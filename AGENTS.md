@@ -26,10 +26,10 @@ See `MODELS.md` for the full discipline statement and rationale.
 ## Current renderer direction
 
 The app currently uses a CPU Canvas 2D renderer in `src/app/renderer.ts`.
-The next major frontend task is a Cursor-owned GPU/WebGL renderer rewrite for
-better graphics and smoother high-resolution experimentation. Keep the
-`SimKernel` contract unchanged unless there is an explicit architecture pass.
-See `HANDOFF.md` and `START-PROMPT-cursor.md` before starting that work.
+The next major frontend task is a Cursor-owned quality-first WebGL2/GPU renderer
+rewrite for current Chrome and Safari on modern Macs. Keep the `SimKernel`
+contract unchanged unless there is an explicit architecture pass. See
+`HANDOFF.md` and `START-PROMPT-cursor.md` before starting that work.
 
 ## Interface contract
 

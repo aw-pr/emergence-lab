@@ -6,8 +6,8 @@ shared interactive renderer.
 
 Status: active prototype. The public branch is clean and publish-ready, but the
 project is primarily a personal experimentation space. The next major upgrade
-is a Cursor-owned WebGL/GPU renderer rewrite for better graphics and smoother
-high-resolution interaction.
+is a Cursor-owned quality-first WebGL2/GPU renderer rewrite for current Chrome
+and Safari on modern Macs.
 
 ---
 
@@ -15,8 +15,9 @@ high-resolution interaction.
 
 - **Vite** with **TypeScript** throughout.
 - Current renderer: CPU Canvas 2D in `src/app/renderer.ts`.
-- Planned renderer: WebGL/GPU path owned by Cursor, keeping the `SimKernel`
-  interface stable if possible.
+- Planned renderer: WebGL2/GPU path owned by Cursor, keeping the `SimKernel`
+  interface stable if possible. Legacy browser support is not a priority for
+  that pass.
 - No runtime dependencies in kernel files. Kernels are deterministic numerics.
 
 ---

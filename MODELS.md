@@ -32,9 +32,11 @@ This arrangement means:
 ## Current renderer direction
 
 The current frontend renderer is CPU Canvas 2D. The next planned frontend pass is
-a Cursor-owned WebGL/GPU renderer rewrite under `src/app/**`, with CPU Canvas 2D
-kept as a fallback if practical. The goal is better local experimentation:
-higher effective resolution, smoother continuous systems, and crisp grid models.
+a Cursor-owned quality-first WebGL2/GPU renderer rewrite under `src/app/**`, with
+CPU Canvas 2D kept as a fallback if practical. Target current Chrome and Safari
+on modern Macs rather than legacy browser compatibility. The goal is better
+local experimentation: higher effective resolution, smoother continuous systems,
+and crisp grid models.
 
 Do not change `docs/INTERFACE.md` for this rewrite unless there is an explicit
 architecture decision to version the kernel contract.
