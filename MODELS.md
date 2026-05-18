@@ -29,6 +29,16 @@ This arrangement means:
 - The contract is the single point of coordination, and it is version-controlled.
 - No model has to read another model's files to do its job.
 
+## Current renderer direction
+
+The current frontend renderer is CPU Canvas 2D. The next planned frontend pass is
+a Cursor-owned WebGL/GPU renderer rewrite under `src/app/**`, with CPU Canvas 2D
+kept as a fallback if practical. The goal is better local experimentation:
+higher effective resolution, smoother continuous systems, and crisp grid models.
+
+Do not change `docs/INTERFACE.md` for this rewrite unless there is an explicit
+architecture decision to version the kernel contract.
+
 ## Cross-model comparison
 
 If you want to compare how Codex and Cursor (or any other pairing) handle a task, fork the task into a separate private benchmark workspace. Document the prompt, the outputs, and the evaluation criteria there. Do not run comparisons on this trunk.

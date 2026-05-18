@@ -1,89 +1,137 @@
 # START-PROMPT-cursor.md
 
-Paste the block below verbatim into a Cursor session.
+Paste the block below into a Cursor session when continuing the renderer work.
 
 ---
 
-## Task: Shared renderer and gallery UI
+## Task: WebGL/GPU renderer rewrite for emergence-lab
 
-You are building the shared front end for the `emergence-lab` repository. Your task is strictly scoped to `src/app/**`.
+You are working in the `emergence-lab` repository. Your task is strictly scoped
+to the frontend under `src/app/**`.
 
-### Contract
+The project is a personal emergent-behaviour lab. Favour excellent graphics,
+smooth interaction, and room to experiment over minimal showcase polish.
 
-Read `docs/INTERFACE.md` (FINAL v1.0) before writing any code. It defines the `SimKernel` TypeScript interface that every simulation kernel implements. You consume this interface; you do not implement it and you do not modify it. Key v1.0 points you must rely on: `step()` is synchronous; `readState()` is `Float32Array` only, so you do the float-to-pixel mapping; normalise using `kernel.channelRanges`; label the legend from `kernel.channelLabels`; and build the controls panel generically from `kernel.paramSchema` (no per-sim UI code).
+### Read first
 
-### Files you may create or edit
+1. `AGENTS.md`
+2. `MODELS.md`
+3. `docs/INTERFACE.md`
+4. `HANDOFF.md`
+5. Existing frontend files under `src/app/**`
 
-```
+### Model boundary
+
+You own:
+
+```text
 src/app/**
 ```
 
-Everything under `src/app/` is yours. Do not touch `src/sims/**` or any file outside `src/app/`. Do not modify `docs/INTERFACE.md`.
+Do not edit:
 
-### Stack
-
-- **Vite** + **TypeScript**. The project does not have a framework yet; you may add React or keep it vanilla — choose what fits a canvas-heavy sim viewer best, but keep the dependency footprint minimal.
-- Rendering: Canvas 2D or WebGL. WebGL preferred for performance (large grids update every frame).
-- No CSS framework required; utility-first or plain CSS is fine.
-
-### What to implement
-
-#### 1. SimKernel loader
-
-A dynamic import mechanism that loads a kernel by name. Kernels live at:
-
-```
-src/sims/<name>/kernel.ts
+```text
+src/sims/**
+docs/INTERFACE.md
+package.json
+package-lock.json
+root docs
 ```
 
-The loader should import the default or named export, verify it satisfies `SimKernel` (type-only check is fine), and return an instance. The renderer never imports kernel files directly; it always goes through the loader.
+If you believe the `SimKernel` interface needs to change, stop and write the
+proposed change as a note instead of editing the contract.
 
-#### 2. Renderer
+### Current state
 
-A canvas-based renderer that:
+The app currently uses a CPU Canvas 2D renderer in `src/app/renderer.ts`.
+Kernels expose state as `Float32Array` through the stable `SimKernel` contract:
 
-- Accepts a `SimKernel` instance.
-- Calls `kernel.readState()` after each `kernel.step(dt)`.
-- Maps the `Float32Array` state to pixel colours. Normalise each channel using `kernel.channelRanges[i]` (do not assume [0, 1]). For a 2-channel kernel, map the channels to a legible combined colour map; this must work for any `channelCount`, not just 2.
-- Runs at `requestAnimationFrame` pace.
-- Handles canvas resize: calls `kernel.init()` again with new dimensions and restarts.
+- `init(width, height, params)`
+- `step(dt)`
+- `readState()`
+- `channelCount`
+- `channelRanges`
+- `channelLabels`
+- `paramSchema`
+- `destroy()`
 
-#### 3. Controls panel
+There are 12 simulations registered in `src/app/registry.ts`.
 
-A simple UI panel (HTML or component) that:
+### Goal
 
-- Shows the current simulation name.
-- Exposes a play/pause toggle.
-- Exposes a reset button (calls `kernel.init()` with current params).
-- Exposes a step-rate slider (frames per animation frame, 1–10).
-- Auto-generates per-sim parameter controls from `kernel.paramSchema`: a `number` descriptor renders a labelled slider using its `min`/`max`/`step`/`default`, `boolean` a checkbox, `enum` a dropdown from `options`. Changing any control calls `kernel.init()` with the updated `SimParams`. This is generic: no Gray-Scott-specific code.
+Replace or parallelise the CPU Canvas 2D renderer with a WebGL/GPU renderer
+that gives better visuals and smoother high-resolution rendering while keeping
+the kernel contract stable.
 
-#### 4. Gallery page
+This is a renderer rewrite, not a simulation rewrite. Kernels still compute
+their own state. The renderer should upload `Float32Array` state to the GPU and
+map it to pixels with shader-based colour mapping where practical.
 
-A landing/gallery view that lists available simulations by name. For now it only needs to list "Gray-Scott" as a placeholder (the kernel does not need to be loaded on the gallery page). Clicking a sim navigates to the renderer view for that sim.
+### Desired architecture
 
-Routing can be hash-based (`#/gray-scott`) or a minimal client-side router — keep it simple.
+- Keep the existing app shell, gallery, routing, controls, presets, and kernel
+  loader.
+- Introduce a WebGL renderer implementation behind a clean boundary.
+- Preserve the existing `Renderer` public behaviour where possible so
+  `simView.ts` does not become complicated.
+- Keep CPU Canvas 2D as a fallback if WebGL is unavailable.
+- Avoid per-simulation rendering branches except where there is a clear visual
+  mode distinction such as smooth trajectory fields versus pixel-grid fields.
+- Continue to normalise using `kernel.channelRanges`.
+- Continue to support 1, 2, 3+ channel states.
+- Keep fractal zoom/pan and colour cycling working.
+- Keep the Lorenz attractor smooth and continuous-looking.
 
-### Determinism and performance
+### Visual priorities
 
-- Do not put simulation logic in `src/app/**`. The renderer only calls the kernel interface; all numerics are the kernel's responsibility.
-- Aim for 60 fps on a 512x512 grid with a 2-channel kernel on a modern laptop.
+- Higher effective resolution and less fuzz on large screens.
+- Smooth colour ramps and palette controls.
+- Crisp pixel-grid rendering for cellular automata and lattice models.
+- Smooth rendering for continuous/trajectory models such as Lorenz.
+- Avoid giant blocky pixels unless a user explicitly chooses that look.
 
-### Forbidden
+### Verification
 
-- Do not create or edit `src/sims/**`.
-- Do not modify `docs/INTERFACE.md`.
-- Do not add server-side code.
-- Do not hardcode params, channel counts, or value ranges for a specific kernel; the UI must work with any `SimKernel` via `paramSchema`, `channelCount`, `channelRanges` and `channelLabels`.
+Run:
 
-### When you are done
+```bash
+npm run verify
+```
 
-`src/app/` should contain at minimum:
+Also manually smoke-test these routes in the browser:
 
-- An entry point wired to `index.html` (or Vite's default).
-- The renderer module.
-- The controls panel.
-- The gallery page.
-- The kernel loader.
+```text
+/#/lorenz-attractor
+/#/mandelbrot
+/#/diffusion-limited-aggregation
+/#/game-of-life
+/#/boids
+```
 
-Running `npm run dev` should open a browser, show the gallery, and on clicking "Gray-Scott" load and run the kernel (once the kernel file exists at `src/sims/gray-scott/kernel.ts`).
+Check that:
+
+- the canvas is nonblank,
+- controls still update params,
+- reset still works,
+- FPS is acceptable,
+- fractal pan/zoom still works,
+- Lorenz renders as smooth curves rather than chunky dots,
+- grid/cell simulations remain crisp.
+
+### Do not do yet
+
+- Do not move simulation logic into `src/app/**`.
+- Do not change kernel files.
+- Do not rewrite the UI framework.
+- Do not add heavy dependencies unless the payoff is clear.
+- Do not push to GitHub from Cursor unless explicitly asked.
+
+### Output
+
+Summarise:
+
+- files changed,
+- renderer architecture chosen,
+- known limitations,
+- verification run,
+- manual routes tested.

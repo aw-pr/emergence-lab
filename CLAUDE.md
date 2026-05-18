@@ -2,12 +2,15 @@
 
 ## Model boundary — read this first
 
-This repository enforces a strict three-model discipline. Claude's role is **architecture, the interface contract, and essays**. Do not write or edit files outside that scope.
+This repository enforces a strict model-boundary discipline. Claude's role is
+architecture, interface-contract stewardship, essays, and root documentation.
+Do not write or edit files outside that scope.
 
-| Area | Lead model | Paths Claude must NOT touch |
+| Area | Lead model | Paths |
 |---|---|---|
-| Simulation kernels | Codex | `src/sims/**/kernel.ts` and any sim-specific numerics |
-| Front end | Cursor | `src/app/**` |
+| Simulation kernels and sim-specific numerics | Codex | `src/sims/**/kernel.ts`, `src/sims/**/kernel.test.cjs` |
+| Front end: renderer, controls, gallery UI | Cursor | `src/app/**` |
+| Architecture, interface contract, essays, root docs | Claude / Codex coordination | `docs/**`, `essays/**`, root docs and config |
 
 Claude owns:
 - `docs/INTERFACE.md` — the TypeScript interface contract between kernels and the renderer
@@ -15,9 +18,19 @@ Claude owns:
 - Root configuration files, `CLAUDE.md`, `README.md`, `MODELS.md`
 - Architecture decisions and module interface changes
 
-**Do not create or edit `src/sims/**/kernel.ts` or anything under `src/app/`.** Those files belong to Codex and Cursor respectively. If a change is needed in those areas, describe it clearly so the appropriate model can be given a targeted prompt.
+Do not create or edit `src/sims/**` or `src/app/**`. Those files belong to
+Codex and Cursor respectively. If a change is needed in those areas, describe
+it clearly so the appropriate model can be given a targeted prompt.
 
 See `MODELS.md` for the full discipline statement and rationale.
+
+## Current renderer direction
+
+The app currently uses a CPU Canvas 2D renderer in `src/app/renderer.ts`.
+The next major frontend task is a Cursor-owned GPU/WebGL renderer rewrite for
+better graphics and smoother high-resolution experimentation. Keep the
+`SimKernel` contract unchanged unless there is an explicit architecture pass.
+See `HANDOFF.md` and `START-PROMPT-cursor.md` before starting that work.
 
 ## Interface contract
 
@@ -39,4 +52,5 @@ Never put secrets, tokens, or API keys in code or committed files. Use `.env.loc
 - `docs/INTERFACE.md` — kernel contract (FINAL v1.0, owned by Claude)
 - `MODELS.md` — full model-boundary discipline
 - `START-PROMPT-codex.md` — first kernel prompt (Gray-Scott)
-- `START-PROMPT-cursor.md` — renderer + gallery prompt
+- `START-PROMPT-cursor.md` — current Cursor prompt, now focused on WebGL renderer rewrite
+- `HANDOFF.md` — current status and next-run brief

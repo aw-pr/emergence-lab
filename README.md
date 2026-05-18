@@ -1,16 +1,64 @@
 # emergence-lab
 
-A repository of canonical emergent-behaviour and complex-adaptive-systems simulations. Each simulation is self-contained: a deterministic kernel, a shared visual front end, and a short essay explaining the dynamics and their significance.
+A local lab for playing with emergent behaviour and complex-adaptive-systems
+simulations. Each simulation has a deterministic TypeScript kernel behind a
+shared interactive renderer.
 
-Status: scaffold. No simulations exist yet. The structure, contracts, and starting prompts are in place; the first simulation (Gray-Scott reaction-diffusion) is ready to be built via the starting prompts in `START-PROMPT-codex.md` and `START-PROMPT-cursor.md`.
+Status: active prototype. The public branch is clean and publish-ready, but the
+project is primarily a personal experimentation space. The next major upgrade
+is a Cursor-owned WebGL/GPU renderer rewrite for better graphics and smoother
+high-resolution interaction.
 
 ---
 
 ## Stack
 
-- **Vite** with **TypeScript** throughout. A single language keeps the boundary between kernel and renderer clean and type-safe.
-- No framework on the front end beyond what Vite provides; Canvas or WebGL for rendering.
-- No runtime dependencies in kernel files. Kernels are pure numerics.
+- **Vite** with **TypeScript** throughout.
+- Current renderer: CPU Canvas 2D in `src/app/renderer.ts`.
+- Planned renderer: WebGL/GPU path owned by Cursor, keeping the `SimKernel`
+  interface stable if possible.
+- No runtime dependencies in kernel files. Kernels are deterministic numerics.
+
+---
+
+## Run it
+
+```bash
+npm install
+npm run dev
+```
+
+Open the local URL Vite prints, normally `http://localhost:5173/`.
+
+Useful checks:
+
+```bash
+npm run verify
+npm test
+npm run build
+```
+
+`npm run verify` runs TypeScript checks, all kernel tests, and a production
+build.
+
+---
+
+## Simulations
+
+The current gallery includes:
+
+- Gray-Scott reaction diffusion
+- Abelian sandpile
+- Game of Life
+- Belousov-Zhabotinsky reaction waves
+- Boids
+- Lorenz attractor
+- Diffusion-limited aggregation
+- Elementary cellular automata
+- Brian's Brain
+- Mandelbrot
+- Julia set
+- Burning Ship
 
 ---
 
@@ -42,10 +90,11 @@ emergence-lab/
   essays/                 # Claude owns — one .md per sim
   docs/
     INTERFACE.md          # Claude owns — kernel<->renderer contract (TypeScript)
+  HANDOFF.md              # Current handoff and next-run brief
   CLAUDE.md               # Instructions for Claude sessions in this repo
   MODELS.md               # Model-boundary discipline statement
-  START-PROMPT-codex.md   # Ready-to-paste prompt for Codex: first kernel
-  START-PROMPT-cursor.md  # Ready-to-paste prompt for Cursor: renderer + gallery
+  START-PROMPT-codex.md   # Kernel prompt
+  START-PROMPT-cursor.md  # Cursor prompt for the WebGL renderer rewrite
 ```
 
 ---
@@ -65,3 +114,18 @@ No model ever edits outside its designated area. If a change is needed across ar
 ## Secrets
 
 Never put secrets, tokens, or API keys in code or committed files. Use `.env.local` (git-ignored).
+
+## Publish state
+
+This branch has been squashed to a clean public history. Historical private
+work was backed up outside the repo before the public branch was created.
+Before pushing to a host, run:
+
+```bash
+npm run verify
+git rev-list --all --count
+```
+
+Expected: tests pass and history is intentionally small. For the full
+publish-safety sweep, use the local publish-guard runbook rather than copying
+machine-specific patterns into public documentation.
