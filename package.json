@@ -1,0 +1,19 @@
+{
+  "name": "emergence-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "build:test": "tsc -p tsconfig.test.json",
+    "test": "npm run build:test && node scripts/run-kernel-tests.cjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "verify:kernels": "tsc -p tsconfig.test.json --noEmit && npm test",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^6.0.0"
+  }
+}

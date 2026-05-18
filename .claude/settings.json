@@ -1,0 +1,68 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(**)",
+
+      "Write(src/**)",
+      "Write(essays/**)",
+      "Write(.claude/**)",
+      "Write(docs/**)",
+      "Write(*.json)",
+      "Write(*.ts)",
+      "Write(*.md)",
+      "Write(.gitignore)",
+      "Write(vite.config*)",
+      "Write(tsconfig*)",
+      "Write(CLAUDE.md)",
+      "Write(README.md)",
+
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git branch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git checkout *)",
+      "Bash(git show *)",
+      "Bash(git ls-files *)",
+      "Bash(git for-each-ref *)",
+
+      "Bash(gh pr *)",
+      "Bash(gh repo *)",
+
+      "Bash(npm run *)",
+      "Bash(npm run dev*)",
+      "Bash(npm install)",
+      "Bash(npm install *)",
+      "Bash(npm ci)",
+
+      "Bash(npx vite *)",
+      "Bash(npx *)",
+      "Bash(tsc *)",
+
+      "Bash(ls *)",
+      "Bash(ls)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(mkdir *)",
+      "Bash(mkdir -p *)",
+      "Bash(touch *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~*)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)"
+    ],
+    "ask": []
+  },
+  "cleanupPeriodDays": 30
+}
