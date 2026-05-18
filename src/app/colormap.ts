@@ -124,7 +124,7 @@ export function defaultColourOptionsFor(
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "lorenz-attractor":
-      return { ...base, preset: "plasma", gamma: 0.72, contrast: 1.45 };
+      return { ...base, preset: "inferno", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
       return { ...base, preset: "plasma", gamma: 0.62, contrast: 1.55 };
     case "julia-set":

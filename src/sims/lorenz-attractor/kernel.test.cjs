@@ -74,8 +74,10 @@ test("init seeds a visible trajectory so the sim is not blank on load", () => {
   kernel.init(96, 72, {});
 
   const state = Array.from(kernel.readState());
+  const brightCells = state.filter((value) => value > 0.25).length;
 
-  assert.ok(occupiedCells(state) > 20);
+  assert.ok(occupiedCells(state) > 300);
+  assert.ok(brightCells > 100);
   assert.ok(state.some((value) => value > 0));
 });
 

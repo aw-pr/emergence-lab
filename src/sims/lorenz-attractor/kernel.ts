@@ -26,11 +26,12 @@ interface SimKernel {
 const DEFAULT_SIGMA = 10;
 const DEFAULT_RHO = 28;
 const DEFAULT_BETA = 2.6666667;
-const DEFAULT_STEPS_PER_FRAME = 8;
-const DEFAULT_FADE = 0.985;
+const DEFAULT_STEPS_PER_FRAME = 24;
+const DEFAULT_FADE = 0.997;
 const CHANNEL_COUNT = 1;
 const INTERNAL_DT = 0.005;
-const DEPOSIT = 0.18;
+const DEPOSIT = 0.65;
+const DEPOSIT_RADIUS = 3;
 const WARMUP_STEPS = 900;
 
 function clamp01(value: number): number {
@@ -255,8 +256,24 @@ export class LorenzAttractorKernel implements SimKernel {
       return;
     }
 
-    const index = gridY * this.width + gridX;
-    this.state[index] = clamp01(this.state[index] + DEPOSIT);
+    for (let dy = -DEPOSIT_RADIUS; dy <= DEPOSIT_RADIUS; dy += 1) {
+      for (let dx = -DEPOSIT_RADIUS; dx <= DEPOSIT_RADIUS; dx += 1) {
+        const px = gridX + dx;
+        const py = gridY + dy;
+        if (px < 0 || px >= this.width || py < 0 || py >= this.height) {
+          continue;
+        }
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > DEPOSIT_RADIUS) {
+          continue;
+        }
+
+        const falloff = 1 - distance / (DEPOSIT_RADIUS + 1);
+        const index = py * this.width + px;
+        this.state[index] = clamp01(this.state[index] + DEPOSIT * falloff);
+      }
+    }
   }
 }
 
