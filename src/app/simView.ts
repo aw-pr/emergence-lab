@@ -36,6 +36,9 @@ export async function renderSimView(
   }
 
   const layout = buildLayout(container, entry.name);
+  if (slug === "lorenz-attractor") {
+    layout.canvas.classList.add("sim-view__canvas--smooth");
+  }
 
   let kernel: SimKernel;
   try {
@@ -219,9 +222,6 @@ function defaultStepsPerFrameFor(slug: string): number {
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   if (slug === "boids") {
     return { dotSize: 6 };
-  }
-  if (slug === "lorenz-attractor") {
-    return { dotSize: 4 };
   }
   return { dotSize: 1 };
 }

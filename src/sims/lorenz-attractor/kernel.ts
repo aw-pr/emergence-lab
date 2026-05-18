@@ -30,8 +30,8 @@ const DEFAULT_STEPS_PER_FRAME = 24;
 const DEFAULT_FADE = 0.997;
 const CHANNEL_COUNT = 1;
 const INTERNAL_DT = 0.005;
-const DEPOSIT = 0.65;
-const DEPOSIT_RADIUS = 3;
+const DEPOSIT = 0.38;
+const DEPOSIT_RADIUS = 1;
 const WARMUP_STEPS = 900;
 
 function clamp01(value: number): number {
@@ -133,6 +133,8 @@ export class LorenzAttractorKernel implements SimKernel {
   private x = 0.1;
   private y = 0;
   private z = 0;
+  private previousGridX: number | null = null;
+  private previousGridY: number | null = null;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -165,6 +167,8 @@ export class LorenzAttractorKernel implements SimKernel {
     this.x = 0.1;
     this.y = 0;
     this.z = 0;
+    this.previousGridX = null;
+    this.previousGridY = null;
 
     this.seedInitialTrail();
   }
@@ -194,6 +198,8 @@ export class LorenzAttractorKernel implements SimKernel {
     this.width = 0;
     this.height = 0;
     this.state = new Float32Array(0);
+    this.previousGridX = null;
+    this.previousGridY = null;
   }
 
   private derivative(x: number, y: number, z: number): LorenzDerivative {
@@ -256,6 +262,32 @@ export class LorenzAttractorKernel implements SimKernel {
       return;
     }
 
+    if (this.previousGridX !== null && this.previousGridY !== null) {
+      this.depositLine(this.previousGridX, this.previousGridY, gridX, gridY);
+    } else {
+      this.depositPoint(gridX, gridY);
+    }
+
+    this.previousGridX = gridX;
+    this.previousGridY = gridY;
+  }
+
+  private depositLine(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): void {
+    const steps = Math.max(Math.abs(endX - startX), Math.abs(endY - startY), 1);
+    for (let index = 0; index <= steps; index += 1) {
+      const t = index / steps;
+      const x = Math.round(startX + (endX - startX) * t);
+      const y = Math.round(startY + (endY - startY) * t);
+      this.depositPoint(x, y);
+    }
+  }
+
+  private depositPoint(gridX: number, gridY: number): void {
     for (let dy = -DEPOSIT_RADIUS; dy <= DEPOSIT_RADIUS; dy += 1) {
       for (let dx = -DEPOSIT_RADIUS; dx <= DEPOSIT_RADIUS; dx += 1) {
         const px = gridX + dx;

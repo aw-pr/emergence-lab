@@ -176,6 +176,10 @@ code {
   image-rendering: pixelated;
 }
 
+.sim-view__canvas--smooth {
+  image-rendering: auto;
+}
+
 .sim-view__canvas--fractal {
   touch-action: none;
   cursor: grab;
