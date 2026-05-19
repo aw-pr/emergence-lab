@@ -1,0 +1,34 @@
+---
+description: Publish safety — never commit secrets/personal data, keep public history clean
+alwaysApply: true
+---
+
+# Publish safety
+
+This repo is published as a clean public mirror. Armed git hooks enforce this;
+do not work around them blindly.
+
+## Never commit
+
+- Secrets, tokens, API keys, credentials. Use `.env.local` (gitignored).
+- Personal/machine paths or identifiers: local home paths, `op://` references,
+  personal email handles. The `pre-commit` hook blocks these via patterns in
+  the gitignored `.publish-guard.local`.
+- Sensitive paths: `.env`, `.env.*`, `*op-refs.local.sh`,
+  `*settings.local.json`, `.publish-guard.local`.
+
+## If a hook blocks you
+
+Fix the offending content — do not reflexively use `--no-verify`. Only override
+(`git commit --no-verify` / `git push --no-verify`) after reading the flagged
+lines and confirming they are genuinely safe to publish. Treat an override as a
+deliberate, logged decision.
+
+## Pushing
+
+- Only `main` may go to the public remote; the `pre-push` hook enforces this.
+- Do not push to any public remote from an agent session unless explicitly
+  asked by the user.
+- Run `npm run verify` green before any push.
+
+Full workflow and pre-publish checklist: `docs/PUBLISH-WORKFLOW.md`.

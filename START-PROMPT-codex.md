@@ -1,5 +1,9 @@
 # START-PROMPT-codex.md
 
+> **Historical / retired.** The Codex kernel role has been retired. The full
+> stack (`src/**`) is now owned by Cursor — see `START-PROMPT-cursor.md` and
+> `MODELS.md`. This file is kept only as a record of the original kernel brief.
+
 Paste the block below verbatim into a Codex session.
 
 ---
