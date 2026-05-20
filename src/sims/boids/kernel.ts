@@ -52,6 +52,16 @@ function numberParam(
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 0x100000000;
+  };
+}
+
 function wrap(value: number, limit: number): number {
   if (limit <= 0) {
     return 0;
@@ -342,26 +352,19 @@ export class BoidsKernel implements SimKernel {
       return;
     }
 
-    const centerX = this.width / 2;
-    const centerY = this.height / 2;
-    const radiusX = Math.max(1, this.width * 0.34);
-    const radiusY = Math.max(1, this.height * 0.34);
+    const seed =
+      (Math.imul(this.width, 73856093) ^
+        Math.imul(this.height, 19349663) ^
+        Math.imul(this.boidCount, 83492791)) >>>
+      0;
+    const random = mulberry32(seed);
 
     for (let i = 0; i < this.boidCount; i += 1) {
-      const layer = (i % 17) / 17;
-      const angle = (i * 2.399963229728653) % TWO_PI;
-      const radiusScale = 0.22 + layer * 0.78;
-      this.x[i] = wrap(
-        centerX + Math.cos(angle) * radiusX * radiusScale,
-        this.width,
-      );
-      this.y[i] = wrap(
-        centerY + Math.sin(angle) * radiusY * radiusScale,
-        this.height,
-      );
+      this.x[i] = random() * this.width;
+      this.y[i] = random() * this.height;
 
-      const velocityAngle = angle + Math.PI / 2 + (i % 5) * 0.09;
-      const speed = this.maxSpeed * (0.45 + (i % 7) * 0.045);
+      const velocityAngle = random() * TWO_PI;
+      const speed = this.maxSpeed * (0.45 + random() * 0.55);
       this.vx[i] = Math.cos(velocityAngle) * speed;
       this.vy[i] = Math.sin(velocityAngle) * speed;
     }

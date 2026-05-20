@@ -26,6 +26,12 @@ function runKernel(params = {}, steps = 12) {
   return Array.from(kernel.readState());
 }
 
+function initOnlyState(params = {}) {
+  const kernel = new BoidsKernel();
+  kernel.init(32, 24, params);
+  return Array.from(kernel.readState());
+}
+
 test("metadata matches the renderer contract", () => {
   const kernel = new BoidsKernel();
 
@@ -98,6 +104,14 @@ test("repeated runs are deterministic for the same params and steps", () => {
   };
 
   assert.deepEqual(runKernel(params, 24), runKernel(params, 24));
+});
+
+test("seeded random initial flock is deterministic", () => {
+  const params = {
+    boidCount: 96,
+    maxSpeed: 2.4,
+  };
+  assert.deepEqual(initOnlyState(params), initOnlyState(params));
 });
 
 test("selfTest passes", () => {
