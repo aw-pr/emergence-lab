@@ -104,10 +104,10 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Dense ash",
       params: {
         birthMin: 3,
-        birthMax: 4,
+        birthMax: 3,
         surviveMin: 2,
-        surviveMax: 4,
-        seedDensity: 0.42,
+        surviveMax: 3,
+        seedDensity: 0.28,
       },
     },
   ],

@@ -257,7 +257,7 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "diffusion-limited-aggregation":
       return { initial: 6, control: growth };
     case "game-of-life":
-      return { initial: 0.5, control: careful };
+      return { initial: 1, control: careful };
     case "elementary-cellular-automata":
       return { initial: 0.35, control: careful };
     case "brians-brain":
