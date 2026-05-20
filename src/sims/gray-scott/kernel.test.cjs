@@ -86,7 +86,7 @@ test("init floors dimensions and resets state idempotently", () => {
     vValues.push(kernel.readState()[index]);
   }
 
-  assert.ok(vValues.some((value) => value === 1));
+  assert.ok(vValues.some((value) => value > 0.1));
   assert.ok(vValues.some((value) => value === 0));
 });
 
@@ -123,6 +123,31 @@ test("stepping starts the reaction and selfTest passes", () => {
 
   assert.notDeepEqual(after, before);
   assert.equal(selfTest(), true);
+});
+
+test("default seed keeps the reaction active after startup", () => {
+  const kernel = new GrayScottKernel();
+  kernel.init(64, 48, {});
+
+  for (let index = 0; index < 180; index += 1) {
+    kernel.step(1);
+  }
+
+  const state = kernel.readState();
+  let activeV = 0;
+  let depletedU = 0;
+
+  for (let index = 0; index < state.length; index += kernel.channelCount) {
+    if (state[index] < 0.9) {
+      depletedU += 1;
+    }
+    if (state[index + 1] > 0.1) {
+      activeV += 1;
+    }
+  }
+
+  assert.ok(depletedU > 200);
+  assert.ok(activeV > 200);
 });
 
 test("destroy releases state and leaves step/readState safe", () => {
