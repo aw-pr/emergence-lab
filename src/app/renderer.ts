@@ -1,9 +1,12 @@
-import type { SimKernel, SimParams } from "./types.ts";
+import { CanvasRendererBackend } from "./canvasRenderer.ts";
+import { DEFAULT_COLOUR_OPTIONS, type ColourMapOptions } from "./colormap.ts";
 import {
-  buildMapper,
-  DEFAULT_COLOUR_OPTIONS,
-  type ColourMapOptions,
-} from "./colormap.ts";
+  type DisplayOptions,
+  type RenderMode,
+  type RendererBackend,
+} from "./rendererBackend.ts";
+import { createWebGLRendererBackend } from "./webglRenderer.ts";
+import type { SimKernel, SimParams } from "./types.ts";
 
 export interface RendererOptions {
   canvas: HTMLCanvasElement;
@@ -14,11 +17,10 @@ export interface RendererOptions {
   params: SimParams;
   colourOptions?: ColourMapOptions;
   displayOptions?: DisplayOptions;
+  renderMode?: RenderMode;
 }
 
-export interface DisplayOptions {
-  dotSize: number;
-}
+export type { DisplayOptions } from "./rendererBackend.ts";
 
 /**
  * Owns the canvas, the animation loop, and the float → pixel mapping.
@@ -33,21 +35,22 @@ export interface DisplayOptions {
  */
 export class Renderer {
   private readonly canvas: HTMLCanvasElement;
-  private readonly ctx: CanvasRenderingContext2D;
+  private readonly backend: RendererBackend;
   private kernel: SimKernel;
   private params: SimParams;
 
-  private imageData: ImageData;
   private gridWidth = 0;
   private gridHeight = 0;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
-  private mapper = buildMapper(0, [], DEFAULT_COLOUR_OPTIONS);
+  private renderMode: RenderMode;
 
   private running = false;
   private rafHandle = 0;
   private lastTimestamp = 0;
+  private elapsedTime = 0;
   private stepsPerFrame: number;
+  private stepAccumulator = 0;
 
   private fpsSamples: number[] = [];
   private onFpsChange: ((fps: number) => void) | null = null;
@@ -59,16 +62,20 @@ export class Renderer {
     this.canvas = options.canvas;
     this.kernel = options.kernel;
     this.params = { ...options.params };
-    this.stepsPerFrame = Math.max(1, Math.floor(options.stepsPerFrame ?? 1));
+    this.stepsPerFrame = Math.max(0, options.stepsPerFrame ?? 1);
     this.colourOptions = options.colourOptions ?? DEFAULT_COLOUR_OPTIONS;
     this.displayOptions = options.displayOptions ?? { dotSize: 1 };
+    this.renderMode = options.renderMode ?? "grid";
 
-    const ctx = this.canvas.getContext("2d", { alpha: false });
-    if (!ctx) {
-      throw new Error("Canvas 2D context is not available in this browser.");
-    }
-    this.ctx = ctx;
-    this.imageData = ctx.createImageData(1, 1);
+    this.backend =
+      createWebGLRendererBackend(this.canvas) ?? new CanvasRendererBackend(this.canvas);
+    this.canvas.dataset.renderer = this.backend.kind;
+    console.info(
+      `emergence-lab renderer: ${this.backend.kind}`,
+      this.backend.maxTextureSize
+        ? `(max texture ${this.backend.maxTextureSize}px)`
+        : "",
+    );
 
     this.observeResize();
     this.reinitFromCanvasSize();
@@ -80,22 +87,17 @@ export class Renderer {
   }
 
   setStepsPerFrame(value: number): void {
-    this.stepsPerFrame = Math.max(1, Math.floor(value));
+    this.stepsPerFrame = Math.max(0, value);
   }
 
   setColourOptions(options: ColourMapOptions): void {
     this.colourOptions = { ...options };
-    this.mapper = buildMapper(
-      this.kernel.channelCount,
-      this.kernel.channelRanges,
-      this.colourOptions,
-    );
     this.draw();
   }
 
   setDisplayOptions(options: DisplayOptions): void {
     this.displayOptions = {
-      dotSize: Math.max(1, Math.min(16, Math.floor(options.dotSize))),
+      dotSize: Math.max(1, Math.min(6, Math.floor(options.dotSize))),
     };
     this.draw();
   }
@@ -135,6 +137,7 @@ export class Renderer {
     this.pause();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.backend.destroy();
     this.kernel.destroy();
   }
 
@@ -143,8 +146,13 @@ export class Renderer {
 
     const dt = Math.max(0, (timestamp - this.lastTimestamp) / 1000);
     this.lastTimestamp = timestamp;
+    this.elapsedTime += dt;
 
-    for (let i = 0; i < this.stepsPerFrame; i += 1) {
+    this.stepAccumulator += this.stepsPerFrame;
+    const stepCount = Math.floor(this.stepAccumulator);
+    this.stepAccumulator -= stepCount;
+
+    for (let i = 0; i < stepCount; i += 1) {
       this.kernel.step(dt);
     }
     this.draw();
@@ -167,77 +175,16 @@ export class Renderer {
       return;
     }
 
-    const pixels = this.imageData.data;
-    const mapper = this.mapper;
-    let pixelOffset = 0;
-
-    for (let cell = 0; cell < width * height; cell += 1) {
-      const channelOffset = cell * channelCount;
-      const [r, g, b] = mapper(state, channelOffset);
-      pixels[pixelOffset] = r;
-      pixels[pixelOffset + 1] = g;
-      pixels[pixelOffset + 2] = b;
-      pixels[pixelOffset + 3] = 255;
-      pixelOffset += 4;
-    }
-
-    if (this.displayOptions.dotSize > 1) {
-      this.expandActiveCells(state, channelCount, width, height);
-    }
-
-    this.ctx.putImageData(this.imageData, 0, 0);
-  }
-
-  private expandActiveCells(
-    state: Float32Array,
-    channelCount: number,
-    width: number,
-    height: number,
-  ): void {
-    const pixels = this.imageData.data;
-    const radius = Math.floor(this.displayOptions.dotSize / 2);
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const cell = y * width + x;
-        const channelOffset = cell * channelCount;
-        if (this.signalAt(state, channelOffset, channelCount) <= 0.02) {
-          continue;
-        }
-
-        const [r, g, b] = this.mapper(state, channelOffset);
-        const minY = Math.max(0, y - radius);
-        const maxY = Math.min(height - 1, y + radius);
-        const minX = Math.max(0, x - radius);
-        const maxX = Math.min(width - 1, x + radius);
-
-        for (let py = minY; py <= maxY; py += 1) {
-          for (let px = minX; px <= maxX; px += 1) {
-            const pixelOffset = (py * width + px) * 4;
-            pixels[pixelOffset] = r;
-            pixels[pixelOffset + 1] = g;
-            pixels[pixelOffset + 2] = b;
-            pixels[pixelOffset + 3] = 255;
-          }
-        }
-      }
-    }
-  }
-
-  private signalAt(
-    state: Float32Array,
-    offset: number,
-    channelCount: number,
-  ): number {
-    let signal = 0;
-    for (let channel = 0; channel < channelCount; channel += 1) {
-      const [min, max] = this.kernel.channelRanges[channel] ?? [0, 1];
-      const value = max === min ? 0 : (state[offset + channel] - min) / (max - min);
-      if (Number.isFinite(value)) {
-        signal = Math.max(signal, Math.min(1, Math.max(0, value)));
-      }
-    }
-    return signal;
+    this.backend.draw({
+      state,
+      kernel: this.kernel,
+      colourOptions: this.colourOptions,
+      displayOptions: this.displayOptions,
+      mode: this.renderMode,
+      params: this.params,
+      elapsedTime: this.elapsedTime,
+      speedScale: this.stepsPerFrame,
+    });
   }
 
   private recordFps(dt: number): void {
@@ -264,13 +211,20 @@ export class Renderer {
 
   private reinitFromCanvasSize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    const MAX_RENDER_DIM = 1024;
-    const MAX_PIXELS = 786_432;
+    const dpr = this.resolutionScale();
+    const MAX_RENDER_DIM = this.maxRenderDim();
+    const MAX_PIXELS = this.maxRenderPixels();
     const FALLBACK_CSS_PX = 512;
     const MIN_GRID = 64;
 
-    const rectWidth = Math.max(1, Math.floor(rect.width) || FALLBACK_CSS_PX);
-    const rectHeight = Math.max(1, Math.floor(rect.height) || FALLBACK_CSS_PX);
+    const rectWidth = Math.max(
+      1,
+      Math.floor((rect.width || FALLBACK_CSS_PX) * dpr),
+    );
+    const rectHeight = Math.max(
+      1,
+      Math.floor((rect.height || FALLBACK_CSS_PX) * dpr),
+    );
 
     // Preserve CSS aspect ratio: scale width and height by the same factor so the
     // backing bitmap is not stretched into a different aspect on the stage.
@@ -300,17 +254,43 @@ export class Renderer {
 
     this.canvas.width = width;
     this.canvas.height = height;
+    this.canvas.dataset.renderSize = `${width}x${height}`;
     this.gridWidth = width;
     this.gridHeight = height;
 
-    this.imageData = this.ctx.createImageData(width, height);
-    this.mapper = buildMapper(
-      this.kernel.channelCount,
-      this.kernel.channelRanges,
-      this.colourOptions,
-    );
+    this.backend.resize(width, height, this.kernel);
 
     this.kernel.init(width, height, this.params);
     this.draw();
+  }
+
+  private resolutionScale(): number {
+    const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+    if (this.backend.kind !== "webgl2") {
+      return Math.min(1, Math.max(1, dpr));
+    }
+    if (this.renderMode === "grid" || this.renderMode === "particle") {
+      return Math.min(2, Math.max(1, dpr));
+    }
+    return Math.min(3, Math.max(1, dpr));
+  }
+
+  private maxRenderDim(): number {
+    if (this.backend.kind === "webgl2") {
+      const gpuLimit = this.backend.maxTextureSize ?? 4096;
+      const target =
+        this.renderMode === "grid" || this.renderMode === "particle" ? 2048 : 4096;
+      return Math.max(1024, Math.min(gpuLimit, target));
+    }
+    return 1024;
+  }
+
+  private maxRenderPixels(): number {
+    if (this.backend.kind === "webgl2") {
+      return this.renderMode === "grid" || this.renderMode === "particle"
+        ? 3_145_728
+        : 8_388_608;
+    }
+    return 786_432;
   }
 }
