@@ -253,7 +253,7 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "belousov-zhabotinsky":
       return { initial: 1.5, control: balanced };
     case "abelian-sandpile":
-      return { initial: 2, control: growth };
+      return { initial: 4, control: growth };
     case "diffusion-limited-aggregation":
       return { initial: 6, control: growth };
     case "game-of-life":

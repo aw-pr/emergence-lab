@@ -48,6 +48,11 @@ test("metadata matches the renderer contract", () => {
     assert.ok(descriptor.min <= descriptor.default);
     assert.ok(descriptor.default <= descriptor.max);
   }
+
+  const grainsDescriptor = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "grainsPerStep",
+  );
+  assert.equal(grainsDescriptor?.default, 4);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
