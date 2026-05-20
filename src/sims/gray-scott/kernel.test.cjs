@@ -39,7 +39,7 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["Du", "Dv", "F", "k"],
+    ["Du", "Dv", "F", "k", "stepsPerFrame"],
   );
 
   for (const descriptor of kernel.paramSchema) {
@@ -102,7 +102,7 @@ test("missing params use schema defaults", () => {
 
 test("parameter changes affect the evolved state", () => {
   const baseline = runKernel({});
-  const changed = runKernel({ F: 0.025, k: 0.075 });
+  const changed = runKernel({ F: 0.025, k: 0.067 });
 
   assert.notDeepEqual(changed, baseline);
 });
@@ -123,6 +123,20 @@ test("stepping starts the reaction and selfTest passes", () => {
 
   assert.notDeepEqual(after, before);
   assert.equal(selfTest(), true);
+});
+
+test("stepsPerFrame matches repeated single-step work", () => {
+  const batched = new GrayScottKernel();
+  batched.init(24, 24, { stepsPerFrame: 5 });
+  batched.step(1);
+
+  const repeated = new GrayScottKernel();
+  repeated.init(24, 24, { stepsPerFrame: 1 });
+  for (let index = 0; index < 5; index += 1) {
+    repeated.step(1);
+  }
+
+  assert.deepEqual(Array.from(batched.readState()), Array.from(repeated.readState()));
 });
 
 test("default seed keeps the reaction active after startup", () => {

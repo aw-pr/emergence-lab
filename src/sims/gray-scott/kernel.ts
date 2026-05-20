@@ -25,8 +25,9 @@ interface SimKernel {
 
 const DEFAULT_DU = 0.2097;
 const DEFAULT_DV = 0.105;
-const DEFAULT_F = 0.034;
-const DEFAULT_K = 0.05;
+// Keep Du:Dv close to 2:1 for stable explicit-Euler integration.
+const DEFAULT_F = 0.0367;
+const DEFAULT_K = 0.0649;
 const CHANNEL_COUNT = 2;
 
 function clamp01(value: number): number {
@@ -46,6 +47,17 @@ function numberParam(
 ): number {
   const value = params[key];
   return typeof value === "number" ? value : fallback;
+}
+
+function clampStepCount(value: number): number {
+  const floored = Math.floor(value);
+  if (floored < 1) {
+    return 1;
+  }
+  if (floored > 60) {
+    return 60;
+  }
+  return floored;
 }
 
 export class GrayScottKernel implements SimKernel {
@@ -80,18 +92,27 @@ export class GrayScottKernel implements SimKernel {
       label: "Feed rate",
       type: "number",
       default: DEFAULT_F,
-      min: 0,
-      max: 0.1,
-      step: 0.001,
+      min: 0.01,
+      max: 0.07,
+      step: 0.0005,
     },
     {
       key: "k",
       label: "Kill rate",
       type: "number",
       default: DEFAULT_K,
-      min: 0,
-      max: 0.1,
-      step: 0.001,
+      min: 0.04,
+      max: 0.07,
+      step: 0.0005,
+    },
+    {
+      key: "stepsPerFrame",
+      label: "Steps per frame",
+      type: "number",
+      default: 20,
+      min: 1,
+      max: 60,
+      step: 1,
     },
   ] as const satisfies readonly ParamDescriptor[];
 
@@ -103,6 +124,7 @@ export class GrayScottKernel implements SimKernel {
   private dv = DEFAULT_DV;
   private feed = DEFAULT_F;
   private kill = DEFAULT_K;
+  private stepsPerFrame = 20;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -121,6 +143,9 @@ export class GrayScottKernel implements SimKernel {
     this.dv = numberParam(params, "Dv", DEFAULT_DV);
     this.feed = numberParam(params, "F", DEFAULT_F);
     this.kill = numberParam(params, "k", DEFAULT_K);
+    this.stepsPerFrame = clampStepCount(
+      numberParam(params, "stepsPerFrame", 20),
+    );
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
       const index = cell * this.channelCount;
@@ -145,40 +170,42 @@ export class GrayScottKernel implements SimKernel {
     const feed = this.feed;
     const kill = this.kill;
 
-    for (let y = 0; y < height; y += 1) {
-      const yUp = y === 0 ? height - 1 : y - 1;
-      const yDown = y === height - 1 ? 0 : y + 1;
+    for (let stepIndex = 0; stepIndex < this.stepsPerFrame; stepIndex += 1) {
+      for (let y = 0; y < height; y += 1) {
+        const yUp = y === 0 ? height - 1 : y - 1;
+        const yDown = y === height - 1 ? 0 : y + 1;
 
-      for (let x = 0; x < width; x += 1) {
-        const xLeft = x === 0 ? width - 1 : x - 1;
-        const xRight = x === width - 1 ? 0 : x + 1;
+        for (let x = 0; x < width; x += 1) {
+          const xLeft = x === 0 ? width - 1 : x - 1;
+          const xRight = x === width - 1 ? 0 : x + 1;
 
-        const index = (y * width + x) * CHANNEL_COUNT;
-        const left = (y * width + xLeft) * CHANNEL_COUNT;
-        const right = (y * width + xRight) * CHANNEL_COUNT;
-        const up = (yUp * width + x) * CHANNEL_COUNT;
-        const down = (yDown * width + x) * CHANNEL_COUNT;
+          const index = (y * width + x) * CHANNEL_COUNT;
+          const left = (y * width + xLeft) * CHANNEL_COUNT;
+          const right = (y * width + xRight) * CHANNEL_COUNT;
+          const up = (yUp * width + x) * CHANNEL_COUNT;
+          const down = (yDown * width + x) * CHANNEL_COUNT;
 
-        const u = state[index];
-        const v = state[index + 1];
-        const laplaceU =
-          state[left] + state[right] + state[up] + state[down] - 4 * u;
-        const laplaceV =
-          state[left + 1] +
-          state[right + 1] +
-          state[up + 1] +
-          state[down + 1] -
-          4 * v;
-        const reaction = u * v * v;
+          const u = state[index];
+          const v = state[index + 1];
+          const laplaceU =
+            state[left] + state[right] + state[up] + state[down] - 4 * u;
+          const laplaceV =
+            state[left + 1] +
+            state[right + 1] +
+            state[up + 1] +
+            state[down + 1] -
+            4 * v;
+          const reaction = u * v * v;
 
-        next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
-        next[index + 1] = clamp01(
-          dv * laplaceV + reaction - (feed + kill) * v + v,
-        );
+          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
+          next[index + 1] = clamp01(
+            dv * laplaceV + reaction - (feed + kill) * v + v,
+          );
+        }
       }
-    }
 
-    state.set(next);
+      state.set(next);
+    }
   }
 
   readState(): Float32Array {

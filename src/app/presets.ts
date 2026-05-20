@@ -9,19 +9,39 @@ export interface ParamPreset {
 const PRESETS: Record<string, readonly ParamPreset[]> = {
   "gray-scott": [
     {
-      id: "worms",
-      label: "Worm trails",
-      params: { Du: 0.16, Dv: 0.08, F: 0.035, k: 0.065 },
+      id: "mitosis",
+      label: "Mitosis",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.0367, k: 0.0649, stepsPerFrame: 20 },
     },
     {
       id: "coral",
-      label: "Coral growth",
-      params: { Du: 0.18, Dv: 0.09, F: 0.06, k: 0.062 },
+      label: "Coral",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.0545, k: 0.062, stepsPerFrame: 20 },
     },
     {
-      id: "labyrinth",
-      label: "Labyrinth",
-      params: { Du: 0.2097, Dv: 0.105, F: 0.029, k: 0.057 },
+      id: "worms",
+      label: "Worms",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.054, k: 0.063, stepsPerFrame: 20 },
+    },
+    {
+      id: "maze",
+      label: "Maze",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.029, k: 0.057, stepsPerFrame: 20 },
+    },
+    {
+      id: "spots",
+      label: "Spots",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.03, k: 0.062, stepsPerFrame: 20 },
+    },
+    {
+      id: "waves",
+      label: "Waves",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.014, k: 0.045, stepsPerFrame: 20 },
+    },
+    {
+      id: "u-skate",
+      label: "U-skate gliders",
+      params: { Du: 0.2097, Dv: 0.105, F: 0.062, k: 0.0609, stepsPerFrame: 20 },
     },
   ],
   "abelian-sandpile": [
