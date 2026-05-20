@@ -217,7 +217,7 @@ export function attachFractalCanvasInteractions(
     if (slug === "mandelbrot") {
       const scale = 3 / (Math.min(w, h) * zoom);
       cx -= dx * scale;
-      cy -= dy * scale;
+      cy += dy * scale;
     } else if (slug === "julia-set") {
       const aspect = w / h;
       const viewHeight = JULIA_BASE_HEIGHT / zoom;
@@ -225,14 +225,14 @@ export function attachFractalCanvasInteractions(
       const xScale = w > 1 ? viewWidth / (w - 1) : 0;
       const yScale = h > 1 ? viewHeight / (h - 1) : 0;
       cx -= dx * xScale;
-      cy -= dy * yScale;
+      cy += dy * yScale;
     } else if (slug === "burning-ship") {
       const xDiv = Math.max(1, w - 1);
       const yDiv = Math.max(1, h - 1);
       const widthScale = BURNING_BASE_WIDTH / zoom;
       const heightScale = widthScale * (h / w);
       cx -= (dx / xDiv) * widthScale;
-      cy -= (dy / yDiv) * heightScale;
+      cy += (dy / yDiv) * heightScale;
     }
 
     applyCenterZoom(params, cx, cy, zoom);
