@@ -320,18 +320,7 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     x: number,
     y: number,
   ): number {
-    const roll = hashUint32(walkerId, stepIndex, x + y * this.width);
-    if ((roll & 3) !== 0) {
-      return roll & 3;
-    }
-
-    const centreX = Math.floor(this.width / 2);
-    const centreY = Math.floor(this.height / 2);
-    if (Math.abs(centreX - x) >= Math.abs(centreY - y)) {
-      return x < centreX ? 0 : 1;
-    }
-
-    return y < centreY ? 2 : 3;
+    return hashUint32(walkerId, stepIndex, x + y * this.width) & 3;
   }
 
   private occupy(x: number, y: number): void {

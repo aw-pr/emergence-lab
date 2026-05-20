@@ -127,6 +127,48 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
   }
 });
 
+test("growth remains directional-balanced around the seed", () => {
+  const width = 41;
+  const height = 41;
+  const centreX = Math.floor(width / 2);
+  const centreY = Math.floor(height / 2);
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(width, height, {
+    walkersPerStep: 160,
+    maxWalkSteps: 512,
+    spawnRadius: 0.34,
+    stickiness: 1,
+    seedCount: 1,
+  });
+
+  for (let index = 0; index < 10; index += 1) {
+    kernel.step(1);
+  }
+
+  const state = kernel.readState();
+  let left = 0;
+  let right = 0;
+  let up = 0;
+  let down = 0;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (state[y * width + x] !== 1) {
+        continue;
+      }
+      if (x < centreX) left += 1;
+      if (x > centreX) right += 1;
+      if (y < centreY) up += 1;
+      if (y > centreY) down += 1;
+    }
+  }
+
+  assert.ok(left > 0);
+  assert.ok(right > 0);
+  assert.ok(up > 0);
+  assert.ok(down > 0);
+});
+
 test("open boundaries keep walkers on-grid or discard them without wrapping", () => {
   const kernel = new DiffusionLimitedAggregationKernel();
   kernel.init(5, 5, {
