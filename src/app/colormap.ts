@@ -15,6 +15,7 @@ export type ColourPreset =
   | "inferno"
   | "ice"
   | "amber"
+  | "brian"
   | "binary"
   | "chemical"
   | "rgb";
@@ -44,6 +45,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "inferno", label: "Inferno" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
+  { value: "brian", label: "Brian's Brain" },
   { value: "binary", label: "Binary" },
   { value: "chemical", label: "Chemical blend" },
   { value: "rgb", label: "Direct RGB" },
@@ -93,6 +95,12 @@ const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb">, readonly ColourSt
     [0.62, [238, 156, 24]],
     [1, [255, 246, 184]],
   ],
+  // Brian's Brain: dead=black, dying=amber, alive=white.
+  brian: [
+    [0, [0, 0, 0]],
+    [0.5, [255, 136, 0]],
+    [1, [255, 255, 255]],
+  ],
   binary: [
     [0, [3, 7, 18]],
     [0.45, [20, 26, 38]],
@@ -118,6 +126,7 @@ export function defaultColourOptionsFor(
     case "boids":
       return { ...base, preset: "chemical", contrast: 1.2 };
     case "brians-brain":
+      return { ...base, preset: "brian", contrast: 1.2 };
     case "game-of-life":
     case "elementary-cellular-automata":
       return { ...base, preset: "binary", contrast: 1.25 };

@@ -261,7 +261,7 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "elementary-cellular-automata":
       return { initial: 0.35, control: careful };
     case "brians-brain":
-      return { initial: 0.5, control: careful };
+      return { initial: 1, control: careful };
     case "lorenz-attractor":
       return { initial: 0.35, control: careful };
     case "boids":

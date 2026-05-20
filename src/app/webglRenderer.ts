@@ -92,6 +92,11 @@ vec3 rampColour(int preset, float t) {
     return mixRgb(vec3(236.0, 248.0, 255.0), vec3(255.0, 255.0, 255.0), (x - 0.55) / 0.45) / 255.0;
   }
 
+  if (preset == 8) {
+    if (x <= 0.5) return mixRgb(vec3(0.0, 0.0, 0.0), vec3(255.0, 136.0, 0.0), x / 0.5) / 255.0;
+    return mixRgb(vec3(255.0, 136.0, 0.0), vec3(255.0, 255.0, 255.0), (x - 0.5) / 0.5) / 255.0;
+  }
+
   if (x <= 0.28) return mixRgb(vec3(68.0, 1.0, 84.0), vec3(59.0, 82.0, 139.0), x / 0.28) / 255.0;
   if (x <= 0.55) return mixRgb(vec3(59.0, 82.0, 139.0), vec3(33.0, 145.0, 140.0), (x - 0.28) / 0.27) / 255.0;
   if (x <= 0.78) return mixRgb(vec3(33.0, 145.0, 140.0), vec3(94.0, 201.0, 98.0), (x - 0.55) / 0.23) / 255.0;
@@ -566,6 +571,8 @@ function presetIndex(preset: ColourPreset): number {
       return 6;
     case "rgb":
       return 7;
+    case "brian":
+      return 8;
   }
 }
 
