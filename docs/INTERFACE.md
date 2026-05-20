@@ -4,10 +4,10 @@
 **Status: FINAL — v1.0 (2026-05-15)**
 
 This file defines the TypeScript interface that all simulation kernels must
-implement and that the renderer consumes. It is the only shared surface between
-Codex (kernels) and Cursor (renderer). Neither model defines or modifies this
-interface; Claude does. Any change is a new version and must be committed before
-either model is given a prompt that depends on it.
+implement and that the renderer consumes. It is the only shared surface
+between kernels and the renderer. Code agents (currently Codex) implement and
+consume the interface but do not modify it; Claude does. Any change is a new
+version and must be committed before any dependent code work begins.
 
 ---
 
@@ -144,7 +144,7 @@ export interface SimKernel {
 
 ---
 
-## Notes for Codex (kernel authors)
+## Notes for kernel authors
 
 - Implement `SimKernel` exactly. Do not add methods the renderer cannot see.
 - `readState()` returns a stable pre-allocated reference; never allocate per call.
@@ -153,7 +153,7 @@ export interface SimKernel {
 - Export a `selfTest(): boolean` alongside the class (not on the interface).
 - Do not import from `src/app/**`. The kernel has no knowledge of the renderer.
 
-## Notes for Cursor (renderer authors)
+## Notes for renderer authors
 
 - Import `SimKernel`, `SimParams`, `ParamDescriptor` from this file (or a `.d.ts`).
 - Build the controls panel from `paramSchema` only; no per-sim branching.
@@ -164,5 +164,6 @@ export interface SimKernel {
 
 ## Changing this contract
 
-Bump the version, record the change under "Resolved design decisions", commit,
-then update the START-PROMPT files before re-prompting Codex or Cursor.
+Bump the version, record the change under "Resolved design decisions", and
+commit. Update `HANDOFF.md` if the change affects the active work plan, then
+re-prompt code agents.

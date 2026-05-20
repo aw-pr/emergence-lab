@@ -1,50 +1,46 @@
 # AGENTS.md — emergence-lab
 
-## Model boundary — read this first
+## Phase: hone
 
-This repository enforces a strict model-boundary discipline. Keep edits inside
-the area owned by the model doing the work.
+emergence-lab is in the **hone phase** — refinement, parameter tuning,
+performance, and UX polish on a working set of 12 simulations. The code trunk
+(`src/**`) is single-lead Codex. Claude maintains architecture, the interface
+contract, essays, and root directives. See `MODELS.md`.
+
+## Ownership
 
 | Area | Lead model | Paths |
 |---|---|---|
-| Full stack: kernels, renderer, controls, gallery, presets, performance | Cursor | `src/**` |
-| Architecture, interface contract, essays, root docs | Claude | `docs/INTERFACE.md`, `essays/**`, root docs and config |
+| Code: kernels, renderer, controls, gallery, presets, performance | Codex | `src/**` |
+| Architecture, interface contract, essays, root directives | Claude | `docs/INTERFACE.md`, `essays/**`, root directive docs |
 
-Cursor owns the whole of `src/**` — simulation kernels and tests under
-`src/sims/**` and the frontend under `src/app/**`. Kernels and renderer are
-refined together so GPU acceleration and numerics can be co-designed.
-
-Claude owns:
-- `docs/INTERFACE.md` — the TypeScript interface contract between kernels and the renderer
-- `essays/**` — one essay per simulation
-- Root configuration files, `AGENTS.md`, `CLAUDE.md`, `README.md`, `MODELS.md`, `HANDOFF.md`, `START-PROMPT-*.md`
-- Architecture decisions and module interface changes
-
-This is a deliberate change from the earlier three-model split: Codex no
-longer holds an active trunk role. See `MODELS.md` for the rationale.
-
-## Current direction
-
-Full-stack refinement pass: quality-first WebGL2/GPU renderer for current
-Chrome and Safari on modern Macs, sim/render rate decoupling, per-pane
-performance and graphics-quality bounds, and a review of every sim's initial
-conditions and defaults for a usable frame rate. The diffusion (Gray-Scott)
-model is the priority. See `HANDOFF.md` and `START-PROMPT-cursor.md`.
+There is no longer a strict file-area enforcement. The practical division is:
+Codex writes code, Claude writes prose and architecture decisions. Where work
+crosses the boundary (e.g. a code change motivated by an interface decision),
+Claude handles the interface side and delegates the code side to a Codex
+subagent.
 
 ## Interface contract
 
 The kernel-to-renderer contract lives in `docs/INTERFACE.md` and is
-Claude-owned. Cursor implements and consumes it but must not change its shape.
-If the `SimKernel` interface needs to change, stop and write the proposed
-change as a note — do not edit `docs/INTERFACE.md`. Changes must be agreed and
-committed by Claude before dependent work.
+Claude-owned. Code that consumes or implements it must not change its shape.
+If a change is needed, write it up as a proposal note in your summary —
+do not edit `docs/INTERFACE.md`. The contract update must be agreed and
+committed by Claude before dependent code work begins.
 
 ## Adding a simulation
 
 1. Confirm `docs/INTERFACE.md` covers the new sim's needs (Claude).
-2. Extend `START-PROMPT-cursor.md` with the new sim scope.
-3. Cursor implements the kernel under `src/sims/<name>/` and wires the gallery.
-4. Claude writes the essay in `essays/<name>.md`.
+2. Implement the kernel under `src/sims/<name>/` and wire the gallery
+   (Codex).
+3. Write the essay in `essays/<name>.md` (Claude).
+
+## Commit discipline
+
+Atomic commits, one logical change each. Author identity tracks the model
+that wrote the change; committer is always the human user. The verify gate
+`npm run verify` must be green before any commit lands on `main`. See
+`.cursor/rules/git-strategy.mdc`.
 
 ## Secrets
 
@@ -61,7 +57,6 @@ agent session unless explicitly asked.
 ## Related
 
 - `docs/INTERFACE.md` — kernel contract (FINAL v1.0, owned by Claude)
-- `MODELS.md` — full model-boundary discipline
-- `START-PROMPT-cursor.md` — current full-stack Cursor prompt
+- `MODELS.md` — model-boundary discipline statement
 - `HANDOFF.md` — current status and next-run brief
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks

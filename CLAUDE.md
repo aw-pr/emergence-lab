@@ -1,57 +1,52 @@
 # CLAUDE.md — emergence-lab
 
-## Model boundary — read this first
+## Phase: hone
 
-This repository enforces a strict model-boundary discipline. Claude's role is
-architecture, interface-contract stewardship, essays, and root documentation.
-Do not write or edit files outside that scope.
+emergence-lab is in the **hone phase** — refinement, parameter tuning,
+performance, and UX polish on a working set of 12 simulations. The code trunk
+is single-lead Codex. See `MODELS.md`.
 
-| Area | Lead model | Paths |
-|---|---|---|
-| Full stack: kernels, renderer, controls, gallery, presets, performance | Cursor | `src/**` |
-| Architecture, interface contract, essays, root docs | Claude | `docs/INTERFACE.md`, `essays/**`, root docs and config |
+Claude maintains:
 
-Claude owns:
-- `docs/INTERFACE.md` — the TypeScript interface contract between kernels and the renderer
+- `docs/INTERFACE.md` — the TypeScript `SimKernel` contract
 - `essays/**` — one essay per simulation
-- Root configuration files, `CLAUDE.md`, `AGENTS.md`, `README.md`, `MODELS.md`, `HANDOFF.md`, `START-PROMPT-*.md`
-- Architecture decisions and module interface changes
+- Root directives: `MODELS.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`,
+  `HANDOFF.md`
+- Architecture and interface-contract decisions
 
-Do not create or edit anything under `src/**`. The full stack — simulation
-kernels (`src/sims/**`) and the frontend (`src/app/**`) — now belongs to
-Cursor, refined together so GPU acceleration and numerics can be co-designed.
-If a change is needed under `src/**`, describe it clearly so Cursor can be
-given a targeted prompt.
-
-This is a deliberate change from the earlier three-model split: Codex no
-longer holds an active trunk role. See `MODELS.md` for the rationale.
+Code work in `src/**` is Codex's lead. From within Cursor IDE, Claude
+delegates code changes to Codex subagents (model slug
+`gpt-5.3-codex-high-fast`, author identity `Codex GPT-5 <codex-gpt-5@local>`)
+rather than editing `src/**` directly. Claude does not edit `src/**` unless
+making a change that is architecturally entangled with an interface decision
+and the user explicitly authorises it.
 
 ## Current direction
 
-Full-stack refinement pass owned by Cursor: quality-first WebGL2/GPU renderer
-for current Chrome and Safari on modern Macs, sim/render rate decoupling,
-per-pane performance and graphics-quality bounds, and a review of every sim's
-initial conditions and defaults for a usable frame rate. The diffusion
-(Gray-Scott) model is the priority. Keep the `SimKernel` contract unchanged
-unless there is an explicit architecture pass. See `HANDOFF.md` and
-`START-PROMPT-cursor.md`.
+Refinement of defaults, initial conditions, and controls UX across all 12
+sims, plus landing the in-flight WebGL2 renderer work. The diffusion model
+(Gray-Scott) is the priority kernel. The controls panel is gaining
+user-overridable slider min/max with localStorage persistence and a
+"Reset to defaults" button. See `HANDOFF.md`.
 
 ## Interface contract
 
-The kernel-to-renderer contract lives in `docs/INTERFACE.md` and is Claude-owned.
-Cursor now both implements and consumes it but must not change its shape. Any
-change to the `SimKernel` TypeScript interface requires updating that file and
-must be agreed and committed before Cursor is given a prompt that depends on it.
+Changes to the `SimKernel` interface in `docs/INTERFACE.md` are still made
+here. If Codex proposes a change, write it up as a note for Claude review;
+commit the contract update before any dependent code work.
 
-## Adding a simulation
+## Commit discipline
 
-1. Update or confirm `docs/INTERFACE.md` covers the new sim's needs.
-2. Draft or extend `START-PROMPT-cursor.md` with the new sim scope.
-3. Write the essay in `essays/<name>.md` once the kernel is working.
+Atomic commits, one logical change each. Author identity tracks the model
+that wrote the change (`Claude Opus 4.7 <claude-opus-4-7@local>`,
+`Codex GPT-5 <codex-gpt-5@local>`, etc.); committer stays the human user.
+Verify gate `npm run verify` green before any commit lands on `main`. See
+`.cursor/rules/git-strategy.mdc`.
 
 ## Secrets
 
-Never put secrets, tokens, or API keys in code or committed files. Use `.env.local` (already git-ignored). Remind the user if a prompt asks for credentials inline.
+Never put secrets, tokens, or API keys in code or committed files. Use
+`.env.local` (already git-ignored).
 
 ## Publishing
 
@@ -61,8 +56,6 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 ## Related
 
 - `docs/INTERFACE.md` — kernel contract (FINAL v1.0, owned by Claude)
-- `MODELS.md` — full model-boundary discipline
-- `START-PROMPT-cursor.md` — current full-stack Cursor prompt
-- `START-PROMPT-codex.md` — historical kernel prompt (Codex role retired)
+- `MODELS.md` — model-boundary discipline statement
 - `HANDOFF.md` — current status and next-run brief
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks

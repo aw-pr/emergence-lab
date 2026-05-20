@@ -6,10 +6,12 @@ shared interactive renderer.
 
 Status: active prototype with a solid set of working simulations. The public
 branch is clean and publish-ready, but the project is primarily a personal
-experimentation space. The current pass is a Cursor-owned full-stack refinement:
-quality-first WebGL2/GPU renderer for current Chrome and Safari on modern Macs,
-decoupled sim/render rates, per-pane performance and graphics-quality bounds,
-and tuned initial conditions across every sim (diffusion model first).
+experimentation space. The current phase is **hone**: refinement, parameter
+tuning, performance, and UX polish — including a quality-first WebGL2/GPU
+renderer for current Chrome and Safari on modern Macs, decoupled sim/render
+rates, per-pane performance and graphics-quality bounds, and tuned initial
+conditions across every sim. The diffusion model (Gray-Scott) is the priority
+kernel.
 
 ---
 
@@ -65,19 +67,18 @@ The current gallery includes:
 
 ## Model boundary
 
-This repository enforces a strict discipline: each area of the codebase is owned by one lead model. Models do not cross into each other's areas.
+emergence-lab is in the **hone phase** — refinement on a working set of sims.
+The code trunk is single-lead.
 
 | Area | Lead model | Paths |
 |---|---|---|
-| Full stack: kernels, renderer, controls, gallery, presets, performance | **Cursor** | `src/**` |
-| Architecture, interface contract, essays | **Claude** | `docs/INTERFACE.md`, `essays/**`, root config, `MODELS.md` |
+| Code: kernels, renderer, controls, gallery, presets, performance | **Codex** | `src/**` |
+| Architecture, interface contract, essays, root directives | **Claude** | `docs/INTERFACE.md`, `essays/**`, root directive docs |
 
-Cursor refines kernels and the renderer together so GPU acceleration and
-numerics can be co-designed. The contract that binds kernels to the renderer is
-a TypeScript interface defined in `docs/INTERFACE.md` — Claude owns this file;
-Cursor implements and consumes it but does not change its shape. This is a
-deliberate change from an earlier three-model split (Codex's kernel role has
-been retired).
+Codex owns the whole code trunk so numerics and rendering can be co-designed.
+Claude maintains the `SimKernel` contract in `docs/INTERFACE.md`, the per-sim
+essays, and the root directive documents. Cross-model comparison happens only
+in a separate benchmark repo, never on this trunk.
 
 See `MODELS.md` for the full discipline statement.
 
@@ -87,7 +88,7 @@ See `MODELS.md` for the full discipline statement.
 
 ```
 emergence-lab/
-  src/                    # Cursor owns — full stack
+  src/                    # Codex owns — full code stack
     app/                  #   renderer, gallery, controls, presets
     sims/<name>/
       kernel.ts           #   deterministic sim kernel
@@ -97,20 +98,22 @@ emergence-lab/
     PUBLISH-WORKFLOW.md   # Publish-safety workflow and guard hooks
   HANDOFF.md              # Current handoff and next-run brief
   CLAUDE.md               # Instructions for Claude sessions in this repo
+  AGENTS.md               # General agent-guidance for this repo
   MODELS.md               # Model-boundary discipline statement
-  START-PROMPT-cursor.md  # Current full-stack Cursor prompt
 ```
 
 ---
 
 ## Adding a new simulation
 
-1. Claude defines or extends the `SimKernel` interface in `docs/INTERFACE.md` if the new sim requires it.
-2. Give Cursor a prompt to add the kernel under `src/sims/<name>/` and wire the gallery/renderer in `src/app/**`.
+1. Claude defines or extends the `SimKernel` interface in `docs/INTERFACE.md`
+   if the new sim requires it.
+2. Codex adds the kernel under `src/sims/<name>/` and wires the gallery /
+   renderer in `src/app/**`.
 3. Claude writes the essay in `essays/<name>.md`.
 
-Claude never edits under `src/**`; Cursor never edits the interface contract,
-essays, or root docs. Cross-area changes are split into separate prompts.
+Code lives under Codex; architecture, interface contract, essays, and root
+directives live under Claude.
 
 ---
 
