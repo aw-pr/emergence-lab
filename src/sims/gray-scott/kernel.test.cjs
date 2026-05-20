@@ -26,6 +26,11 @@ function runKernel(params = {}, steps = 12) {
   return Array.from(kernel.readState());
 }
 
+function readCell(state, width, x, y) {
+  const index = (y * width + x) * 2;
+  return { u: state[index], v: state[index + 1] };
+}
+
 test("metadata matches the renderer contract", () => {
   const kernel = new GrayScottKernel();
 
@@ -98,6 +103,38 @@ test("init floors dimensions and resets state idempotently", () => {
 
   assert.ok(vValues.some((value) => value > 0.1));
   assert.ok(vValues.some((value) => value === 0));
+});
+
+test("init seeds a symmetric clean centre patch", () => {
+  const width = 32;
+  const height = 24;
+  const kernel = new GrayScottKernel();
+  kernel.init(width, height, {});
+
+  const state = kernel.readState();
+  const centreX = Math.floor(width / 2);
+  const centreY = Math.floor(height / 2);
+  const half = Math.max(4, Math.floor(Math.min(width, height) * 0.08));
+
+  const centreCell = readCell(state, width, centreX, centreY);
+  assert.equal(centreCell.u, 0.5);
+  assert.equal(centreCell.v, 0.25);
+
+  const farCell = readCell(state, width, 0, 0);
+  assert.equal(farCell.u, 1);
+  assert.equal(farCell.v, 0);
+
+  for (let offset = 0; offset <= half; offset += 1) {
+    const left = readCell(state, width, centreX - offset, centreY);
+    const right = readCell(state, width, centreX + offset, centreY);
+    assert.equal(left.u, right.u);
+    assert.equal(left.v, right.v);
+
+    const up = readCell(state, width, centreX, centreY - offset);
+    const down = readCell(state, width, centreX, centreY + offset);
+    assert.equal(up.u, down.u);
+    assert.equal(up.v, down.v);
+  }
 });
 
 test("missing params use schema defaults", () => {

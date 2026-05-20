@@ -224,58 +224,19 @@ export class GrayScottKernel implements SimKernel {
     if (this.width === 0 || this.height === 0) {
       return;
     }
-
-    const centreX = (this.width - 1) / 2;
-    const centreY = (this.height - 1) / 2;
-    const radius = Math.max(2, Math.min(this.width, this.height) * 0.13);
-    const maxDistance = radius * 3;
-    const sigma2 = radius * radius * 0.22;
-    const startX = Math.max(0, Math.floor(centreX - maxDistance));
-    const startY = Math.max(0, Math.floor(centreY - maxDistance));
-    const endX = Math.min(this.width - 1, Math.ceil(centreX + maxDistance));
-    const endY = Math.min(this.height - 1, Math.ceil(centreY + maxDistance));
-    const lobes = [
-      [0, 0, 0.75],
-      [-0.95, -0.28, 0.58],
-      [0.78, 0.45, 0.52],
-      [0.18, -1.05, 0.42],
-      [-0.25, 0.9, 0.35],
-    ] as const;
-
-    for (let y = startY; y <= endY; y += 1) {
-      const dy = y - centreY;
-
-      for (let x = startX; x <= endX; x += 1) {
-        const dx = x - centreX;
-        const d2 = dx * dx + dy * dy;
-        const distance = Math.sqrt(d2);
-        if (distance > maxDistance) {
-          continue;
-        }
-
-        const angle = Math.atan2(dy, dx);
-        const ripple =
-          1 +
-          0.08 * Math.sin(angle * 5 + distance * 0.31) +
-          0.035 * Math.cos(angle * 3 - distance * 0.2);
-        let falloff = 0;
-
-        for (const [offsetX, offsetY, strength] of lobes) {
-          const lobeDx = x - (centreX + offsetX * radius);
-          const lobeDy = y - (centreY + offsetY * radius);
-          falloff +=
-            strength * Math.exp(-(lobeDx * lobeDx + lobeDy * lobeDy) / sigma2);
-        }
-
-        const v = clamp01(falloff * 0.9 * ripple);
-        if (v < 0.0005) {
-          continue;
-        }
-
+    const centreX = Math.floor(this.width / 2);
+    const centreY = Math.floor(this.height / 2);
+    // Small square patch: about 8% of the smaller axis, minimum 4 px.
+    const half = Math.max(4, Math.floor(Math.min(this.width, this.height) * 0.08));
+    for (let dy = -half; dy <= half; dy += 1) {
+      const y = centreY + dy;
+      if (y < 0 || y >= this.height) continue;
+      for (let dx = -half; dx <= half; dx += 1) {
+        const x = centreX + dx;
+        if (x < 0 || x >= this.width) continue;
         const index = (y * this.width + x) * this.channelCount;
-
-        this.state[index] = clamp01(1 - v * 0.65);
-        this.state[index + 1] = v;
+        this.state[index] = 0.5;
+        this.state[index + 1] = 0.25;
       }
     }
   }
