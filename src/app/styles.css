@@ -352,6 +352,64 @@ code {
   color: var(--fg-dim);
 }
 
+.control__label--with-action {
+  gap: 8px;
+}
+
+.control__tune-button {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--fg-dim);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.control__tune-button:hover {
+  color: var(--fg);
+  border-color: rgba(90, 200, 250, 0.45);
+}
+
+.control__tune-popover {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+}
+
+.control__tune-popover[hidden] {
+  display: none;
+}
+
+.control__tune-field {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.control__tune-field input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.control__tune-apply {
+  margin-top: 2px;
+  width: 100%;
+}
+
 .control__value {
   font-size: 12px;
   color: var(--fg);

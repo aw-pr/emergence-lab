@@ -4,6 +4,13 @@ import {
   type ColourMapOptions,
   type ColourPreset,
 } from "./colormap.ts";
+import {
+  loadBounds,
+  loadValues,
+  saveBounds,
+  saveValues,
+  type SliderBounds,
+} from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
 import type { DisplayOptions } from "./renderer.ts";
 
@@ -25,6 +32,7 @@ export interface StepsControlOptions {
 }
 
 export interface ControlsOptions {
+  slug: string;
   container: HTMLElement;
   simName: string;
   paramSchema: readonly ParamDescriptor[];
@@ -47,6 +55,7 @@ export interface ControlsOptions {
  * callbacks.onParamChange (the renderer will re-init the kernel).
  */
 export class ControlsPanel {
+  private readonly slug: string;
   private readonly container: HTMLElement;
   private readonly callbacks: ControlsCallbacks;
   private readonly paramSchema: readonly ParamDescriptor[];
@@ -62,10 +71,15 @@ export class ControlsPanel {
   private fpsLabel!: HTMLSpanElement;
 
   constructor(options: ControlsOptions) {
+    this.slug = options.slug;
     this.container = options.container;
     this.callbacks = options.callbacks;
     this.paramSchema = options.paramSchema;
-    this.params = { ...options.initialParams };
+    this.params = restorePersistedParams(
+      options.slug,
+      options.paramSchema,
+      options.initialParams,
+    );
     this.colourOptions = { ...options.initialColourOptions };
     this.displayOptions = { ...options.initialDisplayOptions };
     this.render(options);
@@ -96,6 +110,7 @@ export class ControlsPanel {
       if (value === undefined) continue;
       this.syncParamControl(descriptor, value);
     }
+    saveValues(this.slug, this.params);
   }
 
   private render(options: ControlsOptions): void {
@@ -216,33 +231,84 @@ export class ControlsPanel {
     const wrap = document.createElement("label");
     wrap.className = "control control--number";
 
+    const bounds = boundsForDescriptor(this.slug, descriptor, initial);
+    const clampedInitial = clampToBounds(initial, bounds);
+
     const label = document.createElement("span");
-    label.className = "control__label";
+    label.className = "control__label control__label--with-action";
     label.textContent = descriptor.label;
+
+    const tuneButton = document.createElement("button");
+    tuneButton.type = "button";
+    tuneButton.className = "control__tune-button";
+    tuneButton.textContent = "⋯";
+    tuneButton.setAttribute(
+      "aria-label",
+      `Adjust ${descriptor.label.toLowerCase()} range`,
+    );
+
+    const popover = document.createElement("div");
+    popover.className = "control__tune-popover";
+    popover.hidden = true;
+
+    const minInput = document.createElement("input");
+    minInput.type = "number";
+    minInput.value = String(bounds.min);
+    minInput.step = descriptor.step !== undefined ? String(descriptor.step) : "any";
+
+    const maxInput = document.createElement("input");
+    maxInput.type = "number";
+    maxInput.value = String(bounds.max);
+    maxInput.step = descriptor.step !== undefined ? String(descriptor.step) : "any";
+
+    popover.appendChild(buildBoundInput("Min", minInput));
+    popover.appendChild(buildBoundInput("Max", maxInput));
+
+    const applyButton = button("Apply", () => {});
+    applyButton.classList.add("control__tune-apply");
+    popover.appendChild(applyButton);
+
+    tuneButton.addEventListener("click", () => {
+      popover.hidden = !popover.hidden;
+    });
+    label.appendChild(tuneButton);
     wrap.appendChild(label);
 
     const input = document.createElement("input");
     input.type = "range";
-    if (descriptor.min !== undefined) input.min = String(descriptor.min);
-    if (descriptor.max !== undefined) input.max = String(descriptor.max);
+    input.min = String(bounds.min);
+    input.max = String(bounds.max);
     if (descriptor.step !== undefined) input.step = String(descriptor.step);
-    input.value = String(initial);
+    input.value = String(clampedInitial);
     this.paramInputs.set(descriptor.key, input);
     wrap.appendChild(input);
 
     const value = document.createElement("span");
     value.className = "control__value";
-    value.textContent = formatNumber(initial, descriptor.step);
+    value.textContent = formatNumber(clampedInitial, descriptor.step);
     this.paramValueLabels.set(descriptor.key, value);
     wrap.appendChild(value);
+    wrap.appendChild(popover);
 
     input.addEventListener("input", () => {
       const next = Number(input.value);
       value.textContent = formatNumber(next, descriptor.step);
-      this.params = { ...this.params, [descriptor.key]: next };
-      this.callbacks.onParamChange(this.params);
+      this.updateParams({ ...this.params, [descriptor.key]: next });
     });
 
+    applyButton.addEventListener("click", () => {
+      const nextMin = Number(minInput.value);
+      const nextMax = Number(maxInput.value);
+      if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax) || nextMax <= nextMin) {
+        return;
+      }
+
+      saveBounds(this.slug, descriptor.key, { min: nextMin, max: nextMax });
+      this.applyNumberBounds(descriptor, input, value, nextMin, nextMax);
+      popover.hidden = true;
+    });
+
+    this.params = { ...this.params, [descriptor.key]: clampedInitial };
     return wrap;
   }
 
@@ -265,8 +331,7 @@ export class ControlsPanel {
     wrap.appendChild(label);
 
     input.addEventListener("change", () => {
-      this.params = { ...this.params, [descriptor.key]: input.checked };
-      this.callbacks.onParamChange(this.params);
+      this.updateParams({ ...this.params, [descriptor.key]: input.checked });
     });
 
     return wrap;
@@ -296,8 +361,7 @@ export class ControlsPanel {
     wrap.appendChild(select);
 
     select.addEventListener("change", () => {
-      this.params = { ...this.params, [descriptor.key]: select.value };
-      this.callbacks.onParamChange(this.params);
+      this.updateParams({ ...this.params, [descriptor.key]: select.value });
     });
 
     return wrap;
@@ -538,6 +602,31 @@ export class ControlsPanel {
     return wrap;
   }
 
+  private updateParams(next: SimParams): void {
+    this.params = next;
+    saveValues(this.slug, this.params);
+    this.callbacks.onParamChange(this.params);
+  }
+
+  private applyNumberBounds(
+    descriptor: ParamDescriptor,
+    input: HTMLInputElement,
+    valueLabel: HTMLSpanElement,
+    min: number,
+    max: number,
+  ): void {
+    input.min = String(min);
+    input.max = String(max);
+
+    const clamped = clampToBounds(Number(input.value), { min, max });
+    input.value = String(clamped);
+    valueLabel.textContent = formatNumber(clamped, descriptor.step);
+
+    if (this.params[descriptor.key] !== clamped) {
+      this.updateParams({ ...this.params, [descriptor.key]: clamped });
+    }
+  }
+
   private setColourOptions(next: ColourMapOptions): void {
     this.colourOptions = { ...next };
     this.callbacks.onColourChange(this.colourOptions);
@@ -560,8 +649,7 @@ export class ControlsPanel {
       nextParams[descriptor.key] = value;
       this.syncParamControl(descriptor, value);
     }
-    this.params = nextParams;
-    this.callbacks.onParamChange(this.params);
+    this.updateParams(nextParams);
   }
 
   private syncParamControl(
@@ -590,6 +678,92 @@ export class ControlsPanel {
         return;
     }
   }
+}
+
+function buildBoundInput(labelText: string, input: HTMLInputElement): HTMLLabelElement {
+  const wrap = document.createElement("label");
+  wrap.className = "control__tune-field";
+
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  wrap.appendChild(label);
+
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function boundsForDescriptor(
+  slug: string,
+  descriptor: ParamDescriptor,
+  initial: number,
+): SliderBounds {
+  const fallbackMin = typeof descriptor.min === "number" ? descriptor.min : initial - 1;
+  const fallbackMax = typeof descriptor.max === "number" ? descriptor.max : initial + 1;
+  const fallback =
+    fallbackMax > fallbackMin
+      ? { min: fallbackMin, max: fallbackMax }
+      : { min: fallbackMin, max: fallbackMin + 1 };
+
+  const stored = loadBounds(slug, descriptor.key);
+  if (!stored || !Number.isFinite(stored.min) || !Number.isFinite(stored.max)) {
+    return fallback;
+  }
+  if (stored.max <= stored.min) {
+    return fallback;
+  }
+  return stored;
+}
+
+function clampToBounds(value: number, bounds: SliderBounds): number {
+  if (!Number.isFinite(value)) {
+    return bounds.min;
+  }
+  if (value < bounds.min) {
+    return bounds.min;
+  }
+  if (value > bounds.max) {
+    return bounds.max;
+  }
+  return value;
+}
+
+export function restorePersistedParams(
+  slug: string,
+  schema: readonly ParamDescriptor[],
+  initialParams: SimParams,
+): SimParams {
+  const loaded = loadValues(slug);
+  if (!loaded) {
+    return { ...initialParams };
+  }
+
+  const next = { ...initialParams };
+  for (const descriptor of schema) {
+    const value = loaded[descriptor.key];
+    if (value === undefined) {
+      continue;
+    }
+
+    switch (descriptor.type) {
+      case "number":
+        if (typeof value === "number" && Number.isFinite(value)) {
+          next[descriptor.key] = value;
+        }
+        break;
+      case "boolean":
+        if (typeof value === "boolean") {
+          next[descriptor.key] = value;
+        }
+        break;
+      case "enum":
+        if (typeof value === "string") {
+          next[descriptor.key] = value;
+        }
+        break;
+    }
+  }
+
+  return next;
 }
 
 function button(label: string, onClick: () => void): HTMLButtonElement {

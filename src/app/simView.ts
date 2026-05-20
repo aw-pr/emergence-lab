@@ -4,6 +4,7 @@ import { Renderer, type DisplayOptions } from "./renderer.ts";
 import {
   ControlsPanel,
   defaultParamsFromSchema,
+  restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
@@ -57,10 +58,10 @@ export async function renderSimView(
     return { dispose() {} };
   }
 
-  const params: SimParams = {
+  const params: SimParams = restorePersistedParams(slug, kernel.paramSchema, {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
-  };
+  });
   let colourOptions: ColourMapOptions = defaultColourOptionsFor(slug, kernel.channelCount);
   let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
   const speedProfile = speedProfileFor(slug);
@@ -79,6 +80,7 @@ export async function renderSimView(
   const fractal = isFractalSlug(slug);
 
   const controls = new ControlsPanel({
+    slug,
     container: layout.sidebar,
     simName: kernel.name,
     paramSchema: paramSchemaForControls(slug, kernel.paramSchema),
