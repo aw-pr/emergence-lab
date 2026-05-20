@@ -229,17 +229,29 @@ export class BelousovZhabotinskyKernel implements SimKernel {
         const dx = (x - centreX) / scale;
         const dy = (y - centreY) / scale;
         const radius = Math.sqrt(dx * dx + dy * dy);
-        const ring = 0.5 + 0.5 * Math.cos(52 * radius);
-        const checker = ((x >> 3) + (y >> 3)) % 2 === 0 ? 1 : -1;
-        const wave = 0.5 + 0.5 * Math.sin(0.37 * x + 0.23 * y);
-        const patch =
-          Math.abs(dx - 0.15) < 0.055 && Math.abs(dy + 0.1) < 0.055 ? 1 : 0;
+        const angle = Math.atan2(dy, dx);
+        const ring = 0.5 + 0.5 * Math.cos(52 * radius + 3 * angle);
+        const wave =
+          0.5 +
+          0.5 *
+            Math.sin(
+              0.37 * x +
+                0.23 * y +
+                4 * Math.sin(3 * angle + 18 * radius),
+            );
+        const firstBlob =
+          Math.exp(-((dx - 0.15) ** 2 + (dy + 0.1) ** 2) / 0.0035);
+        const secondBlob =
+          Math.exp(-((dx + 0.12) ** 2 + (dy - 0.07) ** 2) / 0.0045);
+        const catalyst = firstBlob + 0.7 * secondBlob;
         const index = (y * width + x) * CHANNEL_COUNT;
 
-        this.state[index] = clamp01(0.28 + 0.42 * ring + 0.18 * patch);
-        this.state[index + 1] = clamp01(0.22 + 0.18 * wave + 0.08 * checker);
+        this.state[index] = clamp01(0.28 + 0.42 * ring + 0.16 * catalyst);
+        this.state[index + 1] = clamp01(
+          0.2 + 0.22 * wave + 0.05 * Math.sin(5 * angle - 21 * radius),
+        );
         this.state[index + 2] = clamp01(
-          0.38 + 0.18 * (1 - ring) + 0.16 * patch,
+          0.38 + 0.18 * (1 - ring) + 0.15 * catalyst,
         );
       }
     }
