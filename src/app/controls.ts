@@ -5,6 +5,8 @@ import {
   type ColourPreset,
 } from "./colormap.ts";
 import {
+  clearBounds,
+  clearValues,
   loadBounds,
   loadValues,
   saveBounds,
@@ -67,6 +69,16 @@ export class ControlsPanel {
     HTMLInputElement | HTMLSelectElement
   >();
   private readonly paramValueLabels = new Map<string, HTMLSpanElement>();
+  private readonly numberBoundEditors = new Map<
+    string,
+    {
+      descriptor: ParamDescriptor;
+      input: HTMLInputElement;
+      valueLabel: HTMLSpanElement;
+      minInput: HTMLInputElement;
+      maxInput: HTMLInputElement;
+    }
+  >();
   private playPauseBtn!: HTMLButtonElement;
   private fpsLabel!: HTMLSpanElement;
 
@@ -118,6 +130,7 @@ export class ControlsPanel {
     this.container.classList.add("controls");
     this.paramInputs.clear();
     this.paramValueLabels.clear();
+    this.numberBoundEditors.clear();
 
     const header = document.createElement("header");
     header.className = "controls__header";
@@ -142,6 +155,9 @@ export class ControlsPanel {
     transport.appendChild(this.playPauseBtn);
 
     transport.appendChild(button("Reset", () => this.callbacks.onReset()));
+    transport.appendChild(
+      button("Reset to defaults", () => this.resetToDefaults()),
+    );
     transport.appendChild(
       button("Maximise", () => this.callbacks.onToggleFullscreen()),
     );
@@ -289,6 +305,13 @@ export class ControlsPanel {
     this.paramValueLabels.set(descriptor.key, value);
     wrap.appendChild(value);
     wrap.appendChild(popover);
+    this.numberBoundEditors.set(descriptor.key, {
+      descriptor,
+      input,
+      valueLabel: value,
+      minInput,
+      maxInput,
+    });
 
     input.addEventListener("input", () => {
       const next = Number(input.value);
@@ -627,6 +650,45 @@ export class ControlsPanel {
     }
   }
 
+  private resetToDefaults(): void {
+    clearValues(this.slug);
+    clearBounds(this.slug);
+
+    const nextParams = defaultParamsFromSchema(this.paramSchema);
+    for (const descriptor of this.paramSchema) {
+      const defaultValue = descriptor.default;
+      this.syncParamControl(descriptor, defaultValue);
+      nextParams[descriptor.key] = defaultValue;
+
+      if (descriptor.type !== "number") {
+        continue;
+      }
+
+      const controls = this.numberBoundEditors.get(descriptor.key);
+      if (!controls) {
+        continue;
+      }
+
+      const schemaBounds = schemaBoundsForDescriptor(
+        descriptor,
+        Number(defaultValue),
+      );
+      controls.minInput.value = String(schemaBounds.min);
+      controls.maxInput.value = String(schemaBounds.max);
+      controls.input.min = String(schemaBounds.min);
+      controls.input.max = String(schemaBounds.max);
+
+      const clamped = clampToBounds(Number(defaultValue), schemaBounds);
+      controls.input.value = String(clamped);
+      controls.valueLabel.textContent = formatNumber(clamped, descriptor.step);
+      nextParams[descriptor.key] = clamped;
+    }
+
+    this.params = nextParams;
+    this.callbacks.onParamChange(this.params);
+    this.callbacks.onReset();
+  }
+
   private setColourOptions(next: ColourMapOptions): void {
     this.colourOptions = { ...next };
     this.callbacks.onColourChange(this.colourOptions);
@@ -697,12 +759,7 @@ function boundsForDescriptor(
   descriptor: ParamDescriptor,
   initial: number,
 ): SliderBounds {
-  const fallbackMin = typeof descriptor.min === "number" ? descriptor.min : initial - 1;
-  const fallbackMax = typeof descriptor.max === "number" ? descriptor.max : initial + 1;
-  const fallback =
-    fallbackMax > fallbackMin
-      ? { min: fallbackMin, max: fallbackMax }
-      : { min: fallbackMin, max: fallbackMin + 1 };
+  const fallback = schemaBoundsForDescriptor(descriptor, initial);
 
   const stored = loadBounds(slug, descriptor.key);
   if (!stored || !Number.isFinite(stored.min) || !Number.isFinite(stored.max)) {
@@ -712,6 +769,17 @@ function boundsForDescriptor(
     return fallback;
   }
   return stored;
+}
+
+function schemaBoundsForDescriptor(
+  descriptor: ParamDescriptor,
+  initial: number,
+): SliderBounds {
+  const fallbackMin = typeof descriptor.min === "number" ? descriptor.min : initial - 1;
+  const fallbackMax = typeof descriptor.max === "number" ? descriptor.max : initial + 1;
+  return fallbackMax > fallbackMin
+    ? { min: fallbackMin, max: fallbackMax }
+    : { min: fallbackMin, max: fallbackMin + 1 };
 }
 
 function clampToBounds(value: number, bounds: SliderBounds): number {
