@@ -26,8 +26,9 @@ interface SimKernel {
 const DEFAULT_DU = 0.2097;
 const DEFAULT_DV = 0.105;
 // Keep Du:Dv close to 2:1 for stable explicit-Euler integration.
-const DEFAULT_F = 0.0367;
-const DEFAULT_K = 0.0649;
+// Coral / branching-ridge regime; switch via the Mitosis or Worms preset for spot or filament dynamics.
+const DEFAULT_F = 0.0545;
+const DEFAULT_K = 0.0620;
 const CHANNEL_COUNT = 2;
 
 function clamp01(value: number): number {
@@ -109,7 +110,7 @@ export class GrayScottKernel implements SimKernel {
       key: "stepsPerFrame",
       label: "Steps per frame",
       type: "number",
-      default: 20,
+      default: 12,
       min: 1,
       max: 60,
       step: 1,
@@ -124,7 +125,7 @@ export class GrayScottKernel implements SimKernel {
   private dv = DEFAULT_DV;
   private feed = DEFAULT_F;
   private kill = DEFAULT_K;
-  private stepsPerFrame = 20;
+  private stepsPerFrame = 12;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -144,7 +145,7 @@ export class GrayScottKernel implements SimKernel {
     this.feed = numberParam(params, "F", DEFAULT_F);
     this.kill = numberParam(params, "k", DEFAULT_K);
     this.stepsPerFrame = clampStepCount(
-      numberParam(params, "stepsPerFrame", 20),
+      numberParam(params, "stepsPerFrame", 12),
     );
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
