@@ -1,8 +1,12 @@
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
 import { Renderer, type DisplayOptions } from "./renderer.ts";
-import { ControlsPanel, defaultParamsFromSchema } from "./controls.ts";
-import type { SimKernel, SimParams } from "./types.ts";
+import {
+  ControlsPanel,
+  defaultParamsFromSchema,
+  type StepsControlOptions,
+} from "./controls.ts";
+import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
   defaultColourOptionsFor,
@@ -14,6 +18,10 @@ import {
   attachFractalPaletteCycleKeyboard,
   isFractalSlug,
 } from "./fractalCanvas.ts";
+import {
+  getRenderMode,
+  shouldUseSmoothCanvasPresentation,
+} from "./renderModes.ts";
 
 /**
  * A disposable handle returned by renderSimView. Call dispose() before
@@ -36,7 +44,8 @@ export async function renderSimView(
   }
 
   const layout = buildLayout(container, entry.name);
-  if (slug === "lorenz-attractor") {
+  const renderMode = getRenderMode(slug);
+  if (shouldUseSmoothCanvasPresentation(renderMode)) {
     layout.canvas.classList.add("sim-view__canvas--smooth");
   }
 
@@ -48,10 +57,14 @@ export async function renderSimView(
     return { dispose() {} };
   }
 
-  const params: SimParams = defaultParamsFromSchema(kernel.paramSchema);
+  const params: SimParams = {
+    ...defaultParamsFromSchema(kernel.paramSchema),
+    ...defaultParamOverridesFor(slug),
+  };
   let colourOptions: ColourMapOptions = defaultColourOptionsFor(slug, kernel.channelCount);
   let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
-  let stepsPerFrame = defaultStepsPerFrameFor(slug);
+  const speedProfile = speedProfileFor(slug);
+  let stepsPerFrame = speedProfile.initial;
 
   const renderer = new Renderer({
     canvas: layout.canvas,
@@ -60,6 +73,7 @@ export async function renderSimView(
     stepsPerFrame,
     colourOptions,
     displayOptions,
+    renderMode,
   });
 
   const fractal = isFractalSlug(slug);
@@ -67,10 +81,11 @@ export async function renderSimView(
   const controls = new ControlsPanel({
     container: layout.sidebar,
     simName: kernel.name,
-    paramSchema: kernel.paramSchema,
+    paramSchema: paramSchemaForControls(slug, kernel.paramSchema),
     paramPresets: presetsFor(slug),
     initialParams: params,
     initialStepsPerFrame: stepsPerFrame,
+    stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
     initialDisplayOptions: displayOptions,
     fractalPaletteCycleUi: fractal,
@@ -201,29 +216,128 @@ function buildLayout(container: HTMLElement, simName: string): SimLayout {
   return { body, stage, canvas, sidebar, legend };
 }
 
-function defaultStepsPerFrameFor(slug: string): number {
+interface SpeedProfile {
+  initial: number;
+  control: StepsControlOptions;
+}
+
+function speedProfileFor(slug: string): SpeedProfile {
+  const careful: StepsControlOptions = {
+    label: "Simulation speed",
+    min: 0.1,
+    max: 4,
+    step: 0.05,
+  };
+  const balanced: StepsControlOptions = {
+    label: "Simulation speed",
+    min: 0.25,
+    max: 8,
+    step: 0.25,
+  };
+  const growth: StepsControlOptions = {
+    label: "Simulation speed",
+    min: 0.5,
+    max: 16,
+    step: 0.5,
+  };
+  const fractal: StepsControlOptions = {
+    label: "Colour cycle multiplier",
+    min: 0.05,
+    max: 2,
+    step: 0.05,
+  };
+
   switch (slug) {
     case "gray-scott":
-      return 2;
+      return { initial: 2, control: balanced };
     case "belousov-zhabotinsky":
-    case "lorenz-attractor":
-      return 1;
-    case "game-of-life":
-    case "elementary-cellular-automata":
-      return 4;
+      return { initial: 1.5, control: balanced };
+    case "abelian-sandpile":
+      return { initial: 2, control: growth };
     case "diffusion-limited-aggregation":
+      return { initial: 6, control: growth };
+    case "game-of-life":
+      return { initial: 0.5, control: careful };
+    case "elementary-cellular-automata":
+      return { initial: 0.35, control: careful };
     case "brians-brain":
-      return 3;
+      return { initial: 0.5, control: careful };
+    case "lorenz-attractor":
+      return { initial: 0.35, control: careful };
+    case "boids":
+      return { initial: 1, control: careful };
+    case "mandelbrot":
+    case "julia-set":
+    case "burning-ship":
+      return { initial: 0.5, control: fractal };
     default:
-      return 1;
+      return { initial: 1, control: balanced };
+  }
+}
+
+function defaultParamOverridesFor(slug: string): SimParams {
+  switch (slug) {
+    case "belousov-zhabotinsky":
+      return { stepsPerFrame: 2 };
+    case "lorenz-attractor":
+      return { stepsPerFrame: 6, fade: 0.992 };
+    case "diffusion-limited-aggregation":
+      return { walkersPerStep: 96, maxWalkSteps: 256 };
+    case "elementary-cellular-automata":
+      return { stepsPerFrame: 1 };
+    case "mandelbrot":
+    case "julia-set":
+    case "burning-ship":
+      return { cycleSpeed: 0.0008 };
+    default:
+      return {};
   }
 }
 
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   if (slug === "boids") {
-    return { dotSize: 6 };
+    return { dotSize: 2 };
   }
   return { dotSize: 1 };
+}
+
+function paramSchemaForControls(
+  slug: string,
+  schema: readonly ParamDescriptor[],
+): readonly ParamDescriptor[] {
+  const fractal = isFractalSlug(slug);
+  if (slug !== "lorenz-attractor" && !fractal) return schema;
+
+  return schema.map((descriptor) => {
+    if (fractal && descriptor.key === "cycleSpeed" && descriptor.type === "number") {
+      return {
+        ...descriptor,
+        label: "Base cycle speed",
+        min: 0,
+        max: 0.02,
+        step: 0.0001,
+      };
+    }
+    if (descriptor.key === "fade" && descriptor.type === "number") {
+      return {
+        ...descriptor,
+        label: "Trail history",
+        min: 0.94,
+        max: 0.999,
+        step: 0.001,
+      };
+    }
+    if (descriptor.key === "stepsPerFrame" && descriptor.type === "number") {
+      return {
+        ...descriptor,
+        label: "Trace detail",
+        min: 1,
+        max: 32,
+        step: 1,
+      };
+    }
+    return descriptor;
+  });
 }
 
 function toggleFullscreen(element: HTMLElement): void {

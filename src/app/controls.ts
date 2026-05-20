@@ -17,6 +17,13 @@ export interface ControlsCallbacks {
   onParamChange: (next: SimParams) => void;
 }
 
+export interface StepsControlOptions {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}
+
 export interface ControlsOptions {
   container: HTMLElement;
   simName: string;
@@ -24,6 +31,7 @@ export interface ControlsOptions {
   paramPresets: readonly ParamPreset[];
   initialParams: SimParams;
   initialStepsPerFrame: number;
+  stepsControl: StepsControlOptions;
   initialColourOptions: ColourMapOptions;
   initialDisplayOptions: DisplayOptions;
   callbacks: ControlsCallbacks;
@@ -124,7 +132,7 @@ export class ControlsPanel {
     );
 
     transport.appendChild(
-      this.buildStepsControl(options.initialStepsPerFrame, (value) =>
+      this.buildStepsControl(options.initialStepsPerFrame, options.stepsControl, (value) =>
         this.callbacks.onStepsPerFrameChange(value),
       ),
     );
@@ -154,6 +162,7 @@ export class ControlsPanel {
 
   private buildStepsControl(
     initial: number,
+    control: StepsControlOptions,
     onChange: (value: number) => void,
   ): HTMLLabelElement {
     const wrap = document.createElement("label");
@@ -161,25 +170,25 @@ export class ControlsPanel {
 
     const label = document.createElement("span");
     label.className = "control__label";
-    label.textContent = "Render steps / frame";
+    label.textContent = control.label;
     wrap.appendChild(label);
 
     const input = document.createElement("input");
     input.type = "range";
-    input.min = "1";
-    input.max = "10";
-    input.step = "1";
+    input.min = String(control.min);
+    input.max = String(control.max);
+    input.step = String(control.step);
     input.value = String(initial);
     wrap.appendChild(input);
 
     const value = document.createElement("span");
     value.className = "control__value";
-    value.textContent = input.value;
+    value.textContent = formatSpeed(initial, control.step);
     wrap.appendChild(value);
 
     input.addEventListener("input", () => {
       const next = Number(input.value);
-      value.textContent = input.value;
+      value.textContent = formatSpeed(next, control.step);
       onChange(next);
     });
 
@@ -379,10 +388,10 @@ export class ControlsPanel {
     );
     section.appendChild(
       this.buildColourRangeControl(
-        "Dot size",
+        "Point size (px)",
         this.displayOptions.dotSize,
         1,
-        12,
+        6,
         1,
         (dotSize) => {
           this.setDisplayOptions({ ...this.displayOptions, dotSize });
@@ -536,7 +545,7 @@ export class ControlsPanel {
 
   private setDisplayOptions(next: DisplayOptions): void {
     this.displayOptions = {
-      dotSize: Math.max(1, Math.min(12, Math.floor(next.dotSize))),
+      dotSize: Math.max(1, Math.min(6, Math.floor(next.dotSize))),
     };
     this.callbacks.onDisplayChange(this.displayOptions);
   }
@@ -596,6 +605,10 @@ function formatNumber(value: number, step?: number): string {
   if (step === undefined) return String(value);
   const decimals = Math.max(0, Math.min(6, -Math.floor(Math.log10(step || 1))));
   return value.toFixed(decimals);
+}
+
+function formatSpeed(value: number, step: number): string {
+  return `${formatNumber(value, step)}x`;
 }
 
 /** Read the initial SimParams object from a kernel's paramSchema. */
