@@ -28,7 +28,7 @@ const DEFAULT_CENTER_Y = 0;
 const DEFAULT_ZOOM = 1;
 const DEFAULT_MAX_ITERATIONS = 128;
 const DEFAULT_PALETTE_PHASE = 0;
-const DEFAULT_CYCLE_SPEED = 0.02;
+const DEFAULT_CYCLE_SPEED = 0.25;
 const CHANNEL_COUNT = 1;
 
 function boundedNumber(value: number, min: number, max: number): number {

@@ -56,7 +56,7 @@ test("metadata matches the renderer contract", () => {
     zoom: { default: 1, min: 0.25, max: 500, step: 0.01 },
     maxIterations: { default: 128, min: 16, max: 512, step: 1 },
     palettePhase: { default: 0, min: 0, max: 1, step: 0.001 },
-    cycleSpeed: { default: 0.024, min: 0, max: 5, step: 0.001 },
+    cycleSpeed: { default: 0.3, min: 0, max: 5, step: 0.001 },
   };
 
   for (const descriptor of kernel.paramSchema) {

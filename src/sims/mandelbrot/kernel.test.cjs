@@ -73,7 +73,7 @@ test("metadata matches the renderer contract", () => {
       max: cycleSpeed.max,
       step: cycleSpeed.step,
     },
-    { default: 0.02, min: 0, max: 5, step: 0.001 },
+    { default: 0.25, min: 0, max: 5, step: 0.001 },
   );
 });
 
