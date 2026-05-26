@@ -1,3 +1,4 @@
+import katex from "katex";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
 import { Renderer, type DisplayOptions } from "./renderer.ts";
@@ -24,6 +25,27 @@ import {
   shouldUseSmoothCanvasPresentation,
 } from "./renderModes.ts";
 
+const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
+  "gray-scott": [
+    "\\frac{\\partial U}{\\partial t} = D_u\\nabla^2U - UV^2 + F(1-U)",
+    "\\frac{\\partial V}{\\partial t} = D_v\\nabla^2V + UV^2 - (F+k)V",
+  ],
+  mandelbrot: [
+    "z_{n+1} = z_n^2 + c,\\quad z_0 = 0,\\quad |z_n| > 2",
+  ],
+  "julia-set": [
+    "z_{n+1} = z_n^2 + c,\\quad c = cRe + i\\,cIm,\\quad |z_n| > 2",
+  ],
+  "burning-ship": [
+    "z_{n+1} = (|\\operatorname{Re}(z_n)| + i|\\operatorname{Im}(z_n)|)^2 + c,\\quad |z_n| > 2",
+  ],
+  "lorenz-attractor": [
+    "\\dot{x} = \\sigma(y-x)",
+    "\\dot{y} = x(\\rho-z)-y",
+    "\\dot{z} = xy-\\beta z",
+  ],
+};
+
 /**
  * A disposable handle returned by renderSimView. Call dispose() before
  * navigating away to release the kernel and stop the render loop.
@@ -44,7 +66,7 @@ export async function renderSimView(
     return { dispose() {} };
   }
 
-  const layout = buildLayout(container, entry.name);
+  const layout = buildLayout(container, entry.name, slug);
   const renderMode = getRenderMode(slug);
   if (shouldUseSmoothCanvasPresentation(renderMode)) {
     layout.canvas.classList.add("sim-view__canvas--smooth");
@@ -173,7 +195,7 @@ interface SimLayout {
   legend: HTMLElement;
 }
 
-function buildLayout(container: HTMLElement, simName: string): SimLayout {
+function buildLayout(container: HTMLElement, simName: string, slug: string): SimLayout {
   const page = document.createElement("section");
   page.className = "sim-view";
 
@@ -186,10 +208,20 @@ function buildLayout(container: HTMLElement, simName: string): SimLayout {
   back.textContent = "← Gallery";
   top.appendChild(back);
 
+  const titleBlock = document.createElement("div");
+  titleBlock.className = "sim-view__title-block";
+
   const title = document.createElement("h1");
   title.className = "sim-view__title";
   title.textContent = simName;
-  top.appendChild(title);
+  titleBlock.appendChild(title);
+
+  const formula = document.createElement("div");
+  formula.className = "sim-view__formula";
+  renderFormula(formula, slug);
+  titleBlock.appendChild(formula);
+
+  top.appendChild(titleBlock);
 
   page.appendChild(top);
 
@@ -217,6 +249,26 @@ function buildLayout(container: HTMLElement, simName: string): SimLayout {
   container.appendChild(page);
 
   return { body, stage, canvas, sidebar, legend };
+}
+
+function renderFormula(container: HTMLElement, slug: string): void {
+  container.innerHTML = "";
+  const formulas = FORMULAS_BY_SLUG[slug];
+  if (!formulas) {
+    container.hidden = true;
+    return;
+  }
+
+  container.hidden = false;
+  for (const formula of formulas) {
+    const line = document.createElement("div");
+    line.className = "sim-view__formula-line";
+    katex.render(formula, line, {
+      displayMode: false,
+      throwOnError: false,
+    });
+    container.appendChild(line);
+  }
 }
 
 interface SpeedProfile {

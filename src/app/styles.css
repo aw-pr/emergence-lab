@@ -1,3 +1,5 @@
+@import "katex/dist/katex.min.css";
+
 :root {
   --bg: #0b0e14;
   --bg-elev: #131722;
@@ -123,7 +125,7 @@ code {
 
 .sim-view__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
@@ -133,6 +135,7 @@ code {
 .sim-view__back {
   font-size: 13px;
   color: var(--fg-dim);
+  line-height: 24px;
 }
 
 .sim-view__back:hover {
@@ -143,6 +146,37 @@ code {
   margin: 0;
   font-size: 18px;
   letter-spacing: -0.005em;
+}
+
+.sim-view__title-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sim-view__formula {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  max-width: min(860px, calc(100vw - 160px));
+  padding: 8px 10px;
+  color: rgba(230, 232, 236, 0.9);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.sim-view__formula[hidden] {
+  display: none;
+}
+
+.sim-view__formula-line {
+  white-space: nowrap;
+}
+
+.sim-view__formula .katex {
+  font-size: 0.98em;
 }
 
 .sim-view__body {
@@ -470,6 +504,12 @@ code {
 }
 
 @media (max-width: 720px) {
+  .sim-view__header {
+    padding: 14px 16px;
+  }
+  .sim-view__formula {
+    max-width: calc(100vw - 88px);
+  }
   .sim-view__body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(360px, 1fr) auto;

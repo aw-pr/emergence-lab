@@ -12,6 +12,9 @@
     "verify:kernels": "tsc -p tsconfig.test.json --noEmit && npm test",
     "verify": "npm run typecheck && npm test && npm run build"
   },
+  "dependencies": {
+    "katex": "^0.16.47"
+  },
   "devDependencies": {
     "typescript": "^6.0.3",
     "vite": "^6.0.0"
