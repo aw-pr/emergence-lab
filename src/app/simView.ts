@@ -340,10 +340,6 @@ function defaultParamOverridesFor(slug: string): SimParams {
       return { walkersPerStep: 96, maxWalkSteps: 256 };
     case "elementary-cellular-automata":
       return { stepsPerFrame: 1 };
-    case "mandelbrot":
-    case "julia-set":
-    case "burning-ship":
-      return { cycleSpeed: 0.0008 };
     default:
       return {};
   }
@@ -364,15 +360,6 @@ function paramSchemaForControls(
   if (slug !== "lorenz-attractor" && !fractal) return schema;
 
   return schema.map((descriptor) => {
-    if (fractal && descriptor.key === "cycleSpeed" && descriptor.type === "number") {
-      return {
-        ...descriptor,
-        label: "Base cycle speed",
-        min: 0,
-        max: 0.02,
-        step: 0.0001,
-      };
-    }
     if (descriptor.key === "fade" && descriptor.type === "number") {
       return {
         ...descriptor,
