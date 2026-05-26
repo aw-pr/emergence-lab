@@ -127,6 +127,17 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
   }
 });
 
+test("default settings produce a visible cluster within the page-load budget", () => {
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(800, 600, defaultsFromSchema(kernel));
+
+  for (let index = 0; index < 480; index += 1) {
+    kernel.step(1);
+  }
+
+  assert.ok(clusterSize(Array.from(kernel.readState())) >= 100);
+});
+
 test("growth remains directional-balanced around the seed", () => {
   const width = 41;
   const height = 41;
