@@ -20,3 +20,6 @@ op-refs.local.sh
 .claude/settings.local.json
 logs/
 runs/*.log
+
+state/
+.autometta.local.yaml
