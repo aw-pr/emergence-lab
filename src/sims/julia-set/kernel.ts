@@ -30,7 +30,7 @@ const DEFAULT_CENTER_Y = 0;
 const DEFAULT_ZOOM = 1;
 const DEFAULT_MAX_ITERATIONS = 128;
 const DEFAULT_PALETTE_PHASE = 0;
-const DEFAULT_CYCLE_SPEED = 0.012;
+const DEFAULT_CYCLE_SPEED = 0.024;
 const CHANNEL_COUNT = 1;
 const BASE_VIEW_HEIGHT = 3;
 const ESCAPE_RADIUS_SQUARED = 4;
@@ -148,7 +148,7 @@ export class JuliaSetKernel implements SimKernel {
       type: "number",
       default: DEFAULT_CYCLE_SPEED,
       min: 0,
-      max: 0.08,
+      max: 5,
       step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];
@@ -203,7 +203,7 @@ export class JuliaSetKernel implements SimKernel {
       "cycleSpeed",
       DEFAULT_CYCLE_SPEED,
       0,
-      0.08,
+      5,
     );
 
     this.computeBaseField();

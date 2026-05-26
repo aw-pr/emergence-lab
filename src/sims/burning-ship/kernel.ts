@@ -28,7 +28,7 @@ const DEFAULT_CENTER_Y = -0.5;
 const DEFAULT_ZOOM = 1;
 const DEFAULT_MAX_ITERATIONS = 128;
 const DEFAULT_PALETTE_PHASE = 0.15;
-const DEFAULT_CYCLE_SPEED = 0.008;
+const DEFAULT_CYCLE_SPEED = 0.016;
 const CHANNEL_COUNT = 1;
 const ESCAPE_RADIUS_SQUARED = 4;
 const BASE_VIEW_WIDTH = 3.4;
@@ -110,7 +110,7 @@ export class BurningShipKernel implements SimKernel {
       type: "number",
       default: DEFAULT_CYCLE_SPEED,
       min: 0,
-      max: 0.08,
+      max: 5,
       step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];

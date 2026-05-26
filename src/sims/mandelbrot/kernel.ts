@@ -28,7 +28,7 @@ const DEFAULT_CENTER_Y = 0;
 const DEFAULT_ZOOM = 1;
 const DEFAULT_MAX_ITERATIONS = 128;
 const DEFAULT_PALETTE_PHASE = 0;
-const DEFAULT_CYCLE_SPEED = 0.01;
+const DEFAULT_CYCLE_SPEED = 0.02;
 const CHANNEL_COUNT = 1;
 
 function boundedNumber(value: number, min: number, max: number): number {
@@ -113,7 +113,7 @@ export class MandelbrotKernel implements SimKernel {
       type: "number",
       default: DEFAULT_CYCLE_SPEED,
       min: 0,
-      max: 0.08,
+      max: 5,
       step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];
@@ -162,7 +162,7 @@ export class MandelbrotKernel implements SimKernel {
     this.cycleSpeed = boundedNumber(
       numberParam(params, "cycleSpeed", DEFAULT_CYCLE_SPEED),
       0,
-      0.08,
+      5,
     );
 
     this.computeBase(centerX, centerY, zoom, maxIterations);

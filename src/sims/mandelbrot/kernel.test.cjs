@@ -62,6 +62,19 @@ test("metadata matches the renderer contract", () => {
     assert.ok(descriptor.min <= descriptor.default);
     assert.ok(descriptor.default <= descriptor.max);
   }
+
+  const cycleSpeed = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "cycleSpeed",
+  );
+  assert.deepEqual(
+    {
+      default: cycleSpeed.default,
+      min: cycleSpeed.min,
+      max: cycleSpeed.max,
+      step: cycleSpeed.step,
+    },
+    { default: 0.02, min: 0, max: 5, step: 0.001 },
+  );
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {

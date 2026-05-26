@@ -64,7 +64,7 @@ test("metadata matches the renderer contract", () => {
       ["zoom", 1, 0.25, 500, 0.01],
       ["maxIterations", 128, 16, 512, 1],
       ["palettePhase", 0.15, 0, 1, 0.001],
-      ["cycleSpeed", 0.008, 0, 0.08, 0.001],
+      ["cycleSpeed", 0.016, 0, 5, 0.001],
     ],
   );
 
@@ -165,7 +165,7 @@ test("finite and clamp behavior is schema-driven", () => {
       zoom: 500,
       maxIterations: 512,
       palettePhase: 1,
-      cycleSpeed: 0.08,
+      cycleSpeed: 5,
     }),
   );
 });
