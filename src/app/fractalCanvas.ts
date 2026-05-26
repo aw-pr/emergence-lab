@@ -99,6 +99,11 @@ export function attachFractalCanvasInteractions(
   const { signal } = abort;
 
   let dragPointerId: number | null = null;
+  let dragOriginClientX = 0;
+  let dragOriginClientY = 0;
+  let dragCurrentCssDx = 0;
+  let dragCurrentCssDy = 0;
+  let dragStartParams: SimParams | null = null;
   let lastClientX = 0;
   let lastClientY = 0;
   let gestureStart: { zoom: number; clientX: number; clientY: number } | null = null;
@@ -120,11 +125,11 @@ export function attachFractalCanvasInteractions(
     return typeof v === "number" && Number.isFinite(v) ? v : fallback;
   };
 
-  const bitmapDelta = (clientX: number, clientY: number): [number, number] => {
+  const cssDeltaToBitmapDelta = (dxCss: number, dyCss: number): [number, number] => {
     const rect = canvas.getBoundingClientRect();
     const sx = rect.width > 0 ? canvas.width / rect.width : 1;
     const sy = rect.height > 0 ? canvas.height / rect.height : 1;
-    return [(clientX - lastClientX) * sx, (clientY - lastClientY) * sy];
+    return [dxCss * sx, dyCss * sy];
   };
 
   const pixelToCss = (clientX: number, clientY: number): [number, number] => {
@@ -305,8 +310,14 @@ export function attachFractalCanvasInteractions(
     (ev) => {
       if (ev.button !== 0) return;
       dragPointerId = ev.pointerId;
+      dragOriginClientX = ev.clientX;
+      dragOriginClientY = ev.clientY;
+      dragCurrentCssDx = 0;
+      dragCurrentCssDy = 0;
+      dragStartParams = { ...getParams() };
       lastClientX = ev.clientX;
       lastClientY = ev.clientY;
+      canvas.style.transform = "";
       canvas.setPointerCapture(ev.pointerId);
     },
     { signal },
@@ -316,28 +327,34 @@ export function attachFractalCanvasInteractions(
     "pointermove",
     (ev) => {
       if (dragPointerId === null || ev.pointerId !== dragPointerId) return;
-      const [dx, dy] = bitmapDelta(ev.clientX, ev.clientY);
-      lastClientX = ev.clientX;
-      lastClientY = ev.clientY;
-      if (dx !== 0 || dy !== 0) {
-        panByBitmapDelta(getParams(), dx, dy);
-      }
+      dragCurrentCssDx = ev.clientX - dragOriginClientX;
+      dragCurrentCssDy = ev.clientY - dragOriginClientY;
+      canvas.style.transform = `translate3d(${dragCurrentCssDx}px, ${dragCurrentCssDy}px, 0)`;
     },
     { signal },
   );
 
-  const endDrag = (ev: PointerEvent): void => {
+  const endDrag = (ev: PointerEvent, commit: boolean): void => {
     if (dragPointerId === null || ev.pointerId !== dragPointerId) return;
     try {
       canvas.releasePointerCapture(ev.pointerId);
     } catch {
       /* ignore */
     }
+    const params = dragStartParams;
+    const [bitmapDx, bitmapDy] = cssDeltaToBitmapDelta(dragCurrentCssDx, dragCurrentCssDy);
+    canvas.style.transform = "";
+    if (commit && params !== null && (bitmapDx !== 0 || bitmapDy !== 0)) {
+      panByBitmapDelta(params, bitmapDx, bitmapDy);
+    }
     dragPointerId = null;
+    dragStartParams = null;
+    dragCurrentCssDx = 0;
+    dragCurrentCssDy = 0;
   };
 
-  canvas.addEventListener("pointerup", endDrag, { signal });
-  canvas.addEventListener("pointercancel", endDrag, { signal });
+  canvas.addEventListener("pointerup", (ev) => endDrag(ev, true), { signal });
+  canvas.addEventListener("pointercancel", (ev) => endDrag(ev, false), { signal });
 
   return () => abort.abort();
 }
