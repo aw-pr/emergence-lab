@@ -1,28 +1,52 @@
-# emergence-lab
+# Emergence lab
 
-A local lab for playing with emergent behaviour and complex-adaptive-systems
-simulations. Each simulation has a deterministic TypeScript kernel behind a
-shared interactive renderer.
+![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+![Phase: Hone](https://img.shields.io/badge/phase-hone-blue)
+![Stack: TypeScript + Vite](https://img.shields.io/badge/stack-TypeScript%20%2B%20Vite-3178c6)
+![Renderer: WebGL2](https://img.shields.io/badge/renderer-WebGL2-990000)
+![Agents: Claude + Codex](https://img.shields.io/badge/agents-Claude%20%2B%20Codex-7c3aed)
+![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)
 
-Status: active prototype with a solid set of working simulations. The public
-branch is clean and publish-ready, but the project is primarily a personal
-experimentation space. The current phase is **hone**: refinement, parameter
-tuning, performance, and UX polish — including a quality-first WebGL2/GPU
-renderer for current Chrome and Safari on modern Macs, decoupled sim/render
-rates, per-pane performance and graphics-quality bounds, and tuned initial
-conditions across every sim. The diffusion model (Gray-Scott) is the priority
-kernel.
+> Many agents following simple local rules produce what we call *emergent
+> behaviour*. You see it everywhere in nature and in human systems: ant
+> colonies, flocking, traffic, markets, the way organisations actually
+> function rather than the way the org chart claims they do.
+>
+> Between strict order and pure noise sits a thin band where things get
+> interesting. *Complexity* is the regime where local interactions build
+> global structure nobody specified. *Chaos* is its close cousin:
+> deterministic equations that stay unpredictable forever because they are
+> exquisitely sensitive to where they started. Most of the twelve
+> simulations in this gallery sit somewhere on that line.
+>
+> The repo is also a working bench for multi-agent orchestration across
+> Claude and Codex. Codex leads the code under `src/**`; Claude owns the
+> kernel contract, the essays, and the directive docs. The split is in
+> [`MODELS.md`](MODELS.md). What matters is not what one model can do, it
+> is what two models build together when the boundary between them is
+> made explicit.
 
----
+The lab is the working companion to a research write-up:  
+*[Emergent Behaviour: A Cross-Domain Sweep](https://anthonywest.co.uk/research/emergent-behaviour-cross-domain)*.  
+The essay sets out the cross-domain pattern. The lab makes it move.
 
-## Stack
+## The twelve
 
-- **Vite** with **TypeScript** throughout.
-- Renderer: moving to a quality-first WebGL2/GPU path with CPU Canvas 2D kept
-  as a fallback/debug path. Legacy browser support is not a priority.
-- No runtime dependencies in kernel files. Kernels are deterministic numerics.
+Twelve deterministic kernels behind one renderer. Each is a different  
+discipline's way of pointing at the same thing: local rules, global form.
 
----
+- **Gray-Scott** reaction diffusion. Chemistry's version of the question.
+- **Abelian sandpile.** Self-organised criticality in one toy.
+- **Conway's Game of Life.** The original, and still the cleanest.
+- **Belousov-Zhabotinsky** waves. The reaction that taught chemistry about excitable media.
+- **Boids.** Flocking from three local rules.
+- **Lorenz attractor.** Where deterministic equations stop being predictable.
+- **Diffusion-limited aggregation.** How dendrites and lightning agree.
+- **Elementary cellular automata.** Wolfram's one-dimensional zoo.
+- **Brian's Brain.** Three states. Somehow it breathes.
+- **Mandelbrot, Julia, Burning Ship.** Iterated maps as the geometry of feedback.
+
+Gray-Scott is the priority kernel. The others are calibrated and held.
 
 ## Run it
 
@@ -31,110 +55,52 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints, normally `http://localhost:5173/`.
+Open the URL Vite prints, normally `http://localhost:5173/`.
 
-Useful checks:
+Checks:
 
 ```bash
-npm run verify
+npm run verify   # types, kernel tests, production build
 npm test
 npm run build
 ```
 
-`npm run verify` runs TypeScript checks, all kernel tests, and a production
-build.
+## Stack
 
----
+Vite and TypeScript throughout. Kernels are pure deterministic numerics  
+with no runtime dependencies. The renderer is moving to a quality-first  
+WebGL2/GPU path, with Canvas 2D kept as a fallback and debug surface.  
+Legacy browsers are not a target.
 
-## Simulations
+## Adding a simulation
 
-The current gallery includes:
+1. Extend the `SimKernel` contract in [`docs/INTERFACE.md`](docs/INTERFACE.md) if the new sim needs it.
+2. Add the kernel under `src/sims/<name>/` and wire the gallery in `src/app/**`.
+3. Write the essay in `essays/<name>.md`.
 
-- Gray-Scott reaction diffusion
-- Abelian sandpile
-- Game of Life
-- Belousov-Zhabotinsky reaction waves
-- Boids
-- Lorenz attractor
-- Diffusion-limited aggregation
-- Elementary cellular automata
-- Brian's Brain
-- Mandelbrot
-- Julia set
-- Burning Ship
-
----
-
-## Model boundary
-
-emergence-lab is in the **hone phase** — refinement on a working set of sims.
-The code trunk is single-lead.
-
-| Area | Lead model | Paths |
-|---|---|---|
-| Code: kernels, renderer, controls, gallery, presets, performance | **Codex** | `src/**` |
-| Architecture, interface contract, essays, root directives | **Claude** | `docs/INTERFACE.md`, `essays/**`, root directive docs |
-
-Codex owns the whole code trunk so numerics and rendering can be co-designed.
-Claude maintains the `SimKernel` contract in `docs/INTERFACE.md`, the per-sim
-essays, and the root directive documents. Cross-model comparison happens only
-in a separate benchmark repo, never on this trunk.
-
-See `MODELS.md` for the full discipline statement.
-
----
+Code is Codex-led under `src/**`. Architecture, the kernel contract, and  
+the per-sim essays are Claude-led. The reasoning behind the split is in
+[`MODELS.md`](MODELS.md).
 
 ## Repository layout
 
 ```
 emergence-lab/
-  src/                    # Codex owns — full code stack
-    app/                  #   renderer, gallery, controls, presets
-    sims/<name>/
-      kernel.ts           #   deterministic sim kernel
-  essays/                 # Claude owns — one .md per sim
+  src/                    # kernels, renderer, controls, gallery
+    sims/<name>/kernel.ts # deterministic kernel
+    app/                  # renderer, gallery, controls, presets
+  essays/                 # one .md per sim
   docs/
-    INTERFACE.md          # Claude owns — kernel<->renderer contract (TypeScript)
-    PUBLISH-WORKFLOW.md   # Publish-safety workflow and guard hooks
-  HANDOFF.md              # Current handoff and next-run brief
-  CLAUDE.md               # Instructions for Claude sessions in this repo
-  AGENTS.md               # General agent-guidance for this repo
-  MODELS.md               # Model-boundary discipline statement
+    INTERFACE.md          # the SimKernel contract
+    PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
+  HANDOFF.md              # current state and next-run brief
 ```
 
----
+## Publish and secrets
 
-## Adding a new simulation
-
-1. Claude defines or extends the `SimKernel` interface in `docs/INTERFACE.md`
-   if the new sim requires it.
-2. Codex adds the kernel under `src/sims/<name>/` and wires the gallery /
-   renderer in `src/app/**`.
-3. Claude writes the essay in `essays/<name>.md`.
-
-Code lives under Codex; architecture, interface contract, essays, and root
-directives live under Claude.
-
----
-
-## Secrets
-
-Never put secrets, tokens, or API keys in code or committed files. Use `.env.local` (git-ignored).
-
-## Publish state
-
-This branch has been squashed to a clean public history (5 commits). Historical
-private work was backed up outside the repo before the public branch was
-created. Publish-guard git hooks are armed (`pre-commit` blocks personal/secret
-patterns; `pre-push` keeps non-public branches off the public remote). The full
-workflow, including the one-time remote setup, is in
+The public branch tracks a clean history. Pre-commit and pre-push hooks  
+are armed against personal paths and against pushing private branches to  
+the public remote. The full workflow is in
 [`docs/PUBLISH-WORKFLOW.md`](docs/PUBLISH-WORKFLOW.md).
 
-Before pushing to a host, run:
-
-```bash
-npm run verify
-git rev-list --all --count
-```
-
-Expected: tests pass and history is intentionally small.
+Secrets live in `.env.local`, gitignored. Never commit them.
