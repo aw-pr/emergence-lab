@@ -54,6 +54,8 @@ export class Renderer {
 
   private fpsSamples: number[] = [];
   private onFpsChange: ((fps: number) => void) | null = null;
+  private iterationCount = 0;
+  private onIterationChange: ((iterations: number) => void) | null = null;
 
   private resizeObserver: ResizeObserver | null = null;
   private resizeFrame = 0;
@@ -84,6 +86,12 @@ export class Renderer {
   /** Set or clear an FPS observer. Called once per ~500ms with a smoothed value. */
   setFpsListener(listener: ((fps: number) => void) | null): void {
     this.onFpsChange = listener;
+  }
+
+  /** Set or clear an iteration observer. Called after init and after each frame that steps. */
+  setIterationListener(listener: ((iterations: number) => void) | null): void {
+    this.onIterationChange = listener;
+    listener?.(this.iterationCount);
   }
 
   setStepsPerFrame(value: number): void {
@@ -154,6 +162,10 @@ export class Renderer {
 
     for (let i = 0; i < stepCount; i += 1) {
       this.kernel.step(dt);
+    }
+    if (stepCount > 0) {
+      this.iterationCount += stepCount;
+      this.onIterationChange?.(this.iterationCount);
     }
     this.draw();
     this.recordFps(dt);
@@ -261,6 +273,8 @@ export class Renderer {
     this.backend.resize(width, height, this.kernel);
 
     this.kernel.init(width, height, this.params);
+    this.iterationCount = 0;
+    this.onIterationChange?.(this.iterationCount);
     this.draw();
   }
 

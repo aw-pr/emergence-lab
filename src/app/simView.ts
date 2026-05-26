@@ -126,6 +126,7 @@ export async function renderSimView(
   });
 
   renderer.setFpsListener((fps) => controls.setFps(fps));
+  renderer.setIterationListener((iterations) => controls.setIterations(iterations));
 
   renderer.play();
   controls.setPlayState(true);

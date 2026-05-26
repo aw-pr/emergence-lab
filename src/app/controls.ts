@@ -81,6 +81,7 @@ export class ControlsPanel {
   >();
   private playPauseBtn!: HTMLButtonElement;
   private fpsLabel!: HTMLSpanElement;
+  private iterationLabel!: HTMLSpanElement;
 
   constructor(options: ControlsOptions) {
     this.slug = options.slug;
@@ -104,6 +105,10 @@ export class ControlsPanel {
 
   setFps(fps: number): void {
     this.fpsLabel.textContent = `${fps.toFixed(0)} fps`;
+  }
+
+  setIterations(iterations: number): void {
+    this.iterationLabel.textContent = `iter ${iterations.toLocaleString("en-US")}`;
   }
 
   getParams(): SimParams {
@@ -140,10 +145,20 @@ export class ControlsPanel {
     title.textContent = options.simName;
     header.appendChild(title);
 
+    const metrics = document.createElement("div");
+    metrics.className = "controls__metrics";
+
+    this.iterationLabel = document.createElement("span");
+    this.iterationLabel.className = "controls__iteration";
+    this.iterationLabel.textContent = "iter 0";
+    metrics.appendChild(this.iterationLabel);
+
     this.fpsLabel = document.createElement("span");
     this.fpsLabel.className = "controls__fps";
     this.fpsLabel.textContent = "— fps";
-    header.appendChild(this.fpsLabel);
+    metrics.appendChild(this.fpsLabel);
+
+    header.appendChild(metrics);
 
     this.container.appendChild(header);
 
