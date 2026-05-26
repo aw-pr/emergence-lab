@@ -101,6 +101,7 @@ export function attachFractalCanvasInteractions(
   let dragPointerId: number | null = null;
   let lastClientX = 0;
   let lastClientY = 0;
+  let gestureStart: { zoom: number; clientX: number; clientY: number } | null = null;
 
   const bounds = (key: string): { min: number; max: number } => {
     const d = paramSchema.find((p) => p.key === key);
@@ -242,10 +243,59 @@ export function attachFractalCanvasInteractions(
     "wheel",
     (ev) => {
       ev.preventDefault();
-      const sensitivity = ev.deltaMode === WheelEvent.DOM_DELTA_LINE ? 0.35 : 0.0025;
+      const sensitivity = ev.ctrlKey
+        ? 0.02
+        : ev.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 0.47
+          : 0.0025;
       const factor = Math.exp(-ev.deltaY * sensitivity);
-      const clamped = Math.min(1.35, Math.max(1 / 1.35, factor));
+      const ceiling = ev.deltaMode === WheelEvent.DOM_DELTA_LINE || ev.ctrlKey ? 1.7 : 1.35;
+      const clamped = Math.min(ceiling, Math.max(1 / ceiling, factor));
       zoomAroundCursor(getParams(), ev.clientX, ev.clientY, clamped);
+    },
+    { passive: false, signal },
+  );
+
+  canvas.addEventListener(
+    "gesturestart",
+    (ev) => {
+      ev.preventDefault();
+      const gesture = ev as any;
+      const params = getParams();
+      gestureStart = {
+        zoom: num(params, "zoom", 1),
+        clientX: typeof gesture.clientX === "number" ? gesture.clientX : lastClientX,
+        clientY: typeof gesture.clientY === "number" ? gesture.clientY : lastClientY,
+      };
+    },
+    { passive: false, signal },
+  );
+
+  canvas.addEventListener(
+    "gesturechange",
+    (ev) => {
+      ev.preventDefault();
+      if (gestureStart === null) return;
+      const gesture = ev as any;
+      const scale = typeof gesture.scale === "number" && Number.isFinite(gesture.scale)
+        ? gesture.scale
+        : 1;
+      const params = getParams();
+      const zoom0 = num(params, "zoom", 1);
+      if (zoom0 <= 0) return;
+      const targetZoom = clampKey("zoom", gestureStart.zoom * scale);
+      const clientX = typeof gesture.clientX === "number" ? gesture.clientX : gestureStart.clientX;
+      const clientY = typeof gesture.clientY === "number" ? gesture.clientY : gestureStart.clientY;
+      zoomAroundCursor(params, clientX, clientY, targetZoom / zoom0);
+    },
+    { passive: false, signal },
+  );
+
+  canvas.addEventListener(
+    "gestureend",
+    (ev) => {
+      ev.preventDefault();
+      gestureStart = null;
     },
     { passive: false, signal },
   );
