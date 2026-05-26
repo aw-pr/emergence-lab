@@ -348,20 +348,6 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         cycleSpeed: 0.40,
       },
     },
-    {
-      id: "filled-spiral",
-      label: "Dense spiral",
-      params: {
-        cRe: -0.4,
-        cIm: 0.6,
-        centerX: 0,
-        centerY: 0,
-        zoom: 1.45,
-        maxIterations: 180,
-        palettePhase: 0.38,
-        cycleSpeed: 0.55,
-      },
-    },
   ],
   "burning-ship": [
     {

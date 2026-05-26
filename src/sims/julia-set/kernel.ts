@@ -23,14 +23,14 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_C_RE = -0.8;
-const DEFAULT_C_IM = 0.156;
+const DEFAULT_C_RE = -0.4;
+const DEFAULT_C_IM = 0.6;
 const DEFAULT_CENTER_X = 0;
 const DEFAULT_CENTER_Y = 0;
-const DEFAULT_ZOOM = 1;
-const DEFAULT_MAX_ITERATIONS = 128;
-const DEFAULT_PALETTE_PHASE = 0;
-const DEFAULT_CYCLE_SPEED = 0.3;
+const DEFAULT_ZOOM = 1.45;
+const DEFAULT_MAX_ITERATIONS = 180;
+const DEFAULT_PALETTE_PHASE = 0.38;
+const DEFAULT_CYCLE_SPEED = 0.55;
 const CHANNEL_COUNT = 1;
 const BASE_VIEW_HEIGHT = 3;
 const ESCAPE_RADIUS_SQUARED = 4;
