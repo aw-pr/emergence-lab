@@ -18,6 +18,7 @@ coverage/
 *.local
 op-refs.local.sh
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 logs/
 runs/*.log
 
