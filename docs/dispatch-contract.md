@@ -66,6 +66,14 @@ If the diff is correct and acceptance has passed, the stage is done. If either i
 
 The commit is atomic and follows the per-agent author attribution rule laid down in `~/.claude/rules/mcp-hub-dev-rules.md`: committer is the human user; author is the canonical agent identity of the primary worker. A co-author trailer is added when a second agent contributed non-trivially. The stage card is committed alongside the deliverables so the audit trail is in git, not in chat.
 
+**The orchestrator commits, not the worker.** The worker leaves a dirty working tree as its deliverable; the verifier evaluates that dirty tree and writes its artefact; the orchestrator reads the artefact's `overall` field and acts:
+
+- `overall: PASS` — orchestrator stages the non-state working-tree changes and commits with `--author=<worker-identity>` and a `Co-Authored-By: <verifier-identity>` trailer. The commit subject is `<stage-id>: <headline>`, where the headline comes from the verifier artefact's `headline` field if present, otherwise from the stage card's title line. The stage moves to `completed`; the commit SHA is recorded in `state/state.yaml`.
+- `overall: FAIL` (or a missing / malformed `overall` field, treated as FAIL by the orchestrator) — no commit. The stage moves to `verifier_failed`, `current_stage` is cleared, and the dirty working tree is left intact for the operator to inspect, amend the stage card, and re-run, or revert.
+- Backward-compat — if a worker on an older prompt self-committed before the verifier ran, the working tree on a PASS artefact will be clean. The tick logs a deprecated-path warning and marks the stage `completed` without erroring. New stages should rely on the orchestrator commit path so the `Co-Authored-By: <verifier>` trailer appears in `git log`.
+
+This concentrates the commit decision at the one point where the verifier verdict is known. A worker that self-committed before the verifier ran would land its diff with an unknown verifier identity (the cross-family co-author trailer would be missing on every commit) and would force a `git revert` whenever the verifier later said FAIL. See [[memory/decision-orchestrator-commits-on-verifier-pass]] for the full rationale and rejected alternatives.
+
 ## The five headless gotchas
 
 These are the failure modes documented in the source projects (fractals-from-the-90s, agentic-rag-kimble). Each one has bitten in production at least once. The contract mitigates each at a specific step; do not assume any one of them goes away on its own.
@@ -118,6 +126,73 @@ The autonomous loop now exists as `phat-controller`. It is still layered on this
 - `state/budget.json`: per-repo budget and halt state.
 - `schemas/`: JSON schemas for the state and budget files.
 - `autometta status` and `autometta attach`: read-only operator views.
+
+### Canonical `halt_reason` values
+
+When `state/budget.json` is marked `halted: true`, the `halt_reason`
+field carries one of the following canonical strings. The set is
+closed — every call to `budget_halt` in the loop writes one of these,
+and nothing else overwrites a pre-existing reason on subsequent ticks:
+
+- `token-cap` — `tokens_spent >= token_cap_total`.
+- `wall-clock-cap` — `wall_clock_elapsed_seconds >= wall_clock_cap_seconds`.
+- `tick-cap` — `clock_ticks_used >= clock_tick_cap`.
+- `failure-cap` — `consecutive_failures >= consecutive_failure_cap`.
+- `dirty-working-tree` — the repo working tree was not clean when the
+  tick attempted to advance state.
+- `yq-missing` — the `yq` binary required to read `state/state.yaml`
+  was not on PATH.
+- `invalid-stage-id` — `current_stage` (or a referenced stage id) failed
+  the id-format validator.
+
+`budget_check_caps` distinguishes "real cap hit this tick" (return code
+1; one of the first four strings is selected via the
+`BUDGET_CHECK_LAST_HIT` side channel) from "already halted on a previous
+tick" (return code 2; caller must preserve the recorded reason rather
+than overwrite it).
+
+### Token accounting
+
+`state/budget.json` carries `tokens_spent` and `token_cap_total`. The
+loop increments `tokens_spent` after each worker and verifier phase by
+parsing the captured CLI log; `token-cap` then becomes an enforceable
+halt reason rather than a decorative field.
+
+- **Who increments.** `tick.sh` is the sole writer. The spawn scripts
+  (`spawn-worker.sh`, `spawn-verifier.sh`) source `budget.sh` but cannot
+  account in-band because they background the worker / verifier process
+  and exit immediately so the cron tick is not blocked by a 30-minute
+  run.
+- **When.** Post-exit, on the same tick that reaps the phase:
+  - Worker phase — when `worker_pid` was recorded on a previous tick but
+    `kill -0` now fails. Accounting fires once, then `worker_pid` is
+    cleared in `state.yaml` so subsequent ticks (still waiting on the
+    verifier) do not double-count.
+  - Verifier phase — when the verifier artefact is present at
+    `state/verifiers/<stage-id>.json`. Accounting fires immediately
+    before `_process_verifier_artefact`, which clears `current_stage`
+    on exit. If a prior verifier crashed without writing an artefact and
+    is being re-dispatched, its log is accounted for and `verifier_pid`
+    is cleared before the fresh dispatch.
+- **From what.** `budget_parse_tokens_from_log` (in `scripts/budget.sh`)
+  scans the captured stdout/stderr log for either family format:
+  - Codex two-line: a line that is exactly `tokens used`, followed by a
+    line whose first token is a digit run (commas tolerated).
+  - Claude inline: any line containing `Total tokens:` followed by a
+    digit run (commas and spaces tolerated).
+  When both appear in one log — for example a worker that retried — the
+  **last match wins**. Earlier numbers are treated as cumulative
+  subtotals or aborted-attempt counts; only the final figure is the
+  authoritative usage. The parser is pure awk, bash 3.2-compatible, no
+  python / node dependency.
+- **Failure mode.** A missing log, a log with no token line, or a
+  non-numeric capture is **non-fatal**: the parser logs a warning to
+  stderr and returns without mutating `tokens_spent`. The phase is
+  treated as having spent zero, which is a known undercount; the
+  `wall-clock-cap` and `tick-cap` paths still provide a backstop.
+- **Cap enforcement is automatic.** The next `budget_check_caps` after
+  the increment will surface the `token-cap` halt reason if
+  `tokens_spent >= token_cap_total`. No new gate is added.
 
 ## Reading order for a new operator
 
