@@ -47,6 +47,11 @@ export class CanvasRendererBackend implements RendererBackend {
     const expectedLength = this.width * this.height * channelCount;
     if (state.length !== expectedLength) return;
 
+    if (isBoidsState(kernel)) {
+      this.drawBoids(frame);
+      return;
+    }
+
     const pixels = this.imageData.data;
     let pixelOffset = 0;
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
@@ -67,6 +72,66 @@ export class CanvasRendererBackend implements RendererBackend {
   }
 
   destroy(): void {}
+
+  private drawBoids(frame: RendererBackendFrame): void {
+    const { state, kernel, displayOptions, params } = frame;
+    const pointSize =
+      typeof params.pointSize === "number" && Number.isFinite(params.pointSize)
+        ? params.pointSize
+        : displayOptions.dotSize;
+    const size = Math.max(4, Math.min(16, pointSize));
+    const halfWidth = size * 0.38;
+    const tail = size * 0.55;
+    const nose = size * 0.75;
+
+    this.ctx.fillStyle = "#050812";
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    for (let y = 0; y < this.height; y += 1) {
+      for (let x = 0; x < this.width; x += 1) {
+        const offset = (y * this.width + x) * kernel.channelCount;
+        const density = state[offset];
+        if (density <= 0.02) {
+          continue;
+        }
+
+        const speed = Math.max(0, Math.min(1, state[offset + 1]));
+        let vx = state[offset + 2];
+        let vy = state[offset + 3];
+        const magnitude = Math.hypot(vx, vy);
+        if (magnitude <= 0.0001) {
+          vx = 1;
+          vy = 0;
+        } else {
+          vx /= magnitude;
+          vy /= magnitude;
+        }
+
+        const px = x + 0.5;
+        const py = y + 0.5;
+        const sideX = -vy;
+        const sideY = vx;
+        const tipX = px + vx * nose;
+        const tipY = py + vy * nose;
+        const backX = px - vx * tail;
+        const backY = py - vy * tail;
+        const leftX = backX + sideX * halfWidth;
+        const leftY = backY + sideY * halfWidth;
+        const rightX = backX - sideX * halfWidth;
+        const rightY = backY - sideY * halfWidth;
+
+        const green = Math.round(188 + speed * 50);
+        const blue = Math.round(190 + speed * 55);
+        this.ctx.fillStyle = `rgb(94, ${green}, ${blue})`;
+        this.ctx.beginPath();
+        this.ctx.moveTo(tipX, tipY);
+        this.ctx.lineTo(leftX, leftY);
+        this.ctx.lineTo(rightX, rightY);
+        this.ctx.closePath();
+        this.ctx.fill();
+      }
+    }
+  }
 
   private rebuildMapper(
     kernel: SimKernel,
@@ -140,4 +205,13 @@ export class CanvasRendererBackend implements RendererBackend {
     }
     return signal;
   }
+}
+
+function isBoidsState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Boids" &&
+    kernel.channelCount >= 4 &&
+    kernel.channelLabels[2] === "Velocity X" &&
+    kernel.channelLabels[3] === "Velocity Y"
+  );
 }

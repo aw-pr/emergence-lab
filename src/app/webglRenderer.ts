@@ -32,6 +32,8 @@ uniform bool u_paletteCycleReverse;
 uniform int u_dotRadius;
 uniform bool u_smoothSampling;
 uniform float u_palettePhase;
+uniform bool u_boidsGlyph;
+uniform float u_boidsGlyphRadius;
 
 in vec2 v_uv;
 out vec4 outColor;
@@ -182,6 +184,27 @@ vec3 colourAt(ivec2 coord) {
   return colourFromRaw(readChannels(coord));
 }
 
+bool insideBoidGlyph(vec2 local, vec2 direction, float radius) {
+  float magnitude = length(direction);
+  vec2 forward = magnitude <= 0.0001 ? vec2(1.0, 0.0) : direction / magnitude;
+  vec2 sideAxis = vec2(-forward.y, forward.x);
+  float along = dot(local, forward);
+  float side = abs(dot(local, sideAxis));
+  float nose = radius * 1.2;
+  float tail = radius * 0.9;
+
+  if (along < -tail || along > nose) return false;
+
+  float t = (along + tail) / (nose + tail);
+  float halfWidth = mix(radius * 0.62, 0.0, t);
+  return side <= max(0.65, halfWidth);
+}
+
+vec3 boidColour(float speed) {
+  float s = clamp01(speed);
+  return mixRgb(vec3(94.0, 188.0, 190.0), vec3(130.0, 238.0, 245.0), s) / 255.0;
+}
+
 vec4 softSample(vec2 uv) {
   vec2 texel = 1.0 / u_sourceSize;
   vec4 center = sampleChannels(uv);
@@ -195,6 +218,27 @@ vec4 softSample(vec2 uv) {
 void main() {
   ivec2 size = ivec2(u_sourceSize);
   ivec2 coord = ivec2(clamp(floor(v_uv * u_sourceSize), vec2(0.0), u_sourceSize - vec2(1.0)));
+
+  if (u_boidsGlyph) {
+    int radius = int(ceil(u_boidsGlyphRadius + 1.0));
+    for (int y = -10; y <= 10; y += 1) {
+      for (int x = -10; x <= 10; x += 1) {
+        if (abs(x) > radius || abs(y) > radius) continue;
+        ivec2 sampleCoord = clamp(coord + ivec2(x, y), ivec2(0), size - ivec2(1));
+        vec4 raw = readChannels(sampleCoord);
+        if (raw.r <= 0.02) continue;
+
+        vec2 local = vec2(coord - sampleCoord);
+        if (insideBoidGlyph(local, raw.ba, u_boidsGlyphRadius)) {
+          outColor = vec4(boidColour(raw.g), 1.0);
+          return;
+        }
+      }
+    }
+
+    outColor = vec4(vec3(5.0, 8.0, 18.0) / 255.0, 1.0);
+    return;
+  }
 
   if (u_dotRadius > 0) {
     vec4 raw = readChannels(coord);
@@ -236,6 +280,8 @@ interface UniformLocations {
   dotRadius: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
+  boidsGlyph: WebGLUniformLocation;
+  boidsGlyphRadius: WebGLUniformLocation;
 }
 
 export class WebGLRendererBackend implements RendererBackend {
@@ -363,6 +409,14 @@ export class WebGLRendererBackend implements RendererBackend {
       palettePhase: mustCreate(
         this.gl.getUniformLocation(this.program, "u_palettePhase"),
         "u_palettePhase uniform",
+      ),
+      boidsGlyph: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_boidsGlyph"),
+        "u_boidsGlyph uniform",
+      ),
+      boidsGlyphRadius: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_boidsGlyphRadius"),
+        "u_boidsGlyphRadius uniform",
       ),
     };
   }
@@ -509,6 +563,8 @@ export class WebGLRendererBackend implements RendererBackend {
         ? palettePhase(params, elapsedTime, colourOptions, speedScale)
         : 0,
     );
+    gl.uniform1i(this.uniforms.boidsGlyph, isBoidsState(kernel) ? 1 : 0);
+    gl.uniform1f(this.uniforms.boidsGlyphRadius, boidsGlyphRadius(params, displayOptions));
   }
 }
 
@@ -578,6 +634,27 @@ function presetIndex(preset: ColourPreset): number {
 
 function shouldSmoothSample(mode: RenderMode): boolean {
   return mode === "field" || mode === "smooth" || mode === "fractal";
+}
+
+function isBoidsState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Boids" &&
+    kernel.channelCount >= 4 &&
+    kernel.channelLabels[2] === "Velocity X" &&
+    kernel.channelLabels[3] === "Velocity Y"
+  );
+}
+
+function boidsGlyphRadius(
+  params: Record<string, number | boolean | string>,
+  displayOptions: { dotSize: number },
+): number {
+  const rawSize = params.pointSize;
+  const size =
+    typeof rawSize === "number" && Number.isFinite(rawSize)
+      ? rawSize
+      : displayOptions.dotSize;
+  return Math.max(2, Math.min(8, size / 2));
 }
 
 function palettePhase(

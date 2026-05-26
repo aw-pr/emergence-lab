@@ -30,7 +30,8 @@ const DEFAULT_MAX_SPEED = 2;
 const DEFAULT_ALIGNMENT = 0.05;
 const DEFAULT_COHESION = 0.008;
 const DEFAULT_SEPARATION = 0.18;
-const CHANNEL_COUNT = 2;
+const DEFAULT_POINT_SIZE = 6;
+const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
 
 function clamp(value: number, min: number, max: number): number {
@@ -104,10 +105,12 @@ function limitVector(
 export class BoidsKernel implements SimKernel {
   readonly name = "Boids";
   readonly channelCount = CHANNEL_COUNT;
-  readonly channelLabels = ["Density", "Speed"] as const;
+  readonly channelLabels = ["Density", "Speed", "Velocity X", "Velocity Y"] as const;
   readonly channelRanges = [
     [0, 1],
     [0, 1],
+    [-1, 1],
+    [-1, 1],
   ] as const;
   readonly paramSchema = [
     {
@@ -172,6 +175,15 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.001,
+    },
+    {
+      key: "pointSize",
+      label: "Point size (px)",
+      type: "number",
+      default: DEFAULT_POINT_SIZE,
+      min: 1,
+      max: 16,
+      step: 1,
     },
   ] as const satisfies readonly ParamDescriptor[];
 
@@ -385,6 +397,8 @@ export class BoidsKernel implements SimKernel {
 
       this.state[index] += 1;
       this.state[index + 1] += clamp(speed / this.maxSpeed, 0, 1);
+      this.state[index + 2] += clamp(this.vx[i] / this.maxSpeed, -1, 1);
+      this.state[index + 3] += clamp(this.vy[i] / this.maxSpeed, -1, 1);
     }
 
     for (let index = 0; index < this.state.length; index += CHANNEL_COUNT) {
@@ -392,6 +406,8 @@ export class BoidsKernel implements SimKernel {
       if (count > 0) {
         this.state[index] = clamp(count, 0, 1);
         this.state[index + 1] = clamp(this.state[index + 1] / count, 0, 1);
+        this.state[index + 2] = clamp(this.state[index + 2] / count, -1, 1);
+        this.state[index + 3] = clamp(this.state[index + 3] / count, -1, 1);
       }
     }
   }

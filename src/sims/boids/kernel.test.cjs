@@ -36,11 +36,18 @@ test("metadata matches the renderer contract", () => {
   const kernel = new BoidsKernel();
 
   assert.equal(kernel.name, "Boids");
-  assert.equal(kernel.channelCount, 2);
-  assert.deepEqual(kernel.channelLabels, ["Density", "Speed"]);
+  assert.equal(kernel.channelCount, 4);
+  assert.deepEqual(kernel.channelLabels, [
+    "Density",
+    "Speed",
+    "Velocity X",
+    "Velocity Y",
+  ]);
   assert.deepEqual(kernel.channelRanges, [
     [0, 1],
     [0, 1],
+    [-1, 1],
+    [-1, 1],
   ]);
 
   assert.deepEqual(
@@ -53,8 +60,16 @@ test("metadata matches the renderer contract", () => {
       "alignment",
       "cohesion",
       "separation",
+      "pointSize",
     ],
   );
+
+  const pointSize = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "pointSize",
+  );
+  assert.equal(pointSize.label, "Point size (px)");
+  assert.equal(pointSize.default, 6);
+  assert.ok(pointSize.default > 2);
 
   for (const descriptor of kernel.paramSchema) {
     assert.equal(descriptor.type, "number");
@@ -118,7 +133,7 @@ test("selfTest passes", () => {
   assert.equal(selfTest(), true);
 });
 
-test("stepping populates bounded density and speed channels", () => {
+test("stepping populates bounded density, speed, and velocity channels", () => {
   const kernel = new BoidsKernel();
   kernel.init(32, 32, {});
   kernel.step(1);
@@ -130,14 +145,21 @@ test("stepping populates bounded density and speed channels", () => {
   for (let index = 0; index < state.length; index += kernel.channelCount) {
     const density = state[index];
     const speed = state[index + 1];
+    const velocityX = state[index + 2];
+    const velocityY = state[index + 3];
 
     assert.ok(density >= 0);
     assert.ok(density <= 1);
     assert.ok(speed >= 0);
     assert.ok(speed <= 1);
+    assert.ok(velocityX >= -1);
+    assert.ok(velocityX <= 1);
+    assert.ok(velocityY >= -1);
+    assert.ok(velocityY <= 1);
 
     if (density > 0) {
       densityCells += 1;
+      assert.ok(Math.hypot(velocityX, velocityY) > 0);
     }
     if (speed > 0) {
       speedCells += 1;
