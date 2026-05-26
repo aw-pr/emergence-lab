@@ -6,6 +6,8 @@ const {
   selfTest,
 } = require("../../../.test-build/sims/mandelbrot/kernel.js");
 
+const FRAME_DT_SECONDS = 1 / 60;
+
 function defaultsFromSchema(kernel) {
   return Object.fromEntries(
     kernel.paramSchema.map((descriptor) => [
@@ -20,7 +22,7 @@ function runKernel(params = {}, steps = 0) {
   kernel.init(40, 28, params);
 
   for (let index = 0; index < steps; index += 1) {
-    kernel.step(1);
+    kernel.step(FRAME_DT_SECONDS);
   }
 
   return Array.from(kernel.readState());
@@ -88,7 +90,7 @@ test("init creates the expected state shape and readState reference is stable", 
   assert.equal(first.length, 16 * 12 * kernel.channelCount);
   assert.equal(first, second);
 
-  kernel.step(1);
+  kernel.step(FRAME_DT_SECONDS);
   assert.equal(kernel.readState(), first);
 });
 
@@ -99,7 +101,7 @@ test("init floors dimensions and resets state idempotently", () => {
   const state = kernel.readState();
   assert.equal(state.length, 10 * 8 * kernel.channelCount);
 
-  kernel.step(1);
+  kernel.step(FRAME_DT_SECONDS);
   const afterStep = Array.from(state);
 
   kernel.init(10.9, 8.2, {});
@@ -152,7 +154,7 @@ test("colour cycling changes state on step while staying bounded", () => {
   kernel.init(40, 28, { cycleSpeed: 0.025 });
 
   const before = Array.from(kernel.readState());
-  kernel.step(1);
+  kernel.step(FRAME_DT_SECONDS);
   const after = Array.from(kernel.readState());
 
   assert.notDeepEqual(after, before);
@@ -199,7 +201,7 @@ test("destroy releases state and leaves step/readState safe", () => {
   assert.equal(kernel.readState().length, 0);
 
   assert.doesNotThrow(() => {
-    kernel.step(1);
+    kernel.step(FRAME_DT_SECONDS);
   });
   assert.equal(kernel.readState().length, 0);
 });

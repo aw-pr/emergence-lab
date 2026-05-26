@@ -149,12 +149,12 @@ export class BurningShipKernel implements SimKernel {
     this.writeStateFromBase();
   }
 
-  step(_dt: number): void {
+  step(dt: number): void {
     if (this.state.length === 0) {
       return;
     }
 
-    this.phase = wrap01(this.phase + this.cycleSpeed);
+    this.phase = wrap01(this.phase + this.cycleSpeed * dt);
     this.writeStateFromBase();
   }
 

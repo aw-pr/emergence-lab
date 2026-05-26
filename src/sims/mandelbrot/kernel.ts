@@ -169,12 +169,12 @@ export class MandelbrotKernel implements SimKernel {
     this.writeStateFromBase();
   }
 
-  step(_dt: number): void {
+  step(dt: number): void {
     if (this.width === 0 || this.height === 0) {
       return;
     }
 
-    this.phase = wrap01(this.phase + this.cycleSpeed);
+    this.phase = wrap01(this.phase + this.cycleSpeed * dt);
     this.writeStateFromBase();
   }
 

@@ -210,12 +210,12 @@ export class JuliaSetKernel implements SimKernel {
     this.writePhasedState();
   }
 
-  step(_dt: number): void {
+  step(dt: number): void {
     if (this.width === 0 || this.height === 0) {
       return;
     }
 
-    this.palettePhase = wrapUnit(this.palettePhase + this.cycleSpeed);
+    this.palettePhase = wrapUnit(this.palettePhase + this.cycleSpeed * dt);
     this.writePhasedState();
   }
 
