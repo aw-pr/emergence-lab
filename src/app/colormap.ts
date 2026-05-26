@@ -135,7 +135,7 @@ export function defaultColourOptionsFor(
     case "lorenz-attractor":
       return { ...base, preset: "inferno", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
-      return { ...base, preset: "plasma", gamma: 0.62, contrast: 1.55 };
+      return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "burning-ship":
