@@ -1,0 +1,18 @@
+# Copy this to .publish-guard.local and replace the placeholders.
+# .publish-guard.local is gitignored; this .example file is committed.
+
+# Pipe-separated extended regex of personal/secret patterns the pre-commit
+# hook will refuse to stage. Include things like:
+#   - your home-dir paths on macOS and Linux
+#   - 1Password reference URIs (the op-prefixed scheme)
+#   - your personal email addresses and usernames
+# Example shape (replace each <placeholder> with a real value):
+GUARD_PATTERNS='<MAC_HOME_PATH>|<LINUX_HOME_PATH>|<OP_REF_SCHEME>|<USERNAME>@|<EMAIL>'
+
+# Public-remote gate for the pre-push hook.
+# GUARD_PUBLIC_URL_MATCH: a substring unique to your public remote URL.
+#   Must be narrow enough that it does NOT match any private remote.
+#   Bad: 'emergence-lab' (matches private too). Good: '<PUBLIC_ORG>/<REPO>'.
+# GUARD_PUBLIC_BRANCH: the only branch allowed on the public remote.
+GUARD_PUBLIC_URL_MATCH='<PUBLIC_ORG>/<PUBLIC_REPO>'
+GUARD_PUBLIC_BRANCH='main'
