@@ -1,45 +1,90 @@
 # Publish workflow
 
-How emergence-lab keeps the public mirror clean. Read this before pushing
-anything to the public remote, and before changing the publish-guard
-configuration.
+How emergence-lab keeps the public mirror clean, and how the site deploy
+relates to the publish action. Read this before pushing anything to the
+public remote.
 
 ## Model
 
-This repo runs the **simple publish-guard model**. There is no separate
-`publish` branch and no `git publish` alias. The two hooks gate the
-public remote at the push boundary:
+This repo runs the **dual-branch publish model** in `preserve` history
+mode. There are two long-lived branches with two different audiences:
 
-- **Private side** (`origin` = `tw-one/emergence-lab`): every branch is
-  freely pushable. Topic branches, agent state branches, work in progress.
-- **Public side** (`public` = `aw-pr/emergence-lab`): the pre-push hook
-  refuses anything except `main`. To publish, push `main:main`.
+- **`main`** — site trunk. Private origin (`tw-one/emergence-lab`).
+  Netlify deploys from this branch on every push. Topic branches merge
+  here. May contain commits not yet visible on the public mirror.
+- **`publish`** — public mirror trunk. Fast-forwards onto `main` only
+  when you deliberately publish. Pushed to `public` (`aw-pr/emergence-lab`)
+  as `main`. Append-only and always publish-clean.
 
-History is preserved. The pre-publish audit confirmed no real secrets or
-personal paths have ever entered git history (the only matches are literal
-pattern strings inside this doc and `.cursor/rules/publish-safety.mdc`),
-so there is no scrub or orphan-squash. Public `main` is a straight copy of
-private `main`.
+The site deploy and the public mirror are decoupled. Pushing to `main`
+updates the site. Running `git publish` updates the public mirror.
+You choose when to do each.
 
 ## The one hard invariant
 
-Whatever commit `public/main` points at is immutable. Rewrite or squash
-freely *above* it (commits not yet published); never *at or below* it.
-Rewriting a published commit forces a history-rewriting push, which is the
-exact hazard the guards exist to prevent. Treat that as an incident, not
-routine.
+Whatever commit `public/main` points at is immutable. Squash or rewrite
+freely *above* it; never *at or below* it. Rewriting a published commit
+would require a history-rewriting push to the public remote — treat that
+as an incident, not routine.
+
+## History mode
+
+`publishguard.historymode = preserve`. Atomic commits with per-agent
+authorship (see CLAUDE.md and `~/.claude/rules/mcp-hub-dev-rules.md`) land
+on the public mirror as-is. The public history is the audit trail.
+
+If a particular run produces commits that are too hairy to publish
+commit-by-commit, squash them on a local branch above `publish` before
+fast-forwarding. Mode is a per-merge choice; the config key just sets the
+default.
+
+## Day-to-day
+
+```bash
+# Working on the site (anything that should deploy):
+git switch main
+# commit work atomically with per-agent --author=
+git push origin main          # deploys site
+
+# When main is publish-ready, mirror it:
+git publish                   # ff publish onto main, push origin publish,
+                              # push public publish:main
+```
+
+The `git publish` alias:
+
+1. Refuses if the working tree is dirty.
+2. Switches to `publish`.
+3. Fast-forwards `publish` onto `main` (fails if `main` is not a
+   descendant of `publish` — investigate before forcing).
+4. Pushes `publish` to the private remote (`origin`, for backup).
+5. Pushes `publish:main` to the public remote (`public`).
+6. Returns to the original branch.
+
+Do **not** hand-type `git push public main` to publish. Route through
+`git publish` so the backup push and the public push happen together.
+
+## What never goes public
+
+- Topic branches (`wip/*`, `tuning-and-visual-fixes`, etc.) — these are
+  for `origin` only. The pre-push hook on `public` rejects anything other
+  than the `main` ref.
+- Agent runtime state branches (`phat-controller/state`) — local only.
+- `.publish-guard.local`, `.env*`, the autometta `state/` directory, and
+  anything matching the personal patterns. The pre-commit hook enforces
+  this at staging time.
 
 ## Guard infrastructure
 
 Source-of-truth files in the repo:
 
 - `scripts/git-hooks/pre-commit` — refuses to stage files matching
-  sensitive paths (`.env*`, `*op-refs.local.sh`, `*settings.local.json`,
-  `.publish-guard.local`) and any diff content matching the patterns in
-  `GUARD_PATTERNS`.
+  sensitive paths and diff content matching `GUARD_PATTERNS`.
 - `scripts/git-hooks/pre-push` — on the public remote (matched by
   `GUARD_PUBLIC_URL_MATCH`), allows only the branch named in
-  `GUARD_PUBLIC_BRANCH`. Other remotes are unrestricted.
+  `GUARD_PUBLIC_BRANCH` (set to `main` — the public-side branch name,
+  which is what `publish:main` resolves to). Other remotes are
+  unrestricted.
 - `scripts/install-guards.sh` — idempotent installer. Copies both hooks
   into `.git/hooks/` and seeds `.publish-guard.local` from the example.
 - `.publish-guard.local.example` — committed template with placeholders.
@@ -49,15 +94,30 @@ Override once for a deliberate exception: `git commit --no-verify` or
 `git push --no-verify`. Both are escape hatches; they should not appear in
 routine workflows.
 
+## Config keys
+
+Local git config (not committed), set once at adoption:
+
+```sh
+git config publishguard.publicmatch    aw-pr/emergence-lab
+git config publishguard.publicremote   public
+git config publishguard.publishbranch  publish
+git config publishguard.privateremote  origin
+git config publishguard.historymode    preserve
+```
+
+And `.publish-guard.local` carries the personal-pattern allow-list and
+matches the public remote URL fragment.
+
 ## One-time setup on a fresh clone
 
 ```sh
 bash scripts/install-guards.sh
 ```
 
-That copies the hooks and seeds a placeholder `.publish-guard.local`. Then
-edit `.publish-guard.local` and replace the placeholders with the real
-values for this repo:
+That copies the hooks and seeds a placeholder `.publish-guard.local`.
+Then edit `.publish-guard.local` and replace the placeholders with the
+real values:
 
 ```sh
 GUARD_PATTERNS='<MAC_HOME_PATH>|<LINUX_HOME_PATH>|<OP_REF_SCHEME>|<USERNAME>@|<EMAIL>'
@@ -65,58 +125,38 @@ GUARD_PUBLIC_URL_MATCH='aw-pr/emergence-lab'
 GUARD_PUBLIC_BRANCH='main'
 ```
 
-The example uses angle-bracket placeholders deliberately so this committed
-doc does not trip the pre-commit hook against itself. Real values go in
-`.publish-guard.local`, which is gitignored.
-
-`GUARD_PUBLIC_URL_MATCH` must be narrow enough that it only matches the
-public remote. `emergence-lab` alone would also match `tw-one/emergence-lab`
-and lock the private origin to `main`-only; use `aw-pr/emergence-lab`.
-
-Prove the gate fires:
-
-```sh
-echo "/Users/<yourname>/secret" > /tmp/test-leak.md
-git add /tmp/test-leak.md
-git commit -m "test"            # rejected by pre-commit
-git push public some-branch     # rejected by pre-push
-```
-
-Add the public remote once:
+Set the five `publishguard.*` config keys above. Add the public remote
+and create the local `publish` branch:
 
 ```sh
 git remote add public git@github.com:aw-pr/emergence-lab.git
+git fetch public
+git branch publish public/main
 ```
 
-## Publishing
-
-The whole flow is two commands:
-
-```sh
-git checkout main
-git push public main
-```
-
-The pre-push hook accepts because the branch matches `GUARD_PUBLIC_BRANCH`.
-Any other branch name would be rejected. If history has diverged from the
-public side (it should not, unless someone rewrote a published commit),
-investigate before forcing.
-
-## What never goes public
-
-- Topic branches (`tuning-and-visual-fixes`, `wip/*`, etc.) — push them to
-  `origin`, not `public`. The pre-push hook enforces this.
-- Agent runtime state branches (`phat-controller/state`) — local-only.
-- `.publish-guard.local`, `.env*`, anything matching the personal patterns.
+Re-create the `git publish` alias if it's not in your global git config
+(it's set locally per-checkout in this repo).
 
 ## Audit before any public push
 
 1. `git status` clean.
 2. `npm run verify` green.
-3. The `repo-publish-audit` skill returns only documentation false positives
-   (this file, `.cursor/rules/publish-safety.mdc`). The skill's reference
-   contains the exact grep recipes; they are deliberately not duplicated here
-   because the literal regexes would trip the pre-commit hook.
+3. The `repo-publish-audit` skill returns only documentation false
+   positives (this file, `.cursor/rules/publish-safety.mdc`).
 4. `git ls-files | grep -E '\.env$|settings\.local|op-refs\.local\.sh$|/auth\.json$|\.log$'`
    is empty.
-5. Bundle backup taken: `git bundle create ~/emergence-lab-history-$(date +%Y%m%d-%H%M%S).bundle --all`.
+5. Bundle backup taken:
+   `git bundle create ~/emergence-lab-history-$(date +%Y%m%d-%H%M%S).bundle --all`.
+
+Then `git publish`.
+
+## Site deploy and publish are independent
+
+- **Site update without publish**: commit on `main`, `git push origin main`.
+  Netlify rebuilds. `publish` does not move; the public mirror is
+  unchanged.
+- **Publish without site update**: not really meaningful in this repo —
+  `git publish` fast-forwards `publish` onto `main`, so the public
+  mirror only ever lags or equals the deployed site, never leads it.
+- **Both**: ordinary case. Push to `main` (site updates), then
+  `git publish` when ready (public mirror catches up).
