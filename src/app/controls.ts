@@ -61,6 +61,10 @@ export class ControlsPanel {
   private readonly container: HTMLElement;
   private readonly callbacks: ControlsCallbacks;
   private readonly paramSchema: readonly ParamDescriptor[];
+  private readonly initialStepsPerFrame: number;
+  private readonly stepsControl: StepsControlOptions;
+  private readonly initialColourOptions: ColourMapOptions;
+  private readonly initialDisplayOptions: DisplayOptions;
   private params: SimParams;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
@@ -82,12 +86,29 @@ export class ControlsPanel {
   private playPauseBtn!: HTMLButtonElement;
   private fpsLabel!: HTMLSpanElement;
   private iterationLabel!: HTMLSpanElement;
+  private stepsInput?: HTMLInputElement;
+  private stepsValueLabel?: HTMLSpanElement;
+  private colourPresetSelect?: HTMLSelectElement;
+  private cycleDirectionSelect?: HTMLSelectElement;
+  private invertInput?: HTMLInputElement;
+  private readonly colourRangeControls = new Map<
+    string,
+    {
+      input: HTMLInputElement;
+      valueLabel: HTMLSpanElement;
+      step: number;
+    }
+  >();
 
   constructor(options: ControlsOptions) {
     this.slug = options.slug;
     this.container = options.container;
     this.callbacks = options.callbacks;
     this.paramSchema = options.paramSchema;
+    this.initialStepsPerFrame = options.initialStepsPerFrame;
+    this.stepsControl = options.stepsControl;
+    this.initialColourOptions = { ...options.initialColourOptions };
+    this.initialDisplayOptions = { ...options.initialDisplayOptions };
     this.params = restorePersistedParams(
       options.slug,
       options.paramSchema,
@@ -136,6 +157,7 @@ export class ControlsPanel {
     this.paramInputs.clear();
     this.paramValueLabels.clear();
     this.numberBoundEditors.clear();
+    this.colourRangeControls.clear();
 
     const header = document.createElement("header");
     header.className = "controls__header";
@@ -237,6 +259,9 @@ export class ControlsPanel {
       value.textContent = formatSpeed(next, control.step);
       onChange(next);
     });
+
+    this.stepsInput = input;
+    this.stepsValueLabel = value;
 
     return wrap;
   }
@@ -535,6 +560,7 @@ export class ControlsPanel {
       const paletteCycleReverse = select.value === "reverse";
       this.setColourOptions({ ...this.colourOptions, paletteCycleReverse });
     });
+    this.cycleDirectionSelect = select;
 
     row.appendChild(select);
     block.appendChild(row);
@@ -573,6 +599,7 @@ export class ControlsPanel {
     select.addEventListener("change", () => {
       onChange(select.value as ColourPreset);
     });
+    this.colourPresetSelect = select;
 
     return wrap;
   }
@@ -611,6 +638,7 @@ export class ControlsPanel {
       value.textContent = formatNumber(next, step);
       onChange(next);
     });
+    this.colourRangeControls.set(labelText, { input, valueLabel: value, step });
 
     return wrap;
   }
@@ -636,6 +664,9 @@ export class ControlsPanel {
     input.addEventListener("change", () => {
       onChange(input.checked);
     });
+    if (labelText === "Invert colours") {
+      this.invertInput = input;
+    }
 
     return wrap;
   }
@@ -668,6 +699,14 @@ export class ControlsPanel {
   private resetToDefaults(): void {
     clearValues(this.slug);
     clearBounds(this.slug);
+
+    this.syncStepsControl(this.initialStepsPerFrame);
+    this.colourOptions = { ...this.initialColourOptions };
+    this.displayOptions = { ...this.initialDisplayOptions };
+    this.syncColourControls();
+    this.callbacks.onStepsPerFrameChange(this.initialStepsPerFrame);
+    this.callbacks.onColourChange(this.colourOptions);
+    this.callbacks.onDisplayChange(this.displayOptions);
 
     const nextParams = defaultParamsFromSchema(this.paramSchema);
     for (const descriptor of this.paramSchema) {
@@ -702,6 +741,40 @@ export class ControlsPanel {
     this.params = nextParams;
     this.callbacks.onParamChange(this.params);
     this.callbacks.onReset();
+  }
+
+  private syncStepsControl(value: number): void {
+    if (!this.stepsInput || !this.stepsValueLabel) {
+      return;
+    }
+    this.stepsInput.value = String(value);
+    this.stepsValueLabel.textContent = formatSpeed(value, this.stepsControl.step);
+  }
+
+  private syncColourControls(): void {
+    if (this.colourPresetSelect) {
+      this.colourPresetSelect.value = this.colourOptions.preset;
+    }
+    if (this.cycleDirectionSelect) {
+      this.cycleDirectionSelect.value = this.colourOptions.paletteCycleReverse
+        ? "reverse"
+        : "forward";
+    }
+    if (this.invertInput) {
+      this.invertInput.checked = this.colourOptions.invert;
+    }
+    this.syncColourRangeControl("Gamma", this.colourOptions.gamma);
+    this.syncColourRangeControl("Contrast", this.colourOptions.contrast);
+    this.syncColourRangeControl("Point size (px)", this.displayOptions.dotSize);
+  }
+
+  private syncColourRangeControl(label: string, value: number): void {
+    const controls = this.colourRangeControls.get(label);
+    if (!controls) {
+      return;
+    }
+    controls.input.value = String(value);
+    controls.valueLabel.textContent = formatNumber(value, controls.step);
   }
 
   private setColourOptions(next: ColourMapOptions): void {
