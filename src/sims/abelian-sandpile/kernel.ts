@@ -23,7 +23,7 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_INITIAL_PILE = 100000;
+const DEFAULT_INITIAL_PILE = 300000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
 const DEFAULT_GRAINS_PER_STEP = 4;
 const DEFAULT_TOPPLES_PER_STEP = 50000;
