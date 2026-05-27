@@ -68,8 +68,20 @@ test("metadata matches the renderer contract", () => {
     (descriptor) => descriptor.key === "pointSize",
   );
   assert.equal(pointSize.label, "Point size (px)");
-  assert.equal(pointSize.default, 6);
-  assert.ok(pointSize.default > 2);
+  assert.equal(pointSize.default, 16);
+  assert.equal(pointSize.min, 16);
+
+  const boidCount = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "boidCount",
+  );
+  assert.equal(boidCount.default, 800);
+  assert.equal(boidCount.max, 1200);
+
+  const maxSpeed = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "maxSpeed",
+  );
+  assert.equal(maxSpeed.default, 20);
+  assert.equal(maxSpeed.max, 40);
 
   for (const descriptor of kernel.paramSchema) {
     assert.equal(descriptor.type, "number");

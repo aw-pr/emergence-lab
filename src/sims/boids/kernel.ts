@@ -23,14 +23,14 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_BOID_COUNT = 80;
+const DEFAULT_BOID_COUNT = 800;
 const DEFAULT_VISUAL_RADIUS = 12;
 const DEFAULT_SEPARATION_RADIUS = 4;
-const DEFAULT_MAX_SPEED = 2;
+const DEFAULT_MAX_SPEED = 20;
 const DEFAULT_ALIGNMENT = 0.05;
 const DEFAULT_COHESION = 0.008;
 const DEFAULT_SEPARATION = 0.18;
-const DEFAULT_POINT_SIZE = 6;
+const DEFAULT_POINT_SIZE = 16;
 const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
 
@@ -119,7 +119,7 @@ export class BoidsKernel implements SimKernel {
       type: "number",
       default: DEFAULT_BOID_COUNT,
       min: 1,
-      max: 400,
+      max: 1200,
       step: 1,
     },
     {
@@ -146,7 +146,7 @@ export class BoidsKernel implements SimKernel {
       type: "number",
       default: DEFAULT_MAX_SPEED,
       min: 0.25,
-      max: 8,
+      max: 40,
       step: 0.05,
     },
     {
@@ -181,7 +181,7 @@ export class BoidsKernel implements SimKernel {
       label: "Point size (px)",
       type: "number",
       default: DEFAULT_POINT_SIZE,
-      min: 1,
+      min: 16,
       max: 16,
       step: 1,
     },
@@ -209,7 +209,7 @@ export class BoidsKernel implements SimKernel {
     this.height = Math.max(0, Math.floor(height));
 
     this.boidCount = Math.floor(
-      clamp(numberParam(params, "boidCount", DEFAULT_BOID_COUNT), 1, 400),
+      clamp(numberParam(params, "boidCount", DEFAULT_BOID_COUNT), 1, 1200),
     );
     this.visualRadius = clamp(
       numberParam(params, "visualRadius", DEFAULT_VISUAL_RADIUS),
@@ -224,7 +224,7 @@ export class BoidsKernel implements SimKernel {
     this.maxSpeed = clamp(
       numberParam(params, "maxSpeed", DEFAULT_MAX_SPEED),
       0.25,
-      8,
+      40,
     );
     this.alignment = clamp(
       numberParam(params, "alignment", DEFAULT_ALIGNMENT),
