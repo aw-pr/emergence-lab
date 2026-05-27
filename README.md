@@ -1,22 +1,24 @@
 # Emergence lab
 
-Status: Proof of Concept · Phase: Hone · Stack: TypeScript + Vite · Renderer: WebGL2 · Agents: Claude + Codex · Licence: MIT
+![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange) ![Phase: Hone](https://img.shields.io/badge/phase-hone-blue) ![Stack: TypeScript + Vite](https://img.shields.io/badge/stack-TypeScript%20%2B%20Vite-3178c6) ![Renderer: WebGL2](https://img.shields.io/badge/renderer-WebGL2-990000) ![Agents: Claude + Codex](https://img.shields.io/badge/agents-Claude%20%2B%20Codex-7c3aed) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)
 
-> Many agents following simple local rules produce what we call *emergent*  
-> *behaviour*. You see it everywhere in nature and in human systems: ant  
-> colonies, flocking, traffic, markets, the way organisations actually  
+> Many agents following simple local rules produce what we call *emergent
+> behaviour*. You see it everywhere in nature and in human systems: ant
+> colonies, flocking, traffic, markets, the way organisations actually
 > function rather than the way the org chart claims they do.
-> Between strict order and pure noise sits a thin band where things get  
-> interesting. *Complexity* is the regime where local interactions build  
-> global structure nobody specified. *Chaos* is its close cousin:  
-> deterministic equations that stay unpredictable forever because they are  
-> exquisitely sensitive to where they started. Most of the twelve  
+>
+> Between strict order and pure noise sits a thin band where things get
+> interesting. *Complexity* is the regime where local interactions build
+> global structure nobody specified. *Chaos* is its close cousin:
+> deterministic equations that stay unpredictable forever because they are
+> exquisitely sensitive to where they started. Most of the twelve
 > simulations in this gallery sit somewhere on that line.
-> The repo is also a working bench for multi-agent orchestration across  
-> Claude and Codex. Codex leads the code under `src/**`; Claude owns the  
-> kernel contract, the essays, and the directive docs. The split is in  
-> [`MODELS.md`](MODELS.md). What matters is not what one model can do, it  
-> is what two models build together when the boundary between them is  
+>
+> The repo is also a working bench for multi-agent orchestration across
+> Claude and Codex. Codex leads the code under `src/**`; Claude owns the
+> kernel contract, the essays, and the directive docs. The split is in
+> [`MODELS.md`](MODELS.md). What matters is not what one model can do, it
+> is what two models build together when the boundary between them is
 > made explicit.
 
 The lab is the working companion to a research write-up:  
