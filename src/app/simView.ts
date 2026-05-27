@@ -297,7 +297,7 @@ function speedProfileFor(slug: string): SpeedProfile {
   };
   const fractal: StepsControlOptions = {
     label: "Colour cycle multiplier",
-    min: 0.05,
+    min: 0.5,
     max: 2,
     step: 0.05,
   };

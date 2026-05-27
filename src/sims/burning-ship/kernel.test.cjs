@@ -66,7 +66,7 @@ test("metadata matches the renderer contract", () => {
       ["zoom", 1, 0.25, 500, 0.01],
       ["maxIterations", 128, 16, 512, 1],
       ["palettePhase", 0.15, 0, 1, 0.001],
-      ["cycleSpeed", 0.2, 0, 5, 0.001],
+      ["cycleSpeed", 0.1, 0, 5, 0.001],
     ],
   );
 
