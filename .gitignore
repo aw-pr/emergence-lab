@@ -24,3 +24,5 @@ runs/*.log
 
 state/
 .autometta.local.yaml
+
+state/logs/
