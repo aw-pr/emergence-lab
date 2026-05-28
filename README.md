@@ -2,11 +2,11 @@
 
 ![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange) ![Phase: Hone](https://img.shields.io/badge/phase-hone-blue) ![Stack: TypeScript + Vite](https://img.shields.io/badge/stack-TypeScript%20%2B%20Vite-3178c6) ![Renderer: WebGL2](https://img.shields.io/badge/renderer-WebGL2-990000) ![Agents: Claude + Codex](https://img.shields.io/badge/agents-Claude%20%2B%20Codex-7c3aed) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)
 
-> Many agents following simple local rules produce what we call *emergent
+> Many agents following simple local rules exhibit *emergent
 > behaviour*, seen in everything from ecosystems to economies. 
 >
 > This is a working bench for multi-agent orchestration across
-> Claude and Codex. The higher tier models plan and orcestrate lower tiers code and verify with clear boundries. Cross family orchestration, coding and verification improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
+> Claude and Codex. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
 
  *[Emergent behaviour from nature to management theory](https://anthonywest.co.uk/research/emergent-behaviour-cross-domain)*.  
 
