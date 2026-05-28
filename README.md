@@ -8,7 +8,9 @@
 > This is a working bench for multi-agent orchestration across
 > Claude and Codex. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
 
- *[Emergent behaviour from nature to management theory](https://anthonywest.co.uk/research/emergent-behaviour-cross-domain)*.  
+[Run the app in a browser](https://amazing-empanada-7d6e5f.netlify.app/)
+
+[View the research: Emergent behaviour from nature to management theory.](https://anthonywest.co.uk/research/emergent-behaviour-cross-domain)  
 
 ![Julia set, escape-time render from the lab](docs/images/julia-hero.png)
 
