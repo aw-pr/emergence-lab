@@ -2,6 +2,7 @@ export type SliderBounds = { min: number; max: number };
 
 const BOUNDS_PREFIX = "el:bounds";
 const VALUES_PREFIX = "el:values";
+const RESOLUTION_PREFIX = "el:resolution";
 
 function readStorage(key: string): string | null {
   try {
@@ -120,4 +121,21 @@ export function saveValues(
 
 export function clearValues(slug: string): void {
   removeStorage(valuesKey(slug));
+}
+
+function resolutionKey(slug: string): string {
+  return `${RESOLUTION_PREFIX}:${slug}`;
+}
+
+/** The stored resolution-preset id for a sim, or null. Caller validates it. */
+export function loadResolution(slug: string): string | null {
+  return readStorage(resolutionKey(slug));
+}
+
+export function saveResolution(slug: string, preset: string): void {
+  writeStorage(resolutionKey(slug), preset);
+}
+
+export function clearResolution(slug: string): void {
+  removeStorage(resolutionKey(slug));
 }

@@ -6,15 +6,17 @@ import {
 } from "./colormap.ts";
 import {
   clearBounds,
+  clearResolution,
   clearValues,
   loadBounds,
   loadValues,
   saveBounds,
+  saveResolution,
   saveValues,
   type SliderBounds,
 } from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
-import type { DisplayOptions } from "./renderer.ts";
+import type { DisplayOptions, ResolutionPreset } from "./renderer.ts";
 
 export interface ControlsCallbacks {
   onPlayPause: () => void;
@@ -24,7 +26,18 @@ export interface ControlsCallbacks {
   onColourChange: (next: ColourMapOptions) => void;
   onDisplayChange: (next: DisplayOptions) => void;
   onParamChange: (next: SimParams) => void;
+  onResolutionChange: (preset: ResolutionPreset) => void;
 }
+
+const RESOLUTION_OPTIONS: ReadonlyArray<{
+  value: ResolutionPreset;
+  label: string;
+}> = [
+  { value: "performance", label: "Performance (fastest)" },
+  { value: "balanced", label: "Balanced" },
+  { value: "high", label: "High" },
+  { value: "ultra", label: "Ultra (slowest)" },
+];
 
 export interface StepsControlOptions {
   label: string;
@@ -44,6 +57,9 @@ export interface ControlsOptions {
   stepsControl: StepsControlOptions;
   initialColourOptions: ColourMapOptions;
   initialDisplayOptions: DisplayOptions;
+  initialResolution: ResolutionPreset;
+  /** Show the simulation-resolution preset selector (omit for fractals). */
+  showResolutionControl?: boolean;
   callbacks: ControlsCallbacks;
   /** Mandelbrot / Julia / Burning Ship: palette cycle direction + key hint (does not duplicate cycle speed slider). */
   fractalPaletteCycleUi?: boolean;
@@ -65,9 +81,13 @@ export class ControlsPanel {
   private readonly stepsControl: StepsControlOptions;
   private readonly initialColourOptions: ColourMapOptions;
   private readonly initialDisplayOptions: DisplayOptions;
+  private readonly initialResolution: ResolutionPreset;
+  private readonly showResolutionControl: boolean;
   private params: SimParams;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
+  private resolution: ResolutionPreset;
+  private resolutionSelect?: HTMLSelectElement;
   private readonly paramInputs = new Map<
     string,
     HTMLInputElement | HTMLSelectElement
@@ -109,6 +129,8 @@ export class ControlsPanel {
     this.stepsControl = options.stepsControl;
     this.initialColourOptions = { ...options.initialColourOptions };
     this.initialDisplayOptions = { ...options.initialDisplayOptions };
+    this.initialResolution = options.initialResolution;
+    this.showResolutionControl = options.showResolutionControl ?? true;
     this.params = restorePersistedParams(
       options.slug,
       options.paramSchema,
@@ -116,6 +138,7 @@ export class ControlsPanel {
     );
     this.colourOptions = { ...options.initialColourOptions };
     this.displayOptions = { ...options.initialDisplayOptions };
+    this.resolution = options.initialResolution;
     this.render(options);
   }
 
@@ -206,6 +229,9 @@ export class ControlsPanel {
     );
 
     this.container.appendChild(transport);
+    if (this.showResolutionControl) {
+      this.container.appendChild(this.buildResolutionSection());
+    }
     this.container.appendChild(this.buildPresetSection(options));
     this.container.appendChild(
       this.buildColourDashboard(options.fractalPaletteCycleUi ?? false),
@@ -428,6 +454,50 @@ export class ControlsPanel {
     });
 
     return wrap;
+  }
+
+  private buildResolutionSection(): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "controls__resolution";
+
+    const heading = document.createElement("h3");
+    heading.textContent = "Simulation resolution";
+    section.appendChild(heading);
+
+    const wrap = document.createElement("label");
+    wrap.className = "control control--enum";
+
+    const label = document.createElement("span");
+    label.className = "control__label";
+    label.textContent = "Grid quality";
+    wrap.appendChild(label);
+
+    const select = document.createElement("select");
+    for (const option of RESOLUTION_OPTIONS) {
+      const optEl = document.createElement("option");
+      optEl.value = option.value;
+      optEl.textContent = option.label;
+      if (option.value === this.resolution) optEl.selected = true;
+      select.appendChild(optEl);
+    }
+    select.addEventListener("change", () => {
+      const preset = select.value as ResolutionPreset;
+      this.resolution = preset;
+      saveResolution(this.slug, preset);
+      this.callbacks.onResolutionChange(preset);
+    });
+    this.resolutionSelect = select;
+    wrap.appendChild(select);
+    section.appendChild(wrap);
+
+    const hint = document.createElement("p");
+    hint.className = "controls__hint";
+    hint.textContent =
+      "Detail ceiling. The sim fits your window up to this cap — higher is " +
+      "sharper on big screens but steps slower. Changing it restarts the sim.";
+    section.appendChild(hint);
+
+    return section;
   }
 
   private buildPresetSection(options: ControlsOptions): HTMLElement {
@@ -699,14 +769,20 @@ export class ControlsPanel {
   private resetToDefaults(): void {
     clearValues(this.slug);
     clearBounds(this.slug);
+    clearResolution(this.slug);
 
     this.syncStepsControl(this.initialStepsPerFrame);
     this.colourOptions = { ...this.initialColourOptions };
     this.displayOptions = { ...this.initialDisplayOptions };
+    this.resolution = this.initialResolution;
+    if (this.resolutionSelect) {
+      this.resolutionSelect.value = this.initialResolution;
+    }
     this.syncColourControls();
     this.callbacks.onStepsPerFrameChange(this.initialStepsPerFrame);
     this.callbacks.onColourChange(this.colourOptions);
     this.callbacks.onDisplayChange(this.displayOptions);
+    this.callbacks.onResolutionChange(this.initialResolution);
 
     const nextParams = defaultParamsFromSchema(this.paramSchema);
     for (const descriptor of this.paramSchema) {

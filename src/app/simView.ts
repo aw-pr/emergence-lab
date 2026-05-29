@@ -1,13 +1,20 @@
 import katex from "katex";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
-import { Renderer, type DisplayOptions } from "./renderer.ts";
+import {
+  Renderer,
+  DEFAULT_RESOLUTION,
+  RESOLUTION_TARGETS,
+  type DisplayOptions,
+  type ResolutionPreset,
+} from "./renderer.ts";
 import {
   ControlsPanel,
   defaultParamsFromSchema,
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
+import { loadResolution } from "./persistence.ts";
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
@@ -88,6 +95,8 @@ export async function renderSimView(
   let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
   const speedProfile = speedProfileFor(slug);
   let stepsPerFrame = speedProfile.initial;
+  const fractal = isFractalSlug(slug);
+  const resolution = resolveResolution(slug);
 
   const renderer = new Renderer({
     canvas: layout.canvas,
@@ -97,9 +106,8 @@ export async function renderSimView(
     colourOptions,
     displayOptions,
     renderMode,
+    resolution,
   });
-
-  const fractal = isFractalSlug(slug);
 
   const controls = new ControlsPanel({
     slug,
@@ -112,6 +120,8 @@ export async function renderSimView(
     stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
     initialDisplayOptions: displayOptions,
+    initialResolution: resolution,
+    showResolutionControl: !fractal,
     fractalPaletteCycleUi: fractal,
     callbacks: {
       onPlayPause: () => {
@@ -143,6 +153,9 @@ export async function renderSimView(
       },
       onParamChange: (next) => {
         renderer.updateParams(next);
+      },
+      onResolutionChange: (preset) => {
+        renderer.setResolution(preset);
       },
     },
   });
@@ -304,7 +317,7 @@ function speedProfileFor(slug: string): SpeedProfile {
 
   switch (slug) {
     case "gray-scott":
-      return { initial: 2, control: balanced };
+      return { initial: 1, control: balanced };
     case "belousov-zhabotinsky":
       return { initial: 1.5, control: balanced };
     case "abelian-sandpile":
@@ -350,6 +363,20 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     return { dotSize: 2 };
   }
   return { dotSize: 1 };
+}
+
+function defaultResolutionFor(slug: string): ResolutionPreset {
+  if (slug === "gray-scott") return "performance";
+  return DEFAULT_RESOLUTION;
+}
+
+/** Persisted resolution preset if valid, otherwise the per-sim default. */
+function resolveResolution(slug: string): ResolutionPreset {
+  const stored = loadResolution(slug);
+  if (stored && Object.prototype.hasOwnProperty.call(RESOLUTION_TARGETS, stored)) {
+    return stored as ResolutionPreset;
+  }
+  return defaultResolutionFor(slug);
 }
 
 function paramSchemaForControls(
