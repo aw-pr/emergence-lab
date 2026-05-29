@@ -8,6 +8,23 @@ import {
 import { createWebGLRendererBackend } from "./webglRenderer.ts";
 import type { SimKernel, SimParams } from "./types.ts";
 
+/**
+ * Quality presets for the simulation's compute grid. They set a target cell
+ * count, NOT a pixel size — the grid is independent of the display, so the
+ * per-frame cost is the same on any screen. The actual grid dimensions are
+ * derived from the target and the viewport aspect ratio.
+ */
+export type ResolutionPreset = "performance" | "balanced" | "high" | "ultra";
+
+export const RESOLUTION_TARGETS: Readonly<Record<ResolutionPreset, number>> = {
+  performance: 384 * 384,
+  balanced: 640 * 640,
+  high: 960 * 960,
+  ultra: 1280 * 1280,
+};
+
+export const DEFAULT_RESOLUTION: ResolutionPreset = "balanced";
+
 export interface RendererOptions {
   canvas: HTMLCanvasElement;
   kernel: SimKernel;
@@ -18,6 +35,8 @@ export interface RendererOptions {
   colourOptions?: ColourMapOptions;
   displayOptions?: DisplayOptions;
   renderMode?: RenderMode;
+  /** Compute-grid quality preset. Defaults to "balanced". */
+  resolution?: ResolutionPreset;
 }
 
 export type { DisplayOptions } from "./rendererBackend.ts";
@@ -41,6 +60,9 @@ export class Renderer {
 
   private gridWidth = 0;
   private gridHeight = 0;
+  private displayWidth = 0;
+  private displayHeight = 0;
+  private resolution: ResolutionPreset;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
   private renderMode: RenderMode;
@@ -68,6 +90,7 @@ export class Renderer {
     this.colourOptions = options.colourOptions ?? DEFAULT_COLOUR_OPTIONS;
     this.displayOptions = options.displayOptions ?? { dotSize: 1 };
     this.renderMode = options.renderMode ?? "grid";
+    this.resolution = options.resolution ?? DEFAULT_RESOLUTION;
 
     this.backend =
       createWebGLRendererBackend(this.canvas) ?? new CanvasRendererBackend(this.canvas);
@@ -80,7 +103,8 @@ export class Renderer {
     );
 
     this.observeResize();
-    this.reinitFromCanvasSize();
+    this.resizeDisplay();
+    this.reinitGrid();
   }
 
   /** Set or clear an FPS observer. Called once per ~500ms with a smoothed value. */
@@ -127,18 +151,29 @@ export class Renderer {
     cancelAnimationFrame(this.rafHandle);
   }
 
-  /** Re-initialise the kernel at the current canvas size with the given params. */
+  /** Re-initialise the kernel at the current grid size with the given params. */
   reset(nextParams?: SimParams): void {
     if (nextParams) {
       this.params = { ...nextParams };
     }
-    this.reinitFromCanvasSize();
+    this.reinitGrid();
   }
 
   /** Update params in-place and re-init (the kernel only consumes params on init). */
   updateParams(nextParams: SimParams): void {
     this.params = { ...nextParams };
-    this.reinitFromCanvasSize();
+    this.reinitGrid();
+  }
+
+  /**
+   * Change the compute-grid quality preset. Re-seeds the simulation, since the
+   * grid is reallocated. No effect for sims whose grid follows the display
+   * (e.g. fractals), where detail is per-pixel.
+   */
+  setResolution(preset: ResolutionPreset): void {
+    if (this.resolution === preset) return;
+    this.resolution = preset;
+    this.reinitGrid();
   }
 
   destroy(): void {
@@ -216,66 +251,123 @@ export class Renderer {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
       cancelAnimationFrame(this.resizeFrame);
-      this.resizeFrame = requestAnimationFrame(() => this.reinitFromCanvasSize());
+      this.resizeFrame = requestAnimationFrame(() => this.handleResize());
     });
     this.resizeObserver.observe(this.canvas);
   }
 
-  private reinitFromCanvasSize(): void {
+  /**
+   * A pure viewport resize. Updates only the display backing store and lets the
+   * backend letterbox the existing grid into it — the simulation state and grid
+   * are preserved (no reset). Fractal-style sims, whose grid follows the
+   * display for per-pixel detail, recompute at the new size instead.
+   */
+  private handleResize(): void {
+    this.resizeDisplay();
+    if (this.usesFixedGrid()) {
+      this.draw();
+    } else {
+      this.reinitGrid();
+    }
+  }
+
+  /** Whether the compute grid is fixed (decoupled from display) for this mode. */
+  private usesFixedGrid(): boolean {
+    return this.renderMode !== "fractal";
+  }
+
+  /** Resize the on-screen backing store. Cheap; never reseeds the simulation. */
+  private resizeDisplay(): void {
+    const { width, height } = this.computeDisplaySize();
+    this.displayWidth = width;
+    this.displayHeight = height;
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.canvas.dataset.displaySize = `${width}x${height}`;
+    this.backend.resizeDisplay(width, height);
+  }
+
+  /** (Re)allocate the compute grid and re-seed the kernel. Resets iterations. */
+  private reinitGrid(): void {
+    const { width, height } = this.computeGridSize();
+    if (width === 0 || height === 0) return;
+
+    this.gridWidth = width;
+    this.gridHeight = height;
+    this.canvas.dataset.renderSize = `${width}x${height}`;
+
+    this.backend.setGrid(width, height, this.kernel);
+    this.kernel.init(width, height, this.params);
+    this.iterationCount = 0;
+    this.onIterationChange?.(this.iterationCount);
+    this.draw();
+  }
+
+  private computeDisplaySize(): { width: number; height: number } {
     const rect = this.canvas.getBoundingClientRect();
     const dpr = this.resolutionScale();
     const MAX_RENDER_DIM = this.maxRenderDim();
     const MAX_PIXELS = this.maxRenderPixels();
     const FALLBACK_CSS_PX = 512;
-    const MIN_GRID = 64;
 
-    const rectWidth = Math.max(
-      1,
-      Math.floor((rect.width || FALLBACK_CSS_PX) * dpr),
-    );
-    const rectHeight = Math.max(
-      1,
-      Math.floor((rect.height || FALLBACK_CSS_PX) * dpr),
-    );
+    let w = Math.max(1, Math.floor((rect.width || FALLBACK_CSS_PX) * dpr));
+    let h = Math.max(1, Math.floor((rect.height || FALLBACK_CSS_PX) * dpr));
 
-    // Preserve CSS aspect ratio: scale width and height by the same factor so the
-    // backing bitmap is not stretched into a different aspect on the stage.
-    const scaleForMaxDim = MAX_RENDER_DIM / Math.max(rectWidth, rectHeight);
-    const scaleForPixels = Math.sqrt(MAX_PIXELS / (rectWidth * rectHeight));
-    let s = Math.min(1, scaleForMaxDim, scaleForPixels);
-
-    let w = s * rectWidth;
-    let h = s * rectHeight;
-
-    const scaleUp = Math.max(1, MIN_GRID / w, MIN_GRID / h);
-    w *= scaleUp;
-    h *= scaleUp;
-
-    const scaleDown = Math.min(
+    const scale = Math.min(
       1,
       MAX_RENDER_DIM / Math.max(w, h),
       Math.sqrt(MAX_PIXELS / (w * h)),
     );
-    w *= scaleDown;
-    h *= scaleDown;
+    w = Math.max(1, Math.floor(w * scale));
+    h = Math.max(1, Math.floor(h * scale));
+    return { width: w, height: h };
+  }
 
-    const width = Math.max(MIN_GRID, Math.floor(w));
-    const height = Math.max(MIN_GRID, Math.floor(h));
+  private computeGridSize(): { width: number; height: number } {
+    // Fractal-style sims compute per-pixel detail, so the grid follows the
+    // display for crispness. Resolution presets don't apply to them.
+    if (!this.usesFixedGrid()) {
+      return { width: this.displayWidth, height: this.displayHeight };
+    }
 
-    if (width === 0 || height === 0) return;
+    // The preset is a COST CEILING, not a fixed size. The grid fits the current
+    // window (~1 cell per CSS px → crisp) but never exceeds the preset's cell
+    // budget, so a big window caps out (bounded blur + bounded step cost) while
+    // small/medium windows render close to 1:1. Evaluated only on load / preset
+    // / reset / param change — a plain resize keeps the grid (no reseed).
+    const MIN_GRID = 64;
+    const rect = this.canvas.getBoundingClientRect();
+    const cssW = rect.width || 512;
+    const cssH = rect.height || 512;
+    const cap = RESOLUTION_TARGETS[this.resolution];
 
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.canvas.dataset.renderSize = `${width}x${height}`;
-    this.gridWidth = width;
-    this.gridHeight = height;
+    let w = Math.max(1, cssW);
+    let h = Math.max(1, cssH);
 
-    this.backend.resize(width, height, this.kernel);
+    const overCap = Math.sqrt(cap / (w * h));
+    if (overCap < 1) {
+      w *= overCap;
+      h *= overCap;
+    }
 
-    this.kernel.init(width, height, this.params);
-    this.iterationCount = 0;
-    this.onIterationChange?.(this.iterationCount);
-    this.draw();
+    const maxDim = this.gridMaxDim();
+    const down = Math.min(1, maxDim / Math.max(w, h));
+    w *= down;
+    h *= down;
+
+    const up = Math.max(1, MIN_GRID / w, MIN_GRID / h);
+    w *= up;
+    h *= up;
+
+    return {
+      width: Math.max(MIN_GRID, Math.round(w)),
+      height: Math.max(MIN_GRID, Math.round(h)),
+    };
+  }
+
+  private gridMaxDim(): number {
+    const gpuLimit = this.backend.maxTextureSize ?? 4096;
+    return Math.max(256, Math.min(gpuLimit, 4096));
   }
 
   private resolutionScale(): number {

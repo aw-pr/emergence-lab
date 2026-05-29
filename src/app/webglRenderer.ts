@@ -1,8 +1,9 @@
 import type { ColourMapOptions, ColourPreset } from "./colormap.ts";
-import type {
-  RenderMode,
-  RendererBackend,
-  RendererBackendFrame,
+import {
+  containRect,
+  type RenderMode,
+  type RendererBackend,
+  type RendererBackendFrame,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
 
@@ -112,7 +113,7 @@ vec4 readChannels(ivec2 coord) {
 vec4 sampleChannels(vec2 uv) {
   vec2 source = uv * u_sourceSize - 0.5;
   vec2 base = floor(source);
-  vec2 f = smoothstep(vec2(0.0), vec2(1.0), fract(source));
+  vec2 f = fract(source);
   ivec2 c00 = ivec2(clamp(base, vec2(0.0), u_sourceSize - vec2(1.0)));
   ivec2 c10 = ivec2(clamp(base + vec2(1.0, 0.0), vec2(0.0), u_sourceSize - vec2(1.0)));
   ivec2 c01 = ivec2(clamp(base + vec2(0.0, 1.0), vec2(0.0), u_sourceSize - vec2(1.0)));
@@ -205,16 +206,6 @@ vec3 boidColour(float speed) {
   return mixRgb(vec3(94.0, 188.0, 190.0), vec3(130.0, 238.0, 245.0), s) / 255.0;
 }
 
-vec4 softSample(vec2 uv) {
-  vec2 texel = 1.0 / u_sourceSize;
-  vec4 center = sampleChannels(uv);
-  vec4 north = sampleChannels(uv + vec2(0.0, -texel.y));
-  vec4 south = sampleChannels(uv + vec2(0.0, texel.y));
-  vec4 west = sampleChannels(uv + vec2(-texel.x, 0.0));
-  vec4 east = sampleChannels(uv + vec2(texel.x, 0.0));
-  return center * 0.5 + (north + south + west + east) * 0.125;
-}
-
 void main() {
   ivec2 size = ivec2(u_sourceSize);
   ivec2 coord = ivec2(clamp(floor(v_uv * u_sourceSize), vec2(0.0), u_sourceSize - vec2(1.0)));
@@ -256,7 +247,7 @@ void main() {
     }
   }
 
-  vec4 raw = u_smoothSampling ? softSample(v_uv) : readChannels(coord);
+  vec4 raw = u_smoothSampling ? sampleChannels(v_uv) : readChannels(coord);
   outColor = vec4(colourFromRaw(raw), 1.0);
 }
 `;
@@ -297,8 +288,10 @@ export class WebGLRendererBackend implements RendererBackend {
   private uploadBuffer: Float32Array | null = null;
   private textureWidth = 0;
   private textureHeight = 0;
-  private width = 1;
-  private height = 1;
+  private gridWidth = 1;
+  private gridHeight = 1;
+  private displayWidth = 1;
+  private displayHeight = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", {
@@ -326,16 +319,20 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.clearColor(0, 0, 0, 1);
   }
 
-  resize(width: number, height: number, kernel: SimKernel): void {
-    this.width = width;
-    this.height = height;
-    this.gl.viewport(0, 0, width, height);
+  resizeDisplay(displayWidth: number, displayHeight: number): void {
+    this.displayWidth = Math.max(1, Math.floor(displayWidth));
+    this.displayHeight = Math.max(1, Math.floor(displayHeight));
+  }
+
+  setGrid(gridWidth: number, gridHeight: number, kernel: SimKernel): void {
+    this.gridWidth = Math.max(1, Math.floor(gridWidth));
+    this.gridHeight = Math.max(1, Math.floor(gridHeight));
     this.configureTexture(kernel.channelCount);
   }
 
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
-    const expectedLength = this.width * this.height * kernel.channelCount;
+    const expectedLength = this.gridWidth * this.gridHeight * kernel.channelCount;
     if (state.length !== expectedLength) return;
 
     this.configureTexture(kernel.channelCount);
@@ -351,7 +348,19 @@ export class WebGLRendererBackend implements RendererBackend {
     );
 
     const gl = this.gl;
+    // Clear the whole canvas to black, then draw the grid into a centred,
+    // aspect-preserving rectangle (letterbox). clear() ignores the viewport,
+    // so the bars stay black while the quad fills only the contain rect.
+    gl.viewport(0, 0, this.displayWidth, this.displayHeight);
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    const rect = containRect(
+      this.displayWidth,
+      this.displayHeight,
+      this.gridWidth,
+      this.gridHeight,
+    );
+    gl.viewport(rect.x, rect.y, rect.width, rect.height);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -448,17 +457,17 @@ export class WebGLRendererBackend implements RendererBackend {
       this.textureFormat?.format === nextFormat.format &&
       this.textureFormat?.channels === nextFormat.channels &&
       this.textureFormat?.packed === nextFormat.packed &&
-      this.textureWidth === this.width &&
-      this.textureHeight === this.height;
+      this.textureWidth === this.gridWidth &&
+      this.textureHeight === this.gridHeight;
 
     if (sameFormat) return;
 
     this.textureFormat = nextFormat;
-    this.textureWidth = this.width;
-    this.textureHeight = this.height;
+    this.textureWidth = this.gridWidth;
+    this.textureHeight = this.gridHeight;
     this.uploadBuffer =
       nextFormat.packed || nextFormat.channels === 4
-        ? new Float32Array(this.width * this.height * 4)
+        ? new Float32Array(this.gridWidth * this.gridHeight * 4)
         : null;
 
     const gl = this.gl;
@@ -472,8 +481,8 @@ export class WebGLRendererBackend implements RendererBackend {
       gl.TEXTURE_2D,
       0,
       nextFormat.internalFormat,
-      this.width,
-      this.height,
+      this.gridWidth,
+      this.gridHeight,
       0,
       nextFormat.format,
       gl.FLOAT,
@@ -498,8 +507,8 @@ export class WebGLRendererBackend implements RendererBackend {
       0,
       0,
       0,
-      this.width,
-      this.height,
+      this.gridWidth,
+      this.gridHeight,
       format.format,
       gl.FLOAT,
       upload,
@@ -507,12 +516,12 @@ export class WebGLRendererBackend implements RendererBackend {
   }
 
   private packRgba(state: Float32Array, channelCount: number): Float32Array {
-    if (!this.uploadBuffer || this.uploadBuffer.length !== this.width * this.height * 4) {
-      this.uploadBuffer = new Float32Array(this.width * this.height * 4);
+    if (!this.uploadBuffer || this.uploadBuffer.length !== this.gridWidth * this.gridHeight * 4) {
+      this.uploadBuffer = new Float32Array(this.gridWidth * this.gridHeight * 4);
     }
 
     const out = this.uploadBuffer;
-    for (let cell = 0; cell < this.width * this.height; cell += 1) {
+    for (let cell = 0; cell < this.gridWidth * this.gridHeight; cell += 1) {
       const src = cell * channelCount;
       const dst = cell * 4;
       out[dst] = state[src] ?? 0;
@@ -541,7 +550,7 @@ export class WebGLRendererBackend implements RendererBackend {
     }
 
     gl.useProgram(this.program);
-    gl.uniform2f(this.uniforms.sourceSize, this.width, this.height);
+    gl.uniform2f(this.uniforms.sourceSize, this.gridWidth, this.gridHeight);
     gl.uniform1i(this.uniforms.channelCount, Math.min(4, kernel.channelCount));
     gl.uniform2fv(this.uniforms.ranges, ranges);
     gl.uniform1i(this.uniforms.preset, presetIndex(colourOptions.preset));

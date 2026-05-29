@@ -3,10 +3,12 @@ import {
   type ColourMapOptions,
   type RgbMapper,
 } from "./colormap.ts";
-import type {
-  DisplayOptions,
-  RendererBackend,
-  RendererBackendFrame,
+import {
+  containRect,
+  type DisplayOptions,
+  type RenderMode,
+  type RendererBackend,
+  type RendererBackendFrame,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
 
@@ -14,13 +16,17 @@ export class CanvasRendererBackend implements RendererBackend {
   readonly kind = "canvas2d" as const;
 
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly buffer: HTMLCanvasElement;
+  private readonly bufferCtx: CanvasRenderingContext2D;
   private imageData: ImageData;
   private mapper: RgbMapper;
   private channelCount = 0;
   private channelRanges: readonly (readonly [number, number])[] = [];
   private colourOptions: ColourMapOptions | null = null;
-  private width = 1;
-  private height = 1;
+  private gridWidth = 1;
+  private gridHeight = 1;
+  private displayWidth = 1;
+  private displayHeight = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d", { alpha: false });
@@ -28,33 +34,89 @@ export class CanvasRendererBackend implements RendererBackend {
       throw new Error("Canvas 2D context is not available in this browser.");
     }
     this.ctx = ctx;
-    this.imageData = ctx.createImageData(1, 1);
+
+    // Offscreen buffer holds the grid-resolution image; the display canvas
+    // shows it letterboxed into a centred, aspect-preserving rectangle.
+    this.buffer = document.createElement("canvas");
+    this.buffer.width = 1;
+    this.buffer.height = 1;
+    const bufferCtx = this.buffer.getContext("2d", { alpha: false });
+    if (!bufferCtx) {
+      throw new Error("Canvas 2D context is not available in this browser.");
+    }
+    this.bufferCtx = bufferCtx;
+
+    this.imageData = bufferCtx.createImageData(1, 1);
     this.mapper = buildMapper(0, [], undefined);
   }
 
-  resize(width: number, height: number, kernel: SimKernel): void {
-    this.width = width;
-    this.height = height;
-    this.imageData = this.ctx.createImageData(width, height);
+  resizeDisplay(displayWidth: number, displayHeight: number): void {
+    this.displayWidth = Math.max(1, Math.floor(displayWidth));
+    this.displayHeight = Math.max(1, Math.floor(displayHeight));
+  }
+
+  setGrid(gridWidth: number, gridHeight: number, kernel: SimKernel): void {
+    this.gridWidth = Math.max(1, Math.floor(gridWidth));
+    this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    this.buffer.width = this.gridWidth;
+    this.buffer.height = this.gridHeight;
+    this.imageData = this.bufferCtx.createImageData(this.gridWidth, this.gridHeight);
     this.rebuildMapper(kernel, this.colourOptions);
   }
 
   draw(frame: RendererBackendFrame): void {
     this.rebuildMapper(frame.kernel, frame.colourOptions);
 
-    const { state, kernel, displayOptions } = frame;
+    const { state, kernel, displayOptions, mode } = frame;
     const channelCount = kernel.channelCount;
-    const expectedLength = this.width * this.height * channelCount;
+    const expectedLength = this.gridWidth * this.gridHeight * channelCount;
     if (state.length !== expectedLength) return;
 
     if (isBoidsState(kernel)) {
-      this.drawBoids(frame);
-      return;
+      this.drawBoidsToBuffer(frame);
+    } else {
+      this.paintFieldToBuffer(state, channelCount, displayOptions);
     }
 
+    this.present(mode);
+  }
+
+  destroy(): void {}
+
+  /** Letterbox the grid-resolution buffer onto the display canvas. */
+  private present(mode: RenderMode): void {
+    const ctx = this.ctx;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, this.displayWidth, this.displayHeight);
+    ctx.imageSmoothingEnabled = isSmoothMode(mode);
+
+    const rect = containRect(
+      this.displayWidth,
+      this.displayHeight,
+      this.gridWidth,
+      this.gridHeight,
+    );
+    ctx.drawImage(
+      this.buffer,
+      0,
+      0,
+      this.gridWidth,
+      this.gridHeight,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+    );
+  }
+
+  private paintFieldToBuffer(
+    state: Float32Array,
+    channelCount: number,
+    displayOptions: DisplayOptions,
+  ): void {
     const pixels = this.imageData.data;
     let pixelOffset = 0;
-    for (let cell = 0; cell < this.width * this.height; cell += 1) {
+    for (let cell = 0; cell < this.gridWidth * this.gridHeight; cell += 1) {
       const channelOffset = cell * channelCount;
       const [r, g, b] = this.mapper(state, channelOffset);
       pixels[pixelOffset] = r;
@@ -68,13 +130,12 @@ export class CanvasRendererBackend implements RendererBackend {
       this.expandActiveCells(state, channelCount, displayOptions);
     }
 
-    this.ctx.putImageData(this.imageData, 0, 0);
+    this.bufferCtx.putImageData(this.imageData, 0, 0);
   }
 
-  destroy(): void {}
-
-  private drawBoids(frame: RendererBackendFrame): void {
+  private drawBoidsToBuffer(frame: RendererBackendFrame): void {
     const { state, kernel, displayOptions, params } = frame;
+    const ctx = this.bufferCtx;
     const pointSize =
       typeof params.pointSize === "number" && Number.isFinite(params.pointSize)
         ? params.pointSize
@@ -84,12 +145,12 @@ export class CanvasRendererBackend implements RendererBackend {
     const tail = size * 0.55;
     const nose = size * 0.75;
 
-    this.ctx.fillStyle = "#050812";
-    this.ctx.fillRect(0, 0, this.width, this.height);
+    ctx.fillStyle = "#050812";
+    ctx.fillRect(0, 0, this.gridWidth, this.gridHeight);
 
-    for (let y = 0; y < this.height; y += 1) {
-      for (let x = 0; x < this.width; x += 1) {
-        const offset = (y * this.width + x) * kernel.channelCount;
+    for (let y = 0; y < this.gridHeight; y += 1) {
+      for (let x = 0; x < this.gridWidth; x += 1) {
+        const offset = (y * this.gridWidth + x) * kernel.channelCount;
         const density = state[offset];
         if (density <= 0.02) {
           continue;
@@ -122,13 +183,13 @@ export class CanvasRendererBackend implements RendererBackend {
 
         const green = Math.round(188 + speed * 50);
         const blue = Math.round(190 + speed * 55);
-        this.ctx.fillStyle = `rgb(94, ${green}, ${blue})`;
-        this.ctx.beginPath();
-        this.ctx.moveTo(tipX, tipY);
-        this.ctx.lineTo(leftX, leftY);
-        this.ctx.lineTo(rightX, rightY);
-        this.ctx.closePath();
-        this.ctx.fill();
+        ctx.fillStyle = `rgb(94, ${green}, ${blue})`;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(leftX, leftY);
+        ctx.lineTo(rightX, rightY);
+        ctx.closePath();
+        ctx.fill();
       }
     }
   }
@@ -163,9 +224,9 @@ export class CanvasRendererBackend implements RendererBackend {
     const pixels = this.imageData.data;
     const radius = Math.floor(displayOptions.dotSize / 2);
 
-    for (let y = 0; y < this.height; y += 1) {
-      for (let x = 0; x < this.width; x += 1) {
-        const cell = y * this.width + x;
+    for (let y = 0; y < this.gridHeight; y += 1) {
+      for (let x = 0; x < this.gridWidth; x += 1) {
+        const cell = y * this.gridWidth + x;
         const channelOffset = cell * channelCount;
         if (this.signalAt(state, channelOffset, channelCount) <= 0.02) {
           continue;
@@ -173,13 +234,13 @@ export class CanvasRendererBackend implements RendererBackend {
 
         const [r, g, b] = this.mapper(state, channelOffset);
         const minY = Math.max(0, y - radius);
-        const maxY = Math.min(this.height - 1, y + radius);
+        const maxY = Math.min(this.gridHeight - 1, y + radius);
         const minX = Math.max(0, x - radius);
-        const maxX = Math.min(this.width - 1, x + radius);
+        const maxX = Math.min(this.gridWidth - 1, x + radius);
 
         for (let py = minY; py <= maxY; py += 1) {
           for (let px = minX; px <= maxX; px += 1) {
-            const pixelOffset = (py * this.width + px) * 4;
+            const pixelOffset = (py * this.gridWidth + px) * 4;
             pixels[pixelOffset] = r;
             pixels[pixelOffset + 1] = g;
             pixels[pixelOffset + 2] = b;
@@ -205,6 +266,10 @@ export class CanvasRendererBackend implements RendererBackend {
     }
     return signal;
   }
+}
+
+function isSmoothMode(mode: RenderMode): boolean {
+  return mode === "field" || mode === "smooth" || mode === "fractal";
 }
 
 function isBoidsState(kernel: SimKernel): boolean {
