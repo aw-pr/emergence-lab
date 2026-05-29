@@ -1,13 +1,13 @@
 # docs/INTERFACE.md — Kernel to Renderer Interface Contract
 
-**Owner: Claude**
-**Status: FINAL — v1.0 (2026-05-15)**
+**Status: reviewed contract — v1.0.1 (2026-05-29)**
 
 This file defines the TypeScript interface that all simulation kernels must
 implement and that the renderer consumes. It is the only shared surface
-between kernels and the renderer. Code agents (currently Codex) implement and
-consume the interface but do not modify it; Claude does. Any change is a new
-version and must be committed before any dependent code work begins.
+between kernels and the renderer, and a reviewed boundary not owned by any one
+model. Code that implements or consumes it must not change its shape casually:
+any change to the shape is a new version and must be committed before any
+dependent code work begins.
 
 ---
 
@@ -51,8 +51,10 @@ export interface SimKernel {
    * Initialise or re-initialise the simulation.
    * Must be idempotent — calling again resets to initial conditions.
    *
-   * @param width   Canvas width in pixels (grid columns)
-   * @param height  Canvas height in pixels (grid rows)
+   * @param width   Grid columns. The renderer chooses this; it is the
+   *                 simulation's compute resolution, NOT the canvas pixel width.
+   * @param height  Grid rows. Renderer-chosen compute resolution, not canvas
+   *                 pixel height.
    * @param params  Simulation-specific parameter set. Missing keys take the
    *                 default from paramSchema.
    */
@@ -129,6 +131,19 @@ export interface SimKernel {
 
 ---
 
+## Resolved design decisions (v1.0.1)
+
+4. **`init(width, height)` receives a renderer-chosen grid size, not the canvas
+   pixel size.** Compute resolution (the grid passed to `init()`) and display
+   resolution (the canvas backing store) are independent. The renderer derives
+   the grid from a user-selectable quality preset and the viewport aspect, then
+   upscales the kernel's state to fill the canvas (letterboxed). This keeps
+   simulation cost constant across screen sizes and means a pure window/viewport
+   resize updates only the display — it does **not** re-init the kernel. Kernels
+   are unaffected: they still receive `width`/`height` and allocate accordingly.
+   This is a documentation clarification of existing semantics; the interface
+   surface is unchanged.
+
 ## Resolved design decisions (v1.0)
 
 1. **`step()` is synchronous.** Workers/WASM/GPU are internal kernel details;
@@ -158,7 +173,9 @@ export interface SimKernel {
 - Import `SimKernel`, `SimParams`, `ParamDescriptor` from this file (or a `.d.ts`).
 - Build the controls panel from `paramSchema` only; no per-sim branching.
 - Normalise with `channelRanges`; treat `readState()` as read-only.
-- Call `init()` before the first `step()` and after any resize or param change.
+- Call `init()` before the first `step()`, and on a grid-size or param change.
+  A pure display/viewport resize must NOT call `init()` — it only rescales the
+  canvas; the grid and simulation state are preserved.
 - Call `destroy()` when swapping kernels or unmounting.
 - Do not import from `src/sims/**` directly. Kernels load dynamically.
 

@@ -3,37 +3,29 @@
 ## Phase: hone
 
 emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 12 simulations. The code trunk
-(`src/**`) is single-lead Codex. Claude maintains architecture, the interface
-contract, essays, and root directives. See `MODELS.md`.
+performance, and UX polish on a working set of 12 simulations. See `MODELS.md`.
 
-## Ownership
+## Working model
 
-| Area | Lead model | Paths |
-|---|---|---|
-| Code: kernels, renderer, controls, gallery, presets, performance | Codex | `src/**` |
-| Architecture, interface contract, essays, root directives | Claude | `docs/INTERFACE.md`, `essays/**`, root directive docs |
-
-There is no longer a strict file-area enforcement. The practical division is:
-Codex writes code, Claude writes prose and architecture decisions. Where work
-crosses the boundary (e.g. a code change motivated by an interface decision),
-Claude handles the interface side and delegates the code side to a Codex
-subagent.
+There is **no per-model ownership** of areas of this repo. Whichever agent
+picks up a task may edit any part of it — code (`src/**`), docs, architecture.
+Multi-agent work is run through **autometta** (stage cards under `docs/stages/`,
+see `docs/dispatch-contract.md`) when you want parallel workers and
+cross-checking; otherwise just do the work directly.
 
 ## Interface contract
 
-The kernel-to-renderer contract lives in `docs/INTERFACE.md` and is
-Claude-owned. Code that consumes or implements it must not change its shape.
-If a change is needed, write it up as a proposal note in your summary —
-do not edit `docs/INTERFACE.md`. The contract update must be agreed and
-committed by Claude before dependent code work begins.
+The kernel-to-renderer contract in `docs/INTERFACE.md` is a reviewed boundary,
+not owned by any one model. Code that consumes or implements it must stay in
+step with the committed version and must not change its shape casually. A change
+to its *shape* is versioned: bump the version, record it, and commit it before
+dependent code work begins.
 
 ## Adding a simulation
 
-1. Confirm `docs/INTERFACE.md` covers the new sim's needs (Claude).
-2. Implement the kernel under `src/sims/<name>/` and wire the gallery
-   (Codex).
-3. Write the essay in `essays/<name>.md` (Claude).
+1. Confirm `docs/INTERFACE.md` covers the new sim's needs.
+2. Implement the kernel under `src/sims/<name>/` and wire the gallery.
+3. Write the essay in `essays/<name>.md`.
 
 ## Commit discipline
 
@@ -56,7 +48,7 @@ agent session unless explicitly asked.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (FINAL v1.0, owned by Claude)
-- `MODELS.md` — model-boundary discipline statement
+- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.0.1)
+- `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
 - `HANDOFF.md` — current status and next-run brief
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks

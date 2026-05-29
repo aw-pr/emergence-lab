@@ -62,8 +62,10 @@ Legacy browsers are not a target.
 2. Add the kernel under `src/sims/<name>/` and wire the gallery in `src/app/**`.
 3. Write the essay in `essays/<name>.md`.
 
-Code is Codex-led under `src/**`. Architecture, the kernel contract, and  
-the per-sim essays are Claude-led. The reasoning behind the split is in  
+There is no fixed split of the codebase by model — any agent may work any  
+part of it. Multi-agent work runs through autometta (a worker/verifier loop)  
+when parallel work and cross-checking are wanted. The kernel contract in  
+[`docs/INTERFACE.md`](docs/INTERFACE.md) stays a reviewed boundary. See  
 [`MODELS.md`](MODELS.md).
 
 ## Repository layout

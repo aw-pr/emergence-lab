@@ -1,58 +1,42 @@
-# MODELS.md — Model-boundary discipline
+# MODELS.md — Model policy
 
 ## The rule
 
-**One lead model owns each project's trunk. Comparison happens only in the
-bench-marks repo, never on trunk.**
+**There is no per-model ownership of areas of this repo.** Whichever agent is
+working a task may edit any part of it — code, docs, architecture. Earlier
+phases split the trunk by model (Codex on `src/**`, Claude on docs); that split
+is retired.
 
-Any comparison of models on a specific task is done by forking that task into
-a separate private benchmark workspace. Trunk is the integration point for
-production-quality output from the lead model.
+Multi-agent work happens through **autometta** when you want it: stage cards
+under `docs/stages/` drive a worker / verifier loop with cross-family
+verification (see `docs/dispatch-contract.md`). Single-agent sessions just do
+the work directly, editing whatever the task needs.
 
-## Ownership (hone phase)
+## The interface contract
 
-emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 12 simulations. The code trunk
-is single-lead. Claude continues to maintain architecture, the interface
-contract, and root directives.
+The kernel-to-renderer contract in `docs/INTERFACE.md` is still a deliberate,
+reviewed boundary. It is not owned by any one model, but a change to its *shape*
+is a versioned decision: bump the version, record it, and commit the contract
+update before any dependent code work begins. Keep code that implements or
+consumes it in step with the committed version.
 
-| Area | Lead model | Paths |
-|---|---|---|
-| Code: kernels, renderer, controls, gallery, presets, performance | **Codex** | `src/**` |
-| Architecture, interface contract, essays, root directives | **Claude** | `docs/INTERFACE.md`, `essays/**`, root directive docs |
+Gating the contract this way preserves architectural review of the kernel seam
+without tying it to a particular model.
 
-Codex owns the whole code trunk (`src/**`) — kernels and renderer together —
-so numerics and rendering can be co-designed. Claude continues to maintain the
-`SimKernel` contract (`docs/INTERFACE.md`), the per-sim essays, and the root
-directive documents (this file, `CLAUDE.md`, `AGENTS.md`, `README.md`,
-`HANDOFF.md`).
+## Commit attribution
 
-Inside Cursor IDE, Claude may delegate code work in `src/**` to Codex
-subagents rather than editing directly. This keeps the discipline cheap to
-follow without making it a rigid file-area ban.
+The committer is always the human user; the commit *author* identifies the
+model that wrote the change (e.g. `Claude Opus 4.8 <claude-opus-4-8@local>`,
+`Codex GPT-5.3 <codex-gpt-5-3@local>`). This attribution convention is
+unchanged. See the global dev rules and `.cursor/rules/git-strategy.mdc`.
 
 ## History (context only)
 
 - **Build phase**: three-model split — Codex kernels, Cursor renderer, Claude
   docs. Useful while the kernel/renderer seam was being shaped.
 - **Consolidation phase**: dropped to two — Cursor full stack, Claude docs.
-  Cursor multiplexed models internally, so cross-model variance was already
-  unobservable inside that role.
-- **Hone phase** (current): single-lead Codex over the code trunk, Claude
-  over directives and essays.
-
-## The contract boundary
-
-The kernel-to-renderer contract is a TypeScript interface defined in
-`docs/INTERFACE.md` and **owned by Claude**. Code agents implement and consume
-it across `src/**` but do not change its shape. Any change to the interface
-must be agreed and committed by Claude before dependent code work begins.
-
-Keeping the contract Claude-owned preserves architectural review of the kernel
-seam.
-
-## Cross-model comparison
-
-To compare how two models handle a task, fork it into a separate private
-benchmark workspace and document prompt, outputs, and criteria there. Do not
-run comparisons on this trunk.
+- **Hone phase (earlier)**: single-lead Codex over the code trunk, Claude over
+  directives and essays.
+- **Now**: no area ownership. Any agent edits any part of the repo; autometta is
+  the mechanism for multi-agent runs when parallel work and cross-checking are
+  wanted.

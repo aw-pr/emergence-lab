@@ -3,23 +3,13 @@
 ## Phase: hone
 
 emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 12 simulations. The code trunk
-is single-lead Codex. See `MODELS.md`.
+performance, and UX polish on a working set of 12 simulations. See `MODELS.md`.
 
-Claude maintains:
-
-- `docs/INTERFACE.md` — the TypeScript `SimKernel` contract
-- `essays/**` — one essay per simulation
-- Root directives: `MODELS.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`,
-  `HANDOFF.md`
-- Architecture and interface-contract decisions
-
-Code work in `src/**` is Codex's lead. From within Cursor IDE, Claude
-delegates code changes to Codex subagents (model slug
-`gpt-5.3-codex-high-fast`, author identity `Codex GPT-5 <codex-gpt-5@local>`)
-rather than editing `src/**` directly. Claude does not edit `src/**` unless
-making a change that is architecturally entangled with an interface decision
-and the user explicitly authorises it.
+There is **no per-model ownership** of areas of this repo. Whichever agent is
+working a task may edit any part of it — code (`src/**`), docs, architecture.
+Multi-agent work runs through **autometta** when you want parallel workers and
+cross-checking (stage cards under `docs/stages/`, see
+`docs/dispatch-contract.md`); otherwise just do the work directly.
 
 ## Current direction
 
@@ -31,9 +21,10 @@ user-overridable slider min/max with localStorage persistence and a
 
 ## Interface contract
 
-Changes to the `SimKernel` interface in `docs/INTERFACE.md` are still made
-here. If Codex proposes a change, write it up as a note for Claude review;
-commit the contract update before any dependent code work.
+The `SimKernel` interface in `docs/INTERFACE.md` is a reviewed boundary, not
+owned by any one model. A change to its *shape* is a versioned decision: write
+it up, bump the version, and commit the contract update before any dependent
+code work begins.
 
 ## Commit discipline
 
@@ -55,7 +46,7 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (FINAL v1.0, owned by Claude)
-- `MODELS.md` — model-boundary discipline statement
+- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.0.1)
+- `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
 - `HANDOFF.md` — current status and next-run brief
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks
