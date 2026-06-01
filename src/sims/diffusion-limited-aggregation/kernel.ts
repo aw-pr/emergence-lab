@@ -24,11 +24,16 @@ interface SimKernel {
 }
 
 const DEFAULT_WALKERS_PER_STEP = 64;
-const DEFAULT_MAX_WALK_STEPS = 256;
+const DEFAULT_MAX_WALK_STEPS = 400;
 const DEFAULT_SPAWN_RADIUS = 0.05;
 const DEFAULT_STICKINESS = 1;
 const DEFAULT_SEED_COUNT = 1;
 const CHANNEL_COUNT = 1;
+const TWO_PI = Math.PI * 2;
+/** Fraction of walk steps nudged radially toward the seed so every direction gets fed (prevents runaway single tendrils). */
+const INWARD_BIAS = 0.15;
+/** Stop feeding once the aggregate reaches this fraction of the usable radius, so it never pancakes on the boundary. */
+const EDGE_STOP_FRACTION = 0.92;
 
 function numberParam(
   params: SimParams,
@@ -89,7 +94,7 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       type: "number",
       default: DEFAULT_MAX_WALK_STEPS,
       min: 1,
-      max: 2048,
+      max: 4096,
       step: 1,
     },
     {
@@ -131,6 +136,9 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
   private seedCount = DEFAULT_SEED_COUNT;
   private walkerCursor = 0;
   private clusterSize = 0;
+  private centreX = 0;
+  private centreY = 0;
+  private maxRadius = 0;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -151,7 +159,7 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     this.maxWalkSteps = boundedInteger(
       numberParam(params, "maxWalkSteps", DEFAULT_MAX_WALK_STEPS),
       1,
-      2048,
+      4096,
     );
     this.spawnRadius = boundedNumber(
       numberParam(params, "spawnRadius", DEFAULT_SPAWN_RADIUS),
@@ -170,6 +178,9 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     );
     this.walkerCursor = 0;
     this.clusterSize = 0;
+    this.centreX = Math.floor(this.width / 2);
+    this.centreY = Math.floor(this.height / 2);
+    this.maxRadius = 0;
 
     if (length === 0) {
       return;
@@ -180,6 +191,10 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
 
   step(_dt: number): void {
     if (this.width === 0 || this.height === 0 || this.clusterSize === 0) {
+      return;
+    }
+
+    if (this.maxRadius >= this.maxGridRadius() * EDGE_STOP_FRACTION) {
       return;
     }
 
@@ -199,11 +214,12 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     this.state = new Float32Array(0);
     this.walkerCursor = 0;
     this.clusterSize = 0;
+    this.maxRadius = 0;
   }
 
   private seedCluster(): void {
-    const centreX = Math.floor(this.width / 2);
-    const centreY = Math.floor(this.height / 2);
+    const centreX = this.centreX;
+    const centreY = this.centreY;
     this.occupy(centreX, centreY);
 
     const offsets = [
@@ -251,10 +267,21 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
   }
 
   private launchWalker(walkerId: number): void {
-    let [x, y] = this.spawnPoint(walkerId);
+    const gap = this.spawnGap();
+    const ring = this.spawnRingRadius(gap);
+    const killRadius = ring + Math.max(8, gap * 2);
+    const killRadiusSq = killRadius * killRadius;
+
+    let [x, y] = this.spawnPoint(walkerId, ring);
 
     for (let stepIndex = 0; stepIndex < this.maxWalkSteps; stepIndex += 1) {
       if (!this.inBounds(x, y)) {
+        return;
+      }
+
+      const dx = x - this.centreX;
+      const dy = y - this.centreY;
+      if (dx * dx + dy * dy > killRadiusSq) {
         return;
       }
 
@@ -279,34 +306,29 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     }
   }
 
-  private spawnPoint(walkerId: number): [number, number] {
-    const centreX = Math.floor(this.width / 2);
-    const centreY = Math.floor(this.height / 2);
-    const radius = Math.max(
-      1,
-      Math.floor(Math.min(this.width, this.height) * this.spawnRadius),
+  /** Gap, in cells, between the current cluster edge and the walker spawn ring. */
+  private spawnGap(): number {
+    const raw = Math.round(
+      Math.min(this.width, this.height) * this.spawnRadius * 0.25,
     );
-    const perimeter = Math.max(1, radius * 8);
-    const position = hashUint32(walkerId, this.width, this.height) % perimeter;
+    return Math.max(2, Math.min(16, raw));
+  }
 
-    let x = centreX;
-    let y = centreY;
-    const side = Math.floor(position / (radius * 2));
-    const offset = (position % (radius * 2)) - radius;
+  /** Largest spawn radius that still fits a centred circle inside the grid. */
+  private maxGridRadius(): number {
+    return Math.max(1, Math.floor(Math.min(this.width, this.height) / 2) - 1);
+  }
 
-    if (side === 0) {
-      x += offset;
-      y -= radius;
-    } else if (side === 1) {
-      x += radius;
-      y += offset;
-    } else if (side === 2) {
-      x -= offset;
-      y += radius;
-    } else {
-      x -= radius;
-      y -= offset;
-    }
+  /** Spawn ring tracks the growing cluster: just outside its current radius. */
+  private spawnRingRadius(gap: number): number {
+    return Math.min(this.maxRadius + gap, this.maxGridRadius());
+  }
+
+  private spawnPoint(walkerId: number, ringRadius: number): [number, number] {
+    const radius = Math.min(this.maxGridRadius(), Math.max(1, ringRadius));
+    const angle = hashUnit(walkerId, this.width, this.height) * TWO_PI;
+    const x = Math.round(this.centreX + radius * Math.cos(angle));
+    const y = Math.round(this.centreY + radius * Math.sin(angle));
 
     return [
       Math.max(0, Math.min(this.width - 1, x)),
@@ -320,7 +342,27 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     x: number,
     y: number,
   ): number {
-    return hashUint32(walkerId, stepIndex, x + y * this.width) & 3;
+    const hash = hashUint32(walkerId, stepIndex, x + y * this.width);
+    const drift = (hash & 0xffff) / 0x10000;
+
+    if (drift < INWARD_BIAS) {
+      const dx = this.centreX - x;
+      const dy = this.centreY - y;
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+      const total = adx + ady;
+      if (total > 0) {
+        // Pick the inward axis weighted by its distance component, so the drift
+        // points radially toward the seed (not snapped to a diagonal).
+        const pick = ((hash >>> 16) / 0x10000) * total;
+        if (pick < adx) {
+          return dx >= 0 ? 0 : 1;
+        }
+        return dy >= 0 ? 2 : 3;
+      }
+    }
+
+    return (hash >>> 16) & 3;
   }
 
   private occupy(x: number, y: number): void {
@@ -335,6 +377,13 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
 
     this.state[index] = 1;
     this.clusterSize += 1;
+
+    const dx = x - this.centreX;
+    const dy = y - this.centreY;
+    const radius = Math.sqrt(dx * dx + dy * dy);
+    if (radius > this.maxRadius) {
+      this.maxRadius = radius;
+    }
   }
 
   private isEmpty(x: number, y: number): boolean {
