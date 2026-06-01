@@ -23,10 +23,12 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_INITIAL_PILE = 300000;
+const DEFAULT_INITIAL_PILE = 1500000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
-const DEFAULT_GRAINS_PER_STEP = 4;
-const DEFAULT_TOPPLES_PER_STEP = 50000;
+const DEFAULT_GRAINS_PER_STEP = 1;
+const DEFAULT_TOPPLES_PER_STEP = 500000;
+const MAX_INITIAL_PILE = 5000000;
+const MAX_TOPPLES_PER_STEP = 500000;
 const CHANNEL_COUNT = 1;
 
 function numberParam(
@@ -50,7 +52,7 @@ export class AbelianSandpileKernel implements SimKernel {
   readonly name = "Abelian Sandpile";
   readonly channelCount = CHANNEL_COUNT;
   readonly channelLabels = ["Grains"] as const;
-  readonly channelRanges = [[0, 12]] as const;
+  readonly channelRanges = [[0, 4]] as const;
   readonly paramSchema = [
     {
       key: "initialPile",
@@ -58,8 +60,8 @@ export class AbelianSandpileKernel implements SimKernel {
       type: "number",
       default: DEFAULT_INITIAL_PILE,
       min: 0,
-      max: 500000,
-      step: 1000,
+      max: MAX_INITIAL_PILE,
+      step: 50000,
     },
     {
       key: "toppleThreshold",
@@ -85,7 +87,7 @@ export class AbelianSandpileKernel implements SimKernel {
       type: "number",
       default: DEFAULT_TOPPLES_PER_STEP,
       min: 1,
-      max: 200000,
+      max: MAX_TOPPLES_PER_STEP,
       step: 1000,
     },
   ] as const satisfies readonly ParamDescriptor[];
@@ -132,7 +134,7 @@ export class AbelianSandpileKernel implements SimKernel {
     this.topplesPerStep = boundedInteger(
       numberParam(params, "topplesPerStep", DEFAULT_TOPPLES_PER_STEP),
       1,
-      200000,
+      MAX_TOPPLES_PER_STEP,
     );
 
     if (length === 0) {
@@ -145,7 +147,7 @@ export class AbelianSandpileKernel implements SimKernel {
     this.state[centreIndex] = boundedInteger(
       numberParam(params, "initialPile", DEFAULT_INITIAL_PILE),
       0,
-      500000,
+      MAX_INITIAL_PILE,
     );
     this.enqueueIfUnstable(centreIndex);
   }

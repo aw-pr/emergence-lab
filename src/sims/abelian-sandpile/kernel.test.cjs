@@ -32,7 +32,7 @@ test("metadata matches the renderer contract", () => {
   assert.equal(kernel.name, "Abelian Sandpile");
   assert.equal(kernel.channelCount, 1);
   assert.deepEqual(kernel.channelLabels, ["Grains"]);
-  assert.deepEqual(kernel.channelRanges, [[0, 12]]);
+  assert.deepEqual(kernel.channelRanges, [[0, 4]]);
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
@@ -52,12 +52,12 @@ test("metadata matches the renderer contract", () => {
   const grainsDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "grainsPerStep",
   );
-  assert.equal(grainsDescriptor?.default, 4);
+  assert.equal(grainsDescriptor?.default, 1);
 
   const initialPileDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "initialPile",
   );
-  assert.equal(initialPileDescriptor?.default, 300000);
+  assert.equal(initialPileDescriptor?.default, 1500000);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
