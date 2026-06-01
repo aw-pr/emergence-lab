@@ -148,6 +148,29 @@ code {
   letter-spacing: -0.005em;
 }
 
+.sim-view__subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(230, 232, 236, 0.65);
+  max-width: min(860px, calc(100vw - 160px));
+}
+
+.sim-view__family {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(230, 232, 236, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
 .sim-view__title-block {
   display: grid;
   gap: 8px;

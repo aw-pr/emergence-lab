@@ -51,6 +51,29 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
     "\\dot{y} = x(\\rho-z)-y",
     "\\dot{z} = xy-\\beta z",
   ],
+  "belousov-zhabotinsky": [
+    "\\dot{A} = D_a\\nabla^2A + f(1-A) + CA - AB",
+    "\\dot{B} = D_b\\nabla^2B + AB - BC - kB",
+    "\\dot{C} = D_c\\nabla^2C + BC - CA - \\tfrac{k}{2}(C-0.35)",
+  ],
+  "abelian-sandpile": [
+    "z_i \\ge 4:\\quad z_i \\to z_i - 4,\\ \\ z_{\\partial i} \\to z_{\\partial i} + 1",
+  ],
+  "elementary-cellular-automata": [
+    "s_i^{\\,t+1} = R\\!\\left(s_{i-1}^{\\,t},\\, s_i^{\\,t},\\, s_{i+1}^{\\,t}\\right)",
+  ],
+  "game-of-life": [
+    "\\text{Birth: } n = 3 \\qquad \\text{Survive: } n \\in \\{2,3\\}",
+  ],
+  "brians-brain": [
+    "\\text{off} \\to \\text{on if } n_{\\text{on}} = 2,\\quad \\text{on} \\to \\text{dying} \\to \\text{off}",
+  ],
+  "boids": [
+    "\\vec{v}\\,' = \\vec{v} + w_s\\,\\vec{s} + w_a\\,\\vec{a} + w_c\\,\\vec{c}",
+  ],
+  "diffusion-limited-aggregation": [
+    "x_{t+1} = x_t + \\xi,\\quad \\text{stick when adjacent with } p = \\text{stickiness}",
+  ],
 };
 
 /**
@@ -236,6 +259,22 @@ function buildLayout(container: HTMLElement, simName: string, slug: string): Sim
   title.className = "sim-view__title";
   title.textContent = simName;
   titleBlock.appendChild(title);
+
+  const entry = findEntry(slug);
+  if (entry?.family || entry?.subtitle) {
+    const subtitle = document.createElement("p");
+    subtitle.className = "sim-view__subtitle";
+    if (entry.family) {
+      const tag = document.createElement("span");
+      tag.className = "sim-view__family";
+      tag.textContent = entry.family;
+      subtitle.appendChild(tag);
+    }
+    if (entry.subtitle) {
+      subtitle.appendChild(document.createTextNode(entry.subtitle));
+    }
+    titleBlock.appendChild(subtitle);
+  }
 
   const formula = document.createElement("div");
   formula.className = "sim-view__formula";

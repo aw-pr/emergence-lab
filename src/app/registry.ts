@@ -14,6 +14,10 @@ import type { SimKernel } from "./types.ts";
 export interface SimEntry {
   slug: string;
   name: string;
+  /** Model family this sim belongs to (shown as a tag in the sim header). */
+  family?: string;
+  /** One-line intro shown under the title in the sim header. */
+  subtitle?: string;
   description?: string;
   load: () => Promise<SimKernel>;
 }
@@ -56,6 +60,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "gray-scott",
     name: "Gray-Scott",
+    family: "Reaction–Diffusion",
+    subtitle: "Two chemicals diffuse and react into Turing spots and stripes.",
     description:
       "Two-species reaction-diffusion. Watch spots and stripes self-organise from a seed patch.",
     load: async () => {
@@ -66,6 +72,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "abelian-sandpile",
     name: "Abelian Sandpile",
+    family: "Self-Organised Criticality",
+    subtitle: "Toppling grains relax a critical pile into fractal terraces.",
     description:
       "Grain-by-grain buildup and avalanches on a lattice. Stable patterns emerge near the edge of criticality.",
     load: async () => {
@@ -76,6 +84,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "game-of-life",
     name: "Game of Life",
+    family: "Cellular Automata",
+    subtitle: "Birth and survival rules on a grid breed gliders and still lifes.",
     description:
       "Conway's cellular automaton: simple local rules produce gliders, oscillators, and complex dynamics.",
     load: async () => {
@@ -86,6 +96,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "belousov-zhabotinsky",
     name: "Belousov–Zhabotinsky",
+    family: "Reaction–Diffusion",
+    subtitle: "An excitable chemical medium rolls out spirals and target waves.",
     description:
       "Excitable reaction–diffusion medium; spiral waves and target patterns propagate across the field.",
     load: async () => {
@@ -96,6 +108,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "boids",
     name: "Boids",
+    family: "Swarm & Flocking",
+    subtitle: "Three steering urges turn scattered agents into a flock.",
     description:
       "Simple local rules yield flocking—alignment, cohesion, and separation sculpt coherent motion from noise.",
     load: async () => {
@@ -106,6 +120,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "lorenz-attractor",
     name: "Lorenz Attractor",
+    family: "Chaotic Systems",
+    subtitle: "A three-variable flow traces the butterfly strange attractor.",
     description:
       "The classic chaotic flow in three dimensions. Follow a trajectory tracing the butterfly-shaped strange attractor.",
     load: async () => {
@@ -116,6 +132,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "diffusion-limited-aggregation",
     name: "Diffusion-Limited Aggregation",
+    family: "Aggregation & Growth",
+    subtitle: "Random walkers freeze on contact into branching dendrites.",
     description:
       "Random walkers stick to a seed; branching clusters grow outward without global planning.",
     load: async () => {
@@ -126,6 +144,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "elementary-cellular-automata",
     name: "Elementary Cellular Automata",
+    family: "Cellular Automata",
+    subtitle: "A one-dimensional Wolfram rule grows row by row into complexity.",
     description:
       "One-dimensional rule space: pick a Wolfram rule and watch patterns evolve from a single row.",
     load: async () => {
@@ -136,6 +156,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "brians-brain",
     name: "Brian's Brain",
+    family: "Cellular Automata",
+    subtitle: "A three-state automaton with refractory cells and travelling wavefronts.",
     description:
       "Three-state CA: births, living cells die to refractory, forming wavefronts and spirals.",
     load: async () => {
@@ -146,6 +168,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "mandelbrot",
     name: "Mandelbrot",
+    family: "Escape-Time Fractals",
+    subtitle: "Iterating z² + c maps which points stay bounded forever.",
     description:
       "Quadratic cardioid shoreline—deep zoom stacks escape-time into saturated rings, the zoom-and-palette rhythm of dedicated fractal explorers.",
     load: async () => {
@@ -156,6 +180,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "julia-set",
     name: "Julia Set",
+    family: "Escape-Time Fractals",
+    subtitle: "A fixed seed c splits the plane into prisoner and escapee sets.",
     description:
       "Fix a complex seed c and carve the prisoner set—dendrites, spirals and lacework tides shift as one constant rewires the whole picture.",
     load: async () => {
@@ -166,6 +192,8 @@ export const REGISTRY: readonly SimEntry[] = [
   {
     slug: "burning-ship",
     name: "Burning Ship",
+    family: "Escape-Time Fractals",
+    subtitle: "Absolute-value iteration forges a jagged flaming hull.",
     description:
       "Escaping iteration with mirrored absolute axes—ridge-like corridors and flaming hull wakes along jagged quadratic coastlines.",
     load: async () => {

@@ -5,8 +5,8 @@
 > Many agents following simple local rules exhibit *emergent
 > behaviour*, seen in everything from ecosystems to economies. 
 >
-> This is a working bench for multi-agent orchestration across
-> Claude and Codex. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
+> A test projectdd-c o for multi-agent orchestration across
+> Claude and Codex us oing the Autometta repo. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
 
 [Run the app in a browser](https://amazing-empanada-7d6e5f.netlify.app/)
 
@@ -82,11 +82,3 @@ emergence-lab/
   HANDOFF.md              # current state and next-run brief
 ```
 
-## Publish and secrets
-
-The public branch tracks a clean history. Pre-commit and pre-push hooks  
-are armed against personal paths and against pushing private branches to  
-the public remote. The full workflow is in  
-[`docs/PUBLISH-WORKFLOW.md`](docs/PUBLISH-WORKFLOW.md).
-
-Secrets live in `.env.local`, gitignored. Never commit them.
