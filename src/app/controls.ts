@@ -53,11 +53,15 @@ export interface ControlsOptions {
   paramSchema: readonly ParamDescriptor[];
   paramPresets: readonly ParamPreset[];
   initialParams: SimParams;
+  /** Factory-default params (schema defaults + per-sim overrides), ignoring persistence. Used by "Reset to defaults". */
+  defaultParams: SimParams;
   initialStepsPerFrame: number;
   stepsControl: StepsControlOptions;
   initialColourOptions: ColourMapOptions;
   initialDisplayOptions: DisplayOptions;
   initialResolution: ResolutionPreset;
+  /** Factory-default resolution, ignoring persistence. Used by "Reset to defaults". */
+  defaultResolution: ResolutionPreset;
   /** Show the simulation-resolution preset selector (omit for fractals). */
   showResolutionControl?: boolean;
   callbacks: ControlsCallbacks;
@@ -81,7 +85,8 @@ export class ControlsPanel {
   private readonly stepsControl: StepsControlOptions;
   private readonly initialColourOptions: ColourMapOptions;
   private readonly initialDisplayOptions: DisplayOptions;
-  private readonly initialResolution: ResolutionPreset;
+  private readonly defaultParams: SimParams;
+  private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
   private params: SimParams;
   private colourOptions: ColourMapOptions;
@@ -129,7 +134,8 @@ export class ControlsPanel {
     this.stepsControl = options.stepsControl;
     this.initialColourOptions = { ...options.initialColourOptions };
     this.initialDisplayOptions = { ...options.initialDisplayOptions };
-    this.initialResolution = options.initialResolution;
+    this.defaultParams = { ...options.defaultParams };
+    this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
     this.params = restorePersistedParams(
       options.slug,
@@ -774,19 +780,19 @@ export class ControlsPanel {
     this.syncStepsControl(this.initialStepsPerFrame);
     this.colourOptions = { ...this.initialColourOptions };
     this.displayOptions = { ...this.initialDisplayOptions };
-    this.resolution = this.initialResolution;
+    this.resolution = this.defaultResolution;
     if (this.resolutionSelect) {
-      this.resolutionSelect.value = this.initialResolution;
+      this.resolutionSelect.value = this.defaultResolution;
     }
     this.syncColourControls();
     this.callbacks.onStepsPerFrameChange(this.initialStepsPerFrame);
     this.callbacks.onColourChange(this.colourOptions);
     this.callbacks.onDisplayChange(this.displayOptions);
-    this.callbacks.onResolutionChange(this.initialResolution);
+    this.callbacks.onResolutionChange(this.defaultResolution);
 
     const nextParams = defaultParamsFromSchema(this.paramSchema);
     for (const descriptor of this.paramSchema) {
-      const defaultValue = descriptor.default;
+      const defaultValue = this.defaultParams[descriptor.key] ?? descriptor.default;
       this.syncParamControl(descriptor, defaultValue);
       nextParams[descriptor.key] = defaultValue;
 

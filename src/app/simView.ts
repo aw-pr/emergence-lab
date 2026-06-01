@@ -87,15 +87,21 @@ export async function renderSimView(
     return { dispose() {} };
   }
 
-  const params: SimParams = restorePersistedParams(slug, kernel.paramSchema, {
+  const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
-  });
+  };
+  const params: SimParams = restorePersistedParams(
+    slug,
+    kernel.paramSchema,
+    factoryParams,
+  );
   let colourOptions: ColourMapOptions = defaultColourOptionsFor(slug, kernel.channelCount);
   let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
   const speedProfile = speedProfileFor(slug);
   let stepsPerFrame = speedProfile.initial;
   const fractal = isFractalSlug(slug);
+  const defaultResolution = defaultResolutionFor(slug);
   const resolution = resolveResolution(slug);
 
   const renderer = new Renderer({
@@ -116,11 +122,13 @@ export async function renderSimView(
     paramSchema: paramSchemaForControls(slug, kernel.paramSchema),
     paramPresets: presetsFor(slug),
     initialParams: params,
+    defaultParams: factoryParams,
     initialStepsPerFrame: stepsPerFrame,
     stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
     initialDisplayOptions: displayOptions,
     initialResolution: resolution,
+    defaultResolution,
     showResolutionControl: !fractal,
     fractalPaletteCycleUi: fractal,
     callbacks: {
