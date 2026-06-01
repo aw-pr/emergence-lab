@@ -322,6 +322,12 @@ function speedProfileFor(slug: string): SpeedProfile {
     max: 2,
     step: 0.05,
   };
+  const swarm: StepsControlOptions = {
+    label: "Simulation speed",
+    min: 0.5,
+    max: 8,
+    step: 0.5,
+  };
 
   switch (slug) {
     case "gray-scott":
@@ -329,19 +335,19 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "belousov-zhabotinsky":
       return { initial: 1.5, control: balanced };
     case "abelian-sandpile":
-      return { initial: 0.8, control: growth };
+      return { initial: 5, control: growth };
     case "diffusion-limited-aggregation":
       return { initial: 6, control: growth };
     case "game-of-life":
       return { initial: 1, control: careful };
     case "elementary-cellular-automata":
-      return { initial: 0.35, control: careful };
+      return { initial: 1.5, control: careful };
     case "brians-brain":
       return { initial: 1, control: careful };
     case "lorenz-attractor":
-      return { initial: 0.35, control: careful };
+      return { initial: 1.5, control: careful };
     case "boids":
-      return { initial: 1, control: careful };
+      return { initial: 3, control: swarm };
     case "mandelbrot":
     case "julia-set":
     case "burning-ship":
@@ -374,8 +380,18 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
 }
 
 function defaultResolutionFor(slug: string): ResolutionPreset {
-  if (slug === "gray-scott") return "performance";
-  return DEFAULT_RESOLUTION;
+  switch (slug) {
+    case "gray-scott":
+      return "performance";
+    case "lorenz-attractor":
+    case "elementary-cellular-automata":
+    case "game-of-life":
+    case "diffusion-limited-aggregation":
+    case "abelian-sandpile":
+      return "ultra";
+    default:
+      return DEFAULT_RESOLUTION;
+  }
 }
 
 /** Persisted resolution preset if valid, otherwise the per-sim default. */
