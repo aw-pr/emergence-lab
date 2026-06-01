@@ -23,16 +23,32 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_BOID_COUNT = 800;
-const DEFAULT_VISUAL_RADIUS = 12;
-const DEFAULT_SEPARATION_RADIUS = 4;
-const DEFAULT_MAX_SPEED = 20;
+const DEFAULT_BOID_COUNT = 5000;
+const DEFAULT_VISUAL_RADIUS = 28;
+const DEFAULT_SEPARATION_RADIUS = 8;
+const DEFAULT_MAX_SPEED = 36;
 const DEFAULT_ALIGNMENT = 0.05;
-const DEFAULT_COHESION = 0.008;
-const DEFAULT_SEPARATION = 0.18;
-const DEFAULT_POINT_SIZE = 16;
+const DEFAULT_COHESION = 0.005;
+const DEFAULT_SEPARATION = 0.2;
+const DEFAULT_POINT_SIZE = 6;
+const MAX_BOID_COUNT = 40000;
+/** Per-step random heading nudge as a fraction of max speed; keeps flocks from freezing into rigid order. */
+const WANDER_STRENGTH = 0.12;
+/** Skip spatial binning below this count (brute force is cheaper for small flocks). */
+const BINNING_MIN_BOIDS = 256;
+/** Cap neighbours considered per boid so huge flocks stay O(N) and never freeze the tab. */
+const NEIGHBOUR_LIMIT = 48;
 const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
+
+function hashAngle(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b);
+  h ^= Math.imul(b ^ 0x27d4eb2f, 0xc2b2ae35);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return ((h >>> 0) / 0x100000000) * TWO_PI;
+}
 
 function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -119,7 +135,7 @@ export class BoidsKernel implements SimKernel {
       type: "number",
       default: DEFAULT_BOID_COUNT,
       min: 1,
-      max: 1200,
+      max: 12000,
       step: 1,
     },
     {
@@ -181,7 +197,7 @@ export class BoidsKernel implements SimKernel {
       label: "Point size (px)",
       type: "number",
       default: DEFAULT_POINT_SIZE,
-      min: 16,
+      min: 4,
       max: 16,
       step: 1,
     },
@@ -196,6 +212,9 @@ export class BoidsKernel implements SimKernel {
   private vy = new Float32Array(0);
   private nextVx = new Float32Array(0);
   private nextVy = new Float32Array(0);
+  private binHead = new Int32Array(0);
+  private binNext = new Int32Array(0);
+  private stepCounter = 0;
   private boidCount = DEFAULT_BOID_COUNT;
   private visualRadius = DEFAULT_VISUAL_RADIUS;
   private separationRadius = DEFAULT_SEPARATION_RADIUS;
@@ -209,7 +228,11 @@ export class BoidsKernel implements SimKernel {
     this.height = Math.max(0, Math.floor(height));
 
     this.boidCount = Math.floor(
-      clamp(numberParam(params, "boidCount", DEFAULT_BOID_COUNT), 1, 1200),
+      clamp(
+        numberParam(params, "boidCount", DEFAULT_BOID_COUNT),
+        1,
+        MAX_BOID_COUNT,
+      ),
     );
     this.visualRadius = clamp(
       numberParam(params, "visualRadius", DEFAULT_VISUAL_RADIUS),
@@ -256,8 +279,10 @@ export class BoidsKernel implements SimKernel {
       this.vy = new Float32Array(this.boidCount);
       this.nextVx = new Float32Array(this.boidCount);
       this.nextVy = new Float32Array(this.boidCount);
+      this.binNext = new Int32Array(this.boidCount);
     }
 
+    this.stepCounter = 0;
     this.seedBoids();
     this.rasterise();
   }
@@ -268,8 +293,29 @@ export class BoidsKernel implements SimKernel {
     }
 
     const timeStep = clamp(Number.isFinite(dt) ? dt : 1, 0, 2);
+    this.stepCounter += 1;
+
+    const cols = Math.floor(this.width / this.visualRadius);
+    const rows = Math.floor(this.height / this.visualRadius);
+    if (this.boidCount >= BINNING_MIN_BOIDS && cols >= 3 && rows >= 3) {
+      this.computeForcesBinned(cols, rows);
+    } else {
+      this.computeForcesBrute();
+    }
+
     const nextVx = this.nextVx;
     const nextVy = this.nextVy;
+    for (let i = 0; i < this.boidCount; i += 1) {
+      this.vx[i] = nextVx[i];
+      this.vy[i] = nextVy[i];
+      this.x[i] = wrap(this.x[i] + this.vx[i] * timeStep, this.width);
+      this.y[i] = wrap(this.y[i] + this.vy[i] * timeStep, this.height);
+    }
+
+    this.rasterise();
+  }
+
+  private computeForcesBrute(): void {
     const visualRadiusSq = this.visualRadius * this.visualRadius;
     const separationRadiusSq = this.separationRadius * this.separationRadius;
 
@@ -290,7 +336,6 @@ export class BoidsKernel implements SimKernel {
         const dx = torusDelta(this.x[i], this.x[j], this.width);
         const dy = torusDelta(this.y[i], this.y[j], this.height);
         const distanceSq = dx * dx + dy * dy;
-
         if (distanceSq > visualRadiusSq) {
           continue;
         }
@@ -307,40 +352,143 @@ export class BoidsKernel implements SimKernel {
           repelX -= dx * strength;
           repelY -= dy * strength;
         }
+
+        if (neighborCount >= NEIGHBOUR_LIMIT) {
+          break;
+        }
       }
 
-      let velocityX = this.vx[i];
-      let velocityY = this.vy[i];
-
-      if (neighborCount > 0) {
-        const invCount = 1 / neighborCount;
-        avgVx *= invCount;
-        avgVy *= invCount;
-        centerX *= invCount;
-        centerY *= invCount;
-
-        velocityX += (avgVx - velocityX) * this.alignment;
-        velocityY += (avgVy - velocityY) * this.alignment;
-        velocityX += centerX * this.cohesion;
-        velocityY += centerY * this.cohesion;
-      }
-
-      velocityX += repelX * this.separation;
-      velocityY += repelY * this.separation;
-
-      const limited = limitVector(velocityX, velocityY, this.maxSpeed);
-      nextVx[i] = limited[0];
-      nextVy[i] = limited[1];
+      this.applySteer(
+        i,
+        neighborCount,
+        avgVx,
+        avgVy,
+        centerX,
+        centerY,
+        repelX,
+        repelY,
+      );
     }
+  }
+
+  private computeForcesBinned(cols: number, rows: number): void {
+    const binCount = cols * rows;
+    if (this.binHead.length !== binCount) {
+      this.binHead = new Int32Array(binCount);
+    }
+    this.binHead.fill(-1);
+
+    const binWidth = this.width / cols;
+    const binHeight = this.height / rows;
+    const binNext = this.binNext;
 
     for (let i = 0; i < this.boidCount; i += 1) {
-      this.vx[i] = nextVx[i];
-      this.vy[i] = nextVy[i];
-      this.x[i] = wrap(this.x[i] + this.vx[i] * timeStep, this.width);
-      this.y[i] = wrap(this.y[i] + this.vy[i] * timeStep, this.height);
+      const col = Math.min(cols - 1, Math.floor(this.x[i] / binWidth));
+      const row = Math.min(rows - 1, Math.floor(this.y[i] / binHeight));
+      const bin = row * cols + col;
+      binNext[i] = this.binHead[bin];
+      this.binHead[bin] = i;
     }
 
-    this.rasterise();
+    const visualRadiusSq = this.visualRadius * this.visualRadius;
+    const separationRadiusSq = this.separationRadius * this.separationRadius;
+
+    for (let i = 0; i < this.boidCount; i += 1) {
+      const col = Math.min(cols - 1, Math.floor(this.x[i] / binWidth));
+      const row = Math.min(rows - 1, Math.floor(this.y[i] / binHeight));
+
+      let neighborCount = 0;
+      let avgVx = 0;
+      let avgVy = 0;
+      let centerX = 0;
+      let centerY = 0;
+      let repelX = 0;
+      let repelY = 0;
+
+      neighbours: for (let dr = -1; dr <= 1; dr += 1) {
+        const nr = (row + dr + rows) % rows;
+        for (let dc = -1; dc <= 1; dc += 1) {
+          const nc = (col + dc + cols) % cols;
+          let j = this.binHead[nr * cols + nc];
+          while (j !== -1) {
+            if (j !== i) {
+              const dx = torusDelta(this.x[i], this.x[j], this.width);
+              const dy = torusDelta(this.y[i], this.y[j], this.height);
+              const distanceSq = dx * dx + dy * dy;
+              if (distanceSq <= visualRadiusSq) {
+                neighborCount += 1;
+                avgVx += this.vx[j];
+                avgVy += this.vy[j];
+                centerX += dx;
+                centerY += dy;
+
+                if (distanceSq < separationRadiusSq && distanceSq > 0) {
+                  const distance = Math.sqrt(distanceSq);
+                  const strength = (this.separationRadius - distance) / distance;
+                  repelX -= dx * strength;
+                  repelY -= dy * strength;
+                }
+
+                if (neighborCount >= NEIGHBOUR_LIMIT) {
+                  break neighbours;
+                }
+              }
+            }
+            j = binNext[j];
+          }
+        }
+      }
+
+      this.applySteer(
+        i,
+        neighborCount,
+        avgVx,
+        avgVy,
+        centerX,
+        centerY,
+        repelX,
+        repelY,
+      );
+    }
+  }
+
+  private applySteer(
+    i: number,
+    neighborCount: number,
+    avgVx: number,
+    avgVy: number,
+    centerX: number,
+    centerY: number,
+    repelX: number,
+    repelY: number,
+  ): void {
+    let velocityX = this.vx[i];
+    let velocityY = this.vy[i];
+
+    if (neighborCount > 0) {
+      const invCount = 1 / neighborCount;
+      avgVx *= invCount;
+      avgVy *= invCount;
+      centerX *= invCount;
+      centerY *= invCount;
+
+      velocityX += (avgVx - velocityX) * this.alignment;
+      velocityY += (avgVy - velocityY) * this.alignment;
+      velocityX += centerX * this.cohesion;
+      velocityY += centerY * this.cohesion;
+    }
+
+    velocityX += repelX * this.separation;
+    velocityY += repelY * this.separation;
+
+    const angle = hashAngle(i, this.stepCounter);
+    const wander = this.maxSpeed * WANDER_STRENGTH;
+    velocityX += Math.cos(angle) * wander;
+    velocityY += Math.sin(angle) * wander;
+
+    const limited = limitVector(velocityX, velocityY, this.maxSpeed);
+    this.nextVx[i] = limited[0];
+    this.nextVy[i] = limited[1];
   }
 
   readState(): Float32Array {
@@ -357,6 +505,8 @@ export class BoidsKernel implements SimKernel {
     this.vy = new Float32Array(0);
     this.nextVx = new Float32Array(0);
     this.nextVy = new Float32Array(0);
+    this.binHead = new Int32Array(0);
+    this.binNext = new Int32Array(0);
   }
 
   private seedBoids(): void {
