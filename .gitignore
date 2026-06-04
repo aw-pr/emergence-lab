@@ -26,3 +26,6 @@ state/
 .autometta.local.yaml
 
 state/logs/
+
+# CodeGraph local index cache
+.codegraph/
