@@ -6,7 +6,7 @@
 > behaviour*, seen in everything from ecosystems to economies. 
 >
 > A test project for multi-agent orchestration across
-> Claude and Codex us oing the Autometta repo. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
+> Claude and Codex using the Autometta repo. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
 
 [Run the app in a browser](https://amazing-empanada-7d6e5f.netlify.app/)
 
