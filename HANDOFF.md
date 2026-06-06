@@ -2,7 +2,7 @@
 
 > **Status (2026-06-06b):** Per-sim tuning pass (operator requests): **Boids** flock (wander 0.12→0.05, stronger align/cohesion) instead of looking like noise; **Sandpile** fills the screen (2M pile + much higher per-step topple throughput, settles in ~30s at the default speed of 1); **DLA** defaults to dense coral and **self-randomises each run** (fresh seed unless a numeric `seed` param is passed); **Game of Life** gains a deterministic **spark** re-seed so it stays lively past 1500 iters instead of freezing to ash (flux ~0.13 vs 0.0 at iter 3000); **Burning Ship** opens on the **Mast detail** view. `npm run verify` green (118 tests), default Playwright suite headless (16 pass, 3 sweeps opt-in). All changes visually verified via Playwright screenshots. **Published** to `public/main` (`aw-pr`) at the clean tip `417776b`.
 >
-> **Branch model (read this):** `HANDOFF.md` is **dev-only** — it must never reach `main`/`publish`/`public` (the `pre-push` guard enforces it via `publishguard.privatefile`). `dev` = `main` + this single HANDOFF commit; `main` (site/Netlify) and `publish` (→ `public/main`) are kept HANDOFF-free. To promote dev work: commit on `dev`, then bring the non-HANDOFF changes onto `main` (rebase the HANDOFF commit to the tip and fast-forward `main` to its parent, or `git checkout dev -- <paths>` excluding `HANDOFF.md`), then `git publish`. Do not `git merge dev` into `main`/`publish`.
+> **Branch model (read this):** `HANDOFF.md` is **dev-only** — it must never reach `main`/`publish`/`public` (the `pre-push` guard enforces it via `publishguard.privatefile`). `dev` = `main` + dev-only HANDOFF commit(s) on top; `main` (site/Netlify) and `publish` (→ `public/main`) are kept HANDOFF-free. To promote dev work: commit on `dev`, then bring the non-HANDOFF changes onto `main` (keep the HANDOFF commits at the tip and fast-forward `main` to the last non-HANDOFF commit, or `git checkout dev -- <paths>` excluding `HANDOFF.md`), then `git publish`. Do not `git merge dev` into `main`/`publish`.
 >
 > **Prior (2026-06-06):** Playwright interestingness-sweep harness added under `e2e/` (`SWEEP=1 npx playwright test`); measured Gray-Scott F/k surface → **fixed the dead "Waves" preset** (rendered empty, score 0.000 → 0.831) and **densified "Spots"** (0.669 → 0.743), see `docs/sweeps/gray-scott-interestingness.md`. **Owed live-browser smoke paid**: all 12 routes load+run, DLA/sandpile/boids visually verified.
 >
@@ -33,6 +33,30 @@ Gray-Scott, Abelian sandpile, Game of Life, Belousov-Zhabotinsky, Boids,
 Lorenz attractor, Diffusion-limited aggregation, Elementary cellular
 automata, Brian's Brain, Mandelbrot, Julia set, Burning Ship. Kernel tests
 live beside kernels as `src/sims/**/kernel.test.cjs`.
+
+## Recent activity (2026-06-06c publish to public mirror + branch realign)
+
+Published this session's work to the public mirror and untangled a private-file
+leak the publish guard caught.
+
+- **Publish-guard catch.** `git publish` blocked the push to `public/main`
+  (`aw-pr`): `HANDOFF.md` (a `publishguard.privatefile`) was in the tree — the
+  earlier `dev → publish` fast-forward had dragged the dev-only file across.
+- **History-clean rewrite.** Every one of the 11 unpushed commits carried
+  `HANDOFF.md`, and `public/main` had none — so a tip-only `git rm` would have
+  leaked it into public *history*. Stripped it from the whole range instead:
+  `git filter-branch --prune-empty --index-filter 'git rm --cached
+  --ignore-unmatch HANDOFF.md' 349abb8..publish`. The two HANDOFF-only commits
+  collapsed to empty and dropped; the other 9 kept their messages + per-agent
+  authors. Clean tip `417776b` = old `7b71216` minus `HANDOFF.md`, `npm run
+  verify` green.
+- **Published.** `main` and `publish` → `417776b`; `git publish` fast-forwarded
+  `public/main` (`aw-pr`) from `349abb8` to `417776b`. Public history verified
+  free of `HANDOFF.md`. Site (`origin/main`, Netlify) redeployed — no functional
+  change (`HANDOFF.md` isn't built).
+- **Branch realign.** `dev` reset to `main` and `HANDOFF.md` re-added as a single
+  dev-only commit, so `dev` is a clean descendant of `main` again (see the
+  branch-model note at the top). Backups (tags + bundle) removed once verified.
 
 ## Recent activity (2026-06-06b per-sim tuning: boids/sandpile/DLA/GoL/burning-ship)
 
