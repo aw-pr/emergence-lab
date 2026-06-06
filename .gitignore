@@ -29,3 +29,9 @@ state/logs/
 
 # CodeGraph local index cache
 .codegraph/
+
+# Playwright
+test-results/
+playwright-report/
+e2e/artifacts/
+.cache/ms-playwright/
