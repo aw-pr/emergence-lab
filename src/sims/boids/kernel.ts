@@ -24,16 +24,18 @@ interface SimKernel {
 }
 
 const DEFAULT_BOID_COUNT = 5000;
-const DEFAULT_VISUAL_RADIUS = 28;
+const DEFAULT_VISUAL_RADIUS = 34;
 const DEFAULT_SEPARATION_RADIUS = 8;
 const DEFAULT_MAX_SPEED = 36;
-const DEFAULT_ALIGNMENT = 0.05;
-const DEFAULT_COHESION = 0.005;
-const DEFAULT_SEPARATION = 0.2;
+const DEFAULT_ALIGNMENT = 0.09;
+const DEFAULT_COHESION = 0.011;
+const DEFAULT_SEPARATION = 0.22;
 const DEFAULT_POINT_SIZE = 6;
 const MAX_BOID_COUNT = 40000;
-/** Per-step random heading nudge as a fraction of max speed; keeps flocks from freezing into rigid order. */
-const WANDER_STRENGTH = 0.12;
+/** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
+ * from freezing into rigid crystalline order, but too much washes the flocking
+ * out into uniform noise — kept low so alignment/cohesion can actually organise. */
+const WANDER_STRENGTH = 0.05;
 /** Skip spatial binning below this count (brute force is cheaper for small flocks). */
 const BINNING_MIN_BOIDS = 256;
 /** Cap neighbours considered per boid so huge flocks stay O(N) and never freeze the tab. */
