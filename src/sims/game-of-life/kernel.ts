@@ -28,6 +28,12 @@ const DEFAULT_BIRTH_MAX = 3;
 const DEFAULT_SURVIVE_MIN = 2;
 const DEFAULT_SURVIVE_MAX = 3;
 const DEFAULT_SEED_DENSITY = 0.28;
+// Pure Conway always relaxes into mostly-static "ash" within a couple of
+// thousand generations. The spark periodically sprinkles a sparse layer of fresh
+// cells, so the board keeps spawning gliders and activity indefinitely. Set the
+// spark rate to 0 for purist B3/S23.
+const DEFAULT_SPARK_RATE = 0.04;
+const SPARK_INTERVAL = 24;
 const CHANNEL_COUNT = 1;
 
 function numberParam(
@@ -59,6 +65,20 @@ function coordinateHash(x: number, y: number): number {
   hash ^= hash >>> 15;
   hash = Math.imul(hash, 0x846ca68b);
   hash ^= hash >>> 16;
+
+  return (hash >>> 0) / 0x100000000;
+}
+
+/** Deterministic per-cell, per-epoch unit value for the spark re-seed layer. */
+function sparkHash(x: number, y: number, epoch: number): number {
+  let hash = Math.imul(x + 0x7f4a7c15, 0x9e3779b1);
+  hash ^= Math.imul(y + 0x165667b1, 0x85ebca6b);
+  hash ^= Math.imul(epoch + 0x27d4eb2f, 0xc2b2ae35);
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x2c1b3c6d);
+  hash ^= hash >>> 12;
+  hash = Math.imul(hash, 0x297a2d39);
+  hash ^= hash >>> 15;
 
   return (hash >>> 0) / 0x100000000;
 }
@@ -114,6 +134,15 @@ export class GameOfLifeKernel implements SimKernel {
       max: 1,
       step: 0.01,
     },
+    {
+      key: "sparkRate",
+      label: "Spark rate",
+      type: "number",
+      default: DEFAULT_SPARK_RATE,
+      min: 0,
+      max: 0.2,
+      step: 0.005,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
@@ -125,6 +154,8 @@ export class GameOfLifeKernel implements SimKernel {
   private surviveMin = DEFAULT_SURVIVE_MIN;
   private surviveMax = DEFAULT_SURVIVE_MAX;
   private seedDensity = DEFAULT_SEED_DENSITY;
+  private sparkRate = DEFAULT_SPARK_RATE;
+  private stepCounter = 0;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -166,6 +197,12 @@ export class GameOfLifeKernel implements SimKernel {
       0,
       1,
     );
+    this.sparkRate = boundedNumber(
+      numberParam(params, "sparkRate", DEFAULT_SPARK_RATE),
+      0,
+      0.2,
+    );
+    this.stepCounter = 0;
 
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
@@ -217,6 +254,20 @@ export class GameOfLifeKernel implements SimKernel {
       }
     }
 
+    this.stepCounter += 1;
+    if (this.sparkRate > 0 && this.stepCounter % SPARK_INTERVAL === 0) {
+      const epoch = (this.stepCounter / SPARK_INTERVAL) >>> 0;
+      const rate = this.sparkRate;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const index = y * width + x;
+          if (next[index] === 0 && sparkHash(x, y, epoch) < rate) {
+            next[index] = 1;
+          }
+        }
+      }
+    }
+
     state.set(next);
   }
 
@@ -229,6 +280,7 @@ export class GameOfLifeKernel implements SimKernel {
     this.height = 0;
     this.state = new Float32Array(0);
     this.next = new Float32Array(0);
+    this.stepCounter = 0;
   }
 }
 

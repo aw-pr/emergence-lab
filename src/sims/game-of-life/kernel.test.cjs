@@ -36,7 +36,7 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["birthMin", "birthMax", "surviveMin", "surviveMax", "seedDensity"],
+    ["birthMin", "birthMax", "surviveMin", "surviveMax", "seedDensity", "sparkRate"],
   );
 
   for (const descriptor of kernel.paramSchema) {
