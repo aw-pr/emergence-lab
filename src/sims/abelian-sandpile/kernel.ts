@@ -23,12 +23,17 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_INITIAL_PILE = 1500000;
+// A larger default pile so the settled mandala fills most of the canvas height
+// (radius grows ~sqrt of the grain count). The topple budget and cap are raised
+// well above the old values so it reaches that full size in ~10s rather than
+// creeping there over a minute — the slow relaxation, not the grain count, was
+// why the pile looked small.
+const DEFAULT_INITIAL_PILE = 2000000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
 const DEFAULT_GRAINS_PER_STEP = 1;
-const DEFAULT_TOPPLES_PER_STEP = 500000;
-const MAX_INITIAL_PILE = 5000000;
-const MAX_TOPPLES_PER_STEP = 500000;
+const DEFAULT_TOPPLES_PER_STEP = 1500000;
+const MAX_INITIAL_PILE = 8000000;
+const MAX_TOPPLES_PER_STEP = 3000000;
 const CHANNEL_COUNT = 1;
 
 function numberParam(
