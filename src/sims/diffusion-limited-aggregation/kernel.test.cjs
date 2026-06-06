@@ -17,7 +17,9 @@ function defaultsFromSchema(kernel) {
 
 function runKernel(params = {}, steps = 8) {
   const kernel = new DiffusionLimitedAggregationKernel();
-  kernel.init(32, 32, params);
+  // Fixed seed so determinism/equality assertions hold; the app omits `seed`
+  // and so draws a fresh random cluster each run.
+  kernel.init(32, 32, { seed: 1, ...params });
 
   for (let index = 0; index < steps; index += 1) {
     kernel.step(1);
@@ -129,7 +131,7 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
 
 test("default settings produce a visible cluster within the page-load budget", () => {
   const kernel = new DiffusionLimitedAggregationKernel();
-  kernel.init(800, 600, defaultsFromSchema(kernel));
+  kernel.init(800, 600, { ...defaultsFromSchema(kernel), seed: 1 });
 
   for (let index = 0; index < 480; index += 1) {
     kernel.step(1);
@@ -150,6 +152,7 @@ test("growth remains directional-balanced around the seed", () => {
     spawnRadius: 0.34,
     stickiness: 1,
     seedCount: 1,
+    seed: 1,
   });
 
   for (let index = 0; index < 10; index += 1) {

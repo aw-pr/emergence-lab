@@ -86,7 +86,8 @@ for (const slug of ALL_SLUGS) {
 // Owed live-browser smoke checks (previously verified headless only).
 
 test("DLA grows a visible branching cluster (~0.25 fill target)", async ({ page }) => {
-  const params = { walkersPerStep: 96, maxWalkSteps: 256, spawnRadius: 0.06, stickiness: 1, seedCount: 1 };
+  // Pin the seed so the owed-smoke assertions are stable (the app self-randomises).
+  const params = { walkersPerStep: 96, maxWalkSteps: 256, spawnRadius: 0.06, stickiness: 0.45, seedCount: 4, seed: 7 };
   const grid = 220;
   const fills: number[] = [];
   for (const steps of [60, 140, 260]) {

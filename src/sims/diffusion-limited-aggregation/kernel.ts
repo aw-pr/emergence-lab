@@ -26,8 +26,11 @@ interface SimKernel {
 const DEFAULT_WALKERS_PER_STEP = 64;
 const DEFAULT_MAX_WALK_STEPS = 400;
 const DEFAULT_SPAWN_RADIUS = 0.05;
-const DEFAULT_STICKINESS = 1;
-const DEFAULT_SEED_COUNT = 1;
+// Dense-coral default: stickiness below 1 lets walkers slip past the first
+// contact and pack into the gaps (a fuller, coral-like aggregate rather than
+// open dendrites); several seeds start multiple coral heads.
+const DEFAULT_STICKINESS = 0.45;
+const DEFAULT_SEED_COUNT = 4;
 const CHANNEL_COUNT = 1;
 const TWO_PI = Math.PI * 2;
 /** Fraction of walk steps nudged radially toward the seed so every direction gets fed (prevents runaway single tendrils). */
@@ -139,6 +142,10 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
   private centreX = 0;
   private centreY = 0;
   private maxRadius = 0;
+  // Per-init randomisation: a fresh seed each init means every run/reset grows a
+  // different cluster. Deterministic when a numeric `seed` is supplied in params
+  // (the kernel tests rely on that), random otherwise.
+  private rngSeed = 0;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -176,6 +183,11 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       1,
       32,
     );
+    const seedParam = params["seed"];
+    this.rngSeed =
+      typeof seedParam === "number" && Number.isFinite(seedParam)
+        ? seedParam >>> 0
+        : (Math.random() * 0x100000000) >>> 0;
     this.walkerCursor = 0;
     this.clusterSize = 0;
     this.centreX = Math.floor(this.width / 2);
@@ -266,7 +278,10 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     }
   }
 
-  private launchWalker(walkerId: number): void {
+  private launchWalker(walkerCursor: number): void {
+    // Fold the per-init seed into the walker id so the whole walk (spawn point,
+    // direction, sticking) varies between runs.
+    const walkerId = (walkerCursor ^ this.rngSeed) >>> 0;
     const gap = this.spawnGap();
     const ring = this.spawnRingRadius(gap);
     const killRadius = ring + Math.max(8, gap * 2);
