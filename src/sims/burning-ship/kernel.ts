@@ -23,12 +23,15 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_CENTER_X = -0.5;
-const DEFAULT_CENTER_Y = -0.5;
-const DEFAULT_ZOOM = 1;
-const DEFAULT_MAX_ITERATIONS = 128;
-const DEFAULT_PALETTE_PHASE = 0.15;
-const DEFAULT_CYCLE_SPEED = 0.1;
+// Default view = the "Mast detail" regime (the jagged rigging above the hull),
+// the most striking part of the ship at a glance. The "Harbour view" preset
+// returns to the zoomed-out whole ship.
+const DEFAULT_CENTER_X = -1.755;
+const DEFAULT_CENTER_Y = -0.03;
+const DEFAULT_ZOOM = 14;
+const DEFAULT_MAX_ITERATIONS = 260;
+const DEFAULT_PALETTE_PHASE = 0.1;
+const DEFAULT_CYCLE_SPEED = 0.35;
 const CHANNEL_COUNT = 1;
 const ESCAPE_RADIUS_SQUARED = 4;
 const BASE_VIEW_WIDTH = 3.4;

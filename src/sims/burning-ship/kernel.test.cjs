@@ -61,12 +61,12 @@ test("metadata matches the renderer contract", () => {
       descriptor.step,
     ]),
     [
-      ["centerX", -0.5, -2.2, 1.2, 0.001],
-      ["centerY", -0.5, -2, 1, 0.001],
-      ["zoom", 1, 0.25, 500, 0.01],
-      ["maxIterations", 128, 16, 512, 1],
-      ["palettePhase", 0.15, 0, 1, 0.001],
-      ["cycleSpeed", 0.1, 0, 5, 0.001],
+      ["centerX", -1.755, -2.2, 1.2, 0.001],
+      ["centerY", -0.03, -2, 1, 0.001],
+      ["zoom", 14, 0.25, 500, 0.01],
+      ["maxIterations", 260, 16, 512, 1],
+      ["palettePhase", 0.1, 0, 1, 0.001],
+      ["cycleSpeed", 0.35, 0, 5, 0.001],
     ],
   );
 
