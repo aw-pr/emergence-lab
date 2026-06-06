@@ -31,12 +31,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
     {
       id: "spots",
       label: "Spots",
-      params: { Du: 0.2097, Dv: 0.105, F: 0.03, k: 0.062, stepsPerFrame: 20 },
+      params: { Du: 0.2097, Dv: 0.105, F: 0.026, k: 0.0597, stepsPerFrame: 20 },
     },
     {
       id: "waves",
       label: "Waves",
-      params: { Du: 0.2097, Dv: 0.105, F: 0.014, k: 0.045, stepsPerFrame: 20 },
+      params: { Du: 0.2097, Dv: 0.105, F: 0.018, k: 0.0487, stepsPerFrame: 20 },
     },
     {
       id: "u-skate",
