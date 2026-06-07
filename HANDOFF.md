@@ -1,6 +1,8 @@
 # HANDOFF.md
 
-> **Status (2026-06-06b):** Per-sim tuning pass (operator requests): **Boids** flock (wander 0.12→0.05, stronger align/cohesion) instead of looking like noise; **Sandpile** fills the screen (2M pile + much higher per-step topple throughput, settles in ~30s at the default speed of 1); **DLA** defaults to dense coral and **self-randomises each run** (fresh seed unless a numeric `seed` param is passed); **Game of Life** gains a deterministic **spark** re-seed so it stays lively past 1500 iters instead of freezing to ash (flux ~0.13 vs 0.0 at iter 3000); **Burning Ship** opens on the **Mast detail** view. `npm run verify` green (118 tests), default Playwright suite headless (16 pass, 3 sweeps opt-in). All changes visually verified via Playwright screenshots. **Published** to `public/main` (`aw-pr`) at the clean tip `417776b`.
+> **Status (2026-06-07):** Boids default 10k at **ultra** with a per-run randomised start (optional `seed`; the renderer mints a fresh one on load/reset, slider tweaks keep the layout); **Gray-Scott** density raised to the **balanced** grid (640²) for finer patterns. `npm run verify` green (119 tests). Two atomic commits on `dev` (`789618a`, `101525b`); live browser smoke owed.
+>
+> **Prior (2026-06-06b):** Per-sim tuning pass (operator requests): **Boids** flock (wander 0.12→0.05, stronger align/cohesion) instead of looking like noise; **Sandpile** fills the screen (2M pile + much higher per-step topple throughput, settles in ~30s at the default speed of 1); **DLA** defaults to dense coral and **self-randomises each run** (fresh seed unless a numeric `seed` param is passed); **Game of Life** gains a deterministic **spark** re-seed so it stays lively past 1500 iters instead of freezing to ash (flux ~0.13 vs 0.0 at iter 3000); **Burning Ship** opens on the **Mast detail** view. `npm run verify` green (118 tests), default Playwright suite headless (16 pass, 3 sweeps opt-in). All changes visually verified via Playwright screenshots. **Published** to `public/main` (`aw-pr`) at the clean tip `417776b`.
 >
 > **Branch model (read this):** `HANDOFF.md` is **dev-only** — it must never reach `main`/`publish`/`public` (the `pre-push` guard enforces it via `publishguard.privatefile`). `dev` = `main` + dev-only HANDOFF commit(s) on top; `main` (site/Netlify) and `publish` (→ `public/main`) are kept HANDOFF-free. To promote dev work: commit on `dev`, then bring the non-HANDOFF changes onto `main` (keep the HANDOFF commits at the tip and fast-forward `main` to the last non-HANDOFF commit, or `git checkout dev -- <paths>` excluding `HANDOFF.md`), then `git publish`. Do not `git merge dev` into `main`/`publish`.
 >
@@ -33,6 +35,37 @@ Gray-Scott, Abelian sandpile, Game of Life, Belousov-Zhabotinsky, Boids,
 Lorenz attractor, Diffusion-limited aggregation, Elementary cellular
 automata, Brian's Brain, Mandelbrot, Julia set, Burning Ship. Kernel tests
 live beside kernels as `src/sims/**/kernel.test.cjs`.
+
+## Recent activity (2026-06-07 boids 10k/ultra + randomised start, Gray-Scott density)
+
+Operator todo (`docs/todo.md`) — two atomic commits on `dev`, author = Claude
+Opus 4.8. `npm run verify` green (119 kernel tests + types + build).
+
+- **Boids — 10k flock at ultra, randomised start** (`789618a`). `DEFAULT_BOID_COUNT
+  5000 → 10000` (schema max already 12000) and the per-sim default resolution
+  preset → **ultra** (`defaultResolutionFor` in `simView.ts`). New per-run
+  variety: the kernel reads an optional `seed` param mixed into its RNG seed —
+  **absent/0 reproduces the prior deterministic init**, so every existing
+  determinism test is byte-identical and untouched. The **renderer** now mints a
+  fresh 32-bit `seed` on load and on reset and passes `{ ...params, seed }` into
+  `kernel.init`, so each run/reset grows a different flock while slider tweaks
+  (which keep the current seed) preserve the layout. A new kernel test locks the
+  behaviour (deterministic per seed, varies across seeds, `seed:0 ≡` no-seed);
+  the `boidCount.default` assertion updated 5000 → 10000.
+- **Gray-Scott — density up to balanced** (`101525b`). Default resolution preset
+  `performance (384²) → balanced (640²)`, ~2.8× the cells, so finer / more
+  intricate reaction-diffusion patterns fit on screen. Kept **below high/ultra on
+  operator's pick** to protect framerate, since the kernel steps every cell on
+  the CPU (`stepsPerFrame` × grid). The centre seed patch is grid-relative (8% of
+  the short axis), so it scales correctly.
+- **Generic seed plumbing.** The renderer now injects `seed` into *every* kernel's
+  `init` — harmless for the other 11 sims (they read only their own schema keys),
+  and boids is the first to opt in alongside DLA. `seed` is never persisted or
+  shown as a control (not in any `paramSchema`).
+- **No live browser smoke this session** — covered by the kernel-test gate +
+  build; the ultra/balanced resolution defaults are one-line config in
+  `defaultResolutionFor`. Visual eyeball of the new boids density/variety and
+  Gray-Scott fineness still owed (see Open items).
 
 ## Recent activity (2026-06-06c publish to public mirror + branch realign)
 
@@ -231,6 +264,12 @@ was in effect locally.
 
 ## Open items
 
+- **Live browser smoke for the 2026-06-07 pass owed.** Eyeball 10k boids at ultra
+  (pattern variety across reloads/resets, framerate) and Gray-Scott at the
+  balanced grid (finer patterns, framerate still comfortable). Note: with the
+  renderer injecting `seed` generically, `docs/INTERFACE.md`'s "same params ⇒
+  identical state" note now has a **second** scoped exception (boids, alongside
+  DLA) — the interface *shape* is unchanged, so no version bump is required.
 - **Live browser smoke for the 2026-06-01 pass — DONE (2026-06-06).** Paid via
   `e2e/smoke.spec.ts` (all 12 routes + DLA/sandpile/boids, screenshots eyeballed).
   Note: DLA fill plateaus around **0.16** at default params, a touch under the
