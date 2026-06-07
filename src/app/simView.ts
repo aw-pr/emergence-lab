@@ -421,7 +421,7 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
 function defaultResolutionFor(slug: string): ResolutionPreset {
   switch (slug) {
     case "gray-scott":
-      return "performance";
+      return "balanced";
     case "lorenz-attractor":
     case "elementary-cellular-automata":
     case "game-of-life":
