@@ -23,7 +23,7 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_BOID_COUNT = 5000;
+const DEFAULT_BOID_COUNT = 10000;
 const DEFAULT_VISUAL_RADIUS = 34;
 const DEFAULT_SEPARATION_RADIUS = 8;
 const DEFAULT_MAX_SPEED = 36;
@@ -217,6 +217,7 @@ export class BoidsKernel implements SimKernel {
   private binHead = new Int32Array(0);
   private binNext = new Int32Array(0);
   private stepCounter = 0;
+  private seed = 0;
   private boidCount = DEFAULT_BOID_COUNT;
   private visualRadius = DEFAULT_VISUAL_RADIUS;
   private separationRadius = DEFAULT_SEPARATION_RADIUS;
@@ -266,6 +267,10 @@ export class BoidsKernel implements SimKernel {
       0,
       1,
     );
+    // Optional run-to-run variety: a non-zero seed shifts the initial flock so
+    // each load/reset differs. Absent (0), seeding stays a pure function of the
+    // grid size and boid count, keeping init reproducible.
+    this.seed = numberParam(params, "seed", 0) | 0;
 
     const length = this.width * this.height * this.channelCount;
     if (this.state.length !== length) {
@@ -519,7 +524,8 @@ export class BoidsKernel implements SimKernel {
     const seed =
       (Math.imul(this.width, 73856093) ^
         Math.imul(this.height, 19349663) ^
-        Math.imul(this.boidCount, 83492791)) >>>
+        Math.imul(this.boidCount, 83492791) ^
+        Math.imul(this.seed, 0x9e3779b1)) >>>
       0;
     const random = mulberry32(seed);
 

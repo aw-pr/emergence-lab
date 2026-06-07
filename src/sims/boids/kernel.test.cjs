@@ -74,7 +74,7 @@ test("metadata matches the renderer contract", () => {
   const boidCount = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "boidCount",
   );
-  assert.equal(boidCount.default, 5000);
+  assert.equal(boidCount.default, 10000);
   assert.equal(boidCount.max, 12000);
 
   const maxSpeed = kernel.paramSchema.find(
@@ -139,6 +139,23 @@ test("seeded random initial flock is deterministic", () => {
     maxSpeed: 2.4,
   };
   assert.deepEqual(initOnlyState(params), initOnlyState(params));
+});
+
+test("seed param varies the initial flock but stays deterministic per seed", () => {
+  const base = { boidCount: 96, maxSpeed: 2.4 };
+
+  assert.deepEqual(
+    initOnlyState({ ...base, seed: 1234 }),
+    initOnlyState({ ...base, seed: 1234 }),
+  );
+  assert.notDeepEqual(
+    initOnlyState({ ...base, seed: 1234 }),
+    initOnlyState({ ...base, seed: 5678 }),
+  );
+  assert.deepEqual(
+    initOnlyState({ ...base, seed: 0 }),
+    initOnlyState(base),
+  );
 });
 
 test("selfTest passes", () => {

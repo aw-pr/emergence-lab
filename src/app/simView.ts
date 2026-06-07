@@ -427,6 +427,7 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
     case "game-of-life":
     case "diffusion-limited-aggregation":
     case "abelian-sandpile":
+    case "boids":
       return "ultra";
     default:
       return DEFAULT_RESOLUTION;

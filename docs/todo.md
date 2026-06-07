@@ -1,0 +1,2 @@
+- [x] Set the default boids rersolution to ultra and see if we can reandomise the start criteria so we get different patterns and increase the number of boids to 10000
+- [ ] can we try and increase the pixel desnsity in garry scott diffusion so we can fit more intricate patterns on the screen?

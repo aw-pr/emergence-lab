@@ -41,6 +41,11 @@ export interface RendererOptions {
 
 export type { DisplayOptions } from "./rendererBackend.ts";
 
+/** A non-zero 32-bit seed handed to kernel.init for run-to-run variety. */
+function nextSeed(): number {
+  return ((Math.random() * 0x100000000) >>> 0) || 1;
+}
+
 /**
  * Owns the canvas, the animation loop, and the float → pixel mapping.
  *
@@ -73,6 +78,9 @@ export class Renderer {
   private elapsedTime = 0;
   private stepsPerFrame: number;
   private stepAccumulator = 0;
+  /** Fresh per load/reset; passed to kernel.init so sims that read `seed` vary
+   * between runs while param tweaks (which keep it) preserve the layout. */
+  private seed = 1;
 
   private fpsSamples: number[] = [];
   private onFpsChange: ((fps: number) => void) | null = null;
@@ -102,6 +110,7 @@ export class Renderer {
         : "",
     );
 
+    this.seed = nextSeed();
     this.observeResize();
     this.resizeDisplay();
     this.reinitGrid();
@@ -156,6 +165,7 @@ export class Renderer {
     if (nextParams) {
       this.params = { ...nextParams };
     }
+    this.seed = nextSeed();
     this.reinitGrid();
   }
 
@@ -297,7 +307,7 @@ export class Renderer {
     this.canvas.dataset.renderSize = `${width}x${height}`;
 
     this.backend.setGrid(width, height, this.kernel);
-    this.kernel.init(width, height, this.params);
+    this.kernel.init(width, height, { ...this.params, seed: this.seed });
     this.iterationCount = 0;
     this.onIterationChange?.(this.iterationCount);
     this.draw();
