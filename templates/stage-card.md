@@ -9,6 +9,7 @@ Stage card template, part of the dispatch-contract pattern library. Reusable in 
 - **Orchestrator:** <<orchestrator-identity>>
 - **Worker:** <<worker-identity>>
 - **Verifier:** <<verifier-identity>>
+- **Verifier panel:** false
 - **Pairing rationale:** <<why-this-worker-verifier-pair>>
 
 ## Objective
@@ -39,6 +40,14 @@ All files listed here must be created or modified. Paths are relative to repo ro
 The verifier will check each of these. Failure of any one is a failure of the stage.
 
 <<numbered-list-of-acceptance-criteria>>
+
+## Contract test
+
+<!--
+Optional but recommended for any stage with executable acceptance. The assertions are frozen here at authoring time: the orchestrator writes them from the card's intent before the worker runs, the worker makes them pass without editing the block between the AUTOMETTA-CONTRACT-BEGIN/END markers, and the verifier rejects any assertion change whose new digest is not recorded below. The BEGIN marker in the test file names this card (card=<path-to-this-card>). Leave the whole section as "None" for prose-only or throwaway stages. Generate or regenerate the digest with `scripts/check-contract-test-gate.sh print <test-file>` and update the line below in the same commit as any deliberate assertion change. See docs/dispatch-contract.md (Contract tests). -->
+
+- **Test file:** <<contract-test-path-or-None>>
+- **Assertions digest:** <<sha256-of-frozen-block-or-None>>
 
 ## Out of scope
 
