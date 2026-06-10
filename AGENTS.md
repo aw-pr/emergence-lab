@@ -13,6 +13,13 @@ Multi-agent work is run through **autometta** (stage cards under `docs/stages/`,
 see `docs/dispatch-contract.md`) when you want parallel workers and
 cross-checking; otherwise just do the work directly.
 
+The dispatch-contract templates and the contract-test gate
+(`scripts/check-contract-test-gate.sh`) are **vendored** from Autometta;
+provenance is recorded in `.autometta-vendor`. Check currency against the
+canonical checkout with
+`AUTOMETTA_ROOT=~/repos/autometta scripts/autometta-vendor-check.sh`, and
+refresh by re-running the autometta-setup vendor step.
+
 ## Interface contract
 
 The kernel-to-renderer contract in `docs/INTERFACE.md` is a reviewed boundary,
