@@ -23,14 +23,14 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_BOID_COUNT = 10000;
+const DEFAULT_BOID_COUNT = 17777;
 const DEFAULT_VISUAL_RADIUS = 34;
 const DEFAULT_SEPARATION_RADIUS = 8;
 const DEFAULT_MAX_SPEED = 36;
 const DEFAULT_ALIGNMENT = 0.09;
 const DEFAULT_COHESION = 0.011;
 const DEFAULT_SEPARATION = 0.22;
-const DEFAULT_POINT_SIZE = 6;
+const DEFAULT_POINT_SIZE = 4;
 const MAX_BOID_COUNT = 40000;
 /** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
  * from freezing into rigid crystalline order, but too much washes the flocking
@@ -137,7 +137,7 @@ export class BoidsKernel implements SimKernel {
       type: "number",
       default: DEFAULT_BOID_COUNT,
       min: 1,
-      max: 12000,
+      max: 28000,
       step: 1,
     },
     {

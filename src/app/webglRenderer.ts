@@ -35,6 +35,7 @@ uniform bool u_smoothSampling;
 uniform float u_palettePhase;
 uniform bool u_boidsGlyph;
 uniform float u_boidsGlyphRadius;
+uniform vec2 u_boidsMeanDir;
 
 in vec2 v_uv;
 out vec4 outColor;
@@ -185,25 +186,12 @@ vec3 colourAt(ivec2 coord) {
   return colourFromRaw(readChannels(coord));
 }
 
-bool insideBoidGlyph(vec2 local, vec2 direction, float radius) {
-  float magnitude = length(direction);
-  vec2 forward = magnitude <= 0.0001 ? vec2(1.0, 0.0) : direction / magnitude;
-  vec2 sideAxis = vec2(-forward.y, forward.x);
-  float along = dot(local, forward);
-  float side = abs(dot(local, sideAxis));
-  float nose = radius * 1.2;
-  float tail = radius * 0.9;
-
-  if (along < -tail || along > nose) return false;
-
-  float t = (along + tail) / (nose + tail);
-  float halfWidth = mix(radius * 0.62, 0.0, t);
-  return side <= max(0.65, halfWidth);
-}
-
-vec3 boidColour(float speed) {
-  float s = clamp01(speed);
-  return mixRgb(vec3(94.0, 188.0, 190.0), vec3(130.0, 238.0, 245.0), s) / 255.0;
+float boidAlignmentGrey(vec2 velocity) {
+  float magnitude = length(velocity);
+  float alignment =
+    magnitude <= 0.0001 ? 0.0 : dot(velocity / magnitude, u_boidsMeanDir);
+  float t = (1.0 - alignment) * 0.5; // 0 = aligned with flock, 1 = opposed
+  return (1.0 - t) * 0.95;           // bright (aligned) .. dark (opposed)
 }
 
 void main() {
@@ -211,7 +199,14 @@ void main() {
   ivec2 coord = ivec2(clamp(floor(v_uv * u_sourceSize), vec2(0.0), u_sourceSize - vec2(1.0)));
 
   if (u_boidsGlyph) {
-    int radius = int(ceil(u_boidsGlyphRadius + 1.0));
+    vec3 bg = vec3(5.0, 8.0, 18.0) / 255.0;
+    float halo = min(u_boidsGlyphRadius, 10.0);
+    float core = u_boidsGlyphRadius * 0.2;
+    int radius = int(ceil(halo + 1.0));
+    vec2 fragPos = v_uv * u_sourceSize - vec2(0.5);
+    float greyWeighted = 0.0;
+    float weightSum = 0.0;
+    float coverage = 0.0;
     for (int y = -10; y <= 10; y += 1) {
       for (int x = -10; x <= 10; x += 1) {
         if (abs(x) > radius || abs(y) > radius) continue;
@@ -219,15 +214,17 @@ void main() {
         vec4 raw = readChannels(sampleCoord);
         if (raw.r <= 0.02) continue;
 
-        vec2 local = vec2(coord - sampleCoord);
-        if (insideBoidGlyph(local, raw.ba, u_boidsGlyphRadius)) {
-          outColor = vec4(boidColour(raw.g), 1.0);
-          return;
-        }
+        vec2 local = fragPos - vec2(sampleCoord);
+        float falloff = 1.0 - smoothstep(core, halo, length(local));
+        if (falloff <= 0.0) continue;
+        greyWeighted += boidAlignmentGrey(raw.ba) * falloff;
+        weightSum += falloff;
+        coverage = max(coverage, falloff);
       }
     }
 
-    outColor = vec4(vec3(5.0, 8.0, 18.0) / 255.0, 1.0);
+    vec3 dotColour = weightSum > 0.0 ? vec3(greyWeighted / weightSum) : bg;
+    outColor = vec4(mix(bg, dotColour, min(coverage * 0.92, 1.0)), 1.0);
     return;
   }
 
@@ -273,6 +270,7 @@ interface UniformLocations {
   palettePhase: WebGLUniformLocation;
   boidsGlyph: WebGLUniformLocation;
   boidsGlyphRadius: WebGLUniformLocation;
+  boidsMeanDir: WebGLUniformLocation;
 }
 
 export class WebGLRendererBackend implements RendererBackend {
@@ -345,6 +343,7 @@ export class WebGLRendererBackend implements RendererBackend {
       frame.params,
       frame.elapsedTime,
       frame.speedScale,
+      state,
     );
 
     const gl = this.gl;
@@ -426,6 +425,10 @@ export class WebGLRendererBackend implements RendererBackend {
       boidsGlyphRadius: mustCreate(
         this.gl.getUniformLocation(this.program, "u_boidsGlyphRadius"),
         "u_boidsGlyphRadius uniform",
+      ),
+      boidsMeanDir: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_boidsMeanDir"),
+        "u_boidsMeanDir uniform",
       ),
     };
   }
@@ -540,6 +543,7 @@ export class WebGLRendererBackend implements RendererBackend {
     params: Record<string, number | boolean | string>,
     elapsedTime: number,
     speedScale: number,
+    state: Float32Array,
   ): void {
     const gl = this.gl;
     const ranges = new Float32Array(8);
@@ -574,6 +578,12 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.boidsGlyph, isBoidsState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.boidsGlyphRadius, boidsGlyphRadius(params, displayOptions));
+    const meanDir = boidsMeanDirection(
+      state,
+      kernel.channelCount,
+      this.gridWidth * this.gridHeight,
+    );
+    gl.uniform2f(this.uniforms.boidsMeanDir, meanDir[0], meanDir[1]);
   }
 }
 
@@ -652,6 +662,25 @@ function isBoidsState(kernel: SimKernel): boolean {
     kernel.channelLabels[2] === "Velocity X" &&
     kernel.channelLabels[3] === "Velocity Y"
   );
+}
+
+function boidsMeanDirection(
+  state: Float32Array,
+  channelCount: number,
+  cellCount: number,
+): [number, number] {
+  let sumX = 0;
+  let sumY = 0;
+  for (let cell = 0; cell < cellCount; cell += 1) {
+    const offset = cell * channelCount;
+    const density = state[offset];
+    if (density <= 0.02) continue;
+    sumX += state[offset + 2] * density;
+    sumY += state[offset + 3] * density;
+  }
+  const magnitude = Math.hypot(sumX, sumY);
+  if (magnitude <= 1e-6) return [0, 0];
+  return [sumX / magnitude, sumY / magnitude];
 }
 
 function boidsGlyphRadius(

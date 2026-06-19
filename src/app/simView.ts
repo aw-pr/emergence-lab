@@ -386,7 +386,7 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "lorenz-attractor":
       return { initial: 1.5, control: careful };
     case "boids":
-      return { initial: 3, control: swarm };
+      return { initial: 5, control: swarm };
     case "mandelbrot":
     case "julia-set":
     case "burning-ship":

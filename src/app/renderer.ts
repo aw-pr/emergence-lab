@@ -205,8 +205,19 @@ export class Renderer {
     const stepCount = Math.floor(this.stepAccumulator);
     this.stepAccumulator -= stepCount;
 
-    for (let i = 0; i < stepCount; i += 1) {
-      this.kernel.step(dt);
+    if (this.renderMode === "particle") {
+      // Continuous-time sims (boids) integrate dt and stay stable at large
+      // time-steps, so advance ONCE with a dt scaled by the speed setting
+      // rather than repeating the costly neighbour pass N times per frame.
+      // Same visual speed, far cheaper per paint — which keeps the frame rate
+      // smooth. The kernel clamps the time-step, so a long frame can't blow up.
+      if (this.stepsPerFrame > 0 && dt > 0) {
+        this.kernel.step(dt * this.stepsPerFrame);
+      }
+    } else {
+      for (let i = 0; i < stepCount; i += 1) {
+        this.kernel.step(dt);
+      }
     }
     if (stepCount > 0) {
       this.iterationCount += stepCount;

@@ -141,9 +141,13 @@ export class CanvasRendererBackend implements RendererBackend {
         ? params.pointSize
         : displayOptions.dotSize;
     const size = Math.max(4, Math.min(16, pointSize));
-    const halfWidth = size * 0.38;
-    const tail = size * 0.55;
-    const nose = size * 0.75;
+    const radius = size * 0.5; // smaller dot; soft halo fades to zero by the rim
+    const cellCount = this.gridWidth * this.gridHeight;
+    const [meanX, meanY] = boidsMeanDirection(
+      state,
+      kernel.channelCount,
+      cellCount,
+    );
 
     ctx.fillStyle = "#050812";
     ctx.fillRect(0, 0, this.gridWidth, this.gridHeight);
@@ -156,39 +160,23 @@ export class CanvasRendererBackend implements RendererBackend {
           continue;
         }
 
-        const speed = Math.max(0, Math.min(1, state[offset + 1]));
-        let vx = state[offset + 2];
-        let vy = state[offset + 3];
+        const vx = state[offset + 2];
+        const vy = state[offset + 3];
         const magnitude = Math.hypot(vx, vy);
-        if (magnitude <= 0.0001) {
-          vx = 1;
-          vy = 0;
-        } else {
-          vx /= magnitude;
-          vy /= magnitude;
-        }
+        const alignment =
+          magnitude <= 0.0001 ? 0 : (vx * meanX + vy * meanY) / magnitude;
+        const t = (1 - alignment) / 2; // 0 = aligned with flock, 1 = opposed
+        const grey = Math.round((1 - t) * 235); // bright (aligned) .. dark
 
         const px = x + 0.5;
         const py = y + 0.5;
-        const sideX = -vy;
-        const sideY = vx;
-        const tipX = px + vx * nose;
-        const tipY = py + vy * nose;
-        const backX = px - vx * tail;
-        const backY = py - vy * tail;
-        const leftX = backX + sideX * halfWidth;
-        const leftY = backY + sideY * halfWidth;
-        const rightX = backX - sideX * halfWidth;
-        const rightY = backY - sideY * halfWidth;
-
-        const green = Math.round(188 + speed * 50);
-        const blue = Math.round(190 + speed * 55);
-        ctx.fillStyle = `rgb(94, ${green}, ${blue})`;
+        const grad = ctx.createRadialGradient(px, py, 0, px, py, radius);
+        grad.addColorStop(0, `rgba(${grey}, ${grey}, ${grey}, 0.92)`);
+        grad.addColorStop(0.35, `rgba(${grey}, ${grey}, ${grey}, 0.6)`);
+        grad.addColorStop(1, `rgba(${grey}, ${grey}, ${grey}, 0)`);
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.moveTo(tipX, tipY);
-        ctx.lineTo(leftX, leftY);
-        ctx.lineTo(rightX, rightY);
-        ctx.closePath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -269,7 +257,12 @@ export class CanvasRendererBackend implements RendererBackend {
 }
 
 function isSmoothMode(mode: RenderMode): boolean {
-  return mode === "field" || mode === "smooth" || mode === "fractal";
+  return (
+    mode === "field" ||
+    mode === "smooth" ||
+    mode === "fractal" ||
+    mode === "particle"
+  );
 }
 
 function isBoidsState(kernel: SimKernel): boolean {
@@ -279,4 +272,23 @@ function isBoidsState(kernel: SimKernel): boolean {
     kernel.channelLabels[2] === "Velocity X" &&
     kernel.channelLabels[3] === "Velocity Y"
   );
+}
+
+function boidsMeanDirection(
+  state: Float32Array,
+  channelCount: number,
+  cellCount: number,
+): [number, number] {
+  let sumX = 0;
+  let sumY = 0;
+  for (let cell = 0; cell < cellCount; cell += 1) {
+    const offset = cell * channelCount;
+    const density = state[offset];
+    if (density <= 0.02) continue;
+    sumX += state[offset + 2] * density;
+    sumY += state[offset + 3] * density;
+  }
+  const magnitude = Math.hypot(sumX, sumY);
+  if (magnitude <= 1e-6) return [0, 0];
+  return [sumX / magnitude, sumY / magnitude];
 }

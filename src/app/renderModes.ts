@@ -19,5 +19,10 @@ export function getRenderMode(slug: string): RenderMode {
 }
 
 export function shouldUseSmoothCanvasPresentation(mode: RenderMode): boolean {
-  return mode === "field" || mode === "smooth" || mode === "fractal";
+  return (
+    mode === "field" ||
+    mode === "smooth" ||
+    mode === "fractal" ||
+    mode === "particle"
+  );
 }
