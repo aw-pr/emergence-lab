@@ -38,3 +38,6 @@ test-results/
 playwright-report/
 e2e/artifacts/
 .cache/ms-playwright/
+
+# Dev-only handoff doc — never published to the public mirror
+HANDOFF.md
