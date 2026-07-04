@@ -51,9 +51,9 @@ code {
 /* ---------- Gallery ---------- */
 
 .gallery {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 64px 24px;
+  padding: 64px 24px 96px;
 }
 
 .gallery__header {
@@ -72,6 +72,21 @@ code {
   font-size: 16px;
 }
 
+.gallery__family {
+  margin-bottom: 44px;
+}
+
+.gallery__family-heading {
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
 .gallery__grid {
   list-style: none;
   margin: 0;
@@ -85,6 +100,7 @@ code {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  overflow: hidden;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 
@@ -95,7 +111,6 @@ code {
 
 .gallery__link {
   display: block;
-  padding: 20px;
   color: var(--fg);
 }
 
@@ -103,12 +118,62 @@ code {
   text-decoration: none;
 }
 
-.gallery__link h2 {
+.gallery__thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.gallery__thumb-placeholder {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    var(--bg-elev) 0%,
+    var(--bg-elev-2) 50%,
+    var(--bg-elev) 100%
+  );
+  background-size: 200% 100%;
+  animation: gallery-shimmer 1.6s ease-in-out infinite;
+}
+
+.gallery__thumb--ready .gallery__thumb-placeholder {
+  display: none;
+}
+
+.gallery__thumb--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery__thumb-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes gallery-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.gallery__card-body {
+  padding: 16px 20px 20px;
+}
+
+.gallery__card-body h3 {
   margin: 0 0 8px;
   font-size: 18px;
 }
 
-.gallery__link p {
+.gallery__card-body p {
   margin: 0;
   color: var(--fg-dim);
   font-size: 13px;
