@@ -157,6 +157,15 @@ vec3 twoChannelColour(float c0, float c1) {
   return mixRgb(cool, warm, energy);
 }
 
+vec3 threeChannelChemical(float a, float b, float c) {
+  vec3 cool = rampColour(3, adjust(1.0 - a));
+  vec3 warm = rampColour(4, adjust(a));
+  float energy = clamp01(a * 0.85 + (1.0 - b) * 0.2);
+  vec3 base = mixRgb(cool, warm, energy);
+  float highlight = adjust(c);
+  return mixRgb(base, vec3(1.0), clamp01(highlight * 0.55));
+}
+
 vec3 colourFromRaw(vec4 raw) {
   if (u_channelCount <= 0) return vec3(0.0);
 
@@ -175,6 +184,9 @@ vec3 colourFromRaw(vec4 raw) {
   float c0 = normalise(raw.r, u_ranges[0]);
   float c1 = normalise(raw.g, u_ranges[1]);
   float c2 = normalise(raw.b, u_ranges[2]);
+  if (u_preset == 6) {
+    return threeChannelChemical(c0, c1, c2);
+  }
   if (u_preset != 7) {
     return singleChannelColour((c0 + c1 + c2) / 3.0);
   }

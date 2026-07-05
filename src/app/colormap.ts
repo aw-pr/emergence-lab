@@ -114,10 +114,10 @@ export function defaultColourOptionsFor(
   channelCount: number,
 ): ColourMapOptions {
   const base = { ...DEFAULT_COLOUR_OPTIONS };
-  if (channelCount >= 3) {
-    return { ...base, preset: "rgb", contrast: 1.12 };
-  }
 
+  // Per-slug intent wins over the generic multi-channel fallback below: a
+  // 3-/4-channel sim with a designed look (BZ, boids) must not be forced into
+  // raw RGB just because it has three or more channels.
   switch (slug) {
     case "abelian-sandpile":
       return { ...base, preset: "amber", gamma: 0.78, contrast: 1.45 };
@@ -135,14 +135,20 @@ export function defaultColourOptionsFor(
     case "lorenz-attractor":
       return { ...base, preset: "inferno", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
-      return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
     default:
-      return base;
+      break;
   }
+
+  // Multi-channel sims with no designed palette: direct RGB from the first
+  // three channels.
+  if (channelCount >= 3) {
+    return { ...base, preset: "rgb", contrast: 1.12 };
+  }
+  return base;
 }
 
 function clamp01(value: number): number {
@@ -206,6 +212,27 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
   return mix(cool, warm, energy);
 }
 
+/**
+ * Three-channel "chemical" look (e.g. Belousov-Zhabotinsky activator /
+ * inhibitor / catalyst). The activator drives the same cool→warm blend as the
+ * two-channel path; the catalyst channel lifts a bright highlight so travelling
+ * wavefronts read as luminous crests rather than a flat activator/inhibitor/
+ * catalyst RGB triple.
+ */
+function threeChannelChemical(
+  a: number,
+  b: number,
+  c: number,
+  options: ColourMapOptions,
+): Rgb {
+  const cool = rampColour("ice", adjust(1 - a, options));
+  const warm = rampColour("amber", adjust(a, options));
+  const energy = clamp01(a * 0.85 + (1 - b) * 0.2);
+  const base = mix(cool, warm, energy);
+  const highlight = adjust(c, options);
+  return mix(base, [255, 255, 255], clamp01(highlight * 0.55));
+}
+
 function singleChannelColour(t: number, options: ColourMapOptions): Rgb {
   const value = adjust(t, options);
   const preset =
@@ -258,6 +285,9 @@ export function buildMapper(
     const c0 = normalise(channels[offset], r0[0], r0[1]);
     const c1 = normalise(channels[offset + 1], r1[0], r1[1]);
     const c2 = normalise(channels[offset + 2], r2[0], r2[1]);
+    if (options.preset === "chemical") {
+      return threeChannelChemical(c0, c1, c2, options);
+    }
     if (options.preset !== "rgb") {
       return singleChannelColour((c0 + c1 + c2) / 3, options);
     }
