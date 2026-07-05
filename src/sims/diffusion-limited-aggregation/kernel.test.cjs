@@ -48,10 +48,16 @@ test("metadata matches the renderer contract", () => {
       "spawnRadius",
       "stickiness",
       "seedCount",
+      "colourByAge",
     ],
   );
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.key === "colourByAge") {
+      assert.equal(descriptor.type, "boolean");
+      assert.equal(typeof descriptor.default, "boolean");
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -115,6 +121,7 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
     spawnRadius: 0.32,
     stickiness: 1,
     seedCount: 1,
+    colourByAge: false,
   });
 
   const before = Array.from(kernel.readState());
@@ -131,7 +138,11 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
 
 test("default settings produce a visible cluster within the page-load budget", () => {
   const kernel = new DiffusionLimitedAggregationKernel();
-  kernel.init(800, 600, { ...defaultsFromSchema(kernel), seed: 1 });
+  kernel.init(800, 600, {
+    ...defaultsFromSchema(kernel),
+    seed: 1,
+    colourByAge: false,
+  });
 
   for (let index = 0; index < 480; index += 1) {
     kernel.step(1);
@@ -153,6 +164,7 @@ test("growth remains directional-balanced around the seed", () => {
     stickiness: 1,
     seedCount: 1,
     seed: 1,
+    colourByAge: false,
   });
 
   for (let index = 0; index < 10; index += 1) {
@@ -191,6 +203,7 @@ test("open boundaries keep walkers on-grid or discard them without wrapping", ()
     spawnRadius: 0.5,
     stickiness: 1,
     seedCount: 1,
+    colourByAge: false,
   });
 
   for (let index = 0; index < 4; index += 1) {
@@ -252,4 +265,123 @@ test("destroy releases state and leaves step/readState safe", () => {
     kernel.step(1);
   });
   assert.equal(kernel.readState().length, 0);
+});
+
+test("colourByAge normalises accretion order into (0,1], oldest at the floor and newest near 1", () => {
+  const width = 48;
+  const height = 48;
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(width, height, {
+    walkersPerStep: 64,
+    maxWalkSteps: 256,
+    spawnRadius: 0.4,
+    stickiness: 1,
+    seedCount: 1,
+    seed: 7,
+  });
+
+  const seedIndex =
+    Math.floor(height / 2) * width + Math.floor(width / 2);
+  assert.ok(Math.abs(kernel.readState()[seedIndex] - 0.15) < 1e-6);
+
+  for (let index = 0; index < 10; index += 1) {
+    kernel.step(1);
+  }
+
+  const state = kernel.readState();
+  const nonZero = Array.from(state).filter((value) => value > 0);
+  const distinct = new Set(nonZero.map((value) => Math.round(value * 1000)));
+
+  assert.ok(nonZero.length > 1);
+  assert.ok(
+    distinct.size > 2,
+    "expected a gradient of ages, not a flat value",
+  );
+  for (const value of nonZero) {
+    assert.ok(value >= 0.15 - 1e-9 && value <= 1 + 1e-9);
+  }
+  // The seed is the oldest cell in the cluster: it always renormalises to
+  // the floor, however far the aggregate has since grown.
+  assert.ok(Math.abs(state[seedIndex] - 0.15) < 1e-6);
+  // The most recently stuck cell always reads at full brightness.
+  assert.ok(Math.max(...nonZero) > 0.999);
+});
+
+test("accretion ages are assigned in monotonically increasing stick order", () => {
+  const width = 40;
+  const height = 40;
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(width, height, {
+    walkersPerStep: 4,
+    maxWalkSteps: 300,
+    spawnRadius: 0.4,
+    stickiness: 1,
+    seedCount: 1,
+    seed: 11,
+  });
+
+  const nonZeroCount = (state) =>
+    state.reduce((count, value) => (value > 0 ? count + 1 : count), 0);
+  const argmax = (state) => {
+    let index = 0;
+    let value = -Infinity;
+    for (let i = 0; i < state.length; i += 1) {
+      if (state[i] > value) {
+        value = state[i];
+        index = i;
+      }
+    }
+    return { index, value };
+  };
+
+  let prevCount = nonZeroCount(kernel.readState());
+  let prevMax = argmax(kernel.readState());
+  let sawNewFrontOvertakePrevious = false;
+
+  for (let step = 0; step < 40; step += 1) {
+    kernel.step(1);
+    const state = kernel.readState();
+    const count = nonZeroCount(state);
+    if (count === prevCount) {
+      continue;
+    }
+
+    const currentMax = argmax(state);
+    if (currentMax.index !== prevMax.index) {
+      // A newer cell has become the freshest growth front: it must read
+      // brighter than the cell that previously held the record, since stick
+      // order only increases.
+      assert.ok(state[prevMax.index] < currentMax.value);
+      sawNewFrontOvertakePrevious = true;
+    }
+
+    prevCount = count;
+    prevMax = currentMax;
+  }
+
+  assert.ok(
+    sawNewFrontOvertakePrevious,
+    "expected later growth to consistently read brighter than earlier growth",
+  );
+});
+
+test("colourByAge=false restores the flat binary cluster value", () => {
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(32, 32, {
+    walkersPerStep: 64,
+    maxWalkSteps: 256,
+    spawnRadius: 0.35,
+    stickiness: 1,
+    seedCount: 3,
+    seed: 5,
+    colourByAge: false,
+  });
+
+  for (let index = 0; index < 8; index += 1) {
+    kernel.step(1);
+  }
+
+  for (const value of kernel.readState()) {
+    assert.ok(value === 0 || value === 1);
+  }
 });
