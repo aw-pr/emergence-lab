@@ -106,6 +106,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "physarum",
+    name: "Physarum",
+    family: "Stigmergy",
+    subtitle: "Trail-following agents weave a slime-mould transport network.",
+    description:
+      "Thousands of agents sniff, steer toward, and reinforce a shared trail field—diffusion and decay prune it into branching, self-optimising veins.",
+    load: async () => {
+      const mod = await import("../sims/physarum/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "boids",
     name: "Boids",
     family: "Swarm & Flocking",
