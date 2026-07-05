@@ -35,6 +35,18 @@ const DEFAULT_SEED_DENSITY = 0.28;
 const DEFAULT_SPARK_RATE = 0.04;
 const SPARK_INTERVAL = 24;
 const CHANNEL_COUNT = 1;
+const DEFAULT_AGE_SHADING = true;
+
+// Age-shading presentation constants. These only affect the emitted float per
+// cell; the underlying alive/dead boolean evolution is unchanged regardless
+// of this setting (see ageShading tests).
+const AGE_MATURITY = 80; // generations to reach full brightness saturation
+const AGE_BASE = 0.55; // newborn emission, just above the binary bright threshold
+const AGE_SPAN = 0.45; // additional brightness gained as a cell matures
+const GHOST_BASE = 0.35; // emission the instant a cell dies
+const GHOST_DECAY = 0.7; // per-generation decay multiplier for the ghost trail
+const GHOST_MAX_TICKS = 20; // beyond this the ghost is indistinguishable from 0
+const GHOST_EPSILON = 0.001;
 
 function numberParam(
   params: SimParams,
@@ -43,6 +55,15 @@ function numberParam(
 ): number {
   const value = params[key];
   return typeof value === "number" ? value : fallback;
+}
+
+function booleanParam(
+  params: SimParams,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = params[key];
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function boundedNumber(value: number, min: number, max: number): number {
@@ -81,6 +102,29 @@ function sparkHash(x: number, y: number, epoch: number): number {
   hash ^= hash >>> 15;
 
   return (hash >>> 0) / 0x100000000;
+}
+
+/** Presentation-only mapping from (alive, age, ghostTicks) to the emitted float. */
+function shadeCell(
+  isAlive: boolean,
+  age: number,
+  ghostTicks: number,
+  ageShading: boolean,
+): number {
+  if (!ageShading) {
+    return isAlive ? 1 : 0;
+  }
+
+  if (isAlive) {
+    return AGE_BASE + AGE_SPAN * Math.min(1, age / AGE_MATURITY);
+  }
+
+  if (ghostTicks > GHOST_MAX_TICKS) {
+    return 0;
+  }
+
+  const value = GHOST_BASE * Math.pow(GHOST_DECAY, ghostTicks);
+  return value < GHOST_EPSILON ? 0 : value;
 }
 
 export class GameOfLifeKernel implements SimKernel {
@@ -143,18 +187,33 @@ export class GameOfLifeKernel implements SimKernel {
       max: 0.2,
       step: 0.005,
     },
+    {
+      key: "ageShading",
+      label: "Age shading",
+      type: "boolean",
+      default: DEFAULT_AGE_SHADING,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
   private height = 0;
-  private state = new Float32Array(0);
-  private next = new Float32Array(0);
+  // Canonical boolean (0/1) alive grid, double-buffered. This drives the
+  // B/S rule and is independent of what gets emitted to the renderer.
+  private alive = new Float32Array(0);
+  private aliveNext = new Float32Array(0);
+  // Per-cell presentation state: generations continuously alive, and steps
+  // since death (for the ghost decay trail). Both are internal only.
+  private age = new Float32Array(0);
+  private ghostTicks = new Float32Array(0);
+  // Stable buffer returned by readState(); never reallocated except on resize.
+  private output = new Float32Array(0);
   private birthMin = DEFAULT_BIRTH_MIN;
   private birthMax = DEFAULT_BIRTH_MAX;
   private surviveMin = DEFAULT_SURVIVE_MIN;
   private surviveMax = DEFAULT_SURVIVE_MAX;
   private seedDensity = DEFAULT_SEED_DENSITY;
   private sparkRate = DEFAULT_SPARK_RATE;
+  private ageShading = DEFAULT_AGE_SHADING;
   private stepCounter = 0;
 
   init(width: number, height: number, params: SimParams): void {
@@ -162,12 +221,18 @@ export class GameOfLifeKernel implements SimKernel {
     this.height = Math.max(0, Math.floor(height));
 
     const length = this.width * this.height * this.channelCount;
-    if (this.state.length !== length) {
-      this.state = new Float32Array(length);
-      this.next = new Float32Array(length);
+    if (this.alive.length !== length) {
+      this.alive = new Float32Array(length);
+      this.aliveNext = new Float32Array(length);
+      this.age = new Float32Array(length);
+      this.ghostTicks = new Float32Array(length);
+      this.output = new Float32Array(length);
     } else {
-      this.state.fill(0);
-      this.next.fill(0);
+      this.alive.fill(0);
+      this.aliveNext.fill(0);
+      this.age.fill(0);
+      this.ghostTicks.fill(GHOST_MAX_TICKS + 1);
+      this.output.fill(0);
     }
 
     this.birthMin = boundedInteger(
@@ -202,12 +267,21 @@ export class GameOfLifeKernel implements SimKernel {
       0,
       0.2,
     );
+    this.ageShading = booleanParam(
+      params,
+      "ageShading",
+      DEFAULT_AGE_SHADING,
+    );
     this.stepCounter = 0;
 
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
         const index = y * this.width + x;
-        this.state[index] = coordinateHash(x, y) < this.seedDensity ? 1 : 0;
+        const isAlive = coordinateHash(x, y) < this.seedDensity;
+        this.alive[index] = isAlive ? 1 : 0;
+        this.age[index] = 0;
+        this.ghostTicks[index] = GHOST_MAX_TICKS + 1;
+        this.output[index] = shadeCell(isAlive, 0, GHOST_MAX_TICKS + 1, this.ageShading);
       }
     }
   }
@@ -219,8 +293,8 @@ export class GameOfLifeKernel implements SimKernel {
 
     const width = this.width;
     const height = this.height;
-    const state = this.state;
-    const next = this.next;
+    const alive = this.alive;
+    const aliveNext = this.aliveNext;
     const birthMin = this.birthMin;
     const birthMax = this.birthMax;
     const surviveMin = this.surviveMin;
@@ -236,21 +310,21 @@ export class GameOfLifeKernel implements SimKernel {
         const index = y * width + x;
 
         const neighbours =
-          state[yUp * width + xLeft] +
-          state[yUp * width + x] +
-          state[yUp * width + xRight] +
-          state[y * width + xLeft] +
-          state[y * width + xRight] +
-          state[yDown * width + xLeft] +
-          state[yDown * width + x] +
-          state[yDown * width + xRight];
-        const alive = state[index] === 1;
+          alive[yUp * width + xLeft] +
+          alive[yUp * width + x] +
+          alive[yUp * width + xRight] +
+          alive[y * width + xLeft] +
+          alive[y * width + xRight] +
+          alive[yDown * width + xLeft] +
+          alive[yDown * width + x] +
+          alive[yDown * width + xRight];
+        const wasAlive = alive[index] === 1;
         const survives =
-          alive && neighbours >= surviveMin && neighbours <= surviveMax;
+          wasAlive && neighbours >= surviveMin && neighbours <= surviveMax;
         const born =
-          !alive && neighbours >= birthMin && neighbours <= birthMax;
+          !wasAlive && neighbours >= birthMin && neighbours <= birthMax;
 
-        next[index] = survives || born ? 1 : 0;
+        aliveNext[index] = survives || born ? 1 : 0;
       }
     }
 
@@ -261,25 +335,53 @@ export class GameOfLifeKernel implements SimKernel {
       for (let y = 0; y < height; y += 1) {
         for (let x = 0; x < width; x += 1) {
           const index = y * width + x;
-          if (next[index] === 0 && sparkHash(x, y, epoch) < rate) {
-            next[index] = 1;
+          if (aliveNext[index] === 0 && sparkHash(x, y, epoch) < rate) {
+            aliveNext[index] = 1;
           }
         }
       }
     }
 
-    state.set(next);
+    const age = this.age;
+    const ghostTicks = this.ghostTicks;
+    const output = this.output;
+    const ageShading = this.ageShading;
+    const length = width * height;
+
+    for (let index = 0; index < length; index += 1) {
+      const wasAlive = alive[index] === 1;
+      const isAlive = aliveNext[index] === 1;
+
+      if (isAlive) {
+        age[index] = wasAlive ? age[index] + 1 : 0;
+        ghostTicks[index] = GHOST_MAX_TICKS + 1;
+      } else {
+        age[index] = 0;
+        if (wasAlive) {
+          ghostTicks[index] = 0;
+        } else if (ghostTicks[index] <= GHOST_MAX_TICKS) {
+          ghostTicks[index] += 1;
+        }
+      }
+
+      output[index] = shadeCell(isAlive, age[index], ghostTicks[index], ageShading);
+    }
+
+    alive.set(aliveNext);
   }
 
   readState(): Float32Array {
-    return this.state;
+    return this.output;
   }
 
   destroy(): void {
     this.width = 0;
     this.height = 0;
-    this.state = new Float32Array(0);
-    this.next = new Float32Array(0);
+    this.alive = new Float32Array(0);
+    this.aliveNext = new Float32Array(0);
+    this.age = new Float32Array(0);
+    this.ghostTicks = new Float32Array(0);
+    this.output = new Float32Array(0);
     this.stepCounter = 0;
   }
 }
@@ -302,7 +404,7 @@ export function selfTest(): boolean {
       if (state[index] !== before[index]) {
         changed = true;
       }
-      if (state[index] === 1) {
+      if (state[index] >= 0.5) {
         alive += 1;
       }
     }
