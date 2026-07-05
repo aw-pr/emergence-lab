@@ -13,6 +13,9 @@ export type ColourPreset =
   | "viridis"
   | "plasma"
   | "inferno"
+  | "magma"
+  | "turbo"
+  | "twilight"
   | "ice"
   | "amber"
   | "brian"
@@ -43,6 +46,9 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "viridis", label: "Viridis" },
   { value: "plasma", label: "Plasma" },
   { value: "inferno", label: "Inferno" },
+  { value: "magma", label: "Magma" },
+  { value: "turbo", label: "Turbo" },
+  { value: "twilight", label: "Twilight (cyclic)" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
   { value: "brian", label: "Brian's Brain" },
@@ -50,6 +56,17 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "chemical", label: "Chemical blend" },
   { value: "rgb", label: "Direct RGB" },
 ];
+
+/**
+ * Presets whose ramp endpoints match, so a phase offset can be added modularly
+ * (fract) without a visible seam sweeping through the image. Consumed by the
+ * renderer's palette-cycling path.
+ */
+const CYCLIC_PRESETS: ReadonlySet<ColourPreset> = new Set(["twilight"]);
+
+export function isCyclic(preset: ColourPreset): boolean {
+  return CYCLIC_PRESETS.has(preset);
+}
 
 export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
   preset: "viridis",
@@ -82,6 +99,31 @@ const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb">, readonly ColourSt
     [0.5, [187, 55, 84]],
     [0.75, [249, 142, 8]],
     [1, [252, 255, 164]],
+  ],
+  magma: [
+    [0, [0, 0, 4]],
+    [0.25, [80, 18, 123]],
+    [0.5, [182, 54, 121]],
+    [0.75, [251, 136, 97]],
+    [1, [252, 253, 191]],
+  ],
+  turbo: [
+    [0, [48, 18, 59]],
+    [0.14, [50, 100, 220]],
+    [0.29, [30, 175, 235]],
+    [0.43, [40, 220, 160]],
+    [0.57, [140, 230, 70]],
+    [0.71, [240, 200, 50]],
+    [0.86, [240, 110, 40]],
+    [1, [140, 20, 20]],
+  ],
+  // Cyclic: endpoints match so palette-phase cycling tiles without a seam.
+  twilight: [
+    [0, [226, 217, 226]],
+    [0.25, [65, 110, 175]],
+    [0.5, [30, 20, 55]],
+    [0.75, [150, 70, 90]],
+    [1, [226, 217, 226]],
   ],
   ice: [
     [0, [2, 6, 23]],
