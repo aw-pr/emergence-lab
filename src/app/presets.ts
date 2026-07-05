@@ -387,6 +387,23 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  "cyclic-ca": [
+    {
+      id: "demons",
+      label: "Demons",
+      params: { states: 14, threshold: 1, neighbourhood: "moore" },
+    },
+    {
+      id: "turbulence",
+      label: "Turbulence",
+      params: { states: 8, threshold: 3, neighbourhood: "moore" },
+    },
+    {
+      id: "crystal-lattice",
+      label: "Crystal lattice",
+      params: { states: 12, threshold: 2, neighbourhood: "vonNeumann" },
+    },
+  ],
 };
 
 export function presetsFor(slug: string): readonly ParamPreset[] {

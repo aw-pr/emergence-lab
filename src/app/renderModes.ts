@@ -6,6 +6,7 @@ const GRID_SLUGS = new Set([
   "diffusion-limited-aggregation",
   "elementary-cellular-automata",
   "brians-brain",
+  "cyclic-ca",
 ]);
 
 const FRACTAL_SLUGS = new Set(["mandelbrot", "julia-set", "burning-ship"]);
