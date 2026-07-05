@@ -206,6 +206,26 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Fast trace",
       params: { sigma: 14, rho: 32, beta: 3.1, stepsPerFrame: 20, fade: 0.975 },
     },
+    {
+      id: "rossler-spiral",
+      label: "Rössler spiral",
+      params: { attractor: "rossler", stepsPerFrame: 10, fade: 0.992 },
+    },
+    {
+      id: "thomas-coil",
+      label: "Thomas coil",
+      params: { attractor: "thomas", stepsPerFrame: 14, fade: 0.995 },
+    },
+    {
+      id: "aizawa-spindle",
+      label: "Aizawa spindle",
+      params: { attractor: "aizawa", stepsPerFrame: 12, fade: 0.991 },
+    },
+    {
+      id: "halvorsen-bloom",
+      label: "Halvorsen bloom",
+      params: { attractor: "halvorsen", stepsPerFrame: 12, fade: 0.99 },
+    },
   ],
   "diffusion-limited-aggregation": [
     {

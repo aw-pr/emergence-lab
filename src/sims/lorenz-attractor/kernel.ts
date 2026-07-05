@@ -29,10 +29,165 @@ const DEFAULT_BETA = 2.6666667;
 const DEFAULT_STEPS_PER_FRAME = 24;
 const DEFAULT_FADE = 0.997;
 const CHANNEL_COUNT = 1;
-const INTERNAL_DT = 0.005;
 const DEPOSIT = 0.38;
 const DEPOSIT_RADIUS = 1;
-const WARMUP_STEPS = 900;
+
+const ATTRACTORS = [
+  "lorenz",
+  "rossler",
+  "thomas",
+  "aizawa",
+  "halvorsen",
+] as const;
+type Attractor = (typeof ATTRACTORS)[number];
+const DEFAULT_ATTRACTOR: Attractor = "lorenz";
+
+type Derivative = {
+  dx: number;
+  dy: number;
+  dz: number;
+};
+
+/**
+ * Per-attractor tuning. The RK4 integrator, Bresenham-style trail deposit and
+ * exponential fade are shared across every attractor; only these differ:
+ *
+ *  - `dt` / `warmup`: integration step and pre-roll so the sim opens mid-orbit.
+ *  - `start`: initial point on (or near) the attractor's basin.
+ *  - `derivative`: the ODE right-hand side. Only Lorenz reads sigma/rho/beta;
+ *    the others carry fixed textbook constants and ignore those params.
+ *  - `projX` / `projY`: which state axes map to screen X and Y.
+ *  - `depth`: the remaining axis, normalised via `depthRange` for height colour.
+ *  - `xRange` / `yRange`: screen-axis extents (measured from the settled orbit)
+ *    so each attractor fills the frame without per-frame renormalisation.
+ */
+interface AttractorSpec {
+  dt: number;
+  warmup: number;
+  start: readonly [number, number, number];
+  derivative(
+    x: number,
+    y: number,
+    z: number,
+    sigma: number,
+    rho: number,
+    beta: number,
+  ): Derivative;
+  projX(x: number, y: number, z: number): number;
+  projY(x: number, y: number, z: number): number;
+  depth(x: number, y: number, z: number): number;
+  xRange: readonly [number, number];
+  yRange: readonly [number, number];
+  depthRange: readonly [number, number];
+}
+
+const SPECS: Record<Attractor, AttractorSpec> = {
+  // Classic butterfly. Projects x -> screen X, z -> screen Y (depth axis: y).
+  lorenz: {
+    dt: 0.005,
+    warmup: 900,
+    start: [0.1, 0, 0],
+    derivative: (x, y, z, sigma, rho, beta) => ({
+      dx: sigma * (y - x),
+      dy: x * (rho - z) - y,
+      dz: x * y - beta * z,
+    }),
+    projX: (x) => x,
+    projY: (_x, _y, z) => z,
+    depth: (_x, y) => y,
+    xRange: [-30, 30],
+    yRange: [0, 60],
+    depthRange: [-28, 28],
+  },
+  // Rössler (a=0.2, b=0.2, c=5.7): a flat spiral with a folding z-spike.
+  // Projects the x-y spiral plane; depth axis: z.
+  rossler: {
+    dt: 0.02,
+    warmup: 2000,
+    start: [0.1, 0, 0],
+    derivative: (x, y, z) => ({
+      dx: -y - z,
+      dy: x + 0.2 * y,
+      dz: 0.2 + z * (x - 5.7),
+    }),
+    projX: (x) => x,
+    projY: (_x, y) => y,
+    depth: (_x, _y, z) => z,
+    xRange: [-11, 13],
+    yRange: [-13, 10],
+    depthRange: [0, 23],
+  },
+  // Thomas cyclically symmetric sin-flow (b=0.208186): a slow, tightly wound
+  // coil — larger dt and warmup than the faster attractors. Depth axis: z.
+  thomas: {
+    dt: 0.05,
+    warmup: 1500,
+    start: [0.1, 0, 0],
+    derivative: (x, y, z) => ({
+      dx: Math.sin(y) - 0.208186 * x,
+      dy: Math.sin(z) - 0.208186 * y,
+      dz: Math.sin(x) - 0.208186 * z,
+    }),
+    projX: (x) => x,
+    projY: (_x, y) => y,
+    depth: (_x, _y, z) => z,
+    xRange: [-1.6, 4.3],
+    yRange: [-1.6, 4.3],
+    depthRange: [-1.4, 4.1],
+  },
+  // Aizawa (a=0.95,b=0.7,c=0.6,d=3.5,e=0.25,f=0.1): a spindle/onion with a
+  // spike. Projects the x-z profile so the spike shows; depth axis: y.
+  aizawa: {
+    dt: 0.01,
+    warmup: 2000,
+    start: [0.1, 0, 0],
+    derivative: (x, y, z) => {
+      const a = 0.95;
+      const b = 0.7;
+      const c = 0.6;
+      const d = 3.5;
+      const e = 0.25;
+      const f = 0.1;
+      return {
+        dx: (z - b) * x - d * y,
+        dy: d * x + (z - b) * y,
+        dz:
+          c +
+          a * z -
+          (z * z * z) / 3 -
+          (x * x + y * y) * (1 + e * z) +
+          f * z * x * x * x,
+      };
+    },
+    projX: (x) => x,
+    projY: (_x, _y, z) => z,
+    depth: (_x, y) => y,
+    xRange: [-1.7, 1.7],
+    yRange: [-0.6, 2.1],
+    depthRange: [-1.6, 1.6],
+  },
+  // Halvorsen (a=1.89): cyclically symmetric three-armed spiral bloom.
+  // Projects x -> screen X, y -> screen Y; depth axis: z.
+  halvorsen: {
+    dt: 0.008,
+    warmup: 1500,
+    start: [-5, 0, 0],
+    derivative: (x, y, z) => {
+      const a = 1.89;
+      return {
+        dx: -a * x - 4 * y - 4 * z - y * y,
+        dy: -a * y - 4 * z - 4 * x - z * z,
+        dz: -a * z - 4 * x - 4 * y - x * x,
+      };
+    },
+    projX: (x) => x,
+    projY: (_x, y) => y,
+    depth: (_x, _y, z) => z,
+    xRange: [-13, 7],
+    yRange: [-13, 7],
+    depthRange: [-13, 7],
+  },
+};
 
 function clamp01(value: number): number {
   if (value < 0) {
@@ -63,21 +218,35 @@ function boundedNumber(
   return Math.min(max, Math.max(min, numberParam(params, key, fallback)));
 }
 
-type LorenzDerivative = {
-  dx: number;
-  dy: number;
-  dz: number;
-};
+function enumParam(
+  params: SimParams,
+  key: string,
+  fallback: Attractor,
+  options: readonly Attractor[],
+): Attractor {
+  const value = params[key];
+  return typeof value === "string" &&
+    (options as readonly string[]).includes(value)
+    ? (value as Attractor)
+    : fallback;
+}
 
 export class LorenzAttractorKernel implements SimKernel {
-  readonly name = "Lorenz Attractor";
+  readonly name = "Strange Attractor";
   readonly channelCount = CHANNEL_COUNT;
   readonly channelLabels = ["Density"] as const;
   readonly channelRanges = [[0, 1]] as const;
   readonly paramSchema = [
     {
+      key: "attractor",
+      label: "Attractor",
+      type: "enum",
+      default: DEFAULT_ATTRACTOR,
+      options: ATTRACTORS,
+    },
+    {
       key: "sigma",
-      label: "Sigma",
+      label: "Sigma (Lorenz)",
       type: "number",
       default: DEFAULT_SIGMA,
       min: 0,
@@ -86,7 +255,7 @@ export class LorenzAttractorKernel implements SimKernel {
     },
     {
       key: "rho",
-      label: "Rho",
+      label: "Rho (Lorenz)",
       type: "number",
       default: DEFAULT_RHO,
       min: 0,
@@ -95,7 +264,7 @@ export class LorenzAttractorKernel implements SimKernel {
     },
     {
       key: "beta",
-      label: "Beta",
+      label: "Beta (Lorenz)",
       type: "number",
       default: DEFAULT_BETA,
       min: 0,
@@ -125,6 +294,10 @@ export class LorenzAttractorKernel implements SimKernel {
   private width = 0;
   private height = 0;
   private state = new Float32Array(0);
+  private attractor: Attractor = DEFAULT_ATTRACTOR;
+  private spec: AttractorSpec = SPECS[DEFAULT_ATTRACTOR];
+  private dt = SPECS[DEFAULT_ATTRACTOR].dt;
+  private warmup = SPECS[DEFAULT_ATTRACTOR].warmup;
   private sigma = DEFAULT_SIGMA;
   private rho = DEFAULT_RHO;
   private beta = DEFAULT_BETA;
@@ -147,6 +320,11 @@ export class LorenzAttractorKernel implements SimKernel {
       this.state.fill(0);
     }
 
+    this.attractor = enumParam(params, "attractor", DEFAULT_ATTRACTOR, ATTRACTORS);
+    this.spec = SPECS[this.attractor];
+    this.dt = this.spec.dt;
+    this.warmup = this.spec.warmup;
+
     this.sigma = boundedNumber(params, "sigma", DEFAULT_SIGMA, 0, 30);
     this.rho = boundedNumber(params, "rho", DEFAULT_RHO, 0, 60);
     this.beta = boundedNumber(params, "beta", DEFAULT_BETA, 0, 10);
@@ -164,9 +342,9 @@ export class LorenzAttractorKernel implements SimKernel {
     );
     this.fade = boundedNumber(params, "fade", DEFAULT_FADE, 0, 1);
 
-    this.x = 0.1;
-    this.y = 0;
-    this.z = 0;
+    this.x = this.spec.start[0];
+    this.y = this.spec.start[1];
+    this.z = this.spec.start[2];
     this.previousGridX = null;
     this.previousGridY = null;
 
@@ -202,16 +380,12 @@ export class LorenzAttractorKernel implements SimKernel {
     this.previousGridY = null;
   }
 
-  private derivative(x: number, y: number, z: number): LorenzDerivative {
-    return {
-      dx: this.sigma * (y - x),
-      dy: x * (this.rho - z) - y,
-      dz: x * y - this.beta * z,
-    };
+  private derivative(x: number, y: number, z: number): Derivative {
+    return this.spec.derivative(x, y, z, this.sigma, this.rho, this.beta);
   }
 
   private integrate(): void {
-    const dt = INTERNAL_DT;
+    const dt = this.dt;
     const halfDt = dt * 0.5;
 
     const k1 = this.derivative(this.x, this.y, this.z);
@@ -241,17 +415,22 @@ export class LorenzAttractorKernel implements SimKernel {
       return;
     }
 
-    for (let step = 0; step < WARMUP_STEPS; step += 1) {
+    for (let step = 0; step < this.warmup; step += 1) {
       this.integrate();
       this.deposit();
     }
   }
 
   private deposit(): void {
-    const xNorm = (this.x + 30) / 60;
-    const zNorm = this.z / 60;
+    const spec = this.spec;
+    const px = spec.projX(this.x, this.y, this.z);
+    const py = spec.projY(this.x, this.y, this.z);
+    const xNorm =
+      (px - spec.xRange[0]) / (spec.xRange[1] - spec.xRange[0]);
+    const yNorm =
+      (py - spec.yRange[0]) / (spec.yRange[1] - spec.yRange[0]);
     const gridX = Math.floor(xNorm * (this.width - 1));
-    const gridY = this.height - 1 - Math.floor(zNorm * (this.height - 1));
+    const gridY = this.height - 1 - Math.floor(yNorm * (this.height - 1));
 
     if (
       gridX < 0 ||
@@ -259,6 +438,8 @@ export class LorenzAttractorKernel implements SimKernel {
       gridY < 0 ||
       gridY >= this.height
     ) {
+      this.previousGridX = null;
+      this.previousGridY = null;
       return;
     }
 
@@ -311,22 +492,31 @@ export class LorenzAttractorKernel implements SimKernel {
 
 export function selfTest(): boolean {
   try {
-    const kernel = new LorenzAttractorKernel();
-    kernel.init(48, 36, {});
+    for (const attractor of ATTRACTORS) {
+      const kernel = new LorenzAttractorKernel();
+      kernel.init(48, 36, { attractor });
 
-    for (let i = 0; i < 220; i += 1) {
-      kernel.step(1);
-    }
+      for (let i = 0; i < 220; i += 1) {
+        kernel.step(1);
+      }
 
-    let occupied = 0;
-    const state = kernel.readState();
-    for (let index = 0; index < state.length; index += CHANNEL_COUNT) {
-      if (state[index] > 0) {
-        occupied += 1;
+      let occupied = 0;
+      const state = kernel.readState();
+      for (let index = 0; index < state.length; index += CHANNEL_COUNT) {
+        if (!Number.isFinite(state[index])) {
+          return false;
+        }
+        if (state[index] > 0) {
+          occupied += 1;
+        }
+      }
+
+      if (occupied <= 1) {
+        return false;
       }
     }
 
-    return occupied > 1;
+    return true;
   } catch {
     return false;
   }
