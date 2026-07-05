@@ -1,4 +1,4 @@
-import type { ColourMapOptions, ColourPreset } from "./colormap.ts";
+import { isCyclic, type ColourMapOptions, type ColourPreset } from "./colormap.ts";
 import {
   containRect,
   type RenderMode,
@@ -30,6 +30,7 @@ uniform bool u_invert;
 uniform float u_gamma;
 uniform float u_contrast;
 uniform bool u_paletteCycleReverse;
+uniform bool u_paletteCyclic;
 uniform int u_dotRadius;
 uniform bool u_smoothSampling;
 uniform float u_palettePhase;
@@ -160,10 +161,20 @@ float signalAt(vec4 raw) {
 
 vec3 singleChannelColour(float t) {
   float base = clamp01(t);
-  float shifted =
-    u_palettePhase == 0.0 || base <= 0.001 || base >= 0.999
-      ? base
-      : fract(base + u_palettePhase);
+  float shifted;
+  if (u_palettePhase == 0.0) {
+    shifted = base;
+  } else if (u_paletteCyclic) {
+    // Cyclic ramp (matching endpoints): a modular phase offset tiles with no
+    // seam, so the whole field can rotate through the palette continuously.
+    shifted = fract(base + u_palettePhase);
+  } else if (base <= 0.001 || base >= 0.999) {
+    // Non-cyclic ramp: pin the extremes so the hard seam at the wrap point
+    // stays parked in the background instead of sweeping across the image.
+    shifted = base;
+  } else {
+    shifted = fract(base + u_palettePhase);
+  }
   float value = adjust(shifted);
   int preset = (u_preset == 6 || u_preset == 7) ? 0 : u_preset;
   return rampColour(preset, value);
@@ -301,6 +312,7 @@ interface UniformLocations {
   gamma: WebGLUniformLocation;
   contrast: WebGLUniformLocation;
   paletteCycleReverse: WebGLUniformLocation;
+  paletteCyclic: WebGLUniformLocation;
   dotRadius: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
@@ -441,6 +453,10 @@ export class WebGLRendererBackend implements RendererBackend {
       paletteCycleReverse: mustCreate(
         this.gl.getUniformLocation(this.program, "u_paletteCycleReverse"),
         "u_paletteCycleReverse uniform",
+      ),
+      paletteCyclic: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_paletteCyclic"),
+        "u_paletteCyclic uniform",
       ),
       dotRadius: mustCreate(
         this.gl.getUniformLocation(this.program, "u_dotRadius"),
@@ -601,6 +617,7 @@ export class WebGLRendererBackend implements RendererBackend {
       this.uniforms.paletteCycleReverse,
       colourOptions.paletteCycleReverse ? 1 : 0,
     );
+    gl.uniform1i(this.uniforms.paletteCyclic, isCyclic(colourOptions.preset) ? 1 : 0);
     gl.uniform1i(
       this.uniforms.dotRadius,
       mode === "particle" ? Math.floor(displayOptions.dotSize / 2) : 0,
