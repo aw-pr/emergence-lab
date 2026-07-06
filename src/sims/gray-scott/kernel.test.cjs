@@ -211,6 +211,55 @@ test("default seed keeps the reaction active after startup", () => {
   assert.ok(activeV > 200);
 });
 
+test("applyImpulse injects V and depletes U under the point, deterministically", () => {
+  const width = 40;
+  const height = 30;
+  const px = 12;
+  const py = 9;
+
+  const run = () => {
+    const kernel = new GrayScottKernel();
+    kernel.init(width, height, {});
+    kernel.applyImpulse(px, py, 5, 1);
+    return Array.from(kernel.readState());
+  };
+
+  const first = run();
+  const second = run();
+  assert.deepEqual(first, second);
+
+  const clean = new GrayScottKernel();
+  clean.init(width, height, {});
+  const baseline = Array.from(clean.readState());
+
+  const centre = readCell(first, width, px, py);
+  const before = readCell(baseline, width, px, py);
+  assert.ok(centre.v > before.v, "V raised at the impulse centre");
+  assert.ok(centre.u < before.u, "U depleted at the impulse centre");
+
+  // A cell well outside the brush radius is untouched.
+  const far = readCell(first, width, 0, 0);
+  const farBase = readCell(baseline, width, 0, 0);
+  assert.equal(far.u, farBase.u);
+  assert.equal(far.v, farBase.v);
+});
+
+test("applyImpulse keeps readState reference stable and clamps to bounds", () => {
+  const kernel = new GrayScottKernel();
+  kernel.init(24, 24, {});
+  const ref = kernel.readState();
+
+  // Out-of-range centre and zero strength are safe no-ops that never throw.
+  assert.doesNotThrow(() => kernel.applyImpulse(-100, -100, 4, 1));
+  assert.doesNotThrow(() => kernel.applyImpulse(12, 12, 4, 0));
+  kernel.applyImpulse(12, 12, 6, 1);
+
+  assert.equal(kernel.readState(), ref);
+  for (const value of kernel.readState()) {
+    assert.ok(value >= 0 && value <= 1);
+  }
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new GrayScottKernel();
   kernel.init(12, 10, {});

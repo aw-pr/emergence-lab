@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const DEFAULT_DU = 0.2097;
@@ -211,6 +212,52 @@ export class GrayScottKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /**
+   * Pointer poke: stamp a soft disc of the reactant V (and deplete U) under the
+   * cursor, the same seed the centre patch uses. Only ever adds V / removes U,
+   * so it triggers fresh growth without erasing existing structure. Bounds are
+   * clamped (no wrap); allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = clamp01(strength);
+    if (s <= 0) {
+      return;
+    }
+
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const r = Math.max(1, Math.round(radius));
+    const radiusSq = r * r;
+
+    for (let dy = -r; dy <= r; dy += 1) {
+      const py = centreY + dy;
+      if (py < 0 || py >= this.height) {
+        continue;
+      }
+      for (let dx = -r; dx <= r; dx += 1) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        const px = centreX + dx;
+        if (px < 0 || px >= this.width) {
+          continue;
+        }
+        const weight = (1 - Math.sqrt(distSq) / r) * s;
+        if (weight <= 0) {
+          continue;
+        }
+        const index = (py * this.width + px) * this.channelCount;
+        this.state[index] = Math.min(this.state[index], 1 - 0.5 * weight);
+        this.state[index + 1] = Math.max(this.state[index + 1], 0.25 * weight);
+      }
+    }
   }
 
   destroy(): void {
