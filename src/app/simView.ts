@@ -539,11 +539,16 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
       // diffusion pass over the grid makes true ultra (~1 step/s) unusable, and
       // the network never gets enough steps to form. High is the sweet spot.
       return "high";
+    case "abelian-sandpile":
+      // The mandala's growth rate is fixed by relaxation physics (radius ~
+      // total-topples^0.22), so a coarser grid is what makes it fill the
+      // frame in tens of seconds rather than hours; ~2px cells also read as
+      // deliberate terraces instead of 1px dither.
+      return "balanced";
     case "lorenz-attractor":
     case "elementary-cellular-automata":
     case "game-of-life":
     case "diffusion-limited-aggregation":
-    case "abelian-sandpile":
     case "boids":
     case "cyclic-ca":
     case "particle-life":
