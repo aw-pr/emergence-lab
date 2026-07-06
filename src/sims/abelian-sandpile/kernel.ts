@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 // A larger default pile so the settled mandala fills most of the canvas height
@@ -209,6 +210,54 @@ export class AbelianSandpileKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /**
+   * Pointer poke: pour a soft burst of grains into the disc under the cursor and
+   * feed the touched cells into the existing topple queue, so relaxation happens
+   * through step()'s bounded topple machinery rather than being applied here.
+   * The per-cell pour clears the topple threshold at the centre so a cascade is
+   * guaranteed. Bounds-clamped and allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = Number.isFinite(strength) ? Math.max(0, Math.min(1, strength)) : 0;
+    if (s <= 0) {
+      return;
+    }
+
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const r = Math.max(1, Math.round(radius));
+    const radiusSq = r * r;
+    const base = this.toppleThreshold + 4;
+
+    for (let dy = -r; dy <= r; dy += 1) {
+      const py = centreY + dy;
+      if (py < 0 || py >= this.height) {
+        continue;
+      }
+      for (let dx = -r; dx <= r; dx += 1) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        const px = centreX + dx;
+        if (px < 0 || px >= this.width) {
+          continue;
+        }
+        const grains = Math.round(base * (1 - Math.sqrt(distSq) / r) * s);
+        if (grains <= 0) {
+          continue;
+        }
+        const index = py * this.width + px;
+        this.state[index] += grains;
+        this.enqueueIfUnstable(index);
+      }
+    }
   }
 
   destroy(): void {

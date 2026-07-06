@@ -158,6 +158,53 @@ test("open boundaries allow grains to leave the grid", () => {
   assert.equal(kernel.readState()[0], 0);
 });
 
+test("applyImpulse pours grains and relaxes through the topple queue", () => {
+  const width = 21;
+  const height = 21;
+  const px = 10;
+  const py = 10;
+  const centreIndex = py * width + px;
+
+  const run = () => {
+    const kernel = new AbelianSandpileKernel();
+    kernel.init(width, height, {
+      initialPile: 0,
+      grainsPerStep: 0,
+      topplesPerStep: 5000,
+    });
+    kernel.applyImpulse(px, py, 3, 1);
+    // Grains land immediately but relaxation is deferred to step().
+    const poured = Array.from(kernel.readState());
+    kernel.step(1);
+    return { poured, settled: Array.from(kernel.readState()) };
+  };
+
+  const first = run();
+  const second = run();
+  assert.deepEqual(first.settled, second.settled);
+
+  const pouredCentre = first.poured[centreIndex];
+  assert.ok(pouredCentre > 0, "grains poured at the centre");
+
+  // After a step the topple machinery has spread grains beyond the centre.
+  const spread = first.settled.some(
+    (value, index) => index !== centreIndex && value > 0,
+  );
+  assert.equal(spread, true);
+});
+
+test("applyImpulse is a safe no-op for zero strength and off-grid pokes", () => {
+  const kernel = new AbelianSandpileKernel();
+  kernel.init(16, 16, { initialPile: 0, grainsPerStep: 0 });
+  const ref = kernel.readState();
+
+  kernel.applyImpulse(8, 8, 3, 0);
+  assert.equal(Array.from(ref).reduce((a, b) => a + b, 0), 0);
+
+  assert.doesNotThrow(() => kernel.applyImpulse(-50, -50, 4, 1));
+  assert.equal(kernel.readState(), ref);
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new AbelianSandpileKernel();
   kernel.init(12, 10, {});
