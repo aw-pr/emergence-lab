@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const DEFAULT_MU = 0.15;
@@ -273,6 +274,50 @@ export class LeniaKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /**
+   * Pointer poke: stamp a soft Gaussian blob of mass under the cursor, the same
+   * profile the seed blobs use. In the growth regime a fresh blob condenses into
+   * a new organism instead of erasing what is there — mass is only ever added
+   * (clamped to 1). The disc wraps on the torus and is allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = clamp(Number.isFinite(strength) ? strength : 0, 0, 1);
+    if (s <= 0) {
+      return;
+    }
+
+    const width = this.width;
+    const height = this.height;
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const blobRadius = Math.max(1, radius);
+    const reach = Math.ceil(blobRadius);
+    const falloff = 2 * blobRadius * blobRadius * 0.35;
+    const state = this.state;
+
+    for (let dy = -reach; dy <= reach; dy += 1) {
+      let py = (centreY + dy) % height;
+      if (py < 0) {
+        py += height;
+      }
+      const rowBase = py * width;
+      for (let dx = -reach; dx <= reach; dx += 1) {
+        let px = (centreX + dx) % width;
+        if (px < 0) {
+          px += width;
+        }
+        const value = s * Math.exp(-(dx * dx + dy * dy) / falloff);
+        const index = rowBase + px;
+        const sum = state[index] + value;
+        state[index] = sum > 1 ? 1 : sum;
+      }
+    }
   }
 
   destroy(): void {

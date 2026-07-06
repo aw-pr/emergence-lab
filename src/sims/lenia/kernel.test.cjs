@@ -223,6 +223,52 @@ test("selfTest passes", () => {
   assert.equal(selfTest(), true);
 });
 
+test("applyImpulse stamps a Gaussian mass blob under the point, deterministically", () => {
+  const width = 64;
+  const height = 64;
+  const px = 20;
+  const py = 24;
+
+  const stamp = () => {
+    const kernel = new LeniaKernel();
+    // Empty field (mu high, but no seed interference matters — we read pre-step).
+    kernel.init(width, height, {});
+    kernel.readState().fill(0);
+    kernel.applyImpulse(px, py, 6, 1);
+    return Array.from(kernel.readState());
+  };
+
+  const first = stamp();
+  const second = stamp();
+  assert.deepEqual(first, second);
+
+  // Centre gains the most mass; a far cell stays empty; all values bounded.
+  assert.ok(first[py * width + px] > 0.5, "mass peaks at the blob centre");
+  assert.equal(first[0], 0, "far cell untouched");
+  for (const value of first) {
+    assert.ok(value >= 0 && value <= 1);
+  }
+});
+
+test("applyImpulse only adds mass and is a safe no-op at zero strength", () => {
+  const width = 48;
+  const height = 48;
+  const kernel = new LeniaKernel();
+  kernel.init(width, height, {});
+  const ref = kernel.readState();
+  const before = Array.from(ref);
+
+  kernel.applyImpulse(24, 24, 5, 0);
+  assert.deepEqual(Array.from(kernel.readState()), before);
+
+  kernel.applyImpulse(24, 24, 5, 1);
+  assert.equal(kernel.readState(), ref, "readState reference stays stable");
+  for (let i = 0; i < ref.length; i += 1) {
+    assert.ok(ref[i] >= before[i] - 1e-9, "mass is only ever added");
+  }
+  assert.doesNotThrow(() => kernel.applyImpulse(-5, -5, 4, 1));
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new LeniaKernel();
   kernel.init(24, 20, {});
