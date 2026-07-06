@@ -8,6 +8,11 @@ export interface DisplayOptions {
    * frame (accumulate + fade). 0 = off; ~0.90–0.96 leaves flowing ribbons.
    */
   trailFade: number;
+  /**
+   * Bloom post-pass intensity (WebGL only): threshold extract + blur +
+   * additive composite. 0 = off; ~0.3 is a modest glow.
+   */
+  bloom: number;
 }
 
 export type RenderMode = "grid" | "field" | "smooth" | "fractal" | "particle";

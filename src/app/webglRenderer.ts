@@ -332,6 +332,64 @@ void main() {
 }
 `;
 
+// Bloom pass 1: keep only pixels brighter than the threshold (soft knee).
+const BLOOM_EXTRACT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_tex;
+uniform float u_threshold;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+void main() {
+  vec3 colour = texture(u_tex, v_uv).rgb;
+  float luma = dot(colour, vec3(0.299, 0.587, 0.114));
+  float weight = smoothstep(u_threshold, u_threshold + 0.25, luma);
+  outColor = vec4(colour * weight, 1.0);
+}
+`;
+
+// Bloom pass 2: separable 9-tap gaussian, run horizontally then vertically.
+const BLOOM_BLUR_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_tex;
+uniform vec2 u_direction;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+void main() {
+  float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+  vec3 sum = texture(u_tex, v_uv).rgb * weights[0];
+  for (int i = 1; i < 5; i += 1) {
+    vec2 offset = u_direction * float(i);
+    sum += texture(u_tex, v_uv + offset).rgb * weights[i];
+    sum += texture(u_tex, v_uv - offset).rgb * weights[i];
+  }
+  outColor = vec4(sum, 1.0);
+}
+`;
+
+// Bloom pass 3: additive composite of the scene and the blurred bright pass.
+const BLOOM_COMPOSITE_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_scene;
+uniform sampler2D u_bloom;
+uniform float u_intensity;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+void main() {
+  vec3 scene = texture(u_scene, v_uv).rgb;
+  vec3 bloom = texture(u_bloom, v_uv).rgb;
+  outColor = vec4(scene + bloom * u_intensity, 1.0);
+}
+`;
+
 interface TextureFormat {
   internalFormat: number;
   format: number;
@@ -376,6 +434,15 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly vao: WebGLVertexArrayObject;
   private readonly postProgram: WebGLProgram;
   private readonly postVao: WebGLVertexArrayObject;
+  private readonly extractProgram: WebGLProgram;
+  private readonly extractVao: WebGLVertexArrayObject;
+  private readonly blurProgram: WebGLProgram;
+  private readonly blurVao: WebGLVertexArrayObject;
+  private readonly compositeProgram: WebGLProgram;
+  private readonly compositeVao: WebGLVertexArrayObject;
+  private readonly extractThreshold: WebGLUniformLocation;
+  private readonly blurDirection: WebGLUniformLocation;
+  private readonly compositeIntensity: WebGLUniformLocation;
   private readonly uniforms: UniformLocations;
   private readonly postUniforms: PostUniformLocations;
   private textureFormat: TextureFormat | null = null;
@@ -391,6 +458,14 @@ export class WebGLRendererBackend implements RendererBackend {
   private trailWidth = 0;
   private trailHeight = 0;
   private trailIndex = 0;
+  private sceneTexture: WebGLTexture | null = null;
+  private sceneFbo: WebGLFramebuffer | null = null;
+  private sceneWidth = 0;
+  private sceneHeight = 0;
+  private bloomTextures: [WebGLTexture, WebGLTexture] | null = null;
+  private bloomFbos: [WebGLFramebuffer, WebGLFramebuffer] | null = null;
+  private bloomWidth = 0;
+  private bloomHeight = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", {
@@ -416,10 +491,37 @@ export class WebGLRendererBackend implements RendererBackend {
       new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
       gl.STATIC_DRAW,
     );
+    this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
+    this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
+    this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
     this.vao = this.createQuadVao(this.program);
     this.postVao = this.createQuadVao(this.postProgram);
+    this.extractVao = this.createQuadVao(this.extractProgram);
+    this.blurVao = this.createQuadVao(this.blurProgram);
+    this.compositeVao = this.createQuadVao(this.compositeProgram);
     this.uniforms = this.getUniformLocations();
     this.postUniforms = this.getPostUniformLocations();
+    this.extractThreshold = mustCreate(
+      gl.getUniformLocation(this.extractProgram, "u_threshold"),
+      "u_threshold uniform",
+    );
+    this.blurDirection = mustCreate(
+      gl.getUniformLocation(this.blurProgram, "u_direction"),
+      "u_direction uniform",
+    );
+    this.compositeIntensity = mustCreate(
+      gl.getUniformLocation(this.compositeProgram, "u_intensity"),
+      "u_intensity uniform",
+    );
+
+    // Sampler bindings are fixed: unit 0 = sim state, 1 = scene, 2 = bloom.
+    gl.useProgram(this.extractProgram);
+    gl.uniform1i(gl.getUniformLocation(this.extractProgram, "u_tex"), 1);
+    gl.useProgram(this.blurProgram);
+    gl.uniform1i(gl.getUniformLocation(this.blurProgram, "u_tex"), 1);
+    gl.useProgram(this.compositeProgram);
+    gl.uniform1i(gl.getUniformLocation(this.compositeProgram, "u_scene"), 1);
+    gl.uniform1i(gl.getUniformLocation(this.compositeProgram, "u_bloom"), 2);
 
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "u_state"), 0);
@@ -465,40 +567,48 @@ export class WebGLRendererBackend implements RendererBackend {
     );
 
     const trailFade = trailFadeFor(mode, displayOptions);
-    if (trailFade > 0) {
-      this.drawWithTrails(rect, trailFade, backgroundFor(kernel));
+    const bloom = bloomIntensityFor(displayOptions);
+
+    if (trailFade <= 0 && bloom <= 0) {
+      // Clear the whole canvas to black, then draw the grid into a centred,
+      // aspect-preserving rectangle (letterbox). clear() ignores the viewport,
+      // so the bars stay black while the quad fills only the contain rect.
+      gl.viewport(0, 0, this.displayWidth, this.displayHeight);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.viewport(rect.x, rect.y, rect.width, rect.height);
+      gl.useProgram(this.program);
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       return;
     }
 
-    // Clear the whole canvas to black, then draw the grid into a centred,
-    // aspect-preserving rectangle (letterbox). clear() ignores the viewport,
-    // so the bars stay black while the quad fills only the contain rect.
-    gl.viewport(0, 0, this.displayWidth, this.displayHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    gl.viewport(rect.x, rect.y, rect.width, rect.height);
-    gl.useProgram(this.program);
-    gl.bindVertexArray(this.vao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    // Trails and/or bloom: render the scene into an offscreen texture first,
+    // then present it (with the bloom post-pass when enabled).
+    const sceneTexture =
+      trailFade > 0
+        ? this.renderTrailScene(rect, trailFade, backgroundFor(kernel))
+        : this.renderPlainScene(rect);
+    if (!sceneTexture) return;
+    this.present(rect, sceneTexture, bloom);
   }
 
   /**
    * Accumulate-and-fade: previous frame is faded toward the background into
    * the write target, the current frame is alpha-blended on top (the main
-   * shader emits per-fragment alpha in trail mode), and the result is
-   * presented letterboxed. Ping-pong avoids sampling a texture while
-   * rendering into it.
+   * shader emits per-fragment alpha in trail mode). Ping-pong avoids sampling
+   * a texture while rendering into it. Returns the accumulated scene texture.
    */
-  private drawWithTrails(
+  private renderTrailScene(
     rect: { x: number; y: number; width: number; height: number },
     fade: number,
     bg: [number, number, number],
-  ): void {
+  ): WebGLTexture | null {
     const gl = this.gl;
     this.ensureTrailTargets(rect.width, rect.height, bg);
     const textures = this.trailTextures;
     const fbos = this.trailFbos;
-    if (!textures || !fbos) return;
+    if (!textures || !fbos) return null;
 
     const read = this.trailIndex;
     const write = 1 - this.trailIndex;
@@ -526,18 +636,107 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
 
+    this.trailIndex = write;
+    return textures[write];
+  }
+
+  /** Render the main shader into the offscreen scene texture (bloom input). */
+  private renderPlainScene(
+    rect: { x: number; y: number; width: number; height: number },
+  ): WebGLTexture | null {
+    const gl = this.gl;
+    this.ensureSceneTarget(rect.width, rect.height);
+    if (!this.sceneTexture || !this.sceneFbo) return null;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
+    gl.viewport(0, 0, this.sceneWidth, this.sceneHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.program);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    return this.sceneTexture;
+  }
+
+  /** Letterbox the scene texture onto the canvas, adding bloom when enabled. */
+  private present(
+    rect: { x: number; y: number; width: number; height: number },
+    sceneTexture: WebGLTexture,
+    bloom: number,
+  ): void {
+    const gl = this.gl;
+    const bloomTexture =
+      bloom > 0
+        ? this.renderBloomTexture(sceneTexture, rect.width, rect.height)
+        : null;
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.displayWidth, this.displayHeight);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.viewport(rect.x, rect.y, rect.width, rect.height);
-    gl.useProgram(this.postProgram);
+
+    if (bloomTexture) {
+      gl.useProgram(this.compositeProgram);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, bloomTexture);
+      gl.uniform1f(this.compositeIntensity, bloom);
+      gl.bindVertexArray(this.compositeVao);
+    } else {
+      gl.useProgram(this.postProgram);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+      gl.uniform1i(this.postUniforms.tex, 1);
+      gl.uniform1f(this.postUniforms.mix, 1);
+      gl.bindVertexArray(this.postVao);
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /**
+   * Threshold-extract the scene into a half-resolution target, then blur it
+   * with a separable gaussian (horizontal, then vertical). Returns the
+   * blurred bright-pass texture.
+   */
+  private renderBloomTexture(
+    sceneTexture: WebGLTexture,
+    sceneWidth: number,
+    sceneHeight: number,
+  ): WebGLTexture | null {
+    const gl = this.gl;
+    this.ensureBloomTargets(
+      Math.max(1, Math.floor(sceneWidth / 2)),
+      Math.max(1, Math.floor(sceneHeight / 2)),
+    );
+    const textures = this.bloomTextures;
+    const fbos = this.bloomFbos;
+    if (!textures || !fbos) return null;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[0]);
+    gl.viewport(0, 0, this.bloomWidth, this.bloomHeight);
+    gl.useProgram(this.extractProgram);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, textures[write]);
-    gl.uniform1f(this.postUniforms.mix, 1);
-    gl.bindVertexArray(this.postVao);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
+    gl.uniform1f(this.extractThreshold, 0.6);
+    gl.bindVertexArray(this.extractVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    this.trailIndex = write;
+    gl.useProgram(this.blurProgram);
+    gl.bindVertexArray(this.blurVao);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[1]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, textures[0]);
+    gl.uniform2f(this.blurDirection, 1 / this.bloomWidth, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[0]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    gl.uniform2f(this.blurDirection, 0, 1 / this.bloomHeight);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    return textures[0];
   }
 
   /** (Re)allocate the ping-pong accumulation targets; clears trails on resize. */
@@ -557,32 +756,77 @@ export class WebGLRendererBackend implements RendererBackend {
     this.trailWidth = w;
     this.trailHeight = h;
 
-    const makeTarget = (): [WebGLTexture, WebGLFramebuffer] => {
-      const texture = mustCreate(gl.createTexture(), "trail texture");
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-
-      const fbo = mustCreate(gl.createFramebuffer(), "trail framebuffer");
+    const clearToBg = (fbo: WebGLFramebuffer): void => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
       gl.clearColor(bg[0], bg[1], bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      return [texture, fbo];
     };
 
-    const [texA, fboA] = makeTarget();
-    const [texB, fboB] = makeTarget();
+    const [texA, fboA] = this.createRenderTarget(w, h);
+    const [texB, fboB] = this.createRenderTarget(w, h);
+    clearToBg(fboA);
+    clearToBg(fboB);
     this.trailTextures = [texA, texB];
     this.trailFbos = [fboA, fboB];
     this.trailIndex = 0;
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.clearColor(0, 0, 0, 1);
+  }
+
+  /** (Re)allocate the offscreen scene target used as the bloom input. */
+  private ensureSceneTarget(width: number, height: number): void {
+    const w = Math.max(1, width);
+    const h = Math.max(1, height);
+    if (this.sceneTexture && this.sceneWidth === w && this.sceneHeight === h) {
+      return;
+    }
+
+    this.releaseSceneTarget();
+    const [texture, fbo] = this.createRenderTarget(w, h);
+    this.sceneTexture = texture;
+    this.sceneFbo = fbo;
+    this.sceneWidth = w;
+    this.sceneHeight = h;
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+  }
+
+  /** (Re)allocate the half-resolution bloom ping-pong targets. */
+  private ensureBloomTargets(width: number, height: number): void {
+    const w = Math.max(1, width);
+    const h = Math.max(1, height);
+    if (this.bloomTextures && this.bloomWidth === w && this.bloomHeight === h) {
+      return;
+    }
+
+    this.releaseBloomTargets();
+    const [texA, fboA] = this.createRenderTarget(w, h);
+    const [texB, fboB] = this.createRenderTarget(w, h);
+    this.bloomTextures = [texA, texB];
+    this.bloomFbos = [fboA, fboB];
+    this.bloomWidth = w;
+    this.bloomHeight = h;
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+  }
+
+  private createRenderTarget(
+    width: number,
+    height: number,
+  ): [WebGLTexture, WebGLFramebuffer] {
+    const gl = this.gl;
+    const texture = mustCreate(gl.createTexture(), "render target texture");
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    const fbo = mustCreate(gl.createFramebuffer(), "render target framebuffer");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    return [texture, fbo];
   }
 
   private releaseTrailTargets(): void {
@@ -601,15 +845,53 @@ export class WebGLRendererBackend implements RendererBackend {
     this.trailHeight = 0;
   }
 
+  private releaseSceneTarget(): void {
+    const gl = this.gl;
+    if (this.sceneTexture) {
+      gl.deleteTexture(this.sceneTexture);
+      this.sceneTexture = null;
+    }
+    if (this.sceneFbo) {
+      gl.deleteFramebuffer(this.sceneFbo);
+      this.sceneFbo = null;
+    }
+    this.sceneWidth = 0;
+    this.sceneHeight = 0;
+  }
+
+  private releaseBloomTargets(): void {
+    const gl = this.gl;
+    if (this.bloomTextures) {
+      gl.deleteTexture(this.bloomTextures[0]);
+      gl.deleteTexture(this.bloomTextures[1]);
+      this.bloomTextures = null;
+    }
+    if (this.bloomFbos) {
+      gl.deleteFramebuffer(this.bloomFbos[0]);
+      gl.deleteFramebuffer(this.bloomFbos[1]);
+      this.bloomFbos = null;
+    }
+    this.bloomWidth = 0;
+    this.bloomHeight = 0;
+  }
+
   destroy(): void {
     const gl = this.gl;
     this.releaseTrailTargets();
+    this.releaseSceneTarget();
+    this.releaseBloomTargets();
     gl.deleteTexture(this.texture);
     gl.deleteVertexArray(this.vao);
     gl.deleteVertexArray(this.postVao);
+    gl.deleteVertexArray(this.extractVao);
+    gl.deleteVertexArray(this.blurVao);
+    gl.deleteVertexArray(this.compositeVao);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.program);
     gl.deleteProgram(this.postProgram);
+    gl.deleteProgram(this.extractProgram);
+    gl.deleteProgram(this.blurProgram);
+    gl.deleteProgram(this.compositeProgram);
   }
 
   private getUniformLocations(): UniformLocations {
@@ -935,6 +1217,13 @@ function trailFadeFor(mode: RenderMode, displayOptions: DisplayOptions): number 
   const fade = displayOptions.trailFade;
   if (typeof fade !== "number" || !Number.isFinite(fade) || fade <= 0) return 0;
   return Math.min(0.985, fade);
+}
+
+/** Effective bloom intensity, clamped to [0, 1]. 0 disables the post-pass. */
+function bloomIntensityFor(displayOptions: DisplayOptions): number {
+  const bloom = displayOptions.bloom;
+  if (typeof bloom !== "number" || !Number.isFinite(bloom) || bloom <= 0) return 0;
+  return Math.min(1, bloom);
 }
 
 /** Trail background: the boids glyph path paints its own dark blue; else black. */

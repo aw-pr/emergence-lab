@@ -132,6 +132,7 @@ export function clearValues(slug: string): void {
 export interface RenderOptionsStore {
   steps?: number;
   trailFade?: number;
+  bloom?: number;
 }
 
 const RENDER_PREFIX = "el:render";
@@ -156,6 +157,9 @@ export function loadRenderOptions(slug: string): RenderOptionsStore | null {
     }
     if (typeof parsed.trailFade === "number" && Number.isFinite(parsed.trailFade)) {
       out.trailFade = parsed.trailFade;
+    }
+    if (typeof parsed.bloom === "number" && Number.isFinite(parsed.bloom)) {
+      out.bloom = parsed.bloom;
     }
     return out;
   } catch {

@@ -637,6 +637,18 @@ export class ControlsPanel {
         ),
       );
     }
+    section.appendChild(
+      this.buildColourRangeControl(
+        "Bloom",
+        this.displayOptions.bloom,
+        0,
+        1,
+        0.05,
+        (bloom) => {
+          this.setDisplayOptions({ ...this.displayOptions, bloom });
+        },
+      ),
+    );
 
     return section;
   }
@@ -887,6 +899,7 @@ export class ControlsPanel {
     this.syncColourRangeControl("Palette steps", this.colourOptions.steps);
     this.syncColourRangeControl("Point size (px)", this.displayOptions.dotSize);
     this.syncColourRangeControl("Trail fade", this.displayOptions.trailFade);
+    this.syncColourRangeControl("Bloom", this.displayOptions.bloom);
   }
 
   private syncColourRangeControl(label: string, value: number): void {
@@ -908,6 +921,7 @@ export class ControlsPanel {
     saveRenderOptions(this.slug, {
       steps: this.colourOptions.steps,
       trailFade: this.displayOptions.trailFade,
+      bloom: this.displayOptions.bloom,
     });
   }
 
@@ -915,6 +929,7 @@ export class ControlsPanel {
     this.displayOptions = {
       dotSize: Math.max(1, Math.min(6, Math.floor(next.dotSize))),
       trailFade: Math.max(0, Math.min(0.985, next.trailFade)),
+      bloom: Math.max(0, Math.min(1, next.bloom)),
     };
     this.persistRenderOptions();
     this.callbacks.onDisplayChange(this.displayOptions);

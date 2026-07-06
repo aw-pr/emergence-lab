@@ -96,7 +96,11 @@ export class Renderer {
     this.params = { ...options.params };
     this.stepsPerFrame = Math.max(0, options.stepsPerFrame ?? 1);
     this.colourOptions = options.colourOptions ?? DEFAULT_COLOUR_OPTIONS;
-    this.displayOptions = options.displayOptions ?? { dotSize: 1, trailFade: 0 };
+    this.displayOptions = options.displayOptions ?? {
+      dotSize: 1,
+      trailFade: 0,
+      bloom: 0,
+    };
     this.renderMode = options.renderMode ?? "grid";
     this.resolution = options.resolution ?? DEFAULT_RESOLUTION;
 
@@ -140,6 +144,7 @@ export class Renderer {
     this.displayOptions = {
       dotSize: Math.max(1, Math.min(6, Math.floor(options.dotSize))),
       trailFade: Math.max(0, Math.min(0.985, options.trailFade)),
+      bloom: Math.max(0, Math.min(1, options.bloom)),
     };
     this.draw();
   }

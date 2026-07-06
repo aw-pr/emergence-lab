@@ -443,9 +443,18 @@ function restoreRenderOptions(
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   if (slug === "boids") {
     // Trails on by default: flocks read as flowing ribbons.
-    return { dotSize: 2, trailFade: 0.93 };
+    return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
-  return { dotSize: 1, trailFade: 0 };
+  switch (slug) {
+    // Modest glow on the bright-trace and fractal sims; off elsewhere.
+    case "lorenz-attractor":
+    case "mandelbrot":
+    case "julia-set":
+    case "burning-ship":
+      return { dotSize: 1, trailFade: 0, bloom: 0.3 };
+    default:
+      return { dotSize: 1, trailFade: 0, bloom: 0 };
+  }
 }
 
 /** Factory display options overlaid with any persisted renderer visual options. */
@@ -459,6 +468,9 @@ function restoreDisplayOptions(
   const next = { ...factory };
   if (stored.trailFade !== undefined) {
     next.trailFade = Math.max(0, Math.min(0.985, stored.trailFade));
+  }
+  if (stored.bloom !== undefined) {
+    next.bloom = Math.max(0, Math.min(1, stored.bloom));
   }
   return next;
 }
