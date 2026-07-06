@@ -127,7 +127,11 @@ export async function renderSimView(
     slug,
     factoryColourOptions,
   );
-  let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
+  const factoryDisplayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
+  let displayOptions: DisplayOptions = restoreDisplayOptions(
+    slug,
+    factoryDisplayOptions,
+  );
   const speedProfile = speedProfileFor(slug);
   let stepsPerFrame = speedProfile.initial;
   const fractal = isFractalSlug(slug);
@@ -158,9 +162,11 @@ export async function renderSimView(
     initialColourOptions: colourOptions,
     defaultColourOptions: factoryColourOptions,
     initialDisplayOptions: displayOptions,
+    defaultDisplayOptions: factoryDisplayOptions,
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
+    showTrailControl: renderMode === "particle",
     fractalPaletteCycleUi: fractal,
     callbacks: {
       onPlayPause: () => {
@@ -436,9 +442,25 @@ function restoreRenderOptions(
 
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   if (slug === "boids") {
-    return { dotSize: 2 };
+    // Trails on by default: flocks read as flowing ribbons.
+    return { dotSize: 2, trailFade: 0.93 };
   }
-  return { dotSize: 1 };
+  return { dotSize: 1, trailFade: 0 };
+}
+
+/** Factory display options overlaid with any persisted renderer visual options. */
+function restoreDisplayOptions(
+  slug: string,
+  factory: DisplayOptions,
+): DisplayOptions {
+  const stored = loadRenderOptions(slug);
+  if (!stored) return { ...factory };
+
+  const next = { ...factory };
+  if (stored.trailFade !== undefined) {
+    next.trailFade = Math.max(0, Math.min(0.985, stored.trailFade));
+  }
+  return next;
 }
 
 function defaultResolutionFor(slug: string): ResolutionPreset {

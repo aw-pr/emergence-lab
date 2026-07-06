@@ -1,6 +1,7 @@
 import { isCyclic, type ColourMapOptions, type ColourPreset } from "./colormap.ts";
 import {
   containRect,
+  type DisplayOptions,
   type RenderMode,
   type RendererBackend,
   type RendererBackendFrame,
@@ -38,6 +39,7 @@ uniform float u_palettePhase;
 uniform bool u_boidsGlyph;
 uniform float u_boidsGlyphRadius;
 uniform vec2 u_boidsMeanDir;
+uniform bool u_trailMode;
 
 in vec2 v_uv;
 out vec4 outColor;
@@ -279,7 +281,14 @@ void main() {
     }
 
     vec3 dotColour = weightSum > 0.0 ? vec3(greyWeighted / weightSum) : bg;
-    outColor = vec4(mix(bg, dotColour, min(coverage * 0.92, 1.0)), 1.0);
+    float glyphMix = min(coverage * 0.92, 1.0);
+    if (u_trailMode) {
+      // Trail accumulation: emit only the glyph with coverage alpha so the
+      // faded previous frame shows through everywhere else.
+      outColor = vec4(dotColour, glyphMix);
+    } else {
+      outColor = vec4(mix(bg, dotColour, glyphMix), 1.0);
+    }
     return;
   }
 
@@ -300,7 +309,26 @@ void main() {
   }
 
   vec4 raw = u_smoothSampling ? sampleChannels(v_uv) : readChannels(coord);
-  outColor = vec4(colourFromRaw(raw), 1.0);
+  float alpha = u_trailMode ? (signalAt(raw) > 0.02 ? 1.0 : 0.0) : 1.0;
+  outColor = vec4(colourFromRaw(raw), alpha);
+}
+`;
+
+// Fade previous accumulation toward the background (u_mix < 1) or copy a
+// texture verbatim (u_mix == 1). Shared by the trail fade and present passes.
+const POST_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_tex;
+uniform float u_mix;
+uniform vec3 u_bg;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+void main() {
+  vec3 colour = texture(u_tex, v_uv).rgb;
+  outColor = vec4(mix(u_bg, colour, u_mix), 1.0);
 }
 `;
 
@@ -328,6 +356,13 @@ interface UniformLocations {
   boidsGlyph: WebGLUniformLocation;
   boidsGlyphRadius: WebGLUniformLocation;
   boidsMeanDir: WebGLUniformLocation;
+  trailMode: WebGLUniformLocation;
+}
+
+interface PostUniformLocations {
+  tex: WebGLUniformLocation;
+  mix: WebGLUniformLocation;
+  bg: WebGLUniformLocation;
 }
 
 export class WebGLRendererBackend implements RendererBackend {
@@ -337,8 +372,12 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly gl: WebGL2RenderingContext;
   private readonly program: WebGLProgram;
   private readonly texture: WebGLTexture;
+  private readonly quadBuffer: WebGLBuffer;
   private readonly vao: WebGLVertexArrayObject;
+  private readonly postProgram: WebGLProgram;
+  private readonly postVao: WebGLVertexArrayObject;
   private readonly uniforms: UniformLocations;
+  private readonly postUniforms: PostUniformLocations;
   private textureFormat: TextureFormat | null = null;
   private uploadBuffer: Float32Array | null = null;
   private textureWidth = 0;
@@ -347,6 +386,11 @@ export class WebGLRendererBackend implements RendererBackend {
   private gridHeight = 1;
   private displayWidth = 1;
   private displayHeight = 1;
+  private trailTextures: [WebGLTexture, WebGLTexture] | null = null;
+  private trailFbos: [WebGLFramebuffer, WebGLFramebuffer] | null = null;
+  private trailWidth = 0;
+  private trailHeight = 0;
+  private trailIndex = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", {
@@ -363,10 +407,19 @@ export class WebGLRendererBackend implements RendererBackend {
     this.gl = gl;
     this.maxTextureSize = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 4096;
     this.program = createProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
+    this.postProgram = createProgram(gl, VERTEX_SHADER, POST_FRAGMENT_SHADER);
     this.texture = mustCreate(gl.createTexture(), "texture");
-    this.vao = mustCreate(gl.createVertexArray(), "vertex array");
+    this.quadBuffer = mustCreate(gl.createBuffer(), "quad buffer");
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+      gl.STATIC_DRAW,
+    );
+    this.vao = this.createQuadVao(this.program);
+    this.postVao = this.createQuadVao(this.postProgram);
     this.uniforms = this.getUniformLocations();
-    this.configureQuad();
+    this.postUniforms = this.getPostUniformLocations();
 
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "u_state"), 0);
@@ -404,29 +457,159 @@ export class WebGLRendererBackend implements RendererBackend {
     );
 
     const gl = this.gl;
-    // Clear the whole canvas to black, then draw the grid into a centred,
-    // aspect-preserving rectangle (letterbox). clear() ignores the viewport,
-    // so the bars stay black while the quad fills only the contain rect.
-    gl.viewport(0, 0, this.displayWidth, this.displayHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
     const rect = containRect(
       this.displayWidth,
       this.displayHeight,
       this.gridWidth,
       this.gridHeight,
     );
+
+    const trailFade = trailFadeFor(mode, displayOptions);
+    if (trailFade > 0) {
+      this.drawWithTrails(rect, trailFade, backgroundFor(kernel));
+      return;
+    }
+
+    // Clear the whole canvas to black, then draw the grid into a centred,
+    // aspect-preserving rectangle (letterbox). clear() ignores the viewport,
+    // so the bars stay black while the quad fills only the contain rect.
+    gl.viewport(0, 0, this.displayWidth, this.displayHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
     gl.viewport(rect.x, rect.y, rect.width, rect.height);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
+  /**
+   * Accumulate-and-fade: previous frame is faded toward the background into
+   * the write target, the current frame is alpha-blended on top (the main
+   * shader emits per-fragment alpha in trail mode), and the result is
+   * presented letterboxed. Ping-pong avoids sampling a texture while
+   * rendering into it.
+   */
+  private drawWithTrails(
+    rect: { x: number; y: number; width: number; height: number },
+    fade: number,
+    bg: [number, number, number],
+  ): void {
+    const gl = this.gl;
+    this.ensureTrailTargets(rect.width, rect.height, bg);
+    const textures = this.trailTextures;
+    const fbos = this.trailFbos;
+    if (!textures || !fbos) return;
+
+    const read = this.trailIndex;
+    const write = 1 - this.trailIndex;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[write]);
+    gl.viewport(0, 0, this.trailWidth, this.trailHeight);
+    gl.useProgram(this.postProgram);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, textures[read]);
+    gl.uniform1i(this.postUniforms.tex, 1);
+    gl.uniform1f(this.postUniforms.mix, fade);
+    gl.uniform3f(this.postUniforms.bg, bg[0], bg[1], bg[2]);
+    gl.bindVertexArray(this.postVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(
+      gl.SRC_ALPHA,
+      gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE,
+      gl.ONE_MINUS_SRC_ALPHA,
+    );
+    gl.useProgram(this.program);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.disable(gl.BLEND);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.displayWidth, this.displayHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(rect.x, rect.y, rect.width, rect.height);
+    gl.useProgram(this.postProgram);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, textures[write]);
+    gl.uniform1f(this.postUniforms.mix, 1);
+    gl.bindVertexArray(this.postVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    this.trailIndex = write;
+  }
+
+  /** (Re)allocate the ping-pong accumulation targets; clears trails on resize. */
+  private ensureTrailTargets(
+    width: number,
+    height: number,
+    bg: [number, number, number],
+  ): void {
+    const w = Math.max(1, width);
+    const h = Math.max(1, height);
+    if (this.trailTextures && this.trailWidth === w && this.trailHeight === h) {
+      return;
+    }
+
+    const gl = this.gl;
+    this.releaseTrailTargets();
+    this.trailWidth = w;
+    this.trailHeight = h;
+
+    const makeTarget = (): [WebGLTexture, WebGLFramebuffer] => {
+      const texture = mustCreate(gl.createTexture(), "trail texture");
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+      const fbo = mustCreate(gl.createFramebuffer(), "trail framebuffer");
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      gl.clearColor(bg[0], bg[1], bg[2], 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      return [texture, fbo];
+    };
+
+    const [texA, fboA] = makeTarget();
+    const [texB, fboB] = makeTarget();
+    this.trailTextures = [texA, texB];
+    this.trailFbos = [fboA, fboB];
+    this.trailIndex = 0;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clearColor(0, 0, 0, 1);
+  }
+
+  private releaseTrailTargets(): void {
+    const gl = this.gl;
+    if (this.trailTextures) {
+      gl.deleteTexture(this.trailTextures[0]);
+      gl.deleteTexture(this.trailTextures[1]);
+      this.trailTextures = null;
+    }
+    if (this.trailFbos) {
+      gl.deleteFramebuffer(this.trailFbos[0]);
+      gl.deleteFramebuffer(this.trailFbos[1]);
+      this.trailFbos = null;
+    }
+    this.trailWidth = 0;
+    this.trailHeight = 0;
+  }
+
   destroy(): void {
     const gl = this.gl;
+    this.releaseTrailTargets();
     gl.deleteTexture(this.texture);
     gl.deleteVertexArray(this.vao);
+    gl.deleteVertexArray(this.postVao);
+    gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.program);
+    gl.deleteProgram(this.postProgram);
   }
 
   private getUniformLocations(): UniformLocations {
@@ -495,27 +678,44 @@ export class WebGLRendererBackend implements RendererBackend {
         this.gl.getUniformLocation(this.program, "u_boidsMeanDir"),
         "u_boidsMeanDir uniform",
       ),
+      trailMode: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_trailMode"),
+        "u_trailMode uniform",
+      ),
     };
   }
 
-  private configureQuad(): void {
+  private getPostUniformLocations(): PostUniformLocations {
+    return {
+      tex: mustCreate(
+        this.gl.getUniformLocation(this.postProgram, "u_tex"),
+        "u_tex uniform",
+      ),
+      mix: mustCreate(
+        this.gl.getUniformLocation(this.postProgram, "u_mix"),
+        "u_mix uniform",
+      ),
+      bg: mustCreate(
+        this.gl.getUniformLocation(this.postProgram, "u_bg"),
+        "u_bg uniform",
+      ),
+    };
+  }
+
+  private createQuadVao(program: WebGLProgram): WebGLVertexArrayObject {
     const gl = this.gl;
-    const position = gl.createBuffer();
-    const positionLocation = gl.getAttribLocation(this.program, "a_position");
+    const positionLocation = gl.getAttribLocation(program, "a_position");
     if (positionLocation < 0) {
       throw new Error("WebGL2 renderer could not locate a_position attribute.");
     }
 
-    gl.bindVertexArray(this.vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW,
-    );
+    const vao = mustCreate(gl.createVertexArray(), "vertex array");
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
     gl.enableVertexAttribArray(positionLocation);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
+    return vao;
   }
 
   private configureTexture(channelCount: number): void {
@@ -603,7 +803,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private setUniforms(
     kernel: SimKernel,
     colourOptions: ColourMapOptions,
-    displayOptions: { dotSize: number },
+    displayOptions: DisplayOptions,
     mode: RenderMode,
     params: Record<string, number | boolean | string>,
     elapsedTime: number,
@@ -645,6 +845,7 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.boidsGlyph, isBoidsState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.boidsGlyphRadius, boidsGlyphRadius(params, displayOptions));
+    gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
     const meanDir = boidsMeanDirection(
       state,
       kernel.channelCount,
@@ -726,6 +927,22 @@ function presetIndex(preset: ColourPreset): number {
 
 function shouldSmoothSample(mode: RenderMode): boolean {
   return mode === "field" || mode === "smooth" || mode === "fractal";
+}
+
+/** Effective trail fade factor; trails apply to particle mode only. */
+function trailFadeFor(mode: RenderMode, displayOptions: DisplayOptions): number {
+  if (mode !== "particle") return 0;
+  const fade = displayOptions.trailFade;
+  if (typeof fade !== "number" || !Number.isFinite(fade) || fade <= 0) return 0;
+  return Math.min(0.985, fade);
+}
+
+/** Trail background: the boids glyph path paints its own dark blue; else black. */
+function backgroundFor(kernel: SimKernel): [number, number, number] {
+  if (isBoidsState(kernel)) {
+    return [5 / 255, 8 / 255, 18 / 255];
+  }
+  return [0, 0, 0];
 }
 
 function isBoidsState(kernel: SimKernel): boolean {

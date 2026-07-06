@@ -48,7 +48,7 @@ export async function paintKernelThumbnail(
     }
 
     const colourOptions = defaultColourOptionsFor(slug, kernel.channelCount);
-    const displayOptions = { dotSize: slug === "boids" ? 2 : 1 };
+    const displayOptions = { dotSize: slug === "boids" ? 2 : 1, trailFade: 0 };
 
     backend.draw({
       state: kernel.readState(),

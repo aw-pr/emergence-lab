@@ -149,7 +149,14 @@ export class CanvasRendererBackend implements RendererBackend {
       cellCount,
     );
 
-    ctx.fillStyle = "#050812";
+    // Trail persistence: a translucent background fill fades the previous
+    // frame instead of erasing it, the cheap canvas2d equivalent of the WebGL
+    // accumulate-and-fade pass.
+    const trailFade = Math.min(0.985, Math.max(0, displayOptions.trailFade || 0));
+    ctx.fillStyle =
+      trailFade > 0
+        ? `rgba(5, 8, 18, ${(1 - trailFade).toFixed(3)})`
+        : "#050812";
     ctx.fillRect(0, 0, this.gridWidth, this.gridHeight);
 
     for (let y = 0; y < this.gridHeight; y += 1) {

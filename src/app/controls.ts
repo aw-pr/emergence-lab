@@ -63,11 +63,15 @@ export interface ControlsOptions {
   /** Factory-default colour options, ignoring persistence. Used by "Reset to defaults". */
   defaultColourOptions: ColourMapOptions;
   initialDisplayOptions: DisplayOptions;
+  /** Factory-default display options, ignoring persistence. Used by "Reset to defaults". */
+  defaultDisplayOptions: DisplayOptions;
   initialResolution: ResolutionPreset;
   /** Factory-default resolution, ignoring persistence. Used by "Reset to defaults". */
   defaultResolution: ResolutionPreset;
   /** Show the simulation-resolution preset selector (omit for fractals). */
   showResolutionControl?: boolean;
+  /** Show the particle-trail fade slider (particle-mode sims only). */
+  showTrailControl?: boolean;
   callbacks: ControlsCallbacks;
   /** Mandelbrot / Julia / Burning Ship: palette cycle direction + key hint (does not duplicate cycle speed slider). */
   fractalPaletteCycleUi?: boolean;
@@ -88,10 +92,11 @@ export class ControlsPanel {
   private readonly initialStepsPerFrame: number;
   private readonly stepsControl: StepsControlOptions;
   private readonly defaultColourOptions: ColourMapOptions;
-  private readonly initialDisplayOptions: DisplayOptions;
+  private readonly defaultDisplayOptions: DisplayOptions;
   private readonly defaultParams: SimParams;
   private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
+  private readonly showTrailControl: boolean;
   private params: SimParams;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
@@ -137,10 +142,11 @@ export class ControlsPanel {
     this.initialStepsPerFrame = options.initialStepsPerFrame;
     this.stepsControl = options.stepsControl;
     this.defaultColourOptions = { ...options.defaultColourOptions };
-    this.initialDisplayOptions = { ...options.initialDisplayOptions };
+    this.defaultDisplayOptions = { ...options.defaultDisplayOptions };
     this.defaultParams = { ...options.defaultParams };
     this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
+    this.showTrailControl = options.showTrailControl ?? false;
     this.params = restorePersistedParams(
       options.slug,
       options.paramSchema,
@@ -617,6 +623,20 @@ export class ControlsPanel {
         },
       ),
     );
+    if (this.showTrailControl) {
+      section.appendChild(
+        this.buildColourRangeControl(
+          "Trail fade",
+          this.displayOptions.trailFade,
+          0,
+          0.98,
+          0.01,
+          (trailFade) => {
+            this.setDisplayOptions({ ...this.displayOptions, trailFade });
+          },
+        ),
+      );
+    }
 
     return section;
   }
@@ -796,7 +816,7 @@ export class ControlsPanel {
 
     this.syncStepsControl(this.initialStepsPerFrame);
     this.colourOptions = { ...this.defaultColourOptions };
-    this.displayOptions = { ...this.initialDisplayOptions };
+    this.displayOptions = { ...this.defaultDisplayOptions };
     this.resolution = this.defaultResolution;
     if (this.resolutionSelect) {
       this.resolutionSelect.value = this.defaultResolution;
@@ -866,6 +886,7 @@ export class ControlsPanel {
     this.syncColourRangeControl("Contrast", this.colourOptions.contrast);
     this.syncColourRangeControl("Palette steps", this.colourOptions.steps);
     this.syncColourRangeControl("Point size (px)", this.displayOptions.dotSize);
+    this.syncColourRangeControl("Trail fade", this.displayOptions.trailFade);
   }
 
   private syncColourRangeControl(label: string, value: number): void {
@@ -884,13 +905,18 @@ export class ControlsPanel {
   }
 
   private persistRenderOptions(): void {
-    saveRenderOptions(this.slug, { steps: this.colourOptions.steps });
+    saveRenderOptions(this.slug, {
+      steps: this.colourOptions.steps,
+      trailFade: this.displayOptions.trailFade,
+    });
   }
 
   private setDisplayOptions(next: DisplayOptions): void {
     this.displayOptions = {
       dotSize: Math.max(1, Math.min(6, Math.floor(next.dotSize))),
+      trailFade: Math.max(0, Math.min(0.985, next.trailFade)),
     };
+    this.persistRenderOptions();
     this.callbacks.onDisplayChange(this.displayOptions);
   }
 

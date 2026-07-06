@@ -3,6 +3,11 @@ import type { SimKernel, SimParams } from "./types.ts";
 
 export interface DisplayOptions {
   dotSize: number;
+  /**
+   * Particle-mode trail persistence: fraction of the previous frame kept each
+   * frame (accumulate + fade). 0 = off; ~0.90–0.96 leaves flowing ribbons.
+   */
+  trailFade: number;
 }
 
 export type RenderMode = "grid" | "field" | "smooth" | "fractal" | "particle";
