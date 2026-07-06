@@ -213,6 +213,58 @@ test("parameter changes affect the evolved state", () => {
   assert.notDeepEqual(changed, baseline);
 });
 
+test("applyImpulse swoops boids radially away from the point, deterministically", () => {
+  const width = 64;
+  const height = 64;
+  const px = 32;
+  const py = 32;
+  const radius = 12;
+  const channels = 4;
+
+  const radialOutwardSum = (state) => {
+    let sum = 0;
+    for (let cy = 0; cy < height; cy += 1) {
+      for (let cx = 0; cx < width; cx += 1) {
+        const i = (cy * width + cx) * channels;
+        const density = state[i];
+        if (density <= 0) continue;
+        const ox = cx - px;
+        const oy = cy - py;
+        const d = Math.hypot(ox, oy);
+        if (d === 0 || d > radius) continue;
+        sum += density * (state[i + 2] * (ox / d) + state[i + 3] * (oy / d));
+      }
+    }
+    return sum;
+  };
+
+  const kernel = new BoidsKernel();
+  kernel.init(width, height, { boidCount: 1500 });
+  const before = radialOutwardSum(Array.from(kernel.readState()));
+  kernel.applyImpulse(px, py, radius, 1);
+  const after = radialOutwardSum(Array.from(kernel.readState()));
+  assert.ok(after > before, "mean outward velocity increases after the swoop");
+
+  const twin = new BoidsKernel();
+  twin.init(width, height, { boidCount: 1500 });
+  twin.applyImpulse(px, py, radius, 1);
+  assert.deepEqual(
+    Array.from(kernel.readState()),
+    Array.from(twin.readState()),
+  );
+});
+
+test("applyImpulse is a safe no-op at zero strength and off-grid", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(48, 48, { boidCount: 800 });
+  const before = Array.from(kernel.readState());
+
+  kernel.applyImpulse(24, 24, 6, 0);
+  assert.deepEqual(Array.from(kernel.readState()), before);
+
+  assert.doesNotThrow(() => kernel.applyImpulse(-10, -10, 5, 1));
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new BoidsKernel();
   kernel.init(12, 10, {});

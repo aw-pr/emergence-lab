@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const DEFAULT_BOID_COUNT = 17777;
@@ -500,6 +501,61 @@ export class BoidsKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /**
+   * Pointer poke: a predator swoop. Boids inside the brush disc have their
+   * velocity kicked directly away from the point (radial repulsion with a soft
+   * falloff), then clamped back to max speed, so the flock scatters from the
+   * cursor. Distances use the torus metric to match the flocking rule. The grid
+   * is re-rasterised so a paused frame reflects the scatter. Allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0 || this.boidCount === 0) {
+      return;
+    }
+
+    const s = clamp(Number.isFinite(strength) ? strength : 0, 0, 1);
+    if (s <= 0) {
+      return;
+    }
+
+    const r = Math.max(1, radius);
+    const radiusSq = r * r;
+
+    for (let i = 0; i < this.boidCount; i += 1) {
+      const dx = torusDelta(x, this.x[i], this.width);
+      const dy = torusDelta(y, this.y[i], this.height);
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radiusSq) {
+        continue;
+      }
+
+      const dist = Math.sqrt(distSq);
+      let nx: number;
+      let ny: number;
+      if (dist > 1e-4) {
+        nx = dx / dist;
+        ny = dy / dist;
+      } else {
+        // Boid sitting on the point has no outward direction; scatter it along a
+        // deterministic pseudo-random heading instead.
+        const angle = hashAngle(i, this.stepCounter + 1);
+        nx = Math.cos(angle);
+        ny = Math.sin(angle);
+      }
+
+      const push = this.maxSpeed * (0.6 + 0.9 * (1 - dist / r)) * s;
+      const limited = limitVector(
+        this.vx[i] + nx * push,
+        this.vy[i] + ny * push,
+        this.maxSpeed,
+      );
+      this.vx[i] = limited[0];
+      this.vy[i] = limited[1];
+    }
+
+    this.rasterise();
   }
 
   destroy(): void {
