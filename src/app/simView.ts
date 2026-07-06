@@ -426,7 +426,9 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "gray-scott":
       return { initial: 1, control: balanced };
     case "belousov-zhabotinsky":
-      return { initial: 1.5, control: balanced };
+      // Slower default so the spiral fronts read as they unfurl; the finer
+      // (high-resolution) medium carries the detail.
+      return { initial: 1, control: balanced };
     case "abelian-sandpile":
       return { initial: 1, control: growth };
     case "diffusion-limited-aggregation":
@@ -528,6 +530,10 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
       // CPU convolution cost is cells x kernel taps; 384^2 keeps the default
       // regime at ~27 ms/step (30+ fps) in plain JS.
       return "performance";
+    case "belousov-zhabotinsky":
+      // Finer medium carries more spiral detail; paired with the slower default
+      // speed it stays smooth on the 3-channel CPU reaction step.
+      return "high";
     case "physarum":
       // Finer than the old balanced default for sharper veins, but the CPU 3×3
       // diffusion pass over the grid makes true ultra (~1 step/s) unusable, and
