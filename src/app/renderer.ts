@@ -1,6 +1,7 @@
 import { CanvasRendererBackend } from "./canvasRenderer.ts";
 import { DEFAULT_COLOUR_OPTIONS, type ColourMapOptions } from "./colormap.ts";
 import {
+  containRect,
   type DisplayOptions,
   type RenderMode,
   type RendererBackend,
@@ -190,6 +191,73 @@ export class Renderer {
     if (this.resolution === preset) return;
     this.resolution = preset;
     this.reinitGrid();
+  }
+
+  /** Whether the current kernel accepts pointer impulses (SimKernel.applyImpulse). */
+  supportsImpulse(): boolean {
+    return typeof (this.kernel as { applyImpulse?: unknown }).applyImpulse === "function";
+  }
+
+  /**
+   * Map a CSS-pixel pointer position to a grid cell and perturb the kernel under
+   * it. Reuses the same containRect letterbox maths as the backends, so the
+   * impulse lands under the visible cursor regardless of window size. Applied
+   * immediately (pointer events never overlap a step() on the main thread); a
+   * paused sim is redrawn so the perturbation shows at once. No-op when the
+   * kernel has no applyImpulse or the pointer is outside the letterboxed image.
+   */
+  applyPointerImpulse(clientX: number, clientY: number, strength = 1): boolean {
+    const apply = (this.kernel as {
+      applyImpulse?: (x: number, y: number, radius: number, strength: number) => void;
+    }).applyImpulse;
+    if (typeof apply !== "function") return false;
+
+    const cell = this.pointerToCell(clientX, clientY);
+    if (!cell) return false;
+
+    const radius = this.impulseRadiusCells();
+    const s = Math.max(0, Math.min(1, strength));
+    apply.call(this.kernel, cell.x, cell.y, radius, s);
+    if (!this.running) this.draw();
+    return true;
+  }
+
+  /**
+   * CSS pixel -> grid cell through the letterbox contain-rect. The WebGL backend
+   * samples the state texture with row 0 at the bottom, so its vertical axis is
+   * flipped relative to the canvas2d backend; mirror Y for it so the poke tracks
+   * the visible cursor. Returns null when the pointer is off the drawn image.
+   */
+  private pointerToCell(
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } | null {
+    if (this.gridWidth <= 0 || this.gridHeight <= 0) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    const deviceX = (clientX - rect.left) * (this.displayWidth / rect.width);
+    const deviceY = (clientY - rect.top) * (this.displayHeight / rect.height);
+    const contain = containRect(
+      this.displayWidth,
+      this.displayHeight,
+      this.gridWidth,
+      this.gridHeight,
+    );
+    const u = (deviceX - contain.x) / contain.width;
+    const v = (deviceY - contain.y) / contain.height;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+
+    const x = u * this.gridWidth;
+    const yTop = v * this.gridHeight;
+    const y = this.backend.kind === "webgl2" ? this.gridHeight - yTop : yTop;
+    return { x, y };
+  }
+
+  /** Pointer brush radius: ~3% of the shorter grid axis, clamped to [4, 64] cells. */
+  private impulseRadiusCells(): number {
+    const shorter = Math.min(this.gridWidth, this.gridHeight);
+    return Math.max(4, Math.min(64, Math.round(shorter * 0.03)));
   }
 
   destroy(): void {

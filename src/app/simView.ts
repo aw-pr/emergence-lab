@@ -27,6 +27,7 @@ import {
   attachFractalPaletteCycleKeyboard,
   isFractalSlug,
 } from "./fractalCanvas.ts";
+import { attachPointerImpulse } from "./pointerImpulse.ts";
 import {
   getRenderMode,
   shouldUseSmoothCanvasPresentation,
@@ -215,6 +216,13 @@ export async function renderSimView(
 
   let detachFractalInteractions: (() => void) | undefined;
   let detachFractalPaletteKeys: (() => void) | undefined;
+  let detachPointerImpulse: (() => void) | undefined;
+  if (!fractal && renderer.supportsImpulse()) {
+    // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
+    // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
+    layout.canvas.classList.add("sim-view__canvas--interactive");
+    detachPointerImpulse = attachPointerImpulse(layout.canvas, renderer);
+  }
   if (fractal) {
     layout.canvas.classList.add("sim-view__canvas--fractal");
     const pushFractalParams = (next: SimParams): void => {
@@ -240,6 +248,7 @@ export async function renderSimView(
     dispose() {
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
+      detachPointerImpulse?.();
       renderer.destroy();
     },
   };

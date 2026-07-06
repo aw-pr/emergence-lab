@@ -1,5 +1,5 @@
 /**
- * Local mirror of the kernel/renderer contract defined in docs/INTERFACE.md (v1.0).
+ * Local mirror of the kernel/renderer contract defined in docs/INTERFACE.md (v1.1.0).
  *
  * The contract itself is owned by Claude; this file only restates the types the
  * renderer needs to consume kernels. Do not edit the shape without first
@@ -29,6 +29,12 @@ export interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  /**
+   * Optional pointer-interaction hook (v1.1.0). Perturbs the simulation under
+   * the pointer; x/y are grid cells, radius is in cells, strength is [0, 1].
+   * Kernels without it are simply not interactive. See docs/INTERFACE.md.
+   */
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 export type SimKernelConstructor = new () => SimKernel;

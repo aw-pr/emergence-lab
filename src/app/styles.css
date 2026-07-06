@@ -302,6 +302,11 @@ code {
   image-rendering: auto;
 }
 
+.sim-view__canvas--interactive {
+  touch-action: none;
+  cursor: crosshair;
+}
+
 .sim-view__canvas--fractal {
   touch-action: none;
   cursor: grab;
