@@ -190,6 +190,50 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  physarum: [
+    {
+      id: "veins",
+      label: "Veins",
+      params: {
+        agentCount: 32000,
+        sensorAngle: 22.5,
+        sensorDistance: 9,
+        turnSpeed: 22.5,
+        moveSpeed: 1,
+        depositAmount: 0.24,
+        evaporation: 0.9,
+        stepsPerFrame: 1,
+      },
+    },
+    {
+      id: "coral-fans",
+      label: "Coral fans",
+      params: {
+        agentCount: 26000,
+        sensorAngle: 15,
+        sensorDistance: 17,
+        turnSpeed: 14,
+        moveSpeed: 1.35,
+        depositAmount: 0.2,
+        evaporation: 0.94,
+        stepsPerFrame: 1,
+      },
+    },
+    {
+      id: "filigree-web",
+      label: "Filigree web",
+      params: {
+        agentCount: 60000,
+        sensorAngle: 38,
+        sensorDistance: 5,
+        turnSpeed: 34,
+        moveSpeed: 0.8,
+        depositAmount: 0.12,
+        evaporation: 0.96,
+        stepsPerFrame: 1,
+      },
+    },
+  ],
   "lorenz-attractor": [
     {
       id: "classic",
