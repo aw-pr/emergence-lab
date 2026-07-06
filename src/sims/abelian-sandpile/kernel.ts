@@ -24,17 +24,16 @@ interface SimKernel {
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
-// A larger default pile so the settled mandala fills most of the canvas height
-// (radius grows ~sqrt of the grain count). The topple budget and cap are raised
-// well above the old values so it reaches that full size in ~10s rather than
-// creeping there over a minute — the slow relaxation, not the grain count, was
-// why the pile looked small.
-const DEFAULT_INITIAL_PILE = 2000000;
+// A large default pile so the settled mandala fills a big share of the frame
+// (final radius grows ~sqrt of the grain count). The per-step topple budget is
+// kept modest so each frame stays light: big avalanches spread across several
+// frames instead of landing in one heavy hitch, which reads as smoother growth.
+const DEFAULT_INITIAL_PILE = 3000000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
 const DEFAULT_GRAINS_PER_STEP = 1;
-const DEFAULT_TOPPLES_PER_STEP = 1500000;
-const MAX_INITIAL_PILE = 8000000;
-const MAX_TOPPLES_PER_STEP = 3000000;
+const DEFAULT_TOPPLES_PER_STEP = 1000000;
+const MAX_INITIAL_PILE = 16000000;
+const MAX_TOPPLES_PER_STEP = 6000000;
 const CHANNEL_COUNT = 1;
 
 function numberParam(
