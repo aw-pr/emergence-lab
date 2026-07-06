@@ -30,11 +30,17 @@ const DEFAULT_SURVIVE_MIN = 2;
 const DEFAULT_SURVIVE_MAX = 3;
 const DEFAULT_SEED_DENSITY = 0.28;
 // Pure Conway always relaxes into mostly-static "ash" within a couple of
-// thousand generations. The spark periodically sprinkles a sparse layer of fresh
-// cells, so the board keeps spawning gliders and activity indefinitely. Set the
-// spark rate to 0 for purist B3/S23.
+// thousand generations. The spark drip continuously seeds small random soup
+// clusters — each burns locally for a while and throws gliders — so the board
+// keeps evolving indefinitely without the synchronized full-board flash a
+// periodic bulk re-seed produces. Set the spark rate to 0 for purist B3/S23.
 const DEFAULT_SPARK_RATE = 0.04;
-const SPARK_INTERVAL = 24;
+/** Cells of grid area per unit sparkRate that yield one cluster per
+ * generation: clusters/gen = sparkRate x cellCount / SPARK_AREA_PER_CLUSTER.
+ * At the default rate a 512x512 board seeds ~1.7 clusters each generation. */
+const SPARK_AREA_PER_CLUSTER = 6144;
+const SPARK_PATCH = 4;
+const SPARK_FILL = 0.45;
 const CHANNEL_COUNT = 1;
 const DEFAULT_AGE_SHADING = true;
 
@@ -91,7 +97,7 @@ function coordinateHash(x: number, y: number): number {
   return (hash >>> 0) / 0x100000000;
 }
 
-/** Deterministic per-cell, per-epoch unit value for the spark re-seed layer. */
+/** Deterministic hash to a unit value for the spark cluster drip. */
 function sparkHash(x: number, y: number, epoch: number): number {
   let hash = Math.imul(x + 0x7f4a7c15, 0x9e3779b1);
   hash ^= Math.imul(y + 0x165667b1, 0x85ebca6b);
@@ -216,6 +222,9 @@ export class GameOfLifeKernel implements SimKernel {
   private sparkRate = DEFAULT_SPARK_RATE;
   private ageShading = DEFAULT_AGE_SHADING;
   private stepCounter = 0;
+  // Fractional spark-cluster budget carried between generations, so cluster
+  // spawning is smooth at any rate and grid size (no periodic bursts).
+  private sparkAccumulator = 0;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -274,6 +283,7 @@ export class GameOfLifeKernel implements SimKernel {
       DEFAULT_AGE_SHADING,
     );
     this.stepCounter = 0;
+    this.sparkAccumulator = 0;
 
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
@@ -330,16 +340,27 @@ export class GameOfLifeKernel implements SimKernel {
     }
 
     this.stepCounter += 1;
-    if (this.sparkRate > 0 && this.stepCounter % SPARK_INTERVAL === 0) {
-      const epoch = (this.stepCounter / SPARK_INTERVAL) >>> 0;
-      const rate = this.sparkRate;
-      for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-          const index = y * width + x;
-          if (aliveNext[index] === 0 && sparkHash(x, y, epoch) < rate) {
-            aliveNext[index] = 1;
+    if (this.sparkRate > 0) {
+      const cellCount = width * height;
+      this.sparkAccumulator +=
+        (this.sparkRate * cellCount) / SPARK_AREA_PER_CLUSTER;
+      const gen = this.stepCounter;
+      let cluster = 0;
+      for (; this.sparkAccumulator >= 1; this.sparkAccumulator -= 1) {
+        const originX = Math.floor(sparkHash(cluster, 0x51ed, gen) * width);
+        const originY = Math.floor(sparkHash(cluster, 0xa11ce, gen) * height);
+        for (let dy = 0; dy < SPARK_PATCH; dy += 1) {
+          for (let dx = 0; dx < SPARK_PATCH; dx += 1) {
+            const bit = cluster * SPARK_PATCH * SPARK_PATCH + dy * SPARK_PATCH + dx;
+            if (sparkHash(bit, 0x5eed, gen) >= SPARK_FILL) {
+              continue;
+            }
+            const px = (originX + dx) % width;
+            const py = (originY + dy) % height;
+            aliveNext[py * width + px] = 1;
           }
         }
+        cluster += 1;
       }
     }
 
@@ -429,6 +450,7 @@ export class GameOfLifeKernel implements SimKernel {
     this.ghostTicks = new Float32Array(0);
     this.output = new Float32Array(0);
     this.stepCounter = 0;
+    this.sparkAccumulator = 0;
   }
 }
 
