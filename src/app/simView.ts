@@ -485,6 +485,7 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
     case "diffusion-limited-aggregation":
     case "abelian-sandpile":
     case "boids":
+    case "cyclic-ca":
       return "ultra";
     default:
       return DEFAULT_RESOLUTION;

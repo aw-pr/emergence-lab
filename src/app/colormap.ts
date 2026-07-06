@@ -191,6 +191,10 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
+    case "cyclic-ca":
+      // A cyclic-friendly palette may land later from another branch; plasma
+      // is a reasonable non-cyclic stand-in until then.
+      return { ...base, preset: "plasma", contrast: 1.2 };
     default:
       break;
   }

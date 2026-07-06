@@ -213,6 +213,18 @@ export const REGISTRY: readonly SimEntry[] = [
       return pickKernelExport(mod as Record<string, unknown>);
     },
   },
+  {
+    slug: "cyclic-ca",
+    name: "Cyclic Cellular Automaton",
+    family: "Cellular Automata",
+    subtitle: "Rock-paper-scissors states chase each other into spiral waves.",
+    description:
+      "Each cell's state is consumed by its cyclic successor once enough neighbours reach it—random noise resolves into droplets, demons, and full-screen spirals.",
+    load: async () => {
+      const mod = await import("../sims/cyclic-ca/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
 ];
 
 export function findEntry(slug: string): SimEntry | undefined {
