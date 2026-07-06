@@ -6,6 +6,8 @@ const {
   selfTest,
 } = require("../../../.test-build/sims/lorenz-attractor/kernel.js");
 
+const ATTRACTORS = ["lorenz", "rossler", "thomas", "aizawa", "halvorsen"];
+
 function defaultsFromSchema(kernel) {
   return Object.fromEntries(
     kernel.paramSchema.map((descriptor) => [
@@ -33,17 +35,26 @@ function occupiedCells(state) {
 test("metadata matches the renderer contract", () => {
   const kernel = new LorenzAttractorKernel();
 
-  assert.equal(kernel.name, "Lorenz Attractor");
+  assert.equal(kernel.name, "Strange Attractor");
   assert.equal(kernel.channelCount, 1);
   assert.deepEqual(kernel.channelLabels, ["Density"]);
   assert.deepEqual(kernel.channelRanges, [[0, 1]]);
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["sigma", "rho", "beta", "stepsPerFrame", "fade"],
+    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade", "colourByHeight"],
   );
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.type === "enum") {
+      assert.ok(Array.isArray(descriptor.options));
+      assert.ok(descriptor.options.includes(descriptor.default));
+      continue;
+    }
+    if (descriptor.type === "boolean") {
+      assert.equal(typeof descriptor.default, "boolean");
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -52,6 +63,15 @@ test("metadata matches the renderer contract", () => {
     assert.ok(descriptor.min <= descriptor.default);
     assert.ok(descriptor.default <= descriptor.max);
   }
+});
+
+test("attractor enum offers the whole family with lorenz default", () => {
+  const kernel = new LorenzAttractorKernel();
+  const descriptor = kernel.paramSchema.find((d) => d.key === "attractor");
+
+  assert.ok(descriptor);
+  assert.equal(descriptor.default, "lorenz");
+  assert.deepEqual(Array.from(descriptor.options), ATTRACTORS);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
@@ -101,6 +121,90 @@ test("repeated runs are deterministic for the same params and steps", () => {
   };
 
   assert.deepEqual(runKernel(params, 180), runKernel(params, 180));
+});
+
+test("every attractor stays bounded and is deterministic", () => {
+  for (const attractor of ATTRACTORS) {
+    const params = { attractor, stepsPerFrame: 12, fade: 0.99 };
+
+    const first = runKernel(params, 200);
+    const second = runKernel(params, 200);
+
+    assert.deepEqual(first, second, `${attractor} must be deterministic`);
+    assert.ok(
+      first.every((value) => Number.isFinite(value) && value >= 0 && value <= 1),
+      `${attractor} must stay bounded in [0, 1]`,
+    );
+    assert.ok(
+      occupiedCells(first) > 1,
+      `${attractor} must trace a visible orbit`,
+    );
+  }
+});
+
+test("switching attractor changes the evolved field", () => {
+  const lorenz = runKernel({ attractor: "lorenz" }, 200);
+
+  for (const attractor of ["rossler", "thomas", "aizawa", "halvorsen"]) {
+    assert.notDeepEqual(
+      runKernel({ attractor }, 200),
+      lorenz,
+      `${attractor} should differ from lorenz`,
+    );
+  }
+});
+
+test("unknown attractor falls back to the lorenz default", () => {
+  assert.deepEqual(
+    runKernel({ attractor: "not-an-attractor" }),
+    runKernel({ attractor: "lorenz" }),
+  );
+});
+
+test("colourByHeight defaults on and modulates the deposited field", () => {
+  const descriptor = new LorenzAttractorKernel().paramSchema.find(
+    (d) => d.key === "colourByHeight",
+  );
+  assert.ok(descriptor);
+  assert.equal(descriptor.type, "boolean");
+  assert.equal(descriptor.default, true);
+
+  for (const attractor of ATTRACTORS) {
+    const on = runKernel({ attractor, colourByHeight: true }, 200);
+    const off = runKernel({ attractor, colourByHeight: false }, 200);
+
+    assert.notDeepEqual(
+      on,
+      off,
+      `${attractor} height colouring should change deposits`,
+    );
+
+    // Height colouring only scales each deposit down (floor 0.35, span 0.65),
+    // so total density can never exceed the flat-deposit path.
+    const sum = (state) => state.reduce((total, value) => total + value, 0);
+    assert.ok(
+      sum(off) >= sum(on) - 1e-6,
+      `${attractor} flat deposits should total >= height-coloured deposits`,
+    );
+    assert.ok(
+      on.every((value) => Number.isFinite(value) && value >= 0 && value <= 1),
+      `${attractor} height-coloured field must stay bounded`,
+    );
+  }
+});
+
+test("colourByHeight off is deterministic and matches the schema-default toggle", () => {
+  const off = runKernel({ attractor: "lorenz", colourByHeight: false }, 200);
+
+  assert.deepEqual(
+    off,
+    runKernel({ attractor: "lorenz", colourByHeight: false }, 200),
+  );
+  // A non-boolean toggle falls back to the default (on), so it must differ.
+  assert.notDeepEqual(
+    off,
+    runKernel({ attractor: "lorenz", colourByHeight: "nope" }, 200),
+  );
 });
 
 test("selfTest passes", () => {

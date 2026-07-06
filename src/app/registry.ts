@@ -119,11 +119,11 @@ export const REGISTRY: readonly SimEntry[] = [
   },
   {
     slug: "lorenz-attractor",
-    name: "Lorenz Attractor",
+    name: "Strange Attractors",
     family: "Chaotic Systems",
-    subtitle: "A three-variable flow traces the butterfly strange attractor.",
+    subtitle: "A gallery of three-variable flows tracing strange attractors.",
     description:
-      "The classic chaotic flow in three dimensions. Follow a trajectory tracing the butterfly-shaped strange attractor.",
+      "Pick an attractor—Lorenz butterfly, Rössler spiral, Thomas coil, Aizawa spindle or Halvorsen bloom—and follow a single trajectory trace out its shape.",
     load: async () => {
       const mod = await import("../sims/lorenz-attractor/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);
