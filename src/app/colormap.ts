@@ -183,6 +183,10 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":
       return { ...base, preset: "inferno", gamma: 0.7, contrast: 1.4 };
+    case "lenia":
+      // Viridis with a mid-tone lift: organism skirts glow teal-green over
+      // the near-black background while saturated cores read yellow.
+      return { ...base, preset: "viridis", gamma: 0.9, contrast: 1.35 };
     case "lorenz-attractor":
       return { ...base, preset: "inferno", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":

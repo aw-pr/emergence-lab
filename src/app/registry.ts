@@ -237,6 +237,18 @@ export const REGISTRY: readonly SimEntry[] = [
       return pickKernelExport(mod as Record<string, unknown>);
     },
   },
+  {
+    slug: "lenia",
+    name: "Lenia",
+    family: "Cellular Automata",
+    subtitle: "A continuous Game of Life where soft blobs condense and glide.",
+    description:
+      "Continuous-state cellular automaton: a ring kernel and a Gaussian growth rule turn scattered blobs into self-organising creatures.",
+    load: async () => {
+      const mod = await import("../sims/lenia/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
 ];
 
 export function findEntry(slug: string): SimEntry | undefined {

@@ -509,6 +509,23 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { states: 12, threshold: 2, neighbourhood: "vonNeumann" },
     },
   ],
+  lenia: [
+    {
+      id: "orbium-soup",
+      label: "Orbium soup",
+      params: { mu: 0.15, sigma: 0.017, dt: 0.1, radius: 10, stepsPerFrame: 1 },
+    },
+    {
+      id: "coral-growth",
+      label: "Coral growth",
+      params: { mu: 0.14, sigma: 0.016, dt: 0.08, radius: 9, stepsPerFrame: 1 },
+    },
+    {
+      id: "geminium-storm",
+      label: "Geminium storm",
+      params: { mu: 0.16, sigma: 0.02, dt: 0.12, radius: 10, stepsPerFrame: 1 },
+    },
+  ],
 };
 
 export function presetsFor(slug: string): readonly ParamPreset[] {
