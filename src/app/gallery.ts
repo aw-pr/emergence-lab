@@ -1,12 +1,23 @@
 import { REGISTRY, type SimEntry } from "./registry.ts";
-import { paintKernelThumbnail } from "./thumbnail.ts";
 
 const UNGROUPED_FAMILY = "Other";
 
-/** Physical thumbnail canvas size (device pixels). Deliberately small and
- * cheap — this is a still, not a live sim. */
-const THUMB_WIDTH = 320;
-const THUMB_HEIGHT = 200;
+/** Families are ordered by this priority, then by registry-encounter order.
+ * Swarm & Flocking leads. */
+const FAMILY_PRIORITY: readonly string[] = ["Swarm & Flocking"];
+
+/** A single gallery card. One sim entry yields one card, unless it declares
+ * variants (e.g. each strange attractor), in which case it yields one per
+ * variant. */
+interface CardModel {
+  href: string;
+  name: string;
+  blurb?: string;
+  family: string;
+  /** Basename of the pre-rendered still in /thumbnails (see
+   * scripts/generate-thumbnails.mjs). */
+  thumbKey: string;
+}
 
 export function renderGallery(container: HTMLElement): void {
   container.innerHTML = "";
@@ -29,77 +40,83 @@ export function renderGallery(container: HTMLElement): void {
 
   page.appendChild(header);
 
-  const observer = createThumbnailObserver();
-
-  for (const group of groupByFamily(REGISTRY)) {
-    page.appendChild(renderFamilyGroup(group, observer));
+  const grid = document.createElement("ul");
+  grid.className = "gallery__grid";
+  for (const card of orderCards(buildCards(REGISTRY))) {
+    grid.appendChild(renderCard(card));
   }
+  page.appendChild(grid);
 
   container.appendChild(page);
 }
 
-interface FamilyGroup {
-  family: string;
-  entries: readonly SimEntry[];
-}
-
-function groupByFamily(entries: readonly SimEntry[]): FamilyGroup[] {
-  const order: string[] = [];
-  const byFamily = new Map<string, SimEntry[]>();
-
+function buildCards(entries: readonly SimEntry[]): CardModel[] {
+  const cards: CardModel[] = [];
   for (const entry of entries) {
     const family = entry.family ?? UNGROUPED_FAMILY;
-    if (!byFamily.has(family)) {
-      byFamily.set(family, []);
-      order.push(family);
+    if (entry.variants && entry.variants.length > 0) {
+      for (const variant of entry.variants) {
+        cards.push({
+          href: `#/${entry.slug}/${variant.variant}`,
+          name: variant.name,
+          blurb: variant.subtitle ?? variant.description,
+          family,
+          thumbKey: `${entry.slug}__${variant.variant}`,
+        });
+      }
+    } else {
+      cards.push({
+        href: `#/${entry.slug}`,
+        name: entry.name,
+        blurb: entry.subtitle ?? entry.description,
+        family,
+        thumbKey: entry.slug,
+      });
     }
-    byFamily.get(family)!.push(entry);
   }
-
-  return order.map((family) => ({ family, entries: byFamily.get(family)! }));
+  return cards;
 }
 
-function renderFamilyGroup(
-  group: FamilyGroup,
-  observer: IntersectionObserver | null,
-): HTMLElement {
-  const section = document.createElement("section");
-  section.className = "gallery__family";
-
-  const heading = document.createElement("h2");
-  heading.className = "gallery__family-heading";
-  heading.textContent = group.family;
-  section.appendChild(heading);
-
-  const grid = document.createElement("ul");
-  grid.className = "gallery__grid";
-
-  for (const entry of group.entries) {
-    grid.appendChild(renderCard(entry, observer));
+/** Group cards by family so families stay contiguous in the single grid, with
+ * the priority families first. A stable sort preserves registry order within
+ * and between equal-rank families. */
+function orderCards(cards: readonly CardModel[]): CardModel[] {
+  const familyOrder: string[] = [];
+  for (const card of cards) {
+    if (!familyOrder.includes(card.family)) familyOrder.push(card.family);
   }
+  familyOrder.sort((a, b) => familyRank(a) - familyRank(b));
 
-  section.appendChild(grid);
-  return section;
+  return familyOrder.flatMap((family) =>
+    cards.filter((card) => card.family === family),
+  );
 }
 
-function renderCard(
-  entry: SimEntry,
-  observer: IntersectionObserver | null,
-): HTMLLIElement {
-  const card = document.createElement("li");
-  card.className = "gallery__card";
+function familyRank(family: string): number {
+  const index = FAMILY_PRIORITY.indexOf(family);
+  return index === -1 ? FAMILY_PRIORITY.length : index;
+}
+
+function renderCard(card: CardModel): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className = "gallery__card";
 
   const link = document.createElement("a");
   link.className = "gallery__link";
-  link.href = `#/${entry.slug}`;
+  link.href = card.href;
 
   const thumb = document.createElement("div");
   thumb.className = "gallery__thumb";
-  thumb.dataset.slug = entry.slug;
 
-  const placeholder = document.createElement("div");
-  placeholder.className = "gallery__thumb-placeholder";
-  thumb.appendChild(placeholder);
+  const img = document.createElement("img");
+  img.className = "gallery__thumb-img";
+  img.src = `thumbnails/${card.thumbKey}.png`;
+  img.alt = "";
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.width = 640;
+  img.height = 400;
+  thumb.appendChild(img);
 
   link.appendChild(thumb);
 
@@ -107,70 +124,22 @@ function renderCard(
   body.className = "gallery__card-body";
 
   const name = document.createElement("h3");
-  name.textContent = entry.name;
+  name.textContent = card.name;
   body.appendChild(name);
 
-  if (entry.description) {
+  const tag = document.createElement("span");
+  tag.className = "gallery__tag";
+  tag.textContent = card.family;
+  body.appendChild(tag);
+
+  if (card.blurb) {
     const desc = document.createElement("p");
-    desc.textContent = entry.description;
+    desc.textContent = card.blurb;
     body.appendChild(desc);
   }
 
   link.appendChild(body);
-  card.appendChild(link);
+  item.appendChild(link);
 
-  if (observer) {
-    observer.observe(thumb);
-  } else {
-    // No IntersectionObserver support: just load it directly.
-    void loadThumbnail(entry.slug, thumb, placeholder);
-  }
-
-  return card;
-}
-
-function createThumbnailObserver(): IntersectionObserver | null {
-  if (typeof IntersectionObserver === "undefined") return null;
-
-  const observer = new IntersectionObserver(
-    (entries, obs) => {
-      for (const observed of entries) {
-        if (!observed.isIntersecting) continue;
-        const el = observed.target as HTMLElement;
-        obs.unobserve(el);
-        const slug = el.dataset.slug;
-        const placeholder = el.querySelector<HTMLElement>(
-          ".gallery__thumb-placeholder",
-        );
-        if (slug) {
-          void loadThumbnail(slug, el, placeholder);
-        }
-      }
-    },
-    { rootMargin: "200px" },
-  );
-
-  return observer;
-}
-
-async function loadThumbnail(
-  slug: string,
-  thumbContainer: HTMLElement,
-  placeholder: HTMLElement | null,
-): Promise<void> {
-  const canvas = document.createElement("canvas");
-  canvas.width = THUMB_WIDTH;
-  canvas.height = THUMB_HEIGHT;
-  canvas.className = "gallery__thumb-canvas";
-
-  try {
-    await paintKernelThumbnail(slug, canvas);
-    thumbContainer.replaceChildren(canvas);
-    thumbContainer.classList.add("gallery__thumb--ready");
-  } catch (error) {
-    // Degrade gracefully: keep the text-only card, drop the broken thumbnail.
-    console.warn(`emergence-lab: thumbnail failed for "${slug}"`, error);
-    placeholder?.remove();
-    thumbContainer.classList.add("gallery__thumb--failed");
-  }
+  return item;
 }

@@ -51,40 +51,25 @@ code {
 /* ---------- Gallery ---------- */
 
 .gallery {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 64px 24px 96px;
+  padding: 40px 24px 72px;
 }
 
 .gallery__header {
-  margin-bottom: 40px;
+  margin-bottom: 28px;
 }
 
 .gallery__header h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
+  margin: 0 0 6px;
+  font-size: 28px;
   letter-spacing: -0.01em;
 }
 
 .gallery__subtitle {
   margin: 0;
   color: var(--fg-dim);
-  font-size: 16px;
-}
-
-.gallery__family {
-  margin-bottom: 44px;
-}
-
-.gallery__family-heading {
-  margin: 0 0 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
   font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--fg-dim);
 }
 
 .gallery__grid {
@@ -92,8 +77,8 @@ code {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
 }
 
 .gallery__card {
@@ -126,57 +111,47 @@ code {
   overflow: hidden;
 }
 
-.gallery__thumb-placeholder {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    120deg,
-    var(--bg-elev) 0%,
-    var(--bg-elev-2) 50%,
-    var(--bg-elev) 100%
-  );
-  background-size: 200% 100%;
-  animation: gallery-shimmer 1.6s ease-in-out infinite;
-}
-
-.gallery__thumb--ready .gallery__thumb-placeholder {
-  display: none;
-}
-
-.gallery__thumb--failed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gallery__thumb-canvas {
+.gallery__thumb-img {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-@keyframes gallery-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  object-fit: cover;
 }
 
 .gallery__card-body {
-  padding: 16px 20px 20px;
+  padding: 10px 12px 12px;
 }
 
 .gallery__card-body h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.gallery__tag {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
 }
 
 .gallery__card-body p {
   margin: 0;
   color: var(--fg-dim);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.4;
+  /* Clamp to keep card heights even across long and short blurbs. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ---------- Sim view ---------- */
