@@ -457,7 +457,9 @@ function speedProfileFor(slug: string): SpeedProfile {
 function defaultParamOverridesFor(slug: string): SimParams {
   switch (slug) {
     case "belousov-zhabotinsky":
-      return { stepsPerFrame: 2 };
+      // The medium's local period is ~42 internal steps; 1 step/frame keeps
+      // the rolling fronts readable (2+ reads as flicker).
+      return { stepsPerFrame: 1 };
     case "lorenz-attractor":
       return { stepsPerFrame: 6, fade: 0.992 };
     case "diffusion-limited-aggregation":

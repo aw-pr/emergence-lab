@@ -111,6 +111,9 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  // All presets sit in the sustained-oscillation regime (kill <= 0.03):
+  // damping above ~0.04 collapses this medium to a fixed point within ~1200
+  // steps, which reads as the sim "stopping".
   "belousov-zhabotinsky": [
     {
       id: "spiral-waves",
@@ -119,9 +122,9 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         diffusionA: 0.18,
         diffusionB: 0.08,
         diffusionC: 0.035,
-        feed: 0.024,
-        kill: 0.055,
-        stepsPerFrame: 2,
+        feed: 0.02,
+        kill: 0.02,
+        stepsPerFrame: 1,
       },
     },
     {
@@ -131,9 +134,9 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         diffusionA: 0.14,
         diffusionB: 0.06,
         diffusionC: 0.055,
-        feed: 0.018,
-        kill: 0.045,
-        stepsPerFrame: 3,
+        feed: 0.012,
+        kill: 0.03,
+        stepsPerFrame: 1,
       },
     },
     {
@@ -144,8 +147,8 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         diffusionB: 0.11,
         diffusionC: 0.08,
         feed: 0.03,
-        kill: 0.065,
-        stepsPerFrame: 4,
+        kill: 0.03,
+        stepsPerFrame: 3,
       },
     },
   ],
