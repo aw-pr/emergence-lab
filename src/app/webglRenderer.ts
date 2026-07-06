@@ -31,6 +31,7 @@ uniform float u_gamma;
 uniform float u_contrast;
 uniform bool u_paletteCycleReverse;
 uniform bool u_paletteCyclic;
+uniform int u_steps;
 uniform int u_dotRadius;
 uniform bool u_smoothSampling;
 uniform float u_palettePhase;
@@ -159,8 +160,15 @@ float signalAt(vec4 raw) {
   return clamp01(signal);
 }
 
+float quantise(float t) {
+  if (u_steps <= 0) return t;
+  if (u_steps == 1) return 0.0;
+  float n = float(u_steps);
+  return clamp01(floor(clamp01(t) * n) / (n - 1.0));
+}
+
 vec3 singleChannelColour(float t) {
-  float base = clamp01(t);
+  float base = quantise(clamp01(t));
   float shifted;
   if (u_palettePhase == 0.0) {
     shifted = base;
@@ -313,6 +321,7 @@ interface UniformLocations {
   contrast: WebGLUniformLocation;
   paletteCycleReverse: WebGLUniformLocation;
   paletteCyclic: WebGLUniformLocation;
+  steps: WebGLUniformLocation;
   dotRadius: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
@@ -457,6 +466,10 @@ export class WebGLRendererBackend implements RendererBackend {
       paletteCyclic: mustCreate(
         this.gl.getUniformLocation(this.program, "u_paletteCyclic"),
         "u_paletteCyclic uniform",
+      ),
+      steps: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_steps"),
+        "u_steps uniform",
       ),
       dotRadius: mustCreate(
         this.gl.getUniformLocation(this.program, "u_dotRadius"),
@@ -618,6 +631,7 @@ export class WebGLRendererBackend implements RendererBackend {
       colourOptions.paletteCycleReverse ? 1 : 0,
     );
     gl.uniform1i(this.uniforms.paletteCyclic, isCyclic(colourOptions.preset) ? 1 : 0);
+    gl.uniform1i(this.uniforms.steps, Math.max(0, Math.floor(colourOptions.steps || 0)));
     gl.uniform1i(
       this.uniforms.dotRadius,
       mode === "particle" ? Math.floor(displayOptions.dotSize / 2) : 0,

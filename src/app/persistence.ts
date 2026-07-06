@@ -123,6 +123,50 @@ export function clearValues(slug: string): void {
   removeStorage(valuesKey(slug));
 }
 
+/**
+ * Renderer-side visual options that live outside the kernel's SimParams:
+ * palette quantisation and (later) trail/bloom post-processing. Persisted
+ * separately so the colour/effects panel survives reload without changing how
+ * the core colour controls (gamma/contrast/preset) behave.
+ */
+export interface RenderOptionsStore {
+  steps?: number;
+}
+
+const RENDER_PREFIX = "el:render";
+
+function renderKey(slug: string): string {
+  return `${RENDER_PREFIX}:${slug}`;
+}
+
+export function loadRenderOptions(slug: string): RenderOptionsStore | null {
+  const raw = readStorage(renderKey(slug));
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    const out: RenderOptionsStore = {};
+    if (typeof parsed.steps === "number" && Number.isFinite(parsed.steps)) {
+      out.steps = parsed.steps;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+export function saveRenderOptions(slug: string, options: RenderOptionsStore): void {
+  writeStorage(renderKey(slug), JSON.stringify(options));
+}
+
+export function clearRenderOptions(slug: string): void {
+  removeStorage(renderKey(slug));
+}
+
 function resolutionKey(slug: string): string {
   return `${RESOLUTION_PREFIX}:${slug}`;
 }

@@ -6,11 +6,13 @@ import {
 } from "./colormap.ts";
 import {
   clearBounds,
+  clearRenderOptions,
   clearResolution,
   clearValues,
   loadBounds,
   loadValues,
   saveBounds,
+  saveRenderOptions,
   saveResolution,
   saveValues,
   type SliderBounds,
@@ -58,6 +60,8 @@ export interface ControlsOptions {
   initialStepsPerFrame: number;
   stepsControl: StepsControlOptions;
   initialColourOptions: ColourMapOptions;
+  /** Factory-default colour options, ignoring persistence. Used by "Reset to defaults". */
+  defaultColourOptions: ColourMapOptions;
   initialDisplayOptions: DisplayOptions;
   initialResolution: ResolutionPreset;
   /** Factory-default resolution, ignoring persistence. Used by "Reset to defaults". */
@@ -83,7 +87,7 @@ export class ControlsPanel {
   private readonly paramSchema: readonly ParamDescriptor[];
   private readonly initialStepsPerFrame: number;
   private readonly stepsControl: StepsControlOptions;
-  private readonly initialColourOptions: ColourMapOptions;
+  private readonly defaultColourOptions: ColourMapOptions;
   private readonly initialDisplayOptions: DisplayOptions;
   private readonly defaultParams: SimParams;
   private readonly defaultResolution: ResolutionPreset;
@@ -132,7 +136,7 @@ export class ControlsPanel {
     this.paramSchema = options.paramSchema;
     this.initialStepsPerFrame = options.initialStepsPerFrame;
     this.stepsControl = options.stepsControl;
-    this.initialColourOptions = { ...options.initialColourOptions };
+    this.defaultColourOptions = { ...options.defaultColourOptions };
     this.initialDisplayOptions = { ...options.initialDisplayOptions };
     this.defaultParams = { ...options.defaultParams };
     this.defaultResolution = options.defaultResolution;
@@ -585,6 +589,18 @@ export class ControlsPanel {
       ),
     );
     section.appendChild(
+      this.buildColourRangeControl(
+        "Palette steps",
+        this.colourOptions.steps,
+        0,
+        16,
+        1,
+        (steps) => {
+          this.setColourOptions({ ...this.colourOptions, steps });
+        },
+      ),
+    );
+    section.appendChild(
       this.buildColourBooleanControl("Invert colours", this.colourOptions.invert, (invert) => {
         this.setColourOptions({ ...this.colourOptions, invert });
       }),
@@ -776,9 +792,10 @@ export class ControlsPanel {
     clearValues(this.slug);
     clearBounds(this.slug);
     clearResolution(this.slug);
+    clearRenderOptions(this.slug);
 
     this.syncStepsControl(this.initialStepsPerFrame);
-    this.colourOptions = { ...this.initialColourOptions };
+    this.colourOptions = { ...this.defaultColourOptions };
     this.displayOptions = { ...this.initialDisplayOptions };
     this.resolution = this.defaultResolution;
     if (this.resolutionSelect) {
@@ -847,6 +864,7 @@ export class ControlsPanel {
     }
     this.syncColourRangeControl("Gamma", this.colourOptions.gamma);
     this.syncColourRangeControl("Contrast", this.colourOptions.contrast);
+    this.syncColourRangeControl("Palette steps", this.colourOptions.steps);
     this.syncColourRangeControl("Point size (px)", this.displayOptions.dotSize);
   }
 
@@ -861,7 +879,12 @@ export class ControlsPanel {
 
   private setColourOptions(next: ColourMapOptions): void {
     this.colourOptions = { ...next };
+    this.persistRenderOptions();
     this.callbacks.onColourChange(this.colourOptions);
+  }
+
+  private persistRenderOptions(): void {
+    saveRenderOptions(this.slug, { steps: this.colourOptions.steps });
   }
 
   private setDisplayOptions(next: DisplayOptions): void {

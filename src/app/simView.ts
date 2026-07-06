@@ -14,7 +14,7 @@ import {
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
-import { loadResolution } from "./persistence.ts";
+import { loadRenderOptions, loadResolution } from "./persistence.ts";
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
@@ -119,7 +119,14 @@ export async function renderSimView(
     kernel.paramSchema,
     factoryParams,
   );
-  let colourOptions: ColourMapOptions = defaultColourOptionsFor(slug, kernel.channelCount);
+  const factoryColourOptions: ColourMapOptions = defaultColourOptionsFor(
+    slug,
+    kernel.channelCount,
+  );
+  let colourOptions: ColourMapOptions = restoreRenderOptions(
+    slug,
+    factoryColourOptions,
+  );
   let displayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
   const speedProfile = speedProfileFor(slug);
   let stepsPerFrame = speedProfile.initial;
@@ -149,6 +156,7 @@ export async function renderSimView(
     initialStepsPerFrame: stepsPerFrame,
     stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
+    defaultColourOptions: factoryColourOptions,
     initialDisplayOptions: displayOptions,
     initialResolution: resolution,
     defaultResolution,
@@ -409,6 +417,21 @@ function defaultParamOverridesFor(slug: string): SimParams {
     default:
       return {};
   }
+}
+
+/** Factory colour options overlaid with any persisted renderer visual options. */
+function restoreRenderOptions(
+  slug: string,
+  factory: ColourMapOptions,
+): ColourMapOptions {
+  const stored = loadRenderOptions(slug);
+  if (!stored) return { ...factory };
+
+  const next = { ...factory };
+  if (stored.steps !== undefined) {
+    next.steps = Math.max(0, Math.min(64, Math.floor(stored.steps)));
+  }
+  return next;
 }
 
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {

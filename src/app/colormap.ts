@@ -35,6 +35,12 @@ export interface ColourMapOptions {
    * than by passing a negative kernel param (which would clamp to zero).
    */
   paletteCycleReverse: boolean;
+  /**
+   * Quantise the palette into N discrete bands. 0 = off (continuous ramp).
+   * Renders integer/discrete fields (e.g. sandpile grain counts 0–4) as crisp
+   * terraces instead of a smooth gradient.
+   */
+  steps: number;
 }
 
 export interface ColourPresetOption {
@@ -74,6 +80,7 @@ export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
   gamma: 1,
   contrast: 1,
   paletteCycleReverse: false,
+  steps: 0,
 };
 
 type ColourStop = readonly [number, Rgb];
@@ -162,7 +169,8 @@ export function defaultColourOptionsFor(
   // raw RGB just because it has three or more channels.
   switch (slug) {
     case "abelian-sandpile":
-      return { ...base, preset: "amber", gamma: 0.78, contrast: 1.45 };
+      // 0–4 grains: five bands render the terraces as distinct steps.
+      return { ...base, preset: "amber", gamma: 0.78, contrast: 1.45, steps: 5 };
     case "belousov-zhabotinsky":
     case "gray-scott":
     case "boids":
@@ -275,8 +283,19 @@ function threeChannelChemical(
   return mix(base, [255, 255, 255], clamp01(highlight * 0.55));
 }
 
+/**
+ * Snap a ramp coordinate into one of N evenly spaced levels spanning the full
+ * palette. 0 (or <1) leaves it continuous.
+ */
+function quantise(t: number, steps: number): number {
+  const n = Math.floor(steps);
+  if (!Number.isFinite(n) || n <= 0) return t;
+  if (n <= 1) return 0;
+  return clamp01(Math.floor(clamp01(t) * n) / (n - 1));
+}
+
 function singleChannelColour(t: number, options: ColourMapOptions): Rgb {
-  const value = adjust(t, options);
+  const value = adjust(quantise(t, options.steps), options);
   const preset =
     options.preset === "chemical" || options.preset === "rgb"
       ? "viridis"
