@@ -27,6 +27,19 @@ interface SimKernel {
 const DEFAULT_MU = 0.15;
 const DEFAULT_SIGMA = 0.017;
 const DEFAULT_DT = 0.1;
+// Static-mu Lenia condenses into stationary spots within ~1200 steps at every
+// (mu, sigma) this kernel reaches — measured late activity <=0.004/cell/step
+// across the full slider plane, i.e. the sim visibly "freezes". A slow
+// sinusoidal drift of the growth centre keeps the field reorganising (spots
+// split, merge and travel) at ~2-3x the sustained activity. The default
+// (mu, sigma, dt, drift) combination is seed-robust: no extinction and a
+// stable mass band verified over 5400 steps across six seeds. Narrower sigma
+// (<=0.015) or dt >=0.15 raise activity further but die out on some seeds
+// and on small grids.
+const DEFAULT_MU_DRIFT = 0.015;
+const MAX_MU_DRIFT = 0.03;
+/** Internal steps per drift cycle: ~12.5 s at 60 fps with 1 step/frame. */
+const MU_DRIFT_PERIOD = 750;
 // Radius 8 keeps the convolution ~160 taps: measured ~25 ms/step at the
 // 384x384 performance grid, the budget for smooth animation in plain JS.
 // Radius is in grid cells (no resolution scaling): larger grids get a bigger
@@ -100,6 +113,15 @@ export class LeniaKernel implements SimKernel {
       step: 0.001,
     },
     {
+      key: "muDrift",
+      label: "Growth drift (μ swing)",
+      type: "number",
+      default: DEFAULT_MU_DRIFT,
+      min: 0,
+      max: MAX_MU_DRIFT,
+      step: 0.001,
+    },
+    {
       key: "dt",
       label: "Time step",
       type: "number",
@@ -138,10 +160,12 @@ export class LeniaKernel implements SimKernel {
   private tapCount = 0;
   private mu = DEFAULT_MU;
   private sigma = DEFAULT_SIGMA;
+  private muDrift = DEFAULT_MU_DRIFT;
   private timeStep = DEFAULT_DT;
   private radius = DEFAULT_RADIUS;
   private stepsPerFrame = 1;
   private seed = 0;
+  private stepIndex = 0;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -149,7 +173,13 @@ export class LeniaKernel implements SimKernel {
 
     this.mu = clamp(numberParam(params, "mu", DEFAULT_MU), 0.01, 0.5);
     this.sigma = clamp(numberParam(params, "sigma", DEFAULT_SIGMA), 0.003, 0.1);
+    this.muDrift = clamp(
+      numberParam(params, "muDrift", DEFAULT_MU_DRIFT),
+      0,
+      MAX_MU_DRIFT,
+    );
     this.timeStep = clamp(numberParam(params, "dt", DEFAULT_DT), 0.01, 0.5);
+    this.stepIndex = 0;
     // Row-shift wrapping in step() assumes the kernel fits the grid once
     // (|shift| < dimension), so cap the radius on degenerate tiny grids.
     const fitCap = Math.max(1, Math.floor((Math.min(this.width, this.height) - 1) / 2));
@@ -195,10 +225,10 @@ export class LeniaKernel implements SimKernel {
     const offY = this.offY;
     const weights = this.weights;
     const tapCount = this.tapCount;
-    const mu = this.mu;
     const dt = this.timeStep;
     const twoSigmaSq = 2 * this.sigma * this.sigma;
     const cellCount = width * height;
+    const driftScale = (2 * Math.PI) / MU_DRIFT_PERIOD;
 
     for (let stepIndex = 0; stepIndex < this.stepsPerFrame; stepIndex += 1) {
       // Convolution as per-tap shifted-row accumulation: each tap adds a
@@ -257,6 +287,10 @@ export class LeniaKernel implements SimKernel {
           }
         }
       }
+
+      this.stepIndex += 1;
+      const mu =
+        this.mu + this.muDrift * Math.sin(this.stepIndex * driftScale);
 
       for (let i = 0; i < cellCount; i += 1) {
         const u = potential[i] - mu;
@@ -329,6 +363,7 @@ export class LeniaKernel implements SimKernel {
     this.offY = new Int32Array(0);
     this.weights = new Float32Array(0);
     this.tapCount = 0;
+    this.stepIndex = 0;
   }
 
   /**

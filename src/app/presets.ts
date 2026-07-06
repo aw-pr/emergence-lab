@@ -512,21 +512,44 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { states: 12, threshold: 2, neighbourhood: "vonNeumann" },
     },
   ],
+  // muDrift keeps the field reorganising; muDrift 0 is classic static-growth
+  // Lenia, which condenses into stationary spots within ~20 s.
   lenia: [
     {
       id: "orbium-soup",
-      label: "Orbium soup",
-      params: { mu: 0.15, sigma: 0.017, dt: 0.1, radius: 10, stepsPerFrame: 1 },
+      label: "Drifting soup",
+      params: {
+        mu: 0.15,
+        sigma: 0.017,
+        muDrift: 0.015,
+        dt: 0.1,
+        radius: 8,
+        stepsPerFrame: 1,
+      },
     },
     {
       id: "coral-growth",
-      label: "Coral growth",
-      params: { mu: 0.14, sigma: 0.016, dt: 0.08, radius: 9, stepsPerFrame: 1 },
+      label: "Still spots",
+      params: {
+        mu: 0.15,
+        sigma: 0.017,
+        muDrift: 0,
+        dt: 0.1,
+        radius: 8,
+        stepsPerFrame: 1,
+      },
     },
     {
       id: "geminium-storm",
       label: "Geminium storm",
-      params: { mu: 0.16, sigma: 0.02, dt: 0.12, radius: 10, stepsPerFrame: 1 },
+      params: {
+        mu: 0.15,
+        sigma: 0.017,
+        muDrift: 0.02,
+        dt: 0.1,
+        radius: 10,
+        stepsPerFrame: 1,
+      },
     },
   ],
 };

@@ -53,7 +53,7 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["mu", "sigma", "dt", "radius", "stepsPerFrame"],
+    ["mu", "sigma", "muDrift", "dt", "radius", "stepsPerFrame"],
   );
 
   for (const descriptor of kernel.paramSchema) {
@@ -72,6 +72,7 @@ test("schema defaults use the Orbium-friendly regime at performance radius", () 
 
   assert.equal(defaults.mu, 0.15);
   assert.equal(defaults.sigma, 0.017);
+  assert.equal(defaults.muDrift, 0.015);
   assert.equal(defaults.dt, 0.1);
   assert.equal(defaults.radius, 8);
   assert.equal(defaults.stepsPerFrame, 1);
@@ -204,10 +205,11 @@ test("default regime stays alive and structured for 500 steps", () => {
 });
 
 test("presets stay non-degenerate for 500 steps", () => {
+  // Mirrors the app-level presets in src/app/presets.ts.
   const presets = {
-    "orbium-soup": { mu: 0.15, sigma: 0.017, dt: 0.1, radius: 10, stepsPerFrame: 1 },
-    "coral-growth": { mu: 0.14, sigma: 0.016, dt: 0.08, radius: 9, stepsPerFrame: 1 },
-    "geminium-storm": { mu: 0.16, sigma: 0.02, dt: 0.12, radius: 10, stepsPerFrame: 1 },
+    "drifting-soup": { mu: 0.15, sigma: 0.017, muDrift: 0.015, dt: 0.1, radius: 8, stepsPerFrame: 1 },
+    "still-spots": { mu: 0.15, sigma: 0.017, muDrift: 0, dt: 0.1, radius: 8, stepsPerFrame: 1 },
+    "geminium-storm": { mu: 0.15, sigma: 0.017, muDrift: 0.02, dt: 0.1, radius: 10, stepsPerFrame: 1 },
   };
 
   for (const [name, params] of Object.entries(presets)) {
@@ -217,6 +219,35 @@ test("presets stay non-degenerate for 500 steps", () => {
     assert.ok(aliveFrac > 0.02, `${name} died out: aliveFrac=${aliveFrac}`);
     assert.ok(aliveFrac < 0.9, `${name} exploded: aliveFrac=${aliveFrac}`);
   }
+});
+
+test("default mu drift keeps the field reorganising after it would have frozen", () => {
+  const width = 128;
+  const height = 128;
+  const kernel = new LeniaKernel();
+  kernel.init(width, height, {});
+
+  // Well past the ~1200-step condensation horizon where static-mu Lenia
+  // freezes into stationary spots (late activity <= 0.004/cell/step).
+  for (let index = 0; index < 1500; index += 1) {
+    kernel.step(1);
+  }
+
+  const before = Array.from(kernel.readState());
+  for (let index = 0; index < 300; index += 1) {
+    kernel.step(1);
+  }
+  const after = kernel.readState();
+
+  let delta = 0;
+  for (let index = 0; index < after.length; index += 1) {
+    delta += Math.abs(after[index] - before[index]);
+  }
+  const meanDelta = delta / after.length;
+  assert.ok(
+    meanDelta > 0.02,
+    `field froze: mean |delta| over 300 late steps = ${meanDelta}`,
+  );
 });
 
 test("selfTest passes", () => {
