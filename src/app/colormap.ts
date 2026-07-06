@@ -195,9 +195,10 @@ export function defaultColourOptionsFor(
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
     case "cyclic-ca":
-      // A cyclic-friendly palette may land later from another branch; plasma
-      // is a reasonable non-cyclic stand-in until then.
-      return { ...base, preset: "plasma", contrast: 1.2 };
+      // States wrap modularly, so the palette must too: state N-1 sits next
+      // to state 0 at every spiral arm, and a non-cyclic ramp would draw a
+      // false hard edge there.
+      return { ...base, preset: "twilight", contrast: 1.2 };
     case "particle-life":
       // One species-colour per particle per cell; a slight gamma lift keeps
       // single, un-stacked particles legible while direct RGB preserves hue.
