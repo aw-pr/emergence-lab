@@ -1,6 +1,30 @@
 - [x] Set the default boids rersolution to ultra and see if we can reandomise the start criteria so we get different patterns and increase the number of boids to 10000
 - [x] can we try and increase the pixel desnsity in garry scott diffusion so we can fit more intricate patterns on the screen?
 
+## 2026-07-06 — release to dev, live deploy, and public mirror (Claude Opus 4.8)
+
+Shipped the completed `feat/visual-expansion` tuning work end to end.
+
+- Two docs-currency commits: README/CLAUDE.md updated from "twelve" to
+  "sixteen" kernels and now list physarum/particle-life/cyclic-ca/lenia;
+  `docs/PUBLISH-WORKFLOW.md` and `.cursor/rules/git-strategy.mdc`
+  reconciled to the real feat → dev → main → publish flow (previously
+  described a squash-to-main flow that no longer matches practice).
+- Merged `feat/visual-expansion` → `dev` (fast-forward, `historymode=preserve`
+  via the installed git aliases, not squash).
+- Deployed to live via `git ff-dev-main`; Netlify deploy verified
+  in-browser (20-card gallery, all four new sims present and rendering).
+- Published to the public mirror via `git publish`. Bundle backup taken at
+  `~/emergence-lab-history-20260706-115251.bundle`.
+- `npm run verify` green (201 kernel tests, typecheck, build) before merge
+  and again on merged `dev`.
+- Deferred: thumbnails shipped as-is — the four tuned sims' default looks
+  changed but the user chose not to regenerate them this session; if their
+  defaults move again, regenerate via `node scripts/generate-thumbnails.mjs`.
+- Left untouched: `docs/todo.md` line ~12 above still reads "all 12 essays"
+  — that's a historical changelog line from the 2026-07-04 entry (all 16
+  essays now exist); rewriting past log entries wasn't in scope.
+
 ## 2026-07-04 — overnight build (Claude Sonnet 4.6)
 
 - Gallery landing redesigned: responsive grid grouped by `family`, each card
