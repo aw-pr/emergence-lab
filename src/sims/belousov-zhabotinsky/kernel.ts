@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const CHANNEL_COUNT = 3;
@@ -204,6 +205,53 @@ export class BelousovZhabotinskyKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /**
+   * Pointer poke: spike the activator (with a catalyst kick) in a soft disc
+   * under the cursor. A local excess of activator nucleates a fresh target /
+   * spiral wave that then propagates through the medium. Inhibitor is left
+   * alone so the new front is not immediately quenched. Bounds-clamped and
+   * allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = clamp01(strength);
+    if (s <= 0) {
+      return;
+    }
+
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const r = Math.max(1, Math.round(radius));
+    const radiusSq = r * r;
+
+    for (let dy = -r; dy <= r; dy += 1) {
+      const py = centreY + dy;
+      if (py < 0 || py >= this.height) {
+        continue;
+      }
+      for (let dx = -r; dx <= r; dx += 1) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        const px = centreX + dx;
+        if (px < 0 || px >= this.width) {
+          continue;
+        }
+        const weight = (1 - Math.sqrt(distSq) / r) * s;
+        if (weight <= 0) {
+          continue;
+        }
+        const index = (py * this.width + px) * CHANNEL_COUNT;
+        this.state[index] = Math.max(this.state[index], weight);
+        this.state[index + 2] = Math.max(this.state[index + 2], 0.35 * weight);
+      }
+    }
   }
 
   destroy(): void {

@@ -159,6 +159,42 @@ test("selfTest passes", () => {
   assert.equal(selfTest(), true);
 });
 
+test("applyImpulse spikes the activator and catalyst, deterministically and bounded", () => {
+  const width = 40;
+  const height = 30;
+  const px = 14;
+  const py = 11;
+  const channels = 3;
+  const cell = (state, x, y) => {
+    const i = (y * width + x) * channels;
+    return { a: state[i], b: state[i + 1], c: state[i + 2] };
+  };
+
+  const run = () => {
+    const kernel = new BelousovZhabotinskyKernel();
+    kernel.init(width, height, {});
+    kernel.applyImpulse(px, py, 5, 1);
+    return Array.from(kernel.readState());
+  };
+
+  const first = run();
+  const second = run();
+  assert.deepEqual(first, second);
+  assertBounded(first);
+
+  const clean = new BelousovZhabotinskyKernel();
+  clean.init(width, height, {});
+  const baseline = Array.from(clean.readState());
+
+  const after = cell(first, px, py);
+  const before = cell(baseline, px, py);
+  assert.ok(after.a >= before.a, "activator raised (or held) at centre");
+  assert.ok(after.a > 0.5, "activator spiked toward its ceiling");
+  assert.ok(after.c >= before.c, "catalyst kicked at centre");
+  // Inhibitor channel is untouched by the poke.
+  assert.equal(after.b, before.b);
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new BelousovZhabotinskyKernel();
   kernel.init(12, 10, {});
