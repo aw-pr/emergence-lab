@@ -42,13 +42,17 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade"],
+    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade", "colourByHeight"],
   );
 
   for (const descriptor of kernel.paramSchema) {
     if (descriptor.type === "enum") {
       assert.ok(Array.isArray(descriptor.options));
       assert.ok(descriptor.options.includes(descriptor.default));
+      continue;
+    }
+    if (descriptor.type === "boolean") {
+      assert.equal(typeof descriptor.default, "boolean");
       continue;
     }
     assert.equal(descriptor.type, "number");
@@ -154,6 +158,52 @@ test("unknown attractor falls back to the lorenz default", () => {
   assert.deepEqual(
     runKernel({ attractor: "not-an-attractor" }),
     runKernel({ attractor: "lorenz" }),
+  );
+});
+
+test("colourByHeight defaults on and modulates the deposited field", () => {
+  const descriptor = new LorenzAttractorKernel().paramSchema.find(
+    (d) => d.key === "colourByHeight",
+  );
+  assert.ok(descriptor);
+  assert.equal(descriptor.type, "boolean");
+  assert.equal(descriptor.default, true);
+
+  for (const attractor of ATTRACTORS) {
+    const on = runKernel({ attractor, colourByHeight: true }, 200);
+    const off = runKernel({ attractor, colourByHeight: false }, 200);
+
+    assert.notDeepEqual(
+      on,
+      off,
+      `${attractor} height colouring should change deposits`,
+    );
+
+    // Height colouring only scales each deposit down (floor 0.35, span 0.65),
+    // so total density can never exceed the flat-deposit path.
+    const sum = (state) => state.reduce((total, value) => total + value, 0);
+    assert.ok(
+      sum(off) >= sum(on) - 1e-6,
+      `${attractor} flat deposits should total >= height-coloured deposits`,
+    );
+    assert.ok(
+      on.every((value) => Number.isFinite(value) && value >= 0 && value <= 1),
+      `${attractor} height-coloured field must stay bounded`,
+    );
+  }
+});
+
+test("colourByHeight off is deterministic and matches the schema-default toggle", () => {
+  const off = runKernel({ attractor: "lorenz", colourByHeight: false }, 200);
+
+  assert.deepEqual(
+    off,
+    runKernel({ attractor: "lorenz", colourByHeight: false }, 200),
+  );
+  // A non-boolean toggle falls back to the default (on), so it must differ.
+  assert.notDeepEqual(
+    off,
+    runKernel({ attractor: "lorenz", colourByHeight: "nope" }, 200),
   );
 });
 

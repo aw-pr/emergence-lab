@@ -28,7 +28,10 @@ const DEFAULT_RHO = 28;
 const DEFAULT_BETA = 2.6666667;
 const DEFAULT_STEPS_PER_FRAME = 24;
 const DEFAULT_FADE = 0.997;
+const DEFAULT_COLOUR_BY_HEIGHT = true;
 const CHANNEL_COUNT = 1;
+const HEIGHT_FLOOR = 0.35;
+const HEIGHT_SPAN = 0.65;
 const DEPOSIT = 0.38;
 const DEPOSIT_RADIUS = 1;
 
@@ -218,6 +221,15 @@ function boundedNumber(
   return Math.min(max, Math.max(min, numberParam(params, key, fallback)));
 }
 
+function boolParam(
+  params: SimParams,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = params[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function enumParam(
   params: SimParams,
   key: string,
@@ -289,6 +301,12 @@ export class LorenzAttractorKernel implements SimKernel {
       max: 1,
       step: 0.001,
     },
+    {
+      key: "colourByHeight",
+      label: "Colour by height",
+      type: "boolean",
+      default: DEFAULT_COLOUR_BY_HEIGHT,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
@@ -303,6 +321,7 @@ export class LorenzAttractorKernel implements SimKernel {
   private beta = DEFAULT_BETA;
   private stepsPerFrame = DEFAULT_STEPS_PER_FRAME;
   private fade = DEFAULT_FADE;
+  private colourByHeight = DEFAULT_COLOUR_BY_HEIGHT;
   private x = 0.1;
   private y = 0;
   private z = 0;
@@ -341,6 +360,11 @@ export class LorenzAttractorKernel implements SimKernel {
       ),
     );
     this.fade = boundedNumber(params, "fade", DEFAULT_FADE, 0, 1);
+    this.colourByHeight = boolParam(
+      params,
+      "colourByHeight",
+      DEFAULT_COLOUR_BY_HEIGHT,
+    );
 
     this.x = this.spec.start[0];
     this.y = this.spec.start[1];
@@ -443,14 +467,41 @@ export class LorenzAttractorKernel implements SimKernel {
       return;
     }
 
+    const intensity = this.depositIntensity();
+
     if (this.previousGridX !== null && this.previousGridY !== null) {
-      this.depositLine(this.previousGridX, this.previousGridY, gridX, gridY);
+      this.depositLine(
+        this.previousGridX,
+        this.previousGridY,
+        gridX,
+        gridY,
+        intensity,
+      );
     } else {
-      this.depositPoint(gridX, gridY);
+      this.depositPoint(gridX, gridY, intensity);
     }
 
     this.previousGridX = gridX;
     this.previousGridY = gridY;
+  }
+
+  /**
+   * Deposit strength for the current point. With height colouring on, the
+   * trajectory's normalised depth axis (the state axis NOT projected to screen)
+   * modulates intensity, so wings shade by depth. Off returns the flat DEPOSIT.
+   */
+  private depositIntensity(): number {
+    if (!this.colourByHeight) {
+      return DEPOSIT;
+    }
+
+    const spec = this.spec;
+    const depthValue = spec.depth(this.x, this.y, this.z);
+    const zNorm = clamp01(
+      (depthValue - spec.depthRange[0]) /
+        (spec.depthRange[1] - spec.depthRange[0]),
+    );
+    return DEPOSIT * (HEIGHT_FLOOR + HEIGHT_SPAN * zNorm);
   }
 
   private depositLine(
@@ -458,17 +509,22 @@ export class LorenzAttractorKernel implements SimKernel {
     startY: number,
     endX: number,
     endY: number,
+    intensity: number,
   ): void {
     const steps = Math.max(Math.abs(endX - startX), Math.abs(endY - startY), 1);
     for (let index = 0; index <= steps; index += 1) {
       const t = index / steps;
       const x = Math.round(startX + (endX - startX) * t);
       const y = Math.round(startY + (endY - startY) * t);
-      this.depositPoint(x, y);
+      this.depositPoint(x, y, intensity);
     }
   }
 
-  private depositPoint(gridX: number, gridY: number): void {
+  private depositPoint(
+    gridX: number,
+    gridY: number,
+    intensity: number,
+  ): void {
     for (let dy = -DEPOSIT_RADIUS; dy <= DEPOSIT_RADIUS; dy += 1) {
       for (let dx = -DEPOSIT_RADIUS; dx <= DEPOSIT_RADIUS; dx += 1) {
         const px = gridX + dx;
@@ -484,7 +540,7 @@ export class LorenzAttractorKernel implements SimKernel {
 
         const falloff = 1 - distance / (DEPOSIT_RADIUS + 1);
         const index = py * this.width + px;
-        this.state[index] = clamp01(this.state[index] + DEPOSIT * falloff);
+        this.state[index] = clamp01(this.state[index] + intensity * falloff);
       }
     }
   }
