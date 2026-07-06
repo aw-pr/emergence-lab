@@ -6,19 +6,26 @@ public remote.
 
 ## Model
 
-This repo runs the **dual-branch publish model** in `preserve` history
-mode. There are two long-lived branches with two different audiences:
+This repo runs the **staged publish model** in `preserve` history
+mode. There are three long-lived branches with different audiences:
 
+- **`dev`** — integration/staging branch. Topic branches
+  (`feat/*`, `wip/*`, …) fast-forward here first. Never deploys, never
+  publishes; it is the buffer where work accumulates before it advances
+  to `main`. Local and `origin` only.
 - **`main`** — site trunk. Private origin (`tw-one/emergence-lab`).
-  Netlify deploys from this branch on every push. Topic branches merge
-  here. May contain commits not yet visible on the public mirror.
+  Netlify deploys from this branch on every push. `dev` fast-forwards
+  here via `git ff-dev-main`. May contain commits not yet visible on the
+  public mirror.
 - **`publish`** — public mirror trunk. Fast-forwards onto `main` only
   when you deliberately publish. Pushed to `public` (`aw-pr/emergence-lab`)
   as `main`. Append-only and always publish-clean.
 
-The site deploy and the public mirror are decoupled. Pushing to `main`
-updates the site. Running `git publish` updates the public mirror.
-You choose when to do each.
+The flow is one direction: `feat/* → dev → main → publish → public`.
+The site deploy and the public mirror are decoupled. Advancing `main`
+(via `git ff-dev-main`) updates the site. Running `git publish` updates
+the public mirror. You choose when to do each. Both aliases require a
+local `dev` branch to exist.
 
 ## The one hard invariant
 
@@ -41,25 +48,40 @@ default.
 ## Day-to-day
 
 ```bash
-# Working on the site (anything that should deploy):
-git switch main
-# commit work atomically with per-agent --author=
-git push origin main          # deploys site
+# Land a feature on the staging branch:
+git switch dev
+git merge --ff-only feat/whatever   # commits already have per-agent --author=
+git push origin dev
+
+# When dev is ready to deploy, advance main (this deploys the site):
+git ff-dev-main               # ff main onto dev, push origin main -> Netlify
 
 # When main is publish-ready, mirror it:
 git publish                   # ff publish onto main, push origin publish,
                               # push public publish:main
 ```
 
-The `git publish` alias:
+The `git ff-dev-main` alias (advance the site):
 
 1. Refuses if the working tree is dirty.
-2. Switches to `publish`.
-3. Fast-forwards `publish` onto `main` (fails if `main` is not a
+2. Fetches `origin` and resolves the default branch (`main`).
+3. Requires a local `dev` branch to exist.
+4. Switches to `main`, `pull --ff-only origin main`, then
+   `merge --ff-only dev` (fails if `dev` is not a descendant of `main`).
+5. Pushes `origin main` — **this is what triggers the Netlify deploy.**
+6. Returns to the branch you started on.
+
+The `git publish` alias (advance the public mirror):
+
+1. Refuses if the working tree is dirty.
+2. Requires a local `dev` branch to exist (aborts otherwise).
+3. Switches to `publish`.
+4. Fast-forwards `publish` onto `main` (fails if `main` is not a
    descendant of `publish` — investigate before forcing).
-4. Pushes `publish` to the private remote (`origin`, for backup).
-5. Pushes `publish:main` to the public remote (`public`).
-6. Returns to the original branch.
+5. Pushes `publish` to the private remote (`origin`, for backup).
+6. Pushes `publish:main` to the public remote (`public`), with the
+   `PUBLISH_GUARD_OK=1` sentinel the pre-push hook requires.
+7. Returns to `dev` on exit.
 
 Do **not** hand-type `git push public main` to publish. Route through
 `git publish` so the backup push and the public push happen together.
@@ -126,16 +148,18 @@ GUARD_PUBLIC_BRANCH='main'
 ```
 
 Set the five `publishguard.*` config keys above. Add the public remote
-and create the local `publish` branch:
+and create the local `dev` and `publish` branches (both aliases require
+`dev` to exist):
 
 ```sh
 git remote add public git@github.com:aw-pr/emergence-lab.git
 git fetch public
 git branch publish public/main
+git branch dev main            # or: git switch -c dev
 ```
 
-Re-create the `git publish` alias if it's not in your global git config
-(it's set locally per-checkout in this repo).
+Re-create the `git ff-dev-main` and `git publish` aliases if they're not
+in your git config (they're set locally per-checkout in this repo).
 
 ## Audit before any public push
 
@@ -152,9 +176,9 @@ Then `git publish`.
 
 ## Site deploy and publish are independent
 
-- **Site update without publish**: commit on `main`, `git push origin main`.
-  Netlify rebuilds. `publish` does not move; the public mirror is
-  unchanged.
+- **Site update without publish**: land work on `dev`, then
+  `git ff-dev-main` (advances `main`, pushes `origin main`). Netlify
+  rebuilds. `publish` does not move; the public mirror is unchanged.
 - **Publish without site update**: not really meaningful in this repo —
   `git publish` fast-forwards `publish` onto `main`, so the public
   mirror only ever lags or equals the deployed site, never leads it.

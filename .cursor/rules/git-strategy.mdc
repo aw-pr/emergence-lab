@@ -1,37 +1,45 @@
 ---
-description: Git strategy — branch, verify-gate, commit only on green, merge to main
+description: Git strategy — branch, verify-gate, commit only on green, staged fast-forward to main
 alwaysApply: true
 ---
 
 # Git strategy
 
 `main` is the hub: it must always be green and publish-clean. Real work happens
-on a short-lived branch and only reaches `main` after tests pass.
+on a short-lived branch, integrates on `dev`, and only reaches `main` after
+tests pass. The flow is one direction: `feat/* → dev → main → publish → public`
+(`historymode = preserve` — atomic commits land as-is, not squashed).
 
 ## Workflow
 
-1. **Branch.** Start work on a topic branch, not on `main`:
-   `git switch -c wip/<short-topic>`. Messy intermediate commits on the branch
-   are fine.
-2. **Verify gate.** Before anything merges to `main`, run the full gate and it
-   must pass:
+1. **Branch.** Start work on a topic branch, not on `main` or `dev`:
+   `git switch -c feat/<short-topic>`. Messy intermediate commits on the branch
+   are fine; keep the commits that will reach `main` atomic and per-agent
+   attributed.
+2. **Verify gate.** Before anything advances toward `main`, run the full gate
+   and it must pass:
    ```bash
    npm run verify
    ```
    (typecheck + all kernel tests + production build). If you changed kernel
    numerics, update `src/sims/**/kernel.test.cjs` in the same change and keep
-   the tests deterministic. **Do not commit to `main` on a red gate.**
-3. **Commit on green only.** Commit to `main` (or squash-merge the branch into
-   `main`) only after `npm run verify` is green and a quick manual smoke of the
-   affected routes looks right.
-4. **Squash into main.** Collapse the branch into one focused commit:
+   the tests deterministic. **Do not advance `main` on a red gate.**
+3. **Integrate on dev (green only).** Fast-forward the topic branch onto the
+   staging branch after `npm run verify` is green and a quick manual smoke of
+   the affected routes looks right:
    ```bash
-   git switch main
-   git merge --squash wip/<short-topic>
-   git commit -m "<clear message>"
-   git branch -D wip/<short-topic>
+   git switch dev
+   git merge --ff-only feat/<short-topic>
+   git push origin dev
    ```
-   Keep `main` history small, intentional, and publish-ready.
+4. **Advance main via fast-forward.** Do not squash and do not commit directly
+   on `main`. Use the alias, which fast-forwards `main` onto `dev` and pushes
+   `origin main` (the Netlify deploy trigger):
+   ```bash
+   git ff-dev-main
+   ```
+   Publishing the public mirror is a separate deliberate step (`git publish`).
+   See `docs/PUBLISH-WORKFLOW.md`.
 
 ## Commit messages
 
