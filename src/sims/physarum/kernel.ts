@@ -24,7 +24,11 @@ interface SimKernel {
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
-const DEFAULT_AGENT_COUNT = 32000;
+// Sized for the high 960² default grid: agent count tracks grid area so the
+// trail network stays dense enough to read. At 32k (the old balanced-grid
+// default) the agents are too sparse on the 0.9M-cell high grid and the field
+// reads faint.
+const DEFAULT_AGENT_COUNT = 100000;
 const DEFAULT_SENSOR_ANGLE = 22.5;
 const DEFAULT_SENSOR_DISTANCE = 9;
 const DEFAULT_TURN_SPEED = 22.5;
@@ -32,9 +36,10 @@ const DEFAULT_MOVE_SPEED = 1;
 const DEFAULT_DEPOSIT_AMOUNT = 0.22;
 const DEFAULT_EVAPORATION = 0.9;
 const DEFAULT_STEPS_PER_FRAME = 1;
-// Hard cap so a runaway agentCount cannot freeze the tab. Sized for smooth
-// 60fps at the balanced 640² grid where the 3×3 diffusion pass dominates.
-const MAX_AGENT_COUNT = 80000;
+// Hard cap so a runaway agentCount cannot freeze the tab. Ample headroom above
+// the default for denser networks; the 3×3 diffusion pass over the grid still
+// dominates the per-step cost.
+const MAX_AGENT_COUNT = 300000;
 const CHANNEL_COUNT = 1;
 const TWO_PI = Math.PI * 2;
 const DEG_TO_RAD = Math.PI / 180;

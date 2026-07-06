@@ -528,6 +528,11 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
       // CPU convolution cost is cells x kernel taps; 384^2 keeps the default
       // regime at ~27 ms/step (30+ fps) in plain JS.
       return "performance";
+    case "physarum":
+      // Finer than the old balanced default for sharper veins, but the CPU 3×3
+      // diffusion pass over the grid makes true ultra (~1 step/s) unusable, and
+      // the network never gets enough steps to form. High is the sweet spot.
+      return "high";
     case "lorenz-attractor":
     case "elementary-cellular-automata":
     case "game-of-life":
