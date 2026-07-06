@@ -1,6 +1,6 @@
 # docs/INTERFACE.md — Kernel to Renderer Interface Contract
 
-**Status: reviewed contract — v1.0.1 (2026-05-29)**
+**Status: reviewed contract — v1.1.0 (2026-07-06)**
 
 This file defines the TypeScript interface that all simulation kernels must
 implement and that the renderer consumes. It is the only shared surface
@@ -126,10 +126,52 @@ export interface SimKernel {
    * The renderer calls this before discarding a kernel instance.
    */
   destroy(): void;
+
+  /**
+   * OPTIONAL pointer-interaction hook (v1.1.0). When present, the renderer
+   * calls it in response to a user pointer gesture (click / drag) over the sim
+   * canvas, perturbing the simulation under the pointer. Kernels that omit it
+   * are simply not interactive; nothing else changes for them.
+   *
+   * Coordinates are in GRID CELLS, matching readState()'s row-major layout:
+   * x in [0, width), y in [0, height), origin at the first cell of the state
+   * array. The renderer owns the CSS-pixel -> letterboxed-canvas -> grid-cell
+   * mapping (including any backend-specific axis orientation); the kernel only
+   * ever sees grid coordinates.
+   *
+   * @param x         Grid column, may be fractional. Out-of-range is clamped or
+   *                   ignored by the kernel.
+   * @param y         Grid row, may be fractional.
+   * @param radius    Brush radius in cells (>= 0).
+   * @param strength  Normalised intensity in [0, 1]; 1 is a full-strength poke.
+   *
+   * Contract:
+   *   - Called only BETWEEN step() calls, never re-entrantly during one.
+   *   - Must NOT allocate (same rule as step()/readState()); mutate existing
+   *     buffers in place.
+   *   - Determinism: identical to the pure step() sequence EXCEPT for the user
+   *     input it applies. Given the same impulses at the same points in the
+   *     step sequence, the result is reproducible.
+   */
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 ```
 
 ---
+
+## Resolved design decisions (v1.1.0)
+
+5. **Optional `applyImpulse` for pointer interaction.** Kernels may expose an
+   optional `applyImpulse(x, y, radius, strength)` method to accept a pointer
+   perturbation under the cursor (click / drag). It is additive and
+   backwards-compatible: existing kernels that do not implement it are simply
+   non-interactive, and no renderer or kernel behaviour changes for them. The
+   renderer owns the pixel -> grid-cell mapping (the letterbox contain-rect plus
+   backend axis orientation), so coordinates reach the kernel already in grid
+   cells; radius is in cells and strength is normalised to [0, 1]. The method
+   obeys the same no-allocation rule as `step()` and preserves determinism apart
+   from the user input it applies. This is a purely additive surface change; it
+   bumps the minor version because the interface shape gains a member.
 
 ## Resolved design decisions (v1.0.1)
 
@@ -166,6 +208,8 @@ export interface SimKernel {
 - Deterministic: same `params` + same `step(dt)` sequence => identical `readState()`.
 - Provide `paramSchema` and `channelRanges`; the renderer depends on both.
 - Export a `selfTest(): boolean` alongside the class (not on the interface).
+- `applyImpulse` is optional; implement it only for sims where a pointer poke is
+  meaningful. It follows the same no-allocation and determinism rules as `step()`.
 - Do not import from `src/app/**`. The kernel has no knowledge of the renderer.
 
 ## Notes for renderer authors
