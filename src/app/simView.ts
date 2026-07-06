@@ -401,6 +401,8 @@ function speedProfileFor(slug: string): SpeedProfile {
       return { initial: 1.5, control: careful };
     case "boids":
       return { initial: 5, control: swarm };
+    case "particle-life":
+      return { initial: 5, control: swarm };
     case "mandelbrot":
     case "julia-set":
     case "burning-ship":
@@ -445,6 +447,9 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     // Trails on by default: flocks read as flowing ribbons.
     return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
+  if (slug === "particle-life") {
+    return { dotSize: 2, trailFade: 0, bloom: 0 };
+  }
   switch (slug) {
     // Modest glow on the bright-trace and fractal sims; off elsewhere.
     case "lorenz-attractor":
@@ -486,6 +491,7 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
     case "abelian-sandpile":
     case "boids":
     case "cyclic-ca":
+    case "particle-life":
       return "ultra";
     default:
       return DEFAULT_RESOLUTION;

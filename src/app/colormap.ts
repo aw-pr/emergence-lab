@@ -163,7 +163,6 @@ export function defaultColourOptionsFor(
   channelCount: number,
 ): ColourMapOptions {
   const base = { ...DEFAULT_COLOUR_OPTIONS };
-
   // Per-slug intent wins over the generic multi-channel fallback below: a
   // 3-/4-channel sim with a designed look (BZ, boids) must not be forced into
   // raw RGB just because it has three or more channels.
@@ -195,6 +194,10 @@ export function defaultColourOptionsFor(
       // A cyclic-friendly palette may land later from another branch; plasma
       // is a reasonable non-cyclic stand-in until then.
       return { ...base, preset: "plasma", contrast: 1.2 };
+    case "particle-life":
+      // One species-colour per particle per cell; a slight gamma lift keeps
+      // single, un-stacked particles legible while direct RGB preserves hue.
+      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2 };
     default:
       break;
   }
