@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const DEFAULT_AGENT_COUNT = 32000;
@@ -390,6 +391,54 @@ export class PhysarumKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.trail;
+  }
+
+  /**
+   * Pointer poke: deposit a soft disc of trail attractant under the cursor.
+   * Agents sense the pheromone field, so the fresh deposit pulls the network
+   * toward the cursor — a lure rather than a direct move. The trail buffer is
+   * the rendered state, so a paused frame shows the deposit at once. The disc
+   * wraps on the torus and is allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = clamp01(strength);
+    if (s <= 0) {
+      return;
+    }
+
+    const width = this.width;
+    const height = this.height;
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const r = Math.max(1, Math.round(radius));
+    const radiusSq = r * r;
+
+    for (let dy = -r; dy <= r; dy += 1) {
+      let py = (centreY + dy) % height;
+      if (py < 0) {
+        py += height;
+      }
+      for (let dx = -r; dx <= r; dx += 1) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        let px = (centreX + dx) % width;
+        if (px < 0) {
+          px += width;
+        }
+        const weight = (1 - Math.sqrt(distSq) / r) * s;
+        if (weight <= 0) {
+          continue;
+        }
+        const index = py * width + px;
+        this.trail[index] = clamp01(this.trail[index] + weight);
+      }
+    }
   }
 
   destroy(): void {

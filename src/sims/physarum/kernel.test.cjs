@@ -237,6 +237,46 @@ test("stepping starts the sim and selfTest passes", () => {
   assert.equal(selfTest(), true);
 });
 
+test("applyImpulse deposits trail attractant under the point, deterministically", () => {
+  const width = 48;
+  const height = 40;
+  const px = 20;
+  const py = 16;
+
+  const kernel = new PhysarumKernel();
+  kernel.init(width, height, { agentCount: 1000 });
+  const ref = kernel.readState();
+  const before = ref[py * width + px];
+  kernel.applyImpulse(px, py, 4, 1);
+
+  assert.equal(kernel.readState(), ref, "readState reference stays stable");
+  assert.ok(
+    kernel.readState()[py * width + px] > before,
+    "trail raised at the deposit centre",
+  );
+  for (const value of kernel.readState()) {
+    assert.ok(value >= 0 && value <= 1);
+  }
+
+  // Determinism: same init + same poke gives an identical field.
+  const twin = new PhysarumKernel();
+  twin.init(width, height, { agentCount: 1000 });
+  twin.applyImpulse(px, py, 4, 1);
+  assert.deepEqual(
+    Array.from(kernel.readState()),
+    Array.from(twin.readState()),
+  );
+});
+
+test("applyImpulse is a safe no-op at zero strength", () => {
+  const kernel = new PhysarumKernel();
+  kernel.init(32, 32, { agentCount: 500 });
+  const snapshot = Array.from(kernel.readState());
+  kernel.applyImpulse(16, 16, 4, 0);
+  assert.deepEqual(Array.from(kernel.readState()), snapshot);
+  assert.doesNotThrow(() => kernel.applyImpulse(-5, -5, 3, 1));
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new PhysarumKernel();
   kernel.init(12, 10, {});
