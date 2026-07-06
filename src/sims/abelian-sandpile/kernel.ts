@@ -25,15 +25,17 @@ interface SimKernel {
 }
 
 // A large default pile so the settled mandala fills a big share of the frame
-// (final radius grows ~sqrt of the grain count). The per-step topple budget is
-// kept modest so each frame stays light: big avalanches spread across several
-// frames instead of landing in one heavy hitch, which reads as smoother growth.
+// (final radius grows ~sqrt of the grain count). Relaxation is bulk-toppling:
+// each queue visit topples a cell floor(z/threshold) times at once, which the
+// abelian property guarantees reaches the same stable state as one-at-a-time
+// toppling. "Topples per step" therefore budgets cell relaxations per frame —
+// it bounds frame cost while each relaxation moves arbitrarily many grains.
 const DEFAULT_INITIAL_PILE = 3000000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
 const DEFAULT_GRAINS_PER_STEP = 1;
-const DEFAULT_TOPPLES_PER_STEP = 1000000;
+const DEFAULT_TOPPLES_PER_STEP = 300000;
 const MAX_INITIAL_PILE = 16000000;
-const MAX_TOPPLES_PER_STEP = 6000000;
+const MAX_TOPPLES_PER_STEP = 2000000;
 const CHANNEL_COUNT = 1;
 
 function numberParam(
@@ -178,27 +180,27 @@ export class AbelianSandpileKernel implements SimKernel {
       this.queueCount -= 1;
       this.queued[index] = 0;
 
-      if (this.state[index] < this.toppleThreshold) {
+      const grains = this.state[index];
+      if (grains < this.toppleThreshold) {
         continue;
       }
 
-      this.state[index] -= this.toppleThreshold;
+      const bulk = Math.floor(grains / this.toppleThreshold);
+      this.state[index] = grains - bulk * this.toppleThreshold;
 
       const x = index % this.width;
       if (x > 0) {
-        this.addGrain(index - 1);
+        this.addGrains(index - 1, bulk);
       }
       if (x < this.width - 1) {
-        this.addGrain(index + 1);
+        this.addGrains(index + 1, bulk);
       }
       if (index >= this.width) {
-        this.addGrain(index - this.width);
+        this.addGrains(index - this.width, bulk);
       }
       if (index < this.width * (this.height - 1)) {
-        this.addGrain(index + this.width);
+        this.addGrains(index + this.width, bulk);
       }
-
-      this.enqueueIfUnstable(index);
     }
 
     if (this.queueCount === 0) {
@@ -270,8 +272,8 @@ export class AbelianSandpileKernel implements SimKernel {
     this.queueCount = 0;
   }
 
-  private addGrain(index: number): void {
-    this.state[index] += 1;
+  private addGrains(index: number, count: number): void {
+    this.state[index] += count;
     this.enqueueIfUnstable(index);
   }
 
