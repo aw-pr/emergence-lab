@@ -31,6 +31,9 @@ const DEFAULT_SPAWN_RADIUS = 0.05;
 // open dendrites); several seeds start multiple coral heads.
 const DEFAULT_STICKINESS = 0.45;
 const DEFAULT_SEED_COUNT = 4;
+const DEFAULT_COLOUR_BY_AGE = true;
+/** Oldest structure (order 0) reads as this fraction of full brightness, so the seed stays visible against an empty (0) background rather than washing out. */
+const AGE_FLOOR = 0.15;
 const CHANNEL_COUNT = 1;
 const TWO_PI = Math.PI * 2;
 /** Fraction of walk steps nudged radially toward the seed so every direction gets fed (prevents runaway single tendrils). */
@@ -127,16 +130,30 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       max: 32,
       step: 1,
     },
+    {
+      key: "colourByAge",
+      label: "Colour by accretion age",
+      type: "boolean",
+      default: DEFAULT_COLOUR_BY_AGE,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
   private height = 0;
   private state = new Float32Array(0);
+  // Per-cell stick order (1-based); 0 means the cell has never been occupied.
+  // Decoupled from `state` so occupancy checks (isEmpty/hasOccupiedNeighbour)
+  // don't depend on the displayed, renormalised float value.
+  private order = new Uint32Array(0);
+  // Occupied cell indices in the order they stuck, so readState() only has to
+  // revisit occupied cells (not the whole grid) to renormalise ages.
+  private stuckIndices: number[] = [];
   private walkersPerStep = DEFAULT_WALKERS_PER_STEP;
   private maxWalkSteps = DEFAULT_MAX_WALK_STEPS;
   private spawnRadius = DEFAULT_SPAWN_RADIUS;
   private stickiness = DEFAULT_STICKINESS;
   private seedCount = DEFAULT_SEED_COUNT;
+  private colourByAge = DEFAULT_COLOUR_BY_AGE;
   private walkerCursor = 0;
   private clusterSize = 0;
   private centreX = 0;
@@ -157,6 +174,12 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     } else {
       this.state.fill(0);
     }
+    if (this.order.length !== length) {
+      this.order = new Uint32Array(length);
+    } else {
+      this.order.fill(0);
+    }
+    this.stuckIndices = [];
 
     this.walkersPerStep = boundedInteger(
       numberParam(params, "walkersPerStep", DEFAULT_WALKERS_PER_STEP),
@@ -183,6 +206,11 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       1,
       32,
     );
+    const colourByAgeParam = params["colourByAge"];
+    this.colourByAge =
+      typeof colourByAgeParam === "boolean"
+        ? colourByAgeParam
+        : DEFAULT_COLOUR_BY_AGE;
     const seedParam = params["seed"];
     this.rngSeed =
       typeof seedParam === "number" && Number.isFinite(seedParam)
@@ -217,6 +245,9 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
   }
 
   readState(): Float32Array {
+    if (this.colourByAge) {
+      this.writeAgeGradient();
+    }
     return this.state;
   }
 
@@ -224,9 +255,32 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     this.width = 0;
     this.height = 0;
     this.state = new Float32Array(0);
+    this.order = new Uint32Array(0);
+    this.stuckIndices = [];
     this.walkerCursor = 0;
     this.clusterSize = 0;
     this.maxRadius = 0;
+  }
+
+  /**
+   * Renormalise every stuck cell's displayed value against the current max
+   * stick order, so the newest growth always reads near 1 and older growth
+   * fades relative to it (growth-ring gradient). Only touches occupied
+   * cells: cheap even on a large, sparse grid.
+   */
+  private writeAgeGradient(): void {
+    const maxOrder = this.stuckIndices.length;
+    if (maxOrder === 0) {
+      return;
+    }
+
+    const denom = maxOrder > 1 ? maxOrder - 1 : 1;
+    for (let i = 0; i < this.stuckIndices.length; i += 1) {
+      const index = this.stuckIndices[i];
+      const order = this.order[index];
+      const t = maxOrder > 1 ? (order - 1) / denom : 0;
+      this.state[index] = AGE_FLOOR + (1 - AGE_FLOOR) * t;
+    }
   }
 
   private seedCluster(): void {
@@ -386,12 +440,16 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
     }
 
     const index = y * this.width + x;
-    if (this.state[index] === 1) {
+    if (this.order[index] !== 0) {
       return;
     }
 
-    this.state[index] = 1;
     this.clusterSize += 1;
+    this.stuckIndices.push(index);
+    this.order[index] = this.stuckIndices.length;
+    if (!this.colourByAge) {
+      this.state[index] = 1;
+    }
 
     const dx = x - this.centreX;
     const dy = y - this.centreY;
@@ -402,15 +460,15 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
   }
 
   private isEmpty(x: number, y: number): boolean {
-    return this.state[y * this.width + x] === 0;
+    return this.order[y * this.width + x] === 0;
   }
 
   private hasOccupiedNeighbour(x: number, y: number): boolean {
     return (
-      (x > 0 && this.state[y * this.width + x - 1] === 1) ||
-      (x < this.width - 1 && this.state[y * this.width + x + 1] === 1) ||
-      (y > 0 && this.state[(y - 1) * this.width + x] === 1) ||
-      (y < this.height - 1 && this.state[(y + 1) * this.width + x] === 1)
+      (x > 0 && this.order[y * this.width + x - 1] !== 0) ||
+      (x < this.width - 1 && this.order[y * this.width + x + 1] !== 0) ||
+      (y > 0 && this.order[(y - 1) * this.width + x] !== 0) ||
+      (y < this.height - 1 && this.order[(y + 1) * this.width + x] !== 0)
     );
   }
 
