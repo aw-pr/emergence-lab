@@ -24,7 +24,7 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Conway's Game of Life.** The original, and still the cleanest.
 - **Belousov-Zhabotinsky** waves. The reaction that taught chemistry about excitable media.
 - **Boids.** Flocking from three local rules.
-- **Lorenz attractor.** Where deterministic equations stop being predictable.
+- **Strange attractors** (Lorenz, Rössler, Thomas, Aizawa, Halvorsen). Where deterministic equations stop being predictable.
 - **Diffusion-limited aggregation.** How dendrites and lightning agree.
 - **Elementary cellular automata.** Wolfram's one-dimensional zoo.
 - **Brian's Brain.** Three states. Somehow it breathes.
