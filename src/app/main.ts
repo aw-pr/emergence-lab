@@ -24,7 +24,7 @@ async function show(route: Route): Promise<void> {
 
     case "sim": {
       appRoot.innerHTML = `<div class="loading">Loading ${escapeHtml(route.slug)}…</div>`;
-      const handle = await renderSimView(appRoot, route.slug);
+      const handle = await renderSimView(appRoot, route.slug, route.variant);
       if (current !== token) {
         // A newer navigation happened while we were loading.
         handle.dispose();

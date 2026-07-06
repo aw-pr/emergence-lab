@@ -88,6 +88,7 @@ export interface SimViewHandle {
 export async function renderSimView(
   container: HTMLElement,
   slug: string,
+  variant?: string,
 ): Promise<SimViewHandle> {
   container.innerHTML = "";
 
@@ -97,7 +98,21 @@ export async function renderSimView(
     return { dispose() {} };
   }
 
-  const layout = buildLayout(container, entry.name, slug);
+  // A variant selects a named configuration within the same kernel (e.g. which
+  // strange attractor). Falls back to the base entry when absent or unknown.
+  const variantDef = variant
+    ? entry.variants?.find((v) => v.variant === variant)
+    : undefined;
+
+  const layout = buildLayout(
+    container,
+    {
+      name: variantDef?.name ?? entry.name,
+      family: entry.family,
+      subtitle: variantDef?.subtitle ?? entry.subtitle,
+    },
+    slug,
+  );
   const renderMode = getRenderMode(slug);
   if (shouldUseSmoothCanvasPresentation(renderMode)) {
     layout.canvas.classList.add("sim-view__canvas--smooth");
@@ -114,12 +129,19 @@ export async function renderSimView(
   const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
+    ...(variantDef?.params ?? {}),
   };
-  const params: SimParams = restorePersistedParams(
+  const restored: SimParams = restorePersistedParams(
     slug,
     kernel.paramSchema,
     factoryParams,
   );
+  // Variants share one persistence key (the slug), so the variant's selector
+  // param must win over any restored value—otherwise picking Rössler could
+  // reopen as a previously-saved Lorenz.
+  const params: SimParams = variantDef
+    ? { ...restored, ...variantDef.params }
+    : restored;
   const factoryColourOptions: ColourMapOptions = defaultColourOptionsFor(
     slug,
     kernel.channelCount,
@@ -262,7 +284,17 @@ interface SimLayout {
   legend: HTMLElement;
 }
 
-function buildLayout(container: HTMLElement, simName: string, slug: string): SimLayout {
+interface SimHeader {
+  name: string;
+  family?: string;
+  subtitle?: string;
+}
+
+function buildLayout(
+  container: HTMLElement,
+  header: SimHeader,
+  slug: string,
+): SimLayout {
   const page = document.createElement("section");
   page.className = "sim-view";
 
@@ -280,21 +312,20 @@ function buildLayout(container: HTMLElement, simName: string, slug: string): Sim
 
   const title = document.createElement("h1");
   title.className = "sim-view__title";
-  title.textContent = simName;
+  title.textContent = header.name;
   titleBlock.appendChild(title);
 
-  const entry = findEntry(slug);
-  if (entry?.family || entry?.subtitle) {
+  if (header.family || header.subtitle) {
     const subtitle = document.createElement("p");
     subtitle.className = "sim-view__subtitle";
-    if (entry.family) {
+    if (header.family) {
       const tag = document.createElement("span");
       tag.className = "sim-view__family";
-      tag.textContent = entry.family;
+      tag.textContent = header.family;
       subtitle.appendChild(tag);
     }
-    if (entry.subtitle) {
-      subtitle.appendChild(document.createTextNode(entry.subtitle));
+    if (header.subtitle) {
+      subtitle.appendChild(document.createTextNode(header.subtitle));
     }
     titleBlock.appendChild(subtitle);
   }

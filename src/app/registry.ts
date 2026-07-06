@@ -11,6 +11,22 @@ import type { SimKernel } from "./types.ts";
  * src/sims/<slug>/kernel.ts. The renderer reads everything else off the
  * SimKernel instance (paramSchema, channelCount, channelRanges, etc.).
  */
+/**
+ * A selectable configuration within a single sim kernel, surfaced as its own
+ * gallery card and reachable at #/<slug>/<variant>. The kernel is shared; only
+ * the initial params (and presentation copy) differ. Used by the strange
+ * attractors, where one integrator draws several named attractors.
+ */
+export interface SimVariant {
+  /** Route suffix under the parent slug: #/<slug>/<variant>. */
+  variant: string;
+  name: string;
+  subtitle?: string;
+  description?: string;
+  /** Initial kernel params that pick this variant (e.g. { attractor }). */
+  params: Record<string, number | boolean | string>;
+}
+
 export interface SimEntry {
   slug: string;
   name: string;
@@ -19,6 +35,8 @@ export interface SimEntry {
   /** One-line intro shown under the title in the sim header. */
   subtitle?: string;
   description?: string;
+  /** Optional per-variant cards backed by the same kernel (see SimVariant). */
+  variants?: readonly SimVariant[];
   load: () => Promise<SimKernel>;
 }
 
@@ -148,6 +166,48 @@ export const REGISTRY: readonly SimEntry[] = [
     subtitle: "A gallery of three-variable flows tracing strange attractors.",
     description:
       "Pick an attractor—Lorenz butterfly, Rössler spiral, Thomas coil, Aizawa spindle or Halvorsen bloom—and follow a single trajectory trace out its shape.",
+    variants: [
+      {
+        variant: "lorenz",
+        name: "Lorenz Attractor",
+        subtitle: "The classic butterfly: convection rolls that never repeat.",
+        description:
+          "Two lobes traced by a single never-repeating orbit—the original strange attractor.",
+        params: { attractor: "lorenz" },
+      },
+      {
+        variant: "rossler",
+        name: "Rössler Attractor",
+        subtitle: "A flat spiral that periodically folds up out of plane.",
+        description:
+          "A slow outward spiral punctuated by a sharp z-axis fold—chaos from one quadratic term.",
+        params: { attractor: "rossler" },
+      },
+      {
+        variant: "thomas",
+        name: "Thomas Attractor",
+        subtitle: "A cyclically symmetric sine flow winding a slow coil.",
+        description:
+          "Cyclically symmetric sine dynamics coil into a labyrinthine, slowly drifting knot.",
+        params: { attractor: "thomas" },
+      },
+      {
+        variant: "aizawa",
+        name: "Aizawa Attractor",
+        subtitle: "A spindle wrapped in threads with a punched-through axis.",
+        description:
+          "An onion-like spindle threaded by orbits that pierce and re-wrap its polar axis.",
+        params: { attractor: "aizawa" },
+      },
+      {
+        variant: "halvorsen",
+        name: "Halvorsen Attractor",
+        subtitle: "A three-armed cyclically symmetric spiral bloom.",
+        description:
+          "Three symmetric arms spiral inward and out in a continuously blooming rosette.",
+        params: { attractor: "halvorsen" },
+      },
+    ],
     load: async () => {
       const mod = await import("../sims/lorenz-attractor/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);
