@@ -387,6 +387,8 @@ function speedProfileFor(slug: string): SpeedProfile {
       return { initial: 1.5, control: careful };
     case "boids":
       return { initial: 5, control: swarm };
+    case "particle-life":
+      return { initial: 5, control: swarm };
     case "mandelbrot":
     case "julia-set":
     case "burning-ship":
@@ -412,7 +414,7 @@ function defaultParamOverridesFor(slug: string): SimParams {
 }
 
 function defaultDisplayOptionsFor(slug: string): DisplayOptions {
-  if (slug === "boids") {
+  if (slug === "boids" || slug === "particle-life") {
     return { dotSize: 2 };
   }
   return { dotSize: 1 };
@@ -428,6 +430,7 @@ function defaultResolutionFor(slug: string): ResolutionPreset {
     case "diffusion-limited-aggregation":
     case "abelian-sandpile":
     case "boids":
+    case "particle-life":
       return "ultra";
     default:
       return DEFAULT_RESOLUTION;

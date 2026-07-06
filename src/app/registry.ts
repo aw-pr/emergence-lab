@@ -118,6 +118,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "particle-life",
+    name: "Particle Life",
+    family: "Swarm & Flocking",
+    subtitle: "A random attraction matrix breeds chasing, orbiting, cell-like life.",
+    description:
+      "Coloured particles pull and push by species. Asymmetric forces—A chases B while B flees A—self-organise into membranes, cells, and roving hunters.",
+    load: async () => {
+      const mod = await import("../sims/particle-life/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "lorenz-attractor",
     name: "Lorenz Attractor",
     family: "Chaotic Systems",

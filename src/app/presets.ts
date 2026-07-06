@@ -190,6 +190,47 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  "particle-life": [
+    {
+      id: "cells",
+      label: "Cells",
+      params: {
+        particleCount: 6000,
+        species: 5,
+        rmax: 40,
+        rmin: 12,
+        forceScale: 45,
+        friction: 0.7,
+        matrixBias: 0.08,
+      },
+    },
+    {
+      id: "chasers",
+      label: "Chasers",
+      params: {
+        particleCount: 5000,
+        species: 6,
+        rmax: 48,
+        rmin: 14,
+        forceScale: 85,
+        friction: 0.2,
+        matrixBias: 0,
+      },
+    },
+    {
+      id: "gas-clouds",
+      label: "Gas clouds",
+      params: {
+        particleCount: 12000,
+        species: 4,
+        rmax: 30,
+        rmin: 8,
+        forceScale: 22,
+        friction: 0.45,
+        matrixBias: -0.05,
+      },
+    },
+  ],
   "lorenz-attractor": [
     {
       id: "classic",

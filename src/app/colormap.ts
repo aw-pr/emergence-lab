@@ -115,6 +115,12 @@ export function defaultColourOptionsFor(
 ): ColourMapOptions {
   const base = { ...DEFAULT_COLOUR_OPTIONS };
   if (channelCount >= 3) {
+    // Particle Life packs one species-colour per particle into a cell; a slight
+    // gamma lift keeps single, un-stacked particles legible while the direct RGB
+    // path preserves per-species hue.
+    if (slug === "particle-life") {
+      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2 };
+    }
     return { ...base, preset: "rgb", contrast: 1.12 };
   }
 
