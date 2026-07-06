@@ -194,6 +194,54 @@ test("params are finite-checked and clamped", () => {
   assert.deepEqual(bounded, explicit);
 });
 
+test("applyImpulse paints newborn live cells in the brush disc, deterministically", () => {
+  const width = 40;
+  const height = 30;
+  const px = 15;
+  const py = 12;
+
+  const run = () => {
+    const kernel = new GameOfLifeKernel();
+    kernel.init(width, height, { seedDensity: 0, sparkRate: 0 });
+    kernel.applyImpulse(px, py, 4, 1);
+    return Array.from(kernel.readState());
+  };
+
+  const first = run();
+  const second = run();
+  assert.deepEqual(first, second);
+
+  // Empty seed + a poke: centre is alive at newborn brightness, a far cell dead.
+  assert.ok(first[py * width + px] >= 0.55 - 1e-9, "centre painted alive");
+  assert.equal(first[0], 0, "far cell untouched");
+
+  // The painted seed drives the rule on the next step (some cells survive).
+  const kernel = new GameOfLifeKernel();
+  kernel.init(width, height, { seedDensity: 0, sparkRate: 0 });
+  kernel.applyImpulse(px, py, 4, 1);
+  kernel.step(1);
+  const alive = kernel.readState().reduce((n, v) => n + (v >= 0.5 ? 1 : 0), 0);
+  assert.ok(alive > 0, "painted cells seed live activity");
+});
+
+test("applyImpulse radius scales with strength and stays in bounds", () => {
+  const width = 32;
+  const height = 32;
+  const countPainted = (strength) => {
+    const kernel = new GameOfLifeKernel();
+    kernel.init(width, height, { seedDensity: 0, sparkRate: 0 });
+    kernel.applyImpulse(16, 16, 8, strength);
+    return kernel.readState().reduce((n, v) => n + (v >= 0.5 ? 1 : 0), 0);
+  };
+
+  assert.ok(countPainted(1) > countPainted(0.4), "stronger poke paints wider");
+  assert.equal(countPainted(0), 0, "zero strength paints nothing");
+
+  const edge = new GameOfLifeKernel();
+  edge.init(width, height, { seedDensity: 0, sparkRate: 0 });
+  assert.doesNotThrow(() => edge.applyImpulse(0, 0, 6, 1));
+});
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new GameOfLifeKernel();
   kernel.init(12, 10, {});

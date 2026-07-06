@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
 const DEFAULT_BIRTH_MIN = 3;
@@ -372,6 +373,51 @@ export class GameOfLifeKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.output;
+  }
+
+  /**
+   * Pointer poke: paint live cells inside the brush disc as fresh newborns (age
+   * reset, ghost trail cleared) so the drawn shape immediately becomes seed for
+   * the B/S rule on the next step. Strength scales the effective brush radius.
+   * Writes both the canonical alive grid and the presentation output so a paused
+   * board shows the paint at once. Bounds-clamped and allocation-free.
+   */
+  applyImpulse(x: number, y: number, radius: number, strength: number): void {
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
+
+    const s = boundedNumber(strength, 0, 1);
+    if (s <= 0) {
+      return;
+    }
+
+    const centreX = Math.round(x);
+    const centreY = Math.round(y);
+    const r = Math.max(1, Math.round(radius * s));
+    const radiusSq = r * r;
+    const newborn = shadeCell(true, 0, GHOST_MAX_TICKS + 1, this.ageShading);
+
+    for (let dy = -r; dy <= r; dy += 1) {
+      const py = centreY + dy;
+      if (py < 0 || py >= this.height) {
+        continue;
+      }
+      for (let dx = -r; dx <= r; dx += 1) {
+        if (dx * dx + dy * dy > radiusSq) {
+          continue;
+        }
+        const px = centreX + dx;
+        if (px < 0 || px >= this.width) {
+          continue;
+        }
+        const index = py * this.width + px;
+        this.alive[index] = 1;
+        this.age[index] = 0;
+        this.ghostTicks[index] = GHOST_MAX_TICKS + 1;
+        this.output[index] = newborn;
+      }
+    }
   }
 
   destroy(): void {
