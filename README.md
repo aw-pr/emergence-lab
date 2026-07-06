@@ -14,9 +14,9 @@
 
 ![Julia set, escape-time render from the lab](docs/images/julia-hero.png)
 
-## The twelve
+## The sixteen
 
-Twelve deterministic kernels behind one renderer. Each is a different  
+Sixteen deterministic kernels behind one renderer. Each is a different  
 discipline's way of pointing at the same thing: local rules, global form.
 
 - **Gray-Scott** reaction diffusion. Chemistry's version of the question.
@@ -24,10 +24,14 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Conway's Game of Life.** The original, and still the cleanest.
 - **Belousov-Zhabotinsky** waves. The reaction that taught chemistry about excitable media.
 - **Boids.** Flocking from three local rules.
-- **Strange attractors** (Lorenz, Rössler, Thomas, Aizawa, Halvorsen). Where deterministic equations stop being predictable.
+- **Particle life.** A handful of attraction rules, and cells assemble themselves.
+- **Physarum.** Slime-mould agents laying pheromone trails into networks.
+- **Strange attractors** (Lorenz, Rössler, Thomas, Aizawa, Halvorsen — five separate cards). Where deterministic equations stop being predictable.
 - **Diffusion-limited aggregation.** How dendrites and lightning agree.
 - **Elementary cellular automata.** Wolfram's one-dimensional zoo.
 - **Brian's Brain.** Three states. Somehow it breathes.
+- **Cyclic cellular automata.** Rock-paper-scissors that spirals into itself.
+- **Lenia.** Continuous cellular automata, and life gets smooth gliders.
 - **Mandelbrot, Julia, Burning Ship.** Iterated maps as the geometry of feedback.
 
 Gray-Scott is the priority kernel. The others are calibrated and held.
