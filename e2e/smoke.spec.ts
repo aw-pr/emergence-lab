@@ -18,6 +18,7 @@ const ALL_SLUGS = [
   "mandelbrot",
   "julia-set",
   "burning-ship",
+  "lenia",
 ];
 
 const FRACTALS = new Set(["mandelbrot", "julia-set", "burning-ship"]);
