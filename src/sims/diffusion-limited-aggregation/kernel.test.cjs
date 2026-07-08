@@ -136,6 +136,38 @@ test("stepping grows the cluster and remains bounded to zero or one", () => {
   }
 });
 
+test("isComplete flips from false to true once the aggregate fills the frame", () => {
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(48, 48, {
+    seed: 1,
+    walkersPerStep: 128,
+    maxWalkSteps: 512,
+    spawnRadius: 0.5,
+    stickiness: 1,
+    seedCount: 1,
+  });
+
+  // Freshly seeded: a run is under way, not finished.
+  assert.equal(kernel.isComplete(), false);
+
+  let completed = false;
+  for (let index = 0; index < 4000 && !completed; index += 1) {
+    kernel.step(1);
+    completed = kernel.isComplete();
+  }
+
+  assert.equal(completed, true, "the run should reach the edge-stop and report complete");
+  // Idempotent once done: further stepping keeps it complete (step() no-ops).
+  kernel.step(1);
+  assert.equal(kernel.isComplete(), true);
+});
+
+test("isComplete is false on an unseeded/empty grid", () => {
+  const kernel = new DiffusionLimitedAggregationKernel();
+  kernel.init(0, 0, {});
+  assert.equal(kernel.isComplete(), false);
+});
+
 test("default settings produce a visible cluster within the page-load budget", () => {
   const kernel = new DiffusionLimitedAggregationKernel();
   kernel.init(800, 600, {

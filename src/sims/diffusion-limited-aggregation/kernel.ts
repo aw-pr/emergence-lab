@@ -21,6 +21,7 @@ interface SimKernel {
   readonly channelLabels: readonly string[];
   readonly paramSchema: readonly ParamDescriptor[];
   destroy(): void;
+  isComplete?(): boolean;
 }
 
 const DEFAULT_WALKERS_PER_STEP = 64;
@@ -249,6 +250,19 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       this.writeAgeGradient();
     }
     return this.state;
+  }
+
+  /**
+   * The run is done once the aggregate has grown to the edge-stop radius: at
+   * that point step() feeds no more walkers and the cluster is frozen. Same
+   * condition step() uses to stop, so the two never disagree. A grid with no
+   * cluster (never seeded) is not "complete", just idle.
+   */
+  isComplete(): boolean {
+    if (this.clusterSize === 0) {
+      return false;
+    }
+    return this.maxRadius >= this.maxGridRadius() * EDGE_STOP_FRACTION;
   }
 
   destroy(): void {
