@@ -27,9 +27,9 @@ interface SimKernel {
 const DEFAULT_DU = 0.2097;
 const DEFAULT_DV = 0.105;
 // Keep Du:Dv close to 2:1 for stable explicit-Euler integration.
-// Coral / branching-ridge regime; switch via the Mitosis or Worms preset for spot or filament dynamics.
-const DEFAULT_F = 0.0545;
-const DEFAULT_K = 0.0620;
+// Waves regime; propagating fronts. Switch via the Coral, Mitosis, or Worms preset for branching, spot, or filament dynamics.
+const DEFAULT_F = 0.018;
+const DEFAULT_K = 0.0487;
 const CHANNEL_COUNT = 2;
 
 function clamp01(value: number): number {
@@ -292,7 +292,9 @@ export class GrayScottKernel implements SimKernel {
 export function selfTest(): boolean {
   try {
     const kernel = new GrayScottKernel();
-    kernel.init(32, 32, {});
+    // Waves fronts need room to propagate; a 32x32 torus is too small and the
+    // seed heals over before the reaction takes hold.
+    kernel.init(64, 64, {});
 
     for (let i = 0; i < 100; i += 1) {
       kernel.step(1);

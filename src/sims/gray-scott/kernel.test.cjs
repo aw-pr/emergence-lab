@@ -58,13 +58,13 @@ test("metadata matches the renderer contract", () => {
   }
 });
 
-test("schema defaults use coral branching regime at gentler pace", () => {
+test("schema defaults use waves regime at gentler pace", () => {
   const defaults = defaultsFromSchema(new GrayScottKernel());
 
   assert.equal(defaults.Du, 0.2097);
   assert.equal(defaults.Dv, 0.105);
-  assert.equal(defaults.F, 0.0545);
-  assert.equal(defaults.k, 0.062);
+  assert.equal(defaults.F, 0.018);
+  assert.equal(defaults.k, 0.0487);
   assert.equal(defaults.stepsPerFrame, 12);
 });
 
