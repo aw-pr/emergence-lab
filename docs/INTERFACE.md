@@ -1,6 +1,6 @@
 # docs/INTERFACE.md — Kernel to Renderer Interface Contract
 
-**Status: reviewed contract — v1.1.0 (2026-07-06)**
+**Status: reviewed contract — v1.2.0 (2026-07-08)**
 
 This file defines the TypeScript interface that all simulation kernels must
 implement and that the renderer consumes. It is the only shared surface
@@ -154,10 +154,40 @@ export interface SimKernel {
    *     step sequence, the result is reproducible.
    */
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
+
+  /**
+   * OPTIONAL completion signal (v1.2.0). Returns true once a run has reached a
+   * terminal state that further step() calls will not change (e.g. a growth
+   * sim whose aggregate has filled the frame). The renderer polls it after
+   * stepping; when a sim reports completion and the user has auto-cycle
+   * enabled, the renderer re-initialises the kernel with a fresh seed after a
+   * brief hold, so a new randomised run begins. Kernels that omit it are
+   * treated as never-complete and run indefinitely (the previous behaviour).
+   *
+   * Must be a cheap, allocation-free read of existing state — the renderer may
+   * call it every frame. It reports the kernel's own notion of "done"; it does
+   * not itself reset anything.
+   */
+  isComplete?(): boolean;
 }
 ```
 
 ---
+
+## Resolved design decisions (v1.2.0)
+
+6. **Optional `isComplete` for run auto-cycling.** Kernels whose runs reach a
+   terminal, unchanging state may expose `isComplete(): boolean`. The renderer
+   polls it after stepping; when it returns true and the user has auto-cycle
+   enabled, the renderer holds the finished frame briefly and then re-seeds via
+   its normal reset path, starting a fresh randomised run. It is additive and
+   backwards-compatible: kernels without it are treated as never-complete and
+   run indefinitely, exactly as before, and the auto-cycle control is only
+   surfaced for sims that implement it. The method is a cheap, allocation-free
+   read of existing state (same rule as `step()`/`readState()`); it only
+   *reports* completion and never mutates or resets anything — the reset is the
+   renderer's job. This is a purely additive surface change, so it bumps the
+   minor version.
 
 ## Resolved design decisions (v1.1.0)
 
@@ -210,6 +240,9 @@ export interface SimKernel {
 - Export a `selfTest(): boolean` alongside the class (not on the interface).
 - `applyImpulse` is optional; implement it only for sims where a pointer poke is
   meaningful. It follows the same no-allocation and determinism rules as `step()`.
+- `isComplete` is optional; implement it only for sims that reach a terminal,
+  unchanging state. Keep it a cheap, allocation-free read; it must report the
+  kernel's own "done" state and never reset or mutate anything.
 - Do not import from `src/app/**`. The kernel has no knowledge of the renderer.
 
 ## Notes for renderer authors
