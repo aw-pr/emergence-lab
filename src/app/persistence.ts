@@ -133,6 +133,7 @@ export interface RenderOptionsStore {
   steps?: number;
   trailFade?: number;
   bloom?: number;
+  autoCycle?: boolean;
 }
 
 const RENDER_PREFIX = "el:render";
@@ -160,6 +161,9 @@ export function loadRenderOptions(slug: string): RenderOptionsStore | null {
     }
     if (typeof parsed.bloom === "number" && Number.isFinite(parsed.bloom)) {
       out.bloom = parsed.bloom;
+    }
+    if (typeof parsed.autoCycle === "boolean") {
+      out.autoCycle = parsed.autoCycle;
     }
     return out;
   } catch {

@@ -38,7 +38,16 @@ export interface RendererOptions {
   renderMode?: RenderMode;
   /** Compute-grid quality preset. Defaults to "balanced". */
   resolution?: ResolutionPreset;
+  /**
+   * Auto-cycle: when the kernel reports isComplete(), hold the finished frame
+   * briefly then re-seed into a fresh run. Ignored for kernels without
+   * isComplete(). Defaults to false.
+   */
+  autoCycle?: boolean;
 }
+
+/** Seconds a completed run stays on screen before auto-cycling to a new one. */
+const CYCLE_HOLD_SECONDS = 1.5;
 
 export type { DisplayOptions } from "./rendererBackend.ts";
 
@@ -82,6 +91,9 @@ export class Renderer {
   /** Fresh per load/reset; passed to kernel.init so sims that read `seed` vary
    * between runs while param tweaks (which keep it) preserve the layout. */
   private seed = 1;
+  private autoCycle = false;
+  /** Seconds left holding a completed run before re-seeding; -1 when not holding. */
+  private cycleHold = -1;
 
   private fpsSamples: number[] = [];
   private onFpsChange: ((fps: number) => void) | null = null;
@@ -104,6 +116,7 @@ export class Renderer {
     };
     this.renderMode = options.renderMode ?? "grid";
     this.resolution = options.resolution ?? DEFAULT_RESOLUTION;
+    this.autoCycle = options.autoCycle ?? false;
 
     this.backend =
       createWebGLRendererBackend(this.canvas) ?? new CanvasRendererBackend(this.canvas);
@@ -191,6 +204,19 @@ export class Renderer {
     if (this.resolution === preset) return;
     this.resolution = preset;
     this.reinitGrid();
+  }
+
+  /** Whether the current kernel reports run completion (SimKernel.isComplete). */
+  supportsAutoCycle(): boolean {
+    return typeof (this.kernel as { isComplete?: unknown }).isComplete === "function";
+  }
+
+  /** Enable/disable auto-cycling of completed runs. Clears any pending hold when disabled. */
+  setAutoCycle(enabled: boolean): void {
+    this.autoCycle = enabled;
+    if (!enabled) {
+      this.cycleHold = -1;
+    }
   }
 
   /** Whether the current kernel accepts pointer impulses (SimKernel.applyImpulse). */
@@ -297,11 +323,34 @@ export class Renderer {
       this.iterationCount += stepCount;
       this.onIterationChange?.(this.iterationCount);
     }
+    this.advanceAutoCycle(dt);
     this.draw();
     this.recordFps(dt);
 
     this.rafHandle = requestAnimationFrame(this.tick);
   };
+
+  /**
+   * Auto-cycle: when the kernel reports a finished run, hold it on screen for
+   * CYCLE_HOLD_SECONDS so it can be seen, then re-seed into a fresh run. The
+   * reset bumps the seed, so each cycle grows a different randomised pattern.
+   */
+  private advanceAutoCycle(dt: number): void {
+    if (!this.autoCycle || !this.supportsAutoCycle()) return;
+
+    if (this.cycleHold >= 0) {
+      this.cycleHold -= dt;
+      if (this.cycleHold <= 0) {
+        this.cycleHold = -1;
+        this.reset();
+      }
+      return;
+    }
+
+    if (this.kernel.isComplete?.()) {
+      this.cycleHold = CYCLE_HOLD_SECONDS;
+    }
+  }
 
   private draw(): void {
     const state = this.kernel.readState();
@@ -393,6 +442,7 @@ export class Renderer {
 
     this.backend.setGrid(width, height, this.kernel);
     this.kernel.init(width, height, { ...this.params, seed: this.seed });
+    this.cycleHold = -1;
     this.iterationCount = 0;
     this.onIterationChange?.(this.iterationCount);
     this.draw();

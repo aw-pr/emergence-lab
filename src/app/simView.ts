@@ -161,6 +161,15 @@ export async function renderSimView(
   const defaultResolution = defaultResolutionFor(slug);
   const resolution = resolveResolution(slug);
 
+  // Sims whose kernel reports run completion (currently DLA) can auto-cycle
+  // into a fresh randomised run when they finish. On by default when supported.
+  const autoCycleSupported =
+    typeof (kernel as { isComplete?: unknown }).isComplete === "function";
+  const defaultAutoCycle = true;
+  const initialAutoCycle = autoCycleSupported
+    ? resolveAutoCycle(slug, defaultAutoCycle)
+    : false;
+
   const renderer = new Renderer({
     canvas: layout.canvas,
     kernel,
@@ -170,6 +179,7 @@ export async function renderSimView(
     displayOptions,
     renderMode,
     resolution,
+    autoCycle: initialAutoCycle,
   });
 
   const controls = new ControlsPanel({
@@ -190,6 +200,9 @@ export async function renderSimView(
     defaultResolution,
     showResolutionControl: !fractal,
     showTrailControl: renderMode === "particle",
+    showAutoCycleControl: autoCycleSupported,
+    initialAutoCycle,
+    defaultAutoCycle,
     fractalPaletteCycleUi: fractal,
     callbacks: {
       onPlayPause: () => {
@@ -224,6 +237,9 @@ export async function renderSimView(
       },
       onResolutionChange: (preset) => {
         renderer.setResolution(preset);
+      },
+      onAutoCycleChange: (enabled) => {
+        renderer.setAutoCycle(enabled);
       },
     },
   });
@@ -567,6 +583,12 @@ function resolveResolution(slug: string): ResolutionPreset {
     return stored as ResolutionPreset;
   }
   return defaultResolutionFor(slug);
+}
+
+/** Persisted auto-cycle preference if stored, otherwise the per-sim default. */
+function resolveAutoCycle(slug: string, fallback: boolean): boolean {
+  const stored = loadRenderOptions(slug);
+  return typeof stored?.autoCycle === "boolean" ? stored.autoCycle : fallback;
 }
 
 function paramSchemaForControls(

@@ -29,6 +29,7 @@ export interface ControlsCallbacks {
   onDisplayChange: (next: DisplayOptions) => void;
   onParamChange: (next: SimParams) => void;
   onResolutionChange: (preset: ResolutionPreset) => void;
+  onAutoCycleChange: (enabled: boolean) => void;
 }
 
 const RESOLUTION_OPTIONS: ReadonlyArray<{
@@ -72,6 +73,12 @@ export interface ControlsOptions {
   showResolutionControl?: boolean;
   /** Show the particle-trail fade slider (particle-mode sims only). */
   showTrailControl?: boolean;
+  /** Show the "Auto-cycle runs" toggle (sims whose kernel reports isComplete()). */
+  showAutoCycleControl?: boolean;
+  /** Initial auto-cycle state (persisted or per-sim default). */
+  initialAutoCycle?: boolean;
+  /** Factory-default auto-cycle state, ignoring persistence. Used by "Reset to defaults". */
+  defaultAutoCycle?: boolean;
   callbacks: ControlsCallbacks;
   /** Mandelbrot / Julia / Burning Ship: palette cycle direction + key hint (does not duplicate cycle speed slider). */
   fractalPaletteCycleUi?: boolean;
@@ -97,6 +104,10 @@ export class ControlsPanel {
   private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
   private readonly showTrailControl: boolean;
+  private readonly showAutoCycleControl: boolean;
+  private readonly defaultAutoCycle: boolean;
+  private autoCycle: boolean;
+  private autoCycleInput?: HTMLInputElement;
   private params: SimParams;
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
@@ -147,6 +158,9 @@ export class ControlsPanel {
     this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
     this.showTrailControl = options.showTrailControl ?? false;
+    this.showAutoCycleControl = options.showAutoCycleControl ?? false;
+    this.defaultAutoCycle = options.defaultAutoCycle ?? false;
+    this.autoCycle = options.initialAutoCycle ?? this.defaultAutoCycle;
     this.params = restorePersistedParams(
       options.slug,
       options.paramSchema,
@@ -243,6 +257,10 @@ export class ControlsPanel {
         this.callbacks.onStepsPerFrameChange(value),
       ),
     );
+
+    if (this.showAutoCycleControl) {
+      transport.appendChild(this.buildAutoCycleControl());
+    }
 
     this.container.appendChild(transport);
     if (this.showResolutionControl) {
@@ -795,6 +813,37 @@ export class ControlsPanel {
     return wrap;
   }
 
+  private buildAutoCycleControl(): HTMLLabelElement {
+    const wrap = document.createElement("label");
+    wrap.className = "control control--boolean";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = this.autoCycle;
+    this.autoCycleInput = input;
+    wrap.appendChild(input);
+
+    const label = document.createElement("span");
+    label.className = "control__label";
+    label.textContent = "Auto-cycle runs";
+    wrap.appendChild(label);
+
+    input.addEventListener("change", () => {
+      this.setAutoCycle(input.checked);
+    });
+
+    return wrap;
+  }
+
+  private setAutoCycle(enabled: boolean): void {
+    this.autoCycle = enabled;
+    if (this.autoCycleInput) {
+      this.autoCycleInput.checked = enabled;
+    }
+    this.persistRenderOptions();
+    this.callbacks.onAutoCycleChange(enabled);
+  }
+
   private updateParams(next: SimParams): void {
     this.params = next;
     saveValues(this.slug, this.params);
@@ -834,6 +883,9 @@ export class ControlsPanel {
       this.resolutionSelect.value = this.defaultResolution;
     }
     this.syncColourControls();
+    if (this.showAutoCycleControl && this.autoCycle !== this.defaultAutoCycle) {
+      this.setAutoCycle(this.defaultAutoCycle);
+    }
     this.callbacks.onStepsPerFrameChange(this.initialStepsPerFrame);
     this.callbacks.onColourChange(this.colourOptions);
     this.callbacks.onDisplayChange(this.displayOptions);
@@ -922,6 +974,7 @@ export class ControlsPanel {
       steps: this.colourOptions.steps,
       trailFade: this.displayOptions.trailFade,
       bloom: this.displayOptions.bloom,
+      autoCycle: this.autoCycle,
     });
   }
 
