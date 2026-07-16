@@ -32,11 +32,13 @@ interface SimKernel {
 // it bounds frame cost while each relaxation moves arbitrarily many grains.
 const DEFAULT_INITIAL_PILE = 3000000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
-const DEFAULT_GRAINS_PER_STEP = 1;
-const DEFAULT_TOPPLES_PER_STEP = 300000;
+const DEFAULT_GRAINS_PER_STEP = 32;
+const DEFAULT_TOPPLES_PER_STEP = 120000;
 const MAX_INITIAL_PILE = 16000000;
 const MAX_TOPPLES_PER_STEP = 2000000;
-const CHANNEL_COUNT = 1;
+const CHANNEL_COUNT = 2;
+const ACTIVITY_DECAY = 0.82;
+const ACTIVITY_EPSILON = 0.01;
 
 function numberParam(
   params: SimParams,
@@ -58,8 +60,8 @@ function boundedInteger(value: number, min: number, max: number): number {
 export class AbelianSandpileKernel implements SimKernel {
   readonly name = "Abelian Sandpile";
   readonly channelCount = CHANNEL_COUNT;
-  readonly channelLabels = ["Grains"] as const;
-  readonly channelRanges = [[0, 4]] as const;
+  readonly channelLabels = ["Stable height", "Avalanche activity"] as const;
+  readonly channelRanges = [[0, 1], [0, 1]] as const;
   readonly paramSchema = [
     {
       key: "initialPile",
@@ -101,6 +103,8 @@ export class AbelianSandpileKernel implements SimKernel {
 
   private width = 0;
   private height = 0;
+  private grains = new Float32Array(0);
+  private activity = new Float32Array(0);
   private state = new Float32Array(0);
   private queue = new Int32Array(0);
   private queued = new Uint8Array(0);
@@ -115,12 +119,17 @@ export class AbelianSandpileKernel implements SimKernel {
     this.width = Math.max(0, Math.floor(width));
     this.height = Math.max(0, Math.floor(height));
 
-    const length = this.width * this.height * this.channelCount;
+    const cellCount = this.width * this.height;
+    const length = cellCount * this.channelCount;
     if (this.state.length !== length) {
+      this.grains = new Float32Array(cellCount);
+      this.activity = new Float32Array(cellCount);
       this.state = new Float32Array(length);
-      this.queue = new Int32Array(length);
-      this.queued = new Uint8Array(length);
+      this.queue = new Int32Array(cellCount);
+      this.queued = new Uint8Array(cellCount);
     } else {
+      this.grains.fill(0);
+      this.activity.fill(0);
       this.state.fill(0);
       this.queued.fill(0);
     }
@@ -151,12 +160,13 @@ export class AbelianSandpileKernel implements SimKernel {
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
     const centreIndex = centreY * this.width + centreX;
-    this.state[centreIndex] = boundedInteger(
+    this.grains[centreIndex] = boundedInteger(
       numberParam(params, "initialPile", DEFAULT_INITIAL_PILE),
       0,
       MAX_INITIAL_PILE,
     );
     this.enqueueIfUnstable(centreIndex);
+    this.writeState();
   }
 
   step(_dt: number): void {
@@ -164,10 +174,15 @@ export class AbelianSandpileKernel implements SimKernel {
       return;
     }
 
+    for (let index = 0; index < this.activity.length; index += 1) {
+      const decayed = this.activity[index] * ACTIVITY_DECAY;
+      this.activity[index] = decayed < ACTIVITY_EPSILON ? 0 : decayed;
+    }
+
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
     const centreIndex = centreY * this.width + centreX;
-    this.state[centreIndex] += this.grainsPerStep;
+    this.grains[centreIndex] += this.grainsPerStep;
     this.enqueueIfUnstable(centreIndex);
 
     for (
@@ -180,13 +195,15 @@ export class AbelianSandpileKernel implements SimKernel {
       this.queueCount -= 1;
       this.queued[index] = 0;
 
-      const grains = this.state[index];
+      const grains = this.grains[index];
       if (grains < this.toppleThreshold) {
         continue;
       }
 
       const bulk = Math.floor(grains / this.toppleThreshold);
-      this.state[index] = grains - bulk * this.toppleThreshold;
+      this.grains[index] = grains - bulk * this.toppleThreshold;
+      const intensity = Math.min(1, Math.log2(bulk + 1) / 12);
+      this.activity[index] = Math.max(this.activity[index], intensity);
 
       const x = index % this.width;
       if (x > 0) {
@@ -207,6 +224,7 @@ export class AbelianSandpileKernel implements SimKernel {
       this.queueHead = 0;
       this.queueTail = 0;
     }
+    this.writeState();
   }
 
   readState(): Float32Array {
@@ -255,15 +273,22 @@ export class AbelianSandpileKernel implements SimKernel {
           continue;
         }
         const index = py * this.width + px;
-        this.state[index] += grains;
+        this.grains[index] += grains;
+        this.activity[index] = Math.max(
+          this.activity[index],
+          0.5 * (1 - Math.sqrt(distSq) / r) * s,
+        );
         this.enqueueIfUnstable(index);
       }
     }
+    this.writeState();
   }
 
   destroy(): void {
     this.width = 0;
     this.height = 0;
+    this.grains = new Float32Array(0);
+    this.activity = new Float32Array(0);
     this.state = new Float32Array(0);
     this.queue = new Int32Array(0);
     this.queued = new Uint8Array(0);
@@ -273,13 +298,13 @@ export class AbelianSandpileKernel implements SimKernel {
   }
 
   private addGrains(index: number, count: number): void {
-    this.state[index] += count;
+    this.grains[index] += count;
     this.enqueueIfUnstable(index);
   }
 
   private enqueueIfUnstable(index: number): void {
     if (
-      this.state[index] < this.toppleThreshold ||
+      this.grains[index] < this.toppleThreshold ||
       this.queued[index] === 1 ||
       this.queueCount >= this.queue.length
     ) {
@@ -290,6 +315,15 @@ export class AbelianSandpileKernel implements SimKernel {
     this.queueTail = (this.queueTail + 1) % this.queue.length;
     this.queueCount += 1;
     this.queued[index] = 1;
+  }
+
+  private writeState(): void {
+    const stableMaximum = Math.max(1, this.toppleThreshold - 1);
+    for (let cell = 0; cell < this.grains.length; cell += 1) {
+      const offset = cell * CHANNEL_COUNT;
+      this.state[offset] = (this.grains[cell] % this.toppleThreshold) / stableMaximum;
+      this.state[offset + 1] = this.activity[cell];
+    }
   }
 }
 
@@ -302,10 +336,10 @@ export function selfTest(): boolean {
     const state = kernel.readState();
     const centreX = 16;
     const centreY = 16;
-    const centreIndex = centreY * 32 + centreX;
+    const centreCell = centreY * 32 + centreX;
 
-    for (let index = 0; index < state.length; index += 1) {
-      if (index !== centreIndex && state[index] > 0) {
+    for (let cell = 0; cell < 32 * 32; cell += 1) {
+      if (cell !== centreCell && state[cell * CHANNEL_COUNT] > 0) {
         return true;
       }
     }

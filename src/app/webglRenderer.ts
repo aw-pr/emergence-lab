@@ -188,6 +188,21 @@ vec4 sampleChannels(vec2 uv) {
   return mix(top, bottom, f.y);
 }
 
+vec4 sampleSandpileChannels(vec2 uv) {
+  vec2 texel = 1.6 / u_sourceSize;
+  return (
+    sampleChannels(uv) * 4.0 +
+    sampleChannels(uv + vec2(texel.x, 0.0)) * 2.0 +
+    sampleChannels(uv - vec2(texel.x, 0.0)) * 2.0 +
+    sampleChannels(uv + vec2(0.0, texel.y)) * 2.0 +
+    sampleChannels(uv - vec2(0.0, texel.y)) * 2.0 +
+    sampleChannels(uv + texel) +
+    sampleChannels(uv - texel) +
+    sampleChannels(uv + vec2(texel.x, -texel.y)) +
+    sampleChannels(uv + vec2(-texel.x, texel.y))
+  ) / 16.0;
+}
+
 float signalAt(vec4 raw) {
   float signal = 0.0;
   if (u_channelCount >= 1) signal = max(signal, normalise(raw.r, u_ranges[0]));
@@ -230,6 +245,17 @@ vec3 singleChannelColour(float t) {
 }
 
 vec3 twoChannelColour(float c0, float c1) {
+  if (u_preset == 13) {
+    vec3 base = rampColour(4, adjust(c0));
+    float density = smoothstep(0.0, 0.7, c0);
+    vec3 stable = mixRgb(vec3(8.0, 4.0, 2.0) / 255.0, base, density);
+    vec3 heat = mixRgb(
+      vec3(255.0, 92.0, 12.0) / 255.0,
+      vec3(255.0, 246.0, 184.0) / 255.0,
+      c1
+    );
+    return mixRgb(stable, heat, smoothstep(0.05, 0.85, c1) * 0.55);
+  }
   if (u_preset != 6) {
     float composite = clamp01(c1 * 0.72 + (1.0 - c0) * 0.28);
     return singleChannelColour(composite);
@@ -391,7 +417,9 @@ void main() {
     }
   }
 
-  vec4 raw = u_smoothSampling ? sampleChannels(v_uv) : readChannels(coord);
+  vec4 raw = u_smoothSampling
+    ? (u_preset == 13 ? sampleSandpileChannels(v_uv) : sampleChannels(v_uv))
+    : readChannels(coord);
   float alpha = u_trailMode ? (signalAt(raw) > 0.02 ? 1.0 : 0.0) : 1.0;
   outColor = vec4(colourFromRaw(raw), alpha);
 }
@@ -2159,6 +2187,8 @@ function presetIndex(preset: ColourPreset): number {
       return 11;
     case "phase":
       return 12;
+    case "sand":
+      return 13;
   }
 }
 

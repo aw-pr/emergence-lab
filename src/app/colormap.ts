@@ -17,6 +17,7 @@ export type ColourPreset =
   | "turbo"
   | "twilight"
   | "phase"
+  | "sand"
   | "ice"
   | "amber"
   | "brian"
@@ -57,6 +58,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "turbo", label: "Turbo" },
   { value: "twilight", label: "Twilight (cyclic)" },
   { value: "phase", label: "Phase silk (cyclic)" },
+  { value: "sand", label: "Avalanche glow" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
   { value: "brian", label: "Brian's Brain" },
@@ -87,7 +89,7 @@ export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
 
 type ColourStop = readonly [number, Rgb];
 
-const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb">, readonly ColourStop[]> = {
+const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb" | "sand">, readonly ColourStop[]> = {
   viridis: [
     [0, [68, 1, 84]],
     [0.28, [59, 82, 139]],
@@ -178,8 +180,7 @@ export function defaultColourOptionsFor(
   // raw RGB just because it has three or more channels.
   switch (slug) {
     case "abelian-sandpile":
-      // 0–4 grains: five bands render the terraces as distinct steps.
-      return { ...base, preset: "amber", gamma: 0.78, contrast: 1.45, steps: 5 };
+      return { ...base, preset: "sand", gamma: 0.9, contrast: 1.1 };
     case "belousov-zhabotinsky":
     case "gray-scott":
     case "boids":
@@ -255,7 +256,10 @@ function adjust(value: number, options: ColourMapOptions): number {
   return clamp01((corrected - 0.5) * contrast + 0.5);
 }
 
-function rampColour(preset: Exclude<ColourPreset, "chemical" | "rgb">, t: number): Rgb {
+function rampColour(
+  preset: Exclude<ColourPreset, "chemical" | "rgb" | "sand">,
+  t: number,
+): Rgb {
   const stops = RAMPS[preset];
   const x = clamp01(t);
   for (let i = 1; i < stops.length; i += 1) {
@@ -279,6 +283,13 @@ function mix(left: Rgb, right: Rgb, t: number): Rgb {
 }
 
 function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rgb {
+  if (options.preset === "sand") {
+    const base = rampColour("amber", adjust(c0, options));
+    const density = smoothstep01(c0 / 0.7);
+    const stable = mix([8, 4, 2], base, density);
+    const heat = mix([255, 92, 12], [255, 246, 184], clamp01(c1));
+    return mix(stable, heat, smoothstep01(c1 / 0.85) * 0.55);
+  }
   if (options.preset !== "chemical") {
     const composite = clamp01(c1 * 0.72 + (1 - c0) * 0.28);
     return singleChannelColour(composite, options);
@@ -325,10 +336,15 @@ function quantise(t: number, steps: number): number {
 function singleChannelColour(t: number, options: ColourMapOptions): Rgb {
   const value = adjust(quantise(t, options.steps), options);
   const preset =
-    options.preset === "chemical" || options.preset === "rgb"
+    options.preset === "chemical" || options.preset === "rgb" || options.preset === "sand"
       ? "viridis"
       : options.preset;
   return rampColour(preset, value);
+}
+
+function smoothstep01(value: number): number {
+  const x = clamp01(value);
+  return x * x * (3 - 2 * x);
 }
 
 /**

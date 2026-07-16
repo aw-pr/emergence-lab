@@ -1,7 +1,6 @@
 import type { RenderMode } from "./rendererBackend.ts";
 
 const GRID_SLUGS = new Set([
-  "abelian-sandpile",
   "game-of-life",
   "diffusion-limited-aggregation",
   "elementary-cellular-automata",

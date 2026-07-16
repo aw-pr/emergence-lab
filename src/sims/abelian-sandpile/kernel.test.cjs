@@ -30,9 +30,9 @@ test("metadata matches the renderer contract", () => {
   const kernel = new AbelianSandpileKernel();
 
   assert.equal(kernel.name, "Abelian Sandpile");
-  assert.equal(kernel.channelCount, 1);
-  assert.deepEqual(kernel.channelLabels, ["Grains"]);
-  assert.deepEqual(kernel.channelRanges, [[0, 4]]);
+  assert.equal(kernel.channelCount, 2);
+  assert.deepEqual(kernel.channelLabels, ["Stable height", "Avalanche activity"]);
+  assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
@@ -52,7 +52,7 @@ test("metadata matches the renderer contract", () => {
   const grainsDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "grainsPerStep",
   );
-  assert.equal(grainsDescriptor?.default, 1);
+  assert.equal(grainsDescriptor?.default, 32);
 
   const initialPileDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "initialPile",
@@ -77,7 +77,7 @@ test("init creates the expected state shape and readState reference is stable", 
 
 test("init floors dimensions and resets state idempotently", () => {
   const kernel = new AbelianSandpileKernel();
-  kernel.init(10.9, 8.2, { initialPile: 64 });
+  kernel.init(10.9, 8.2, { initialPile: 65 });
 
   const state = kernel.readState();
   assert.equal(state.length, 10 * 8 * kernel.channelCount);
@@ -85,11 +85,11 @@ test("init floors dimensions and resets state idempotently", () => {
   kernel.step(1);
   const afterStep = Array.from(state);
 
-  kernel.init(10.9, 8.2, { initialPile: 64 });
+  kernel.init(10.9, 8.2, { initialPile: 65 });
   assert.notDeepEqual(Array.from(kernel.readState()), afterStep);
 
-  const centreIndex = Math.floor(8 / 2) * 10 + Math.floor(10 / 2);
-  assert.equal(kernel.readState()[centreIndex], 64);
+  const centreIndex = (Math.floor(8 / 2) * 10 + Math.floor(10 / 2)) * kernel.channelCount;
+  assert.ok(Math.abs(kernel.readState()[centreIndex] - 1 / 3) < 1e-6);
 });
 
 test("missing params use schema defaults", () => {
@@ -132,16 +132,33 @@ test("toppling spreads grains beyond centre with open boundaries", () => {
   kernel.step(1);
 
   const state = kernel.readState();
-  const centreIndex = 4 * 9 + 4;
-  const nonCentreGrains = state.some(
-    (value, index) => index !== centreIndex && value > 0,
+  const centreCell = 4 * 9 + 4;
+  const grains = Array.from({ length: 9 * 9 }, (_value, cell) =>
+    state[cell * kernel.channelCount],
+  );
+  const nonCentreGrains = grains.some(
+    (value, cell) => cell !== centreCell && value > 0,
   );
 
   assert.equal(nonCentreGrains, true);
-  assert.equal(
-    Array.from(state).reduce((sum, value) => sum + value, 0),
-    16,
+  assert.ok(
+    Math.abs(grains.reduce((sum, value) => sum + value * 3, 0) - 16) < 1e-5,
   );
+});
+
+test("toppling emits a visible avalanche activity channel", () => {
+  const kernel = new AbelianSandpileKernel();
+  kernel.init(21, 21, {
+    initialPile: 4096,
+    grainsPerStep: 0,
+    topplesPerStep: 5000,
+  });
+  kernel.step(1);
+
+  const state = kernel.readState();
+  const activity = state.filter((_value, index) => index % 2 === 1);
+  assert.ok(activity.some((value) => value > 0.1));
+  assert.ok(activity.every((value) => value >= 0 && value <= 1));
 });
 
 test("open boundaries allow grains to leave the grid", () => {
@@ -163,7 +180,7 @@ test("applyImpulse pours grains and relaxes through the topple queue", () => {
   const height = 21;
   const px = 10;
   const py = 10;
-  const centreIndex = py * width + px;
+  const centreIndex = (py * width + px) * 2;
 
   const run = () => {
     const kernel = new AbelianSandpileKernel();
@@ -183,12 +200,15 @@ test("applyImpulse pours grains and relaxes through the topple queue", () => {
   const second = run();
   assert.deepEqual(first.settled, second.settled);
 
-  const pouredCentre = first.poured[centreIndex];
-  assert.ok(pouredCentre > 0, "grains poured at the centre");
+  assert.ok(
+    first.poured.some((value, index) => index % 2 === 0 && value > 0),
+    "grain-height residue appears in the poured patch",
+  );
+  assert.ok(first.poured[centreIndex + 1] > 0, "pour marks centre activity");
 
   // After a step the topple machinery has spread grains beyond the centre.
   const spread = first.settled.some(
-    (value, index) => index !== centreIndex && value > 0,
+    (value, index) => index % 2 === 0 && index !== centreIndex && value > 0,
   );
   assert.equal(spread, true);
 });
