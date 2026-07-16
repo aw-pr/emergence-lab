@@ -14,13 +14,15 @@
 
 ![Julia set, escape-time render from the lab](docs/images/julia-hero.png)
 
-## The sixteen
+## The eighteen
 
-Sixteen deterministic kernels behind one renderer. Each is a different  
+Eighteen deterministic kernels behind one renderer. Each is a different
 discipline's way of pointing at the same thing: local rules, global form.
 
 - **Gray-Scott** reaction diffusion. Chemistry's version of the question.
 - **Abelian sandpile.** Self-organised criticality in one toy.
+- **2D Ising model.** A magnetic lattice assembling order at a phase transition.
+- **Kuramoto oscillators.** Different rhythms crossing into collective synchrony.
 - **Conway's Game of Life.** The original, and still the cleanest.
 - **Belousov-Zhabotinsky** waves. The reaction that taught chemistry about excitable media.
 - **Boids.** Flocking from three local rules.

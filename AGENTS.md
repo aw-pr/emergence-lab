@@ -3,7 +3,7 @@
 ## Phase: hone
 
 emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 12 simulations. See `MODELS.md`.
+performance, and UX polish on a working set of 18 simulations. See `MODELS.md`.
 
 ## Working model
 

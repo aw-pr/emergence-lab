@@ -98,6 +98,28 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random" },
     },
   ],
+  "kuramoto-oscillators": [
+    {
+      id: "local-waves",
+      label: "Local phase waves",
+      params: { coupling: 1.8, frequencySpread: 0.45, timestep: 0.045, couplingMode: "local", initialPattern: "waves", noise: 0.015 },
+    },
+    {
+      id: "vortex-field",
+      label: "Vortex field",
+      params: { coupling: 3.2, frequencySpread: 0.18, timestep: 0.04, couplingMode: "local", initialPattern: "vortices", noise: 0.005 },
+    },
+    {
+      id: "global-threshold",
+      label: "Global threshold",
+      params: { coupling: 1.1, frequencySpread: 0.55, timestep: 0.055, couplingMode: "global", initialPattern: "random", noise: 0.01 },
+    },
+    {
+      id: "global-lock",
+      label: "Global lock",
+      params: { coupling: 4.2, frequencySpread: 0.3, timestep: 0.05, couplingMode: "global", initialPattern: "random", noise: 0 },
+    },
+  ],
   "game-of-life": [
     {
       id: "conway",

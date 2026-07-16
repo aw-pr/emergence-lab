@@ -181,6 +181,8 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "binary", contrast: 1.25 };
     case "ising-model":
       return { ...base, preset: "plasma", contrast: 1.25, steps: 2 };
+    case "kuramoto-oscillators":
+      return { ...base, preset: "twilight", contrast: 1.22 };
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":

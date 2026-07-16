@@ -112,6 +112,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "kuramoto-oscillators",
+    name: "Kuramoto Oscillators",
+    family: "Synchronisation",
+    subtitle: "Coupled phases cross a threshold and begin to move together.",
+    description:
+      "A field of oscillators with different natural frequencies. Local or global coupling pulls their phases into waves, vortices, and collective synchrony.",
+    load: async () => {
+      const mod = await import("../sims/kuramoto-oscillators/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "game-of-life",
     name: "Game of Life",
     family: "Cellular Automata",
