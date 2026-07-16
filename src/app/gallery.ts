@@ -110,7 +110,7 @@ function renderCard(card: CardModel): HTMLLIElement {
 
   const img = document.createElement("img");
   img.className = "gallery__thumb-img";
-  img.src = `thumbnails/${card.thumbKey}.png`;
+  img.src = `${import.meta.env.BASE_URL}thumbnails/${card.thumbKey}.png`;
   img.alt = "";
   img.loading = "lazy";
   img.decoding = "async";
