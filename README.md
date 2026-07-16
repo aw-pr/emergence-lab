@@ -55,6 +55,28 @@ npm test
 npm run build
 ```
 
+## Publish into the site
+
+The lab's own Netlify deploy serves from the root path (`/`) and is unaffected
+by the steps below. To vendor a build into the promo-flow site instead, at
+`/labs/app/`:
+
+```bash
+npm run publish:site
+```
+
+This builds with Vite base `/labs/app/` (`build:site`) and rsyncs `dist/` into
+`../promo-flow/public/labs/app/` with `-a --delete`, so stale files from a
+previous build are removed. The promo-flow path defaults to a sibling
+checkout; override it with `PROMO_FLOW_DIR` if promo-flow lives elsewhere:
+
+```bash
+PROMO_FLOW_DIR=/path/to/promo-flow npm run publish:site
+```
+
+Nothing is committed or pushed on the promo-flow side; that repository
+commits its own copy of the vendored build.
+
 ## Stack
 
 Vite and TypeScript throughout. Kernels are pure deterministic numerics

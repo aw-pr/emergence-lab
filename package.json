@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:site": "tsc -p tsconfig.json --noEmit && vite build --base=/labs/app/",
+    "publish:site": "npm run build:site && rsync -a --delete dist/ \"${PROMO_FLOW_DIR:-../promo-flow}/public/labs/app/\"",
     "preview": "vite preview",
     "build:test": "tsc -p tsconfig.test.json",
     "test": "npm run build:test && node scripts/run-kernel-tests.cjs",
