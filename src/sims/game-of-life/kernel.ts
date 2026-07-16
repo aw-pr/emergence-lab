@@ -34,10 +34,10 @@ const DEFAULT_SEED_DENSITY = 0.28;
 // clusters — each burns locally for a while and throws gliders — so the board
 // keeps evolving indefinitely without the synchronized full-board flash a
 // periodic bulk re-seed produces. Set the spark rate to 0 for purist B3/S23.
-const DEFAULT_SPARK_RATE = 0.04;
+const DEFAULT_SPARK_RATE = 0.1;
 /** Cells of grid area per unit sparkRate that yield one cluster per
  * generation: clusters/gen = sparkRate x cellCount / SPARK_AREA_PER_CLUSTER.
- * At the default rate a 512x512 board seeds ~1.7 clusters each generation. */
+ * At the default rate a 512x512 board seeds ~4.3 clusters each generation. */
 const SPARK_AREA_PER_CLUSTER = 6144;
 const SPARK_PATCH = 4;
 const SPARK_FILL = 0.45;

@@ -72,6 +72,10 @@ test("metadata matches the renderer contract", () => {
     (descriptor) => descriptor.key === "ageShading",
   );
   assert.equal(ageShading.default, true);
+  const sparkRate = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "sparkRate",
+  );
+  assert.equal(sparkRate.default, 0.1);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
@@ -253,6 +257,22 @@ test("destroy releases state and leaves step/readState safe", () => {
     kernel.step(1);
   });
   assert.equal(kernel.readState().length, 0);
+});
+
+test("default sparks sustain visible evolution after the initial soup settles", () => {
+  const kernel = new GameOfLifeKernel();
+  kernel.init(128, 128, {});
+  for (let step = 0; step < 999; step += 1) {
+    kernel.step(1);
+  }
+  const before = new Float32Array(kernel.readState());
+  kernel.step(1);
+  const after = kernel.readState();
+  let changed = 0;
+  for (let index = 0; index < after.length; index += 1) {
+    changed += (after[index] >= 0.5) !== (before[index] >= 0.5) ? 1 : 0;
+  }
+  assert.ok(changed / after.length > 0.05);
 });
 
 test("age increments for continuously-alive cells and saturates brightness at maturity", () => {
