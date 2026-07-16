@@ -9,6 +9,10 @@ SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
 Artifacts (per-candidate grayscale field PNGs, full ranked JSON, a generated
 report) land under `e2e/artifacts/gray-scott/` (git-ignored).
 
+> Historical note (2026-07-16): the score tables below were captured with the
+> former raw square seed. The live kernel now generates a single approximate
+> warm-start wave, so fresh absolute scores are not directly comparable.
+
 ## How the harness scores a frame
 
 The sweep drives the **real kernel** headlessly through the Vite dev server: it
@@ -72,10 +76,10 @@ diffusion ratio, not the grid).
   mildly over-rewards *sparse but coherent* frames (e.g. a single labyrinth
   "flower" on black scores ~0.71 on high autocorrelation despite being mostly
   empty). Coverage-gating limits this but does not eliminate it.
-- **Seed symmetry.** Every Gray-Scott regime is 4/8-fold symmetric here because
-  the kernel seeds a single central patch into a symmetric, periodic domain — so
-  the sweep frames are mandala-like. This is faithful to the live sim's behaviour,
-  just smaller and earlier.
+- **Seed symmetry.** Every Gray-Scott regime is 4/8-fold symmetric because the
+  kernel generates one central warm-start wave in a symmetric, periodic domain.
+  The sweep frames remain mandala-like; this is faithful to the live sim's
+  behaviour, just smaller and earlier.
 
 ## Lorenz & Boids (swept, not promoted)
 

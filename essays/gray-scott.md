@@ -10,9 +10,9 @@ subtitle: Two chemicals diffuse and react into Turing spots and stripes.
 ## What it is
 
 Two-species reaction-diffusion. Watch spots and stripes self-organise from a
-seed patch. Two chemicals, U and V, spread across a grid and react with each
-other; the balance between diffusion and reaction is what turns a random seed
-into a stable, repeating pattern.
+warm-started central seed. Two chemicals, U and V, spread across a grid and
+react with each other; the balance between diffusion and reaction is what turns
+a random seed into a stable, repeating pattern.
 
 ## The rule
 

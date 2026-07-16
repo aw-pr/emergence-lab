@@ -101,30 +101,47 @@ test("init floors dimensions and resets state idempotently", () => {
     vValues.push(kernel.readState()[index]);
   }
 
-  assert.ok(vValues.some((value) => value > 0.1));
-  assert.ok(vValues.some((value) => value === 0));
+  assert.ok(vValues.some((value) => value > 0));
+  assert.ok(vValues.some((value) => value < 0.1));
 });
 
-test("init seeds a symmetric clean centre patch", () => {
-  const width = 32;
-  const height = 24;
+test("init creates one symmetric approximate warm-start wave", () => {
+  const width = 64;
+  const height = 48;
   const kernel = new GrayScottKernel();
   kernel.init(width, height, {});
 
   const state = kernel.readState();
   const centreX = Math.floor(width / 2);
   const centreY = Math.floor(height / 2);
-  const half = Math.max(4, Math.floor(Math.min(width, height) * 0.08));
+  const minAxis = Math.min(width, height);
+  const seedHalf = Math.max(4, Math.floor(minAxis * 0.08));
+  const halfExtent = Math.min(minAxis * 0.36, seedHalf + 80);
 
   const centreCell = readCell(state, width, centreX, centreY);
-  assert.equal(centreCell.u, 0.5);
-  assert.equal(centreCell.v, 0.25);
+  assert.equal(centreCell.u, 1);
+  assert.equal(centreCell.v, 0);
+
+  const waveFront = readCell(
+    state,
+    width,
+    Math.round(centreX + halfExtent),
+    centreY,
+  );
+  assert.ok(waveFront.u < 0.7);
+  assert.ok(waveFront.v > 0.2);
+
+  let activeV = 0;
+  for (let index = 1; index < state.length; index += kernel.channelCount) {
+    if (state[index] > 0.1) activeV += 1;
+  }
+  assert.ok(activeV > 500);
 
   const farCell = readCell(state, width, 0, 0);
-  assert.equal(farCell.u, 1);
-  assert.equal(farCell.v, 0);
+  assert.ok(farCell.u > 0.99);
+  assert.ok(farCell.v < 0.001);
 
-  for (let offset = 0; offset <= half; offset += 1) {
+  for (let offset = 0; offset <= 15; offset += 3) {
     const left = readCell(state, width, centreX - offset, centreY);
     const right = readCell(state, width, centreX + offset, centreY);
     assert.equal(left.u, right.u);
@@ -214,8 +231,8 @@ test("default seed keeps the reaction active after startup", () => {
 test("applyImpulse injects V and depletes U under the point, deterministically", () => {
   const width = 40;
   const height = 30;
-  const px = 12;
-  const py = 9;
+  const px = 5;
+  const py = 5;
 
   const run = () => {
     const kernel = new GrayScottKernel();
@@ -238,8 +255,8 @@ test("applyImpulse injects V and depletes U under the point, deterministically",
   assert.ok(centre.u < before.u, "U depleted at the impulse centre");
 
   // A cell well outside the brush radius is untouched.
-  const far = readCell(first, width, 0, 0);
-  const farBase = readCell(baseline, width, 0, 0);
+  const far = readCell(first, width, width - 1, height - 1);
+  const farBase = readCell(baseline, width, width - 1, height - 1);
   assert.equal(far.u, farBase.u);
   assert.equal(far.v, farBase.v);
 });

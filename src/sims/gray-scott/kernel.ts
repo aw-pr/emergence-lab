@@ -155,7 +155,7 @@ export class GrayScottKernel implements SimKernel {
       this.state[index + 1] = 0;
     }
 
-    this.seedCentrePatch();
+    this.seedWarmStart();
   }
 
   step(_dt: number): void {
@@ -277,23 +277,48 @@ export class GrayScottKernel implements SimKernel {
     this.next = new Float32Array(0);
   }
 
-  private seedCentrePatch(): void {
+  private seedWarmStart(): void {
     if (this.width === 0 || this.height === 0) {
       return;
     }
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
-    // Small square patch: about 8% of the smaller axis, minimum 4 px.
-    const half = Math.max(4, Math.floor(Math.min(this.width, this.height) * 0.08));
-    for (let dy = -half; dy <= half; dy += 1) {
-      const y = centreY + dy;
-      if (y < 0 || y >= this.height) continue;
-      for (let dx = -half; dx <= half; dx += 1) {
-        const x = centreX + dx;
-        if (x < 0 || x >= this.width) continue;
+    const minAxis = Math.min(this.width, this.height);
+    const seedHalf = Math.max(4, Math.floor(minAxis * 0.08));
+    const halfExtent = Math.min(minAxis * 0.36, seedHalf + 80);
+    const cornerRadius = halfExtent * 0.28;
+    const straightHalf = halfExtent - cornerRadius;
+    const bandWidth = Math.max(1, Math.min(3.2, minAxis * 0.08));
+    const twoBandVariance = 2 * bandWidth * bandWidth;
+
+    // Approximate the single rounded wave present around displayed iteration
+    // 120. A signed-distance band avoids calculating ~1,440 Euler passes on load.
+    for (let y = 0; y < this.height; y += 1) {
+      const dy = Math.abs(y - centreY);
+      for (let x = 0; x < this.width; x += 1) {
+        const dx = Math.abs(x - centreX);
+        const qx = dx - straightHalf;
+        const qy = dy - straightHalf;
+        const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+        const inside = Math.min(Math.max(qx, qy), 0);
+        const signedDistance = outside + inside - cornerRadius;
+
+        const horizontalWeight = dy / Math.max(1, dx + dy);
+        const ripple =
+          horizontalWeight *
+            (2.4 * Math.cos(dx * 0.09) + 1.2 * Math.cos(dx * 0.21)) +
+          (1 - horizontalWeight) * 0.8 * Math.cos(dy * 0.11);
+        const distance = signedDistance + ripple;
+        let activation = Math.exp(-(distance * distance) / twoBandVariance);
+
+        const split =
+          horizontalWeight * Math.exp(-(dx * dx) / (2 * 12 * 12));
+        activation *= 1 - 0.55 * split;
+        if (activation < 0.001) continue;
+
         const index = (y * this.width + x) * this.channelCount;
-        this.state[index] = 0.5;
-        this.state[index + 1] = 0.25;
+        this.state[index] = clamp01(1 - 0.82 * activation);
+        this.state[index + 1] = clamp01(0.43 * activation);
       }
     }
   }

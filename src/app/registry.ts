@@ -81,7 +81,7 @@ export const REGISTRY: readonly SimEntry[] = [
     family: "Reaction–Diffusion",
     subtitle: "Two chemicals diffuse and react into Turing spots and stripes.",
     description:
-      "Two-species reaction-diffusion. Watch spots and stripes self-organise from a seed patch.",
+      "Two-species reaction-diffusion. Watch spots and stripes self-organise from a warm-started central seed.",
     load: async () => {
       const mod = await import("../sims/gray-scott/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);
