@@ -12,6 +12,11 @@ import {
   type RendererBackendFrame,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
+import {
+  createKuramotoInitialFields,
+  KURAMOTO_TAU,
+  type KuramotoPattern,
+} from "../sims/kuramoto-oscillators/model.ts";
 
 const VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
@@ -40,6 +45,7 @@ uniform bool u_paletteCyclic;
 uniform int u_steps;
 uniform int u_dotRadius;
 uniform bool u_smoothSampling;
+uniform bool u_circularPhase;
 uniform float u_palettePhase;
 uniform bool u_boidsGlyph;
 uniform float u_boidsGlyphRadius;
@@ -136,6 +142,12 @@ vec3 rampColour(int preset, float t) {
     return mixRgb(vec3(150.0, 70.0, 90.0), vec3(226.0, 217.0, 226.0), (x - 0.75) / 0.25) / 255.0;
   }
 
+  if (preset == 12) {
+    if (x <= 0.33) return mixRgb(vec3(226.0, 217.0, 226.0), vec3(65.0, 108.0, 172.0), x / 0.33) / 255.0;
+    if (x <= 0.66) return mixRgb(vec3(65.0, 108.0, 172.0), vec3(176.0, 82.0, 112.0), (x - 0.33) / 0.33) / 255.0;
+    return mixRgb(vec3(176.0, 82.0, 112.0), vec3(226.0, 217.0, 226.0), (x - 0.66) / 0.34) / 255.0;
+  }
+
   if (x <= 0.28) return mixRgb(vec3(68.0, 1.0, 84.0), vec3(59.0, 82.0, 139.0), x / 0.28) / 255.0;
   if (x <= 0.55) return mixRgb(vec3(59.0, 82.0, 139.0), vec3(33.0, 145.0, 140.0), (x - 0.28) / 0.27) / 255.0;
   if (x <= 0.78) return mixRgb(vec3(33.0, 145.0, 140.0), vec3(94.0, 201.0, 98.0), (x - 0.55) / 0.23) / 255.0;
@@ -155,8 +167,24 @@ vec4 sampleChannels(vec2 uv) {
   ivec2 c01 = ivec2(clamp(base + vec2(0.0, 1.0), vec2(0.0), u_sourceSize - vec2(1.0)));
   ivec2 c11 = ivec2(clamp(base + vec2(1.0), vec2(0.0), u_sourceSize - vec2(1.0)));
 
-  vec4 top = mix(readChannels(c00), readChannels(c10), f.x);
-  vec4 bottom = mix(readChannels(c01), readChannels(c11), f.x);
+  vec4 raw00 = readChannels(c00);
+  vec4 raw10 = readChannels(c10);
+  vec4 raw01 = readChannels(c01);
+  vec4 raw11 = readChannels(c11);
+  if (u_circularPhase) {
+    const float TAU = 6.283185307179586;
+    vec2 phase00 = vec2(cos(raw00.r * TAU), sin(raw00.r * TAU));
+    vec2 phase10 = vec2(cos(raw10.r * TAU), sin(raw10.r * TAU));
+    vec2 phase01 = vec2(cos(raw01.r * TAU), sin(raw01.r * TAU));
+    vec2 phase11 = vec2(cos(raw11.r * TAU), sin(raw11.r * TAU));
+    vec2 topPhase = mix(phase00, phase10, f.x);
+    vec2 bottomPhase = mix(phase01, phase11, f.x);
+    vec2 phase = mix(topPhase, bottomPhase, f.y);
+    return vec4(fract(atan(phase.y, phase.x) / TAU + 1.0), 0.0, 0.0, 0.0);
+  }
+
+  vec4 top = mix(raw00, raw10, f.x);
+  vec4 bottom = mix(raw01, raw11, f.x);
   return mix(top, bottom, f.y);
 }
 
@@ -464,6 +492,113 @@ void main() {
 }
 `;
 
+const KURAMOTO_UPDATE_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_phase;
+uniform sampler2D u_frequency;
+uniform ivec2 u_size;
+uniform float u_coupling;
+uniform float u_timestep;
+uniform float u_noise;
+uniform float u_iteration;
+uniform bool u_globalCoupling;
+uniform sampler2D u_order;
+uniform float u_oscillatorCount;
+uniform vec2 u_impulseCenter;
+uniform float u_impulseRadius;
+uniform float u_impulseStrength;
+
+layout(location = 0) out float outPhase;
+
+const float TAU = 6.283185307179586;
+
+ivec2 wrapped(ivec2 coord) {
+  return ivec2(
+    (coord.x + u_size.x) % u_size.x,
+    (coord.y + u_size.y) % u_size.y
+  );
+}
+
+float phaseAt(ivec2 coord) {
+  return texelFetch(u_phase, wrapped(coord), 0).r;
+}
+
+float randomAt(ivec2 coord) {
+  vec3 value = fract(
+    vec3(float(coord.x), float(coord.y), u_iteration) *
+    vec3(0.1031, 0.1030, 0.0973)
+  );
+  value += dot(value, value.yxz + 33.33);
+  return fract((value.x + value.y) * value.z);
+}
+
+void main() {
+  ivec2 coord = ivec2(gl_FragCoord.xy);
+  float phase = phaseAt(coord);
+  float coupling;
+  if (u_globalCoupling) {
+    vec2 meanVector = texelFetch(u_order, ivec2(0), 0).rg /
+      max(u_oscillatorCount, 1.0);
+    float order = length(meanVector);
+    float meanPhase = atan(meanVector.y, meanVector.x);
+    coupling = u_coupling * order * sin(meanPhase - TAU * phase);
+  } else {
+    coupling = (u_coupling * 0.25) * (
+      sin(TAU * (phaseAt(coord + ivec2(-1, 0)) - phase)) +
+      sin(TAU * (phaseAt(coord + ivec2(1, 0)) - phase)) +
+      sin(TAU * (phaseAt(coord + ivec2(0, -1)) - phase)) +
+      sin(TAU * (phaseAt(coord + ivec2(0, 1)) - phase))
+    );
+  }
+  float frequency = texelFetch(u_frequency, coord, 0).r;
+  float jitter = u_noise * (randomAt(coord) * 2.0 - 1.0);
+  float nextPhase = fract(
+    phase + u_timestep * (frequency + coupling + jitter) / TAU + 1.0
+  );
+
+  if (u_impulseStrength > 0.0) {
+    float distanceToBrush = distance(vec2(coord) + 0.5, u_impulseCenter);
+    if (distanceToBrush <= u_impulseRadius) {
+      nextPhase = fract(nextPhase * (1.0 - u_impulseStrength));
+    }
+  }
+  outPhase = nextPhase;
+}
+`;
+
+const KURAMOTO_REDUCTION_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_source;
+uniform ivec2 u_sourceSize;
+uniform bool u_phaseInput;
+
+layout(location = 0) out vec2 outOrder;
+
+const float TAU = 6.283185307179586;
+
+void main() {
+  ivec2 origin = ivec2(gl_FragCoord.xy) * 2;
+  vec2 sum = vec2(0.0);
+  for (int y = 0; y < 2; y += 1) {
+    for (int x = 0; x < 2; x += 1) {
+      ivec2 coord = origin + ivec2(x, y);
+      if (coord.x >= u_sourceSize.x || coord.y >= u_sourceSize.y) continue;
+      vec2 value = texelFetch(u_source, coord, 0).rg;
+      if (u_phaseInput) {
+        float angle = value.r * TAU;
+        value = vec2(cos(angle), sin(angle));
+      }
+      sum += value;
+    }
+  }
+  outOrder = sum;
+}
+`;
+
 // Fade previous accumulation toward the background (u_mix < 1) or copy a
 // texture verbatim (u_mix == 1). Shared by the trail fade and present passes.
 const POST_FRAGMENT_SHADER = `#version 300 es
@@ -560,6 +695,7 @@ interface UniformLocations {
   steps: WebGLUniformLocation;
   dotRadius: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
+  circularPhase: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
   boidsGlyph: WebGLUniformLocation;
   boidsGlyphRadius: WebGLUniformLocation;
@@ -588,6 +724,354 @@ interface FractalUniformLocations {
   paletteCyclic: WebGLUniformLocation;
 }
 
+class GpuKuramotoSimulation {
+  private readonly gl: WebGL2RenderingContext;
+  private readonly program: WebGLProgram;
+  private readonly vao: WebGLVertexArrayObject;
+  private readonly reductionProgram: WebGLProgram;
+  private readonly reductionVao: WebGLVertexArrayObject;
+  private readonly phaseSampler: WebGLUniformLocation;
+  private readonly frequencySampler: WebGLUniformLocation;
+  private readonly sizeUniform: WebGLUniformLocation;
+  private readonly couplingUniform: WebGLUniformLocation;
+  private readonly timestepUniform: WebGLUniformLocation;
+  private readonly noiseUniform: WebGLUniformLocation;
+  private readonly iterationUniform: WebGLUniformLocation;
+  private readonly globalCouplingUniform: WebGLUniformLocation;
+  private readonly orderSampler: WebGLUniformLocation;
+  private readonly oscillatorCountUniform: WebGLUniformLocation;
+  private readonly impulseCenterUniform: WebGLUniformLocation;
+  private readonly impulseRadiusUniform: WebGLUniformLocation;
+  private readonly impulseStrengthUniform: WebGLUniformLocation;
+  private readonly reductionSourceSampler: WebGLUniformLocation;
+  private readonly reductionSourceSizeUniform: WebGLUniformLocation;
+  private readonly reductionPhaseInputUniform: WebGLUniformLocation;
+  private phaseTextures: [WebGLTexture, WebGLTexture] | null = null;
+  private phaseFbos: [WebGLFramebuffer, WebGLFramebuffer] | null = null;
+  private frequencyTexture: WebGLTexture | null = null;
+  private reductionTargets: Array<{
+    texture: WebGLTexture;
+    fbo: WebGLFramebuffer;
+    width: number;
+    height: number;
+  }> = [];
+  private width = 0;
+  private height = 0;
+  private activeIndex = 0;
+  private iteration = 0;
+
+  constructor(
+    gl: WebGL2RenderingContext,
+    quadBuffer: WebGLBuffer,
+  ) {
+    this.gl = gl;
+    this.program = createProgram(gl, VERTEX_SHADER, KURAMOTO_UPDATE_SHADER);
+    this.vao = createQuadVao(gl, this.program, quadBuffer);
+    this.reductionProgram = createProgram(gl, VERTEX_SHADER, KURAMOTO_REDUCTION_SHADER);
+    this.reductionVao = createQuadVao(gl, this.reductionProgram, quadBuffer);
+    const uniform = (name: string): WebGLUniformLocation =>
+      mustCreate(gl.getUniformLocation(this.program, name), `${name} uniform`);
+    this.phaseSampler = uniform("u_phase");
+    this.frequencySampler = uniform("u_frequency");
+    this.sizeUniform = uniform("u_size");
+    this.couplingUniform = uniform("u_coupling");
+    this.timestepUniform = uniform("u_timestep");
+    this.noiseUniform = uniform("u_noise");
+    this.iterationUniform = uniform("u_iteration");
+    this.globalCouplingUniform = uniform("u_globalCoupling");
+    this.orderSampler = uniform("u_order");
+    this.oscillatorCountUniform = uniform("u_oscillatorCount");
+    this.impulseCenterUniform = uniform("u_impulseCenter");
+    this.impulseRadiusUniform = uniform("u_impulseRadius");
+    this.impulseStrengthUniform = uniform("u_impulseStrength");
+    gl.useProgram(this.program);
+    gl.uniform1i(this.phaseSampler, 4);
+    gl.uniform1i(this.frequencySampler, 5);
+    gl.uniform1i(this.orderSampler, 6);
+
+    const reductionUniform = (name: string): WebGLUniformLocation =>
+      mustCreate(
+        gl.getUniformLocation(this.reductionProgram, name),
+        `${name} reduction uniform`,
+      );
+    this.reductionSourceSampler = reductionUniform("u_source");
+    this.reductionSourceSizeUniform = reductionUniform("u_sourceSize");
+    this.reductionPhaseInputUniform = reductionUniform("u_phaseInput");
+    gl.useProgram(this.reductionProgram);
+    gl.uniform1i(this.reductionSourceSampler, 6);
+  }
+
+  get ready(): boolean {
+    return this.phaseTextures !== null && this.phaseFbos !== null;
+  }
+
+  initialise(
+    width: number,
+    height: number,
+    params: Record<string, number | boolean | string>,
+  ): void {
+    this.releaseState();
+    this.width = Math.max(1, Math.floor(width));
+    this.height = Math.max(1, Math.floor(height));
+    const pattern: KuramotoPattern =
+      params.initialPattern === "waves" || params.initialPattern === "random"
+        ? params.initialPattern
+        : "vortices";
+    const initial = createKuramotoInitialFields(this.width, this.height, {
+      frequencySpread: Math.max(
+        0,
+        Math.min(2, numericParam(params, "frequencySpread", 0.45)),
+      ),
+      initialPattern: pattern,
+      seed: numericParam(params, "seed", 1),
+    });
+    for (let index = 0; index < initial.phases.length; index += 1) {
+      initial.phases[index] /= KURAMOTO_TAU;
+    }
+
+    const phaseA = this.createFloatTexture(initial.phases);
+    const phaseB = this.createFloatTexture(null);
+    const fboA = this.createFramebuffer(phaseA);
+    const fboB = this.createFramebuffer(phaseB);
+    this.frequencyTexture = this.createFloatTexture(initial.frequencies);
+    this.phaseTextures = [phaseA, phaseB];
+    this.phaseFbos = [fboA, fboB];
+    this.createReductionTargets();
+    this.activeIndex = 0;
+    this.iteration = 0;
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+  }
+
+  advance(
+    steps: number,
+    params: Record<string, number | boolean | string>,
+  ): boolean {
+    if (!this.ready || !this.frequencyTexture) return false;
+    const count = Math.max(0, Math.floor(steps));
+    const globalCoupling = params.couplingMode === "global";
+    for (let index = 0; index < count; index += 1) {
+      const orderTexture = globalCoupling ? this.reduceGlobalOrder() : null;
+      this.runPass(
+        Math.max(0, Math.min(6, numericParam(params, "coupling", 1.8))),
+        Math.max(0.005, Math.min(0.15, numericParam(params, "timestep", 0.045))),
+        Math.max(0, Math.min(0.4, numericParam(params, "noise", 0.015))),
+        orderTexture,
+        null,
+      );
+      this.iteration += 1;
+    }
+    return true;
+  }
+
+  applyImpulse(
+    x: number,
+    y: number,
+    radius: number,
+    strength: number,
+  ): boolean {
+    if (!this.ready || !this.frequencyTexture) return false;
+    this.runPass(
+      0,
+      0,
+      0,
+      null,
+      {
+        x,
+        y,
+        radius: Math.max(0, radius),
+        strength: Math.max(0, Math.min(1, strength)),
+      },
+    );
+    return true;
+  }
+
+  bindForPresentation(): boolean {
+    if (!this.phaseTextures) return false;
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(
+      this.gl.TEXTURE_2D,
+      this.phaseTextures[this.activeIndex],
+    );
+    return true;
+  }
+
+  releaseState(): void {
+    const gl = this.gl;
+    if (this.phaseTextures) {
+      gl.deleteTexture(this.phaseTextures[0]);
+      gl.deleteTexture(this.phaseTextures[1]);
+      this.phaseTextures = null;
+    }
+    if (this.phaseFbos) {
+      gl.deleteFramebuffer(this.phaseFbos[0]);
+      gl.deleteFramebuffer(this.phaseFbos[1]);
+      this.phaseFbos = null;
+    }
+    if (this.frequencyTexture) {
+      gl.deleteTexture(this.frequencyTexture);
+      this.frequencyTexture = null;
+    }
+    for (const target of this.reductionTargets) {
+      gl.deleteFramebuffer(target.fbo);
+      gl.deleteTexture(target.texture);
+    }
+    this.reductionTargets = [];
+    this.width = 0;
+    this.height = 0;
+  }
+
+  destroy(): void {
+    this.releaseState();
+    this.gl.deleteVertexArray(this.vao);
+    this.gl.deleteVertexArray(this.reductionVao);
+    this.gl.deleteProgram(this.program);
+    this.gl.deleteProgram(this.reductionProgram);
+  }
+
+  private runPass(
+    coupling: number,
+    timestep: number,
+    noise: number,
+    orderTexture: WebGLTexture | null,
+    impulse: { x: number; y: number; radius: number; strength: number } | null,
+  ): void {
+    const textures = this.phaseTextures;
+    const fbos = this.phaseFbos;
+    const frequency = this.frequencyTexture;
+    if (!textures || !fbos || !frequency) return;
+    const target = 1 - this.activeIndex;
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[target]);
+    gl.viewport(0, 0, this.width, this.height);
+    gl.useProgram(this.program);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, textures[this.activeIndex]);
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, frequency);
+    gl.activeTexture(gl.TEXTURE6);
+    gl.bindTexture(gl.TEXTURE_2D, orderTexture);
+    gl.uniform2i(this.sizeUniform, this.width, this.height);
+    gl.uniform1f(this.couplingUniform, coupling);
+    gl.uniform1f(this.timestepUniform, timestep);
+    gl.uniform1f(this.noiseUniform, noise);
+    gl.uniform1f(this.iterationUniform, this.iteration);
+    gl.uniform1i(this.globalCouplingUniform, orderTexture ? 1 : 0);
+    gl.uniform1f(this.oscillatorCountUniform, this.width * this.height);
+    gl.uniform2f(
+      this.impulseCenterUniform,
+      impulse?.x ?? 0,
+      impulse?.y ?? 0,
+    );
+    gl.uniform1f(this.impulseRadiusUniform, impulse?.radius ?? 0);
+    gl.uniform1f(this.impulseStrengthUniform, impulse?.strength ?? 0);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.activeIndex = target;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  private createReductionTargets(): void {
+    let width = Math.max(1, Math.ceil(this.width / 2));
+    let height = Math.max(1, Math.ceil(this.height / 2));
+    while (true) {
+      const texture = this.createOrderTexture(width, height);
+      const fbo = this.createFramebuffer(texture);
+      this.reductionTargets.push({ texture, fbo, width, height });
+      if (width === 1 && height === 1) break;
+      width = Math.max(1, Math.ceil(width / 2));
+      height = Math.max(1, Math.ceil(height / 2));
+    }
+  }
+
+  private reduceGlobalOrder(): WebGLTexture | null {
+    if (!this.phaseTextures || this.reductionTargets.length === 0) return null;
+    const gl = this.gl;
+    let source = this.phaseTextures[this.activeIndex];
+    let sourceWidth = this.width;
+    let sourceHeight = this.height;
+    let phaseInput = true;
+    gl.useProgram(this.reductionProgram);
+    gl.bindVertexArray(this.reductionVao);
+    for (const target of this.reductionTargets) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+      gl.viewport(0, 0, target.width, target.height);
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_2D, source);
+      gl.uniform2i(this.reductionSourceSizeUniform, sourceWidth, sourceHeight);
+      gl.uniform1i(this.reductionPhaseInputUniform, phaseInput ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      source = target.texture;
+      sourceWidth = target.width;
+      sourceHeight = target.height;
+      phaseInput = false;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return source;
+  }
+
+  private createFloatTexture(data: Float32Array | null): WebGLTexture {
+    const gl = this.gl;
+    const texture = mustCreate(gl.createTexture(), "Kuramoto float texture");
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.R32F,
+      this.width,
+      this.height,
+      0,
+      gl.RED,
+      gl.FLOAT,
+      data,
+    );
+    return texture;
+  }
+
+  private createOrderTexture(width: number, height: number): WebGLTexture {
+    const gl = this.gl;
+    const texture = mustCreate(gl.createTexture(), "Kuramoto order texture");
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RG32F,
+      width,
+      height,
+      0,
+      gl.RG,
+      gl.FLOAT,
+      null,
+    );
+    return texture;
+  }
+
+  private createFramebuffer(texture: WebGLTexture): WebGLFramebuffer {
+    const gl = this.gl;
+    const fbo = mustCreate(gl.createFramebuffer(), "Kuramoto framebuffer");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture,
+      0,
+    );
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.deleteFramebuffer(fbo);
+      throw new Error("WebGL2 Kuramoto framebuffer is incomplete.");
+    }
+    return fbo;
+  }
+}
+
 export class WebGLRendererBackend implements RendererBackend {
   readonly kind = "webgl2" as const;
   readonly maxTextureSize: number;
@@ -595,6 +1079,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly gl: WebGL2RenderingContext;
   private readonly program: WebGLProgram;
   private readonly fractalProgram: WebGLProgram;
+  private readonly kuramoto: GpuKuramotoSimulation | null;
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -667,6 +1152,9 @@ export class WebGLRendererBackend implements RendererBackend {
       new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
       gl.STATIC_DRAW,
     );
+    this.kuramoto = gl.getExtension("EXT_color_buffer_float")
+      ? new GpuKuramotoSimulation(gl, this.quadBuffer)
+      : null;
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
@@ -736,6 +1224,7 @@ export class WebGLRendererBackend implements RendererBackend {
     kernel: SimKernel,
     params: Record<string, number | boolean | string>,
   ): boolean {
+    if (this.supportsGpuKuramoto(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
     // adjacent complex coordinates collapse together, so retain the CPU
@@ -754,18 +1243,46 @@ export class WebGLRendererBackend implements RendererBackend {
   ): void {
     this.gridWidth = Math.max(1, Math.floor(gridWidth));
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    if (this.supportsGpuKuramoto(mode, kernel)) {
+      this.kuramoto?.initialise(this.gridWidth, this.gridHeight, params);
+      return;
+    }
+    this.kuramoto?.releaseState();
     if (this.supportsDirectRendering(mode, kernel, params)) return;
     this.configureTexture(kernel.channelCount);
   }
 
+  advanceDirect(
+    steps: number,
+    params: Record<string, number | boolean | string>,
+  ): boolean {
+    return this.kuramoto?.advance(steps, params) ?? false;
+  }
+
+  applyDirectImpulse(
+    x: number,
+    y: number,
+    radius: number,
+    strength: number,
+  ): boolean {
+    return this.kuramoto?.applyImpulse(x, y, radius, strength) ?? false;
+  }
+
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
+    if (this.supportsGpuKuramoto(mode, kernel)) {
+      this.drawGpuKuramoto(frame);
+      return;
+    }
     if (this.supportsDirectRendering(mode, kernel, frame.params)) {
       this.drawGpuFractal(frame);
       return;
     }
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalRenderer;
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    if (isKuramotoState(kernel)) canvas.dataset.simulationRenderer = "cpu-kernel";
+    else delete canvas.dataset.simulationRenderer;
     const expectedLength = this.gridWidth * this.gridHeight * kernel.channelCount;
     if (state.length !== expectedLength) return;
 
@@ -781,7 +1298,33 @@ export class WebGLRendererBackend implements RendererBackend {
       frame.speedScale,
       state,
     );
+    this.drawMappedState(kernel, mode, displayOptions);
+  }
 
+  private drawGpuKuramoto(frame: RendererBackendFrame): void {
+    if (!this.kuramoto?.bindForPresentation()) return;
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    delete canvas.dataset.fractalRenderer;
+    delete canvas.dataset.fractalSupersample;
+    canvas.dataset.simulationRenderer = "gpu-ping-pong";
+    this.setUniforms(
+      frame.kernel,
+      frame.colourOptions,
+      frame.displayOptions,
+      frame.mode,
+      frame.params,
+      frame.elapsedTime,
+      frame.speedScale,
+      frame.state,
+    );
+    this.drawMappedState(frame.kernel, frame.mode, frame.displayOptions);
+  }
+
+  private drawMappedState(
+    kernel: SimKernel,
+    mode: RenderMode,
+    displayOptions: DisplayOptions,
+  ): void {
     const gl = this.gl;
     const rect = containRect(
       this.displayWidth,
@@ -815,6 +1358,17 @@ export class WebGLRendererBackend implements RendererBackend {
         : this.renderPlainScene(rect);
     if (!sceneTexture) return;
     this.present(rect, sceneTexture, bloom);
+  }
+
+  private supportsGpuKuramoto(
+    mode: RenderMode,
+    kernel: SimKernel,
+  ): boolean {
+    return (
+      this.kuramoto !== null &&
+      mode === "field" &&
+      isKuramotoState(kernel)
+    );
   }
 
   private drawGpuFractal(frame: RendererBackendFrame): void {
@@ -1252,6 +1806,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseTrailTargets();
     this.releaseSceneTarget();
     this.releaseBloomTargets();
+    this.kuramoto?.destroy();
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);
@@ -1318,6 +1873,10 @@ export class WebGLRendererBackend implements RendererBackend {
       smoothSampling: mustCreate(
         this.gl.getUniformLocation(this.program, "u_smoothSampling"),
         "u_smoothSampling uniform",
+      ),
+      circularPhase: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_circularPhase"),
+        "u_circularPhase uniform",
       ),
       palettePhase: mustCreate(
         this.gl.getUniformLocation(this.program, "u_palettePhase"),
@@ -1388,19 +1947,7 @@ export class WebGLRendererBackend implements RendererBackend {
   }
 
   private createQuadVao(program: WebGLProgram): WebGLVertexArrayObject {
-    const gl = this.gl;
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-    if (positionLocation < 0) {
-      throw new Error("WebGL2 renderer could not locate a_position attribute.");
-    }
-
-    const vao = mustCreate(gl.createVertexArray(), "vertex array");
-    gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null);
-    return vao;
+    return createQuadVao(this.gl, program, this.quadBuffer);
   }
 
   private configureTexture(channelCount: number): void {
@@ -1522,6 +2069,7 @@ export class WebGLRendererBackend implements RendererBackend {
       mode === "particle" ? Math.floor(displayOptions.dotSize / 2) : 0,
     );
     gl.uniform1i(this.uniforms.smoothSampling, shouldSmoothSample(mode) ? 1 : 0);
+    gl.uniform1i(this.uniforms.circularPhase, isCircularPhaseState(kernel) ? 1 : 0);
     gl.uniform1f(
       this.uniforms.palettePhase,
       mode === "fractal"
@@ -1609,6 +2157,8 @@ function presetIndex(preset: ColourPreset): number {
       return 10;
     case "twilight":
       return 11;
+    case "phase":
+      return 12;
   }
 }
 
@@ -1650,6 +2200,24 @@ function isBoidsState(kernel: SimKernel): boolean {
 
 function isAttractorState(kernel: SimKernel): boolean {
   return kernel.name === "Strange Attractor" && kernel.channelLabels[0] === "Density";
+}
+
+function isKuramotoState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Kuramoto Oscillators" &&
+    kernel.channelCount === 1 &&
+    kernel.channelLabels[0] === "Phase"
+  );
+}
+
+function isCircularPhaseState(kernel: SimKernel): boolean {
+  const range = kernel.channelRanges[0];
+  return (
+    kernel.channelCount === 1 &&
+    kernel.channelLabels[0] === "Phase" &&
+    range?.[0] === 0 &&
+    range[1] === 1
+  );
 }
 
 function numericParam(
@@ -1747,6 +2315,25 @@ function createProgram(
   }
 
   return program;
+}
+
+function createQuadVao(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  quadBuffer: WebGLBuffer,
+): WebGLVertexArrayObject {
+  const positionLocation = gl.getAttribLocation(program, "a_position");
+  if (positionLocation < 0) {
+    throw new Error("WebGL2 renderer could not locate a_position attribute.");
+  }
+
+  const vao = mustCreate(gl.createVertexArray(), "vertex array");
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  return vao;
 }
 
 function createShader(

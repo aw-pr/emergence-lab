@@ -81,6 +81,12 @@ for (const slug of ALL_SLUGS) {
       await page.waitForTimeout(1500);
       const after = await readIterations(page);
       expect(after, `${slug} should be stepping`).toBeGreaterThan(before);
+      if (
+        slug === "kuramoto-oscillators" &&
+        (await canvas.getAttribute("data-renderer")) === "webgl2"
+      ) {
+        await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
+      }
     } else {
       await page.waitForTimeout(800);
       if ((await canvas.getAttribute("data-renderer")) === "webgl2") {
@@ -92,6 +98,76 @@ for (const slug of ALL_SLUGS) {
     await canvas.screenshot({ path: `${SHOT_DIR}/${slug}.png` });
   });
 }
+
+test("Kuramoto local and global coupling stay GPU-resident", async ({ page }) => {
+  await page.goto("/#/kuramoto-oscillators");
+  const canvas = page.locator(".sim-view__canvas");
+  await expect(canvas).toHaveAttribute("data-renderer", /webgl2|canvas2d/);
+  if ((await canvas.getAttribute("data-renderer")) !== "webgl2") return;
+
+  const couplingMode = page.locator('[data-param-key="couplingMode"]');
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
+  await couplingMode.selectOption("global");
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
+  await couplingMode.selectOption("local");
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
+});
+
+test("cyclic phase sampling does not draw a false midpoint seam", async ({ page }) => {
+  const pixel = await page.evaluate(async () => {
+    const { createWebGLRendererBackend } = await import("/src/app/webglRenderer.ts");
+    const canvas = document.createElement("canvas");
+    const backend = createWebGLRendererBackend(canvas);
+    if (!backend) return null;
+
+    const state = new Float32Array([0.99, 0.01]);
+    const kernel = {
+      name: "Circular phase fixture",
+      channelCount: 1,
+      channelLabels: ["Phase"],
+      channelRanges: [[0, 1]],
+      paramSchema: [],
+      init() {},
+      step() {},
+      readState: () => state,
+      destroy() {},
+    };
+    backend.resizeDisplay(200, 100);
+    backend.setGrid(2, 1, kernel, "field", {});
+    backend.draw({
+      state,
+      kernel,
+      colourOptions: {
+        preset: "twilight",
+        invert: false,
+        gamma: 1,
+        contrast: 1,
+        paletteCycleReverse: false,
+        steps: 0,
+      },
+      displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 },
+      mode: "field",
+      params: {},
+      elapsedTime: 0,
+      speedScale: 1,
+    });
+    const gl = canvas.getContext("webgl2");
+    if (!gl) return null;
+    const rgba = new Uint8Array(4);
+    gl.readPixels(100, 50, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    backend.destroy();
+    return Array.from(rgba);
+  });
+
+  test.skip(pixel === null, "WebGL2 is unavailable");
+  const [red, green, blue] = pixel ?? [0, 0, 0, 0];
+  expect(0.299 * red + 0.587 * green + 0.114 * blue).toBeGreaterThan(150);
+});
+
+test("Kuramoto defaults to the softened cyclic phase palette", async ({ page }) => {
+  await page.goto("/#/kuramoto-oscillators");
+  await expect(page.locator(".controls__colour select")).toHaveValue("phase");
+});
 
 for (const slug of ["mandelbrot", "julia-set"]) {
   test(`colour cycle multiplier defaults to 1.8: ${slug}`, async ({ page }) => {

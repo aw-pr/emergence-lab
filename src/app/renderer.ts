@@ -253,16 +253,23 @@ export class Renderer {
    * kernel has no applyImpulse or the pointer is outside the letterboxed image.
    */
   applyPointerImpulse(clientX: number, clientY: number, strength = 1): boolean {
-    const apply = (this.kernel as {
-      applyImpulse?: (x: number, y: number, radius: number, strength: number) => void;
-    }).applyImpulse;
-    if (typeof apply !== "function") return false;
-
     const cell = this.pointerToCell(clientX, clientY);
     if (!cell) return false;
 
     const radius = this.impulseRadiusCells();
     const s = Math.max(0, Math.min(1, strength));
+    if (
+      this.usesDirectRendering() &&
+      this.backend.applyDirectImpulse?.(cell.x, cell.y, radius, s)
+    ) {
+      if (!this.running) this.draw();
+      return true;
+    }
+
+    const apply = (this.kernel as {
+      applyImpulse?: (x: number, y: number, radius: number, strength: number) => void;
+    }).applyImpulse;
+    if (typeof apply !== "function") return false;
     apply.call(this.kernel, cell.x, cell.y, radius, s);
     if (!this.running) this.draw();
     return true;
@@ -325,7 +332,14 @@ export class Renderer {
     const stepCount = Math.floor(this.stepAccumulator);
     this.stepAccumulator -= stepCount;
 
-    if (this.renderMode === "particle") {
+    const directStepHandled =
+      stepCount > 0 &&
+      this.usesDirectRendering() &&
+      (this.backend.advanceDirect?.(stepCount, this.params) ?? false);
+
+    if (directStepHandled) {
+      // State remains GPU-resident; draw() presents the backend's active texture.
+    } else if (this.renderMode === "particle") {
       // Continuous-time sims (boids) integrate dt and stay stable at large
       // time-steps, so advance ONCE with a dt scaled by the speed setting
       // rather than repeating the costly neighbour pass N times per frame.
@@ -466,7 +480,7 @@ export class Renderer {
       height,
       this.kernel,
       this.renderMode,
-      this.params,
+      { ...this.params, seed: this.seed },
     );
     const direct = this.usesDirectRendering();
     this.kernel.init(direct ? 1 : width, direct ? 1 : height, {

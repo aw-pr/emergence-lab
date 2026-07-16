@@ -16,6 +16,7 @@ export type ColourPreset =
   | "magma"
   | "turbo"
   | "twilight"
+  | "phase"
   | "ice"
   | "amber"
   | "brian"
@@ -55,6 +56,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "magma", label: "Magma" },
   { value: "turbo", label: "Turbo" },
   { value: "twilight", label: "Twilight (cyclic)" },
+  { value: "phase", label: "Phase silk (cyclic)" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
   { value: "brian", label: "Brian's Brain" },
@@ -68,7 +70,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
  * (fract) without a visible seam sweeping through the image. Consumed by the
  * renderer's palette-cycling path.
  */
-const CYCLIC_PRESETS: ReadonlySet<ColourPreset> = new Set(["twilight"]);
+const CYCLIC_PRESETS: ReadonlySet<ColourPreset> = new Set(["twilight", "phase"]);
 
 export function isCyclic(preset: ColourPreset): boolean {
   return CYCLIC_PRESETS.has(preset);
@@ -132,6 +134,14 @@ const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb">, readonly ColourSt
     [0.75, [150, 70, 90]],
     [1, [226, 217, 226]],
   ],
+  // Cyclic phase field with a restrained luminance range: hue communicates
+  // phase without the near-black midpoint reading as a contour line.
+  phase: [
+    [0, [226, 217, 226]],
+    [0.33, [65, 108, 172]],
+    [0.66, [176, 82, 112]],
+    [1, [226, 217, 226]],
+  ],
   ice: [
     [0, [2, 6, 23]],
     [0.35, [20, 84, 150]],
@@ -182,7 +192,7 @@ export function defaultColourOptionsFor(
     case "ising-model":
       return { ...base, preset: "plasma", contrast: 1.25, steps: 2 };
     case "kuramoto-oscillators":
-      return { ...base, preset: "twilight", contrast: 1.22 };
+      return { ...base, preset: "phase", contrast: 1.12 };
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":

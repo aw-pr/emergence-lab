@@ -1,3 +1,9 @@
+import {
+  createKuramotoInitialFields,
+  KURAMOTO_TAU,
+  type KuramotoPattern,
+} from "./model.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -11,7 +17,6 @@ type ParamDescriptor = {
 
 type SimParams = Record<string, number | boolean | string>;
 
-const TAU = Math.PI * 2;
 const DEFAULT_COUPLING = 1.8;
 const DEFAULT_SPREAD = 0.45;
 const DEFAULT_TIMESTEP = 0.045;
@@ -29,8 +34,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function wrapTau(value: number): number {
-  const wrapped = value % TAU;
-  return wrapped < 0 ? wrapped + TAU : wrapped;
+  const wrapped = value % KURAMOTO_TAU;
+  return wrapped < 0 ? wrapped + KURAMOTO_TAU : wrapped;
 }
 
 export class KuramotoOscillatorsKernel {
@@ -57,7 +62,7 @@ export class KuramotoOscillatorsKernel {
   private frequencySpread = DEFAULT_SPREAD;
   private timestep = DEFAULT_TIMESTEP;
   private couplingMode = DEFAULT_MODE;
-  private initialPattern = DEFAULT_PATTERN;
+  private initialPattern: KuramotoPattern = DEFAULT_PATTERN;
   private noise = DEFAULT_NOISE;
   private rngState = 1;
 
@@ -80,14 +85,14 @@ export class KuramotoOscillatorsKernel {
       ? params.initialPattern
       : DEFAULT_PATTERN;
     this.noise = clamp(numberParam(params, "noise", DEFAULT_NOISE), 0, 0.4);
-    this.rngState = (Math.floor(numberParam(params, "seed", 1)) >>> 0) || 1;
-
-    for (let index = 0; index < length; index += 1) {
-      const x = index % this.width;
-      const y = Math.floor(index / this.width);
-      this.phases[index] = this.initialPhase(x, y);
-      this.frequencies[index] = (this.random() * 2 - 1) * this.frequencySpread;
-    }
+    const initial = createKuramotoInitialFields(this.width, this.height, {
+      frequencySpread: this.frequencySpread,
+      initialPattern: this.initialPattern,
+      seed: numberParam(params, "seed", 1),
+    });
+    this.phases.set(initial.phases);
+    this.frequencies.set(initial.frequencies);
+    this.rngState = initial.rngState;
     this.writeState();
   }
 
@@ -183,23 +188,8 @@ export class KuramotoOscillatorsKernel {
 
   private writeState(): void {
     for (let index = 0; index < this.phases.length; index += 1) {
-      this.state[index] = this.phases[index] / TAU;
+      this.state[index] = this.phases[index] / KURAMOTO_TAU;
     }
-  }
-
-  private initialPhase(x: number, y: number): number {
-    if (this.initialPattern === "random") return this.random() * TAU;
-
-    const nx = (x + 0.5) / Math.max(1, this.width);
-    const ny = (y + 0.5) / Math.max(1, this.height);
-    const perturbation = (this.random() - 0.5) * 0.3;
-    if (this.initialPattern === "waves") {
-      return wrapTau(TAU * (nx * 1.75 + ny * 0.8) + perturbation);
-    }
-
-    const vortex = Math.atan2(ny - 0.34, nx - 0.34);
-    const antivortex = Math.atan2(ny - 0.68, nx - 0.67);
-    return wrapTau(vortex - antivortex + perturbation);
   }
 
   private random(): number {

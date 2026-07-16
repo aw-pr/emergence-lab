@@ -37,6 +37,15 @@ export interface RendererBackend {
     kernel: SimKernel,
     params: SimParams,
   ): boolean;
+  /** Advance a GPU-resident simulation without stepping or reading back its CPU kernel. */
+  advanceDirect?(steps: number, params: SimParams): boolean;
+  /** Apply a grid-space brush directly to GPU-resident simulation state. */
+  applyDirectImpulse?(
+    x: number,
+    y: number,
+    radius: number,
+    strength: number,
+  ): boolean;
   /**
    * Resize the on-screen backing store (device pixels). Cheap: it does not
    * reallocate simulation buffers. The grid is letterboxed into this area.
