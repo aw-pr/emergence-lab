@@ -192,7 +192,7 @@ export class ControlsPanel {
   /**
    * Merge external param updates (e.g. canvas drag/zoom) and refresh widgets without firing onParamChange.
    */
-  syncParamsFromExternal(next: SimParams): void {
+  syncParamsFromExternal(next: SimParams, persist = true): void {
     const touched = new Set(Object.keys(next));
     this.params = { ...this.params, ...next };
     for (const descriptor of this.paramSchema) {
@@ -201,7 +201,7 @@ export class ControlsPanel {
       if (value === undefined) continue;
       this.syncParamControl(descriptor, value);
     }
-    saveValues(this.slug, this.params);
+    if (persist) saveValues(this.slug, this.params);
   }
 
   private render(options: ControlsOptions): void {
@@ -392,6 +392,7 @@ export class ControlsPanel {
 
     const input = document.createElement("input");
     input.type = "range";
+    input.dataset.paramKey = descriptor.key;
     input.min = String(bounds.min);
     input.max = String(bounds.max);
     if (descriptor.step !== undefined) input.step = String(descriptor.step);
@@ -444,6 +445,7 @@ export class ControlsPanel {
 
     const input = document.createElement("input");
     input.type = "checkbox";
+    input.dataset.paramKey = descriptor.key;
     input.checked = initial;
     this.paramInputs.set(descriptor.key, input);
     wrap.appendChild(input);
@@ -473,6 +475,7 @@ export class ControlsPanel {
     wrap.appendChild(label);
 
     const select = document.createElement("select");
+    select.dataset.paramKey = descriptor.key;
     for (const option of descriptor.options ?? []) {
       const optEl = document.createElement("option");
       optEl.value = option;

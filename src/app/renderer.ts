@@ -8,6 +8,7 @@ import {
 } from "./rendererBackend.ts";
 import { createWebGLRendererBackend } from "./webglRenderer.ts";
 import type { SimKernel, SimParams } from "./types.ts";
+import type { QualityProfile } from "./qualityProfiles.ts";
 
 /**
  * Quality presets for the simulation's compute grid. They set a target cell
@@ -44,6 +45,7 @@ export interface RendererOptions {
    * isComplete(). Defaults to false.
    */
   autoCycle?: boolean;
+  qualityProfile?: QualityProfile;
 }
 
 /** Seconds a completed run stays on screen before auto-cycling to a new one. */
@@ -81,6 +83,7 @@ export class Renderer {
   private colourOptions: ColourMapOptions;
   private displayOptions: DisplayOptions;
   private renderMode: RenderMode;
+  private readonly qualityProfile?: QualityProfile;
 
   private running = false;
   private rafHandle = 0;
@@ -117,6 +120,7 @@ export class Renderer {
     this.renderMode = options.renderMode ?? "grid";
     this.resolution = options.resolution ?? DEFAULT_RESOLUTION;
     this.autoCycle = options.autoCycle ?? false;
+    this.qualityProfile = options.qualityProfile;
 
     this.backend =
       createWebGLRendererBackend(this.canvas) ?? new CanvasRendererBackend(this.canvas);
@@ -193,6 +197,22 @@ export class Renderer {
   updateParams(nextParams: SimParams): void {
     this.params = { ...nextParams };
     this.reinitGrid();
+  }
+
+  /** Reduced-cost fractal render used while a wheel or pinch gesture is active. */
+  previewParams(nextParams: SimParams, scale = 0.35): void {
+    this.params = { ...nextParams };
+    if (this.renderMode !== "fractal") {
+      this.reinitGrid();
+      return;
+    }
+    this.reinitGrid(Math.max(0.2, Math.min(0.6, scale)), "preview");
+  }
+
+  /** Restore the full display-pixel fractal grid after interaction settles. */
+  commitParams(nextParams: SimParams): void {
+    this.params = { ...nextParams };
+    this.reinitGrid(1, "full");
   }
 
   /**
@@ -360,7 +380,7 @@ export class Renderer {
     if (width === 0 || height === 0) return;
 
     const expectedLength = width * height * channelCount;
-    if (state.length !== expectedLength) {
+    if (!this.usesDirectRendering() && state.length !== expectedLength) {
       // Kernel size and renderer size are out of sync. Skip frame; resize handler
       // will re-init shortly.
       return;
@@ -432,16 +452,27 @@ export class Renderer {
   }
 
   /** (Re)allocate the compute grid and re-seed the kernel. Resets iterations. */
-  private reinitGrid(): void {
-    const { width, height } = this.computeGridSize();
+  private reinitGrid(fractalScale = 1, quality: "preview" | "full" = "full"): void {
+    const { width, height } = this.computeGridSize(fractalScale);
     if (width === 0 || height === 0) return;
 
     this.gridWidth = width;
     this.gridHeight = height;
     this.canvas.dataset.renderSize = `${width}x${height}`;
+    this.canvas.dataset.renderQuality = quality;
 
-    this.backend.setGrid(width, height, this.kernel);
-    this.kernel.init(width, height, { ...this.params, seed: this.seed });
+    this.backend.setGrid(
+      width,
+      height,
+      this.kernel,
+      this.renderMode,
+      this.params,
+    );
+    const direct = this.usesDirectRendering();
+    this.kernel.init(direct ? 1 : width, direct ? 1 : height, {
+      ...this.params,
+      seed: this.seed,
+    });
     this.cycleHold = -1;
     this.iterationCount = 0;
     this.onIterationChange?.(this.iterationCount);
@@ -468,11 +499,14 @@ export class Renderer {
     return { width: w, height: h };
   }
 
-  private computeGridSize(): { width: number; height: number } {
+  private computeGridSize(fractalScale = 1): { width: number; height: number } {
     // Fractal-style sims compute per-pixel detail, so the grid follows the
     // display for crispness. Resolution presets don't apply to them.
     if (!this.usesFixedGrid()) {
-      return { width: this.displayWidth, height: this.displayHeight };
+      return {
+        width: Math.max(1, Math.round(this.displayWidth * fractalScale)),
+        height: Math.max(1, Math.round(this.displayHeight * fractalScale)),
+      };
     }
 
     // The preset is a COST CEILING, not a fixed size. The grid fits the current
@@ -486,8 +520,9 @@ export class Renderer {
     const cssH = rect.height || 512;
     const cap = RESOLUTION_TARGETS[this.resolution];
 
-    let w = Math.max(1, cssW);
-    let h = Math.max(1, cssH);
+    const computeScale = this.qualityProfile?.computeScale ?? 1;
+    let w = Math.max(1, cssW * computeScale);
+    let h = Math.max(1, cssH * computeScale);
 
     const overCap = Math.sqrt(cap / (w * h));
     if (overCap < 1) {
@@ -520,17 +555,16 @@ export class Renderer {
     if (this.backend.kind !== "webgl2") {
       return Math.min(1, Math.max(1, dpr));
     }
-    if (this.renderMode === "grid" || this.renderMode === "particle") {
-      return Math.min(2, Math.max(1, dpr));
-    }
-    return Math.min(3, Math.max(1, dpr));
+    const fallback = this.renderMode === "grid" || this.renderMode === "particle" ? 2 : 3;
+    return Math.min(this.qualityProfile?.displayDprCap ?? fallback, Math.max(1, dpr));
   }
 
   private maxRenderDim(): number {
     if (this.backend.kind === "webgl2") {
       const gpuLimit = this.backend.maxTextureSize ?? 4096;
-      const target =
+      const fallback =
         this.renderMode === "grid" || this.renderMode === "particle" ? 2048 : 4096;
+      const target = this.qualityProfile?.maxDisplayDimension ?? fallback;
       return Math.max(1024, Math.min(gpuLimit, target));
     }
     return 1024;
@@ -538,10 +572,23 @@ export class Renderer {
 
   private maxRenderPixels(): number {
     if (this.backend.kind === "webgl2") {
-      return this.renderMode === "grid" || this.renderMode === "particle"
-        ? 3_145_728
-        : 8_388_608;
+      return (
+        this.qualityProfile?.maxDisplayPixels ??
+        (this.renderMode === "grid" || this.renderMode === "particle"
+          ? 3_145_728
+          : 8_388_608)
+      );
     }
     return 786_432;
+  }
+
+  private usesDirectRendering(): boolean {
+    return (
+      this.backend.supportsDirectRendering?.(
+        this.renderMode,
+        this.kernel,
+        this.params,
+      ) ?? false
+    );
   }
 }

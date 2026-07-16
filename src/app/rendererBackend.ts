@@ -31,6 +31,12 @@ export interface RendererBackendFrame {
 export interface RendererBackend {
   readonly kind: "webgl2" | "canvas2d";
   readonly maxTextureSize?: number;
+  /** True when this backend can render the current model without a CPU field. */
+  supportsDirectRendering?(
+    mode: RenderMode,
+    kernel: SimKernel,
+    params: SimParams,
+  ): boolean;
   /**
    * Resize the on-screen backing store (device pixels). Cheap: it does not
    * reallocate simulation buffers. The grid is letterboxed into this area.
@@ -40,7 +46,13 @@ export interface RendererBackend {
    * (Re)allocate buffers for a new compute grid size. The grid (the kernel's
    * resolution) is independent of the display size.
    */
-  setGrid(gridWidth: number, gridHeight: number, kernel: SimKernel): void;
+  setGrid(
+    gridWidth: number,
+    gridHeight: number,
+    kernel: SimKernel,
+    mode?: RenderMode,
+    params?: SimParams,
+  ): void;
   draw(frame: RendererBackendFrame): void;
   destroy(): void;
 }

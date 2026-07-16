@@ -1,4 +1,10 @@
 import type { ParamDescriptor, SimParams } from "./types.ts";
+import {
+  isFractalViewSlug,
+  panByBitmapDelta,
+  zoomAroundPoint,
+  type FractalView,
+} from "./fractalView.ts";
 
 /** Slugs whose kernels use centre/zoom fractal navigation (see each kernel's init mapping). */
 export const FRACTAL_SLUGS = new Set<string>([
@@ -81,8 +87,8 @@ export interface FractalCanvasInteractionOptions {
   canvas: HTMLCanvasElement;
   paramSchema: readonly ParamDescriptor[];
   getParams: () => SimParams;
-  /** Push updated params through the renderer and refresh control widgets (no callback loops). */
-  setParams: (next: SimParams) => void;
+  previewParams: (next: SimParams) => void;
+  commitParams: (next: SimParams) => void;
 }
 
 /**
@@ -92,8 +98,9 @@ export interface FractalCanvasInteractionOptions {
 export function attachFractalCanvasInteractions(
   options: FractalCanvasInteractionOptions,
 ): () => void {
-  const { canvas, paramSchema, getParams, setParams } = options;
+  const { canvas, paramSchema, getParams, previewParams, commitParams } = options;
   const slug = options.slug;
+  if (!isFractalViewSlug(slug)) return () => {};
 
   const abort = new AbortController();
   const { signal } = abort;
@@ -107,6 +114,9 @@ export function attachFractalCanvasInteractions(
   let lastClientX = 0;
   let lastClientY = 0;
   let gestureStart: { zoom: number; clientX: number; clientY: number } | null = null;
+  let pendingParams: SimParams | null = null;
+  let previewFrame = 0;
+  let settleTimer = 0;
 
   const bounds = (key: string): { min: number; max: number } => {
     const d = paramSchema.find((p) => p.key === key);
@@ -139,109 +149,78 @@ export function attachFractalCanvasInteractions(
     return [(clientX - rect.left) * sx, (clientY - rect.top) * sy];
   };
 
-  const applyCenterZoom = (
+  const withCenterZoom = (
     params: SimParams,
     centerX: number,
     centerY: number,
     zoom: number,
-  ): void => {
-    setParams({
+  ): SimParams => ({
       ...params,
       centerX: clampKey("centerX", centerX),
       centerY: clampKey("centerY", centerY),
       zoom: clampKey("zoom", zoom),
-    });
+  });
+
+  const viewFrom = (params: SimParams): FractalView => ({
+    centerX: num(params, "centerX", 0),
+    centerY: num(params, "centerY", 0),
+    zoom: num(params, "zoom", 1),
+  });
+
+  const schedulePreview = (next: SimParams): void => {
+    pendingParams = next;
+    if (previewFrame === 0) {
+      previewFrame = requestAnimationFrame(() => {
+        previewFrame = 0;
+        if (pendingParams) previewParams(pendingParams);
+      });
+    }
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => {
+      if (previewFrame !== 0) {
+        cancelAnimationFrame(previewFrame);
+        previewFrame = 0;
+      }
+      const settled = pendingParams;
+      pendingParams = null;
+      if (settled) commitParams(settled);
+    }, 140);
   };
 
-  const zoomAroundCursor = (params: SimParams, clientX: number, clientY: number, factor: number): void => {
+  const zoomAroundCursor = (
+    params: SimParams,
+    clientX: number,
+    clientY: number,
+    factor: number,
+  ): SimParams => {
     const w = canvas.width;
     const h = canvas.height;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0) return params;
 
     const zoom0 = num(params, "zoom", 1);
-    const cx0 = num(params, "centerX", 0);
-    const cy0 = num(params, "centerY", 0);
     const [fx, fy] = pixelToCss(clientX, clientY);
-
     const zoom1 = clampKey("zoom", zoom0 * factor);
-
-    if (slug === "mandelbrot") {
-      const scale0 = 3 / (Math.min(w, h) * zoom0);
-      const scale1 = 3 / (Math.min(w, h) * zoom1);
-      const wx = cx0 + (fx - (w - 1) / 2) * scale0;
-      const wy = cy0 + (fy - (h - 1) / 2) * scale0;
-      const cx1 = wx - (fx - (w - 1) / 2) * scale1;
-      const cy1 = wy - (fy - (h - 1) / 2) * scale1;
-      applyCenterZoom(params, cx1, cy1, zoom1);
-      return;
-    }
-
-    if (slug === "julia-set") {
-      const aspect = w / h;
-      const viewHeight0 = JULIA_BASE_HEIGHT / zoom0;
-      const viewWidth0 = viewHeight0 * aspect;
-      const xScale0 = w > 1 ? viewWidth0 / (w - 1) : 0;
-      const yScale0 = h > 1 ? viewHeight0 / (h - 1) : 0;
-      const wx = cx0 - viewWidth0 * 0.5 + fx * xScale0;
-      const wy = cy0 - viewHeight0 * 0.5 + fy * yScale0;
-
-      const viewHeight1 = JULIA_BASE_HEIGHT / zoom1;
-      const viewWidth1 = viewHeight1 * aspect;
-      const xScale1 = w > 1 ? viewWidth1 / (w - 1) : 0;
-      const yScale1 = h > 1 ? viewHeight1 / (h - 1) : 0;
-      const cx1 = wx + viewWidth1 * 0.5 - fx * xScale1;
-      const cy1 = wy + viewHeight1 * 0.5 - fy * yScale1;
-      applyCenterZoom(params, cx1, cy1, zoom1);
-      return;
-    }
-
-    if (slug === "burning-ship") {
-      const xDiv = Math.max(1, w - 1);
-      const yDiv = Math.max(1, h - 1);
-      const ws0 = BURNING_BASE_WIDTH / zoom0;
-      const hs0 = ws0 * (h / w);
-      const wx = cx0 + (fx / xDiv - 0.5) * ws0;
-      const wy = cy0 + (fy / yDiv - 0.5) * hs0;
-
-      const ws1 = BURNING_BASE_WIDTH / zoom1;
-      const hs1 = ws1 * (h / w);
-      const cx1 = wx - (fx / xDiv - 0.5) * ws1;
-      const cy1 = wy - (fy / yDiv - 0.5) * hs1;
-      applyCenterZoom(params, cx1, cy1, zoom1);
-    }
+    const next = zoomAroundPoint(
+      slug,
+      viewFrom(params),
+      w,
+      h,
+      { x: fx, y: fy },
+      zoom1,
+    );
+    return withCenterZoom(params, next.centerX, next.centerY, next.zoom);
   };
 
-  const panByBitmapDelta = (params: SimParams, dx: number, dy: number): void => {
+  const panParamsByBitmapDelta = (
+    params: SimParams,
+    dx: number,
+    dy: number,
+  ): SimParams => {
     const w = canvas.width;
     const h = canvas.height;
-    if (w <= 0 || h <= 0) return;
-
-    const zoom = num(params, "zoom", 1);
-    let cx = num(params, "centerX", 0);
-    let cy = num(params, "centerY", 0);
-
-    if (slug === "mandelbrot") {
-      const scale = 3 / (Math.min(w, h) * zoom);
-      cx -= dx * scale;
-      cy += dy * scale;
-    } else if (slug === "julia-set") {
-      const aspect = w / h;
-      const viewHeight = JULIA_BASE_HEIGHT / zoom;
-      const viewWidth = viewHeight * aspect;
-      const xScale = w > 1 ? viewWidth / (w - 1) : 0;
-      const yScale = h > 1 ? viewHeight / (h - 1) : 0;
-      cx -= dx * xScale;
-      cy += dy * yScale;
-    } else if (slug === "burning-ship") {
-      const xDiv = Math.max(1, w - 1);
-      const yDiv = Math.max(1, h - 1);
-      const widthScale = BURNING_BASE_WIDTH / zoom;
-      const heightScale = widthScale * (h / w);
-      cx -= (dx / xDiv) * widthScale;
-      cy += (dy / yDiv) * heightScale;
-    }
-
-    applyCenterZoom(params, cx, cy, zoom);
+    if (w <= 0 || h <= 0) return params;
+    const next = panByBitmapDelta(slug, viewFrom(params), w, h, dx, dy);
+    return withCenterZoom(params, next.centerX, next.centerY, next.zoom);
   };
 
   canvas.addEventListener(
@@ -256,7 +235,8 @@ export function attachFractalCanvasInteractions(
       const factor = Math.exp(-ev.deltaY * sensitivity);
       const ceiling = ev.deltaMode === WheelEvent.DOM_DELTA_LINE || ev.ctrlKey ? 1.7 : 1.35;
       const clamped = Math.min(ceiling, Math.max(1 / ceiling, factor));
-      zoomAroundCursor(getParams(), ev.clientX, ev.clientY, clamped);
+      const base = pendingParams ?? getParams();
+      schedulePreview(zoomAroundCursor(base, ev.clientX, ev.clientY, clamped));
     },
     { passive: false, signal },
   );
@@ -291,7 +271,7 @@ export function attachFractalCanvasInteractions(
       const targetZoom = clampKey("zoom", gestureStart.zoom * scale);
       const clientX = typeof gesture.clientX === "number" ? gesture.clientX : gestureStart.clientX;
       const clientY = typeof gesture.clientY === "number" ? gesture.clientY : gestureStart.clientY;
-      zoomAroundCursor(params, clientX, clientY, targetZoom / zoom0);
+      schedulePreview(zoomAroundCursor(params, clientX, clientY, targetZoom / zoom0));
     },
     { passive: false, signal },
   );
@@ -345,7 +325,7 @@ export function attachFractalCanvasInteractions(
     const [bitmapDx, bitmapDy] = cssDeltaToBitmapDelta(dragCurrentCssDx, dragCurrentCssDy);
     canvas.style.transform = "";
     if (commit && params !== null && (bitmapDx !== 0 || bitmapDy !== 0)) {
-      panByBitmapDelta(params, bitmapDx, bitmapDy);
+      commitParams(panParamsByBitmapDelta(params, bitmapDx, bitmapDy));
     }
     dragPointerId = null;
     dragStartParams = null;
@@ -356,11 +336,9 @@ export function attachFractalCanvasInteractions(
   canvas.addEventListener("pointerup", (ev) => endDrag(ev, true), { signal });
   canvas.addEventListener("pointercancel", (ev) => endDrag(ev, false), { signal });
 
-  return () => abort.abort();
+  return () => {
+    abort.abort();
+    if (previewFrame !== 0) cancelAnimationFrame(previewFrame);
+    window.clearTimeout(settleTimer);
+  };
 }
-
-/** Matches `BASE_VIEW_HEIGHT` in the Julia kernel. */
-const JULIA_BASE_HEIGHT = 3;
-
-/** Matches `BASE_VIEW_WIDTH` in the Burning Ship kernel. */
-const BURNING_BASE_WIDTH = 3.4;

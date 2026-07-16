@@ -32,8 +32,8 @@ const DEFAULT_COLOUR_BY_HEIGHT = true;
 const CHANNEL_COUNT = 1;
 const HEIGHT_FLOOR = 0.35;
 const HEIGHT_SPAN = 0.65;
-const DEPOSIT = 0.38;
-const DEPOSIT_RADIUS = 1;
+const DEPOSIT = 0.26;
+const DEFAULT_RIBBON_WIDTH = 2.1;
 
 const ATTRACTORS = [
   "lorenz",
@@ -67,6 +67,7 @@ type Derivative = {
 interface AttractorSpec {
   dt: number;
   warmup: number;
+  initialTrace: number;
   start: readonly [number, number, number];
   derivative(
     x: number,
@@ -89,6 +90,7 @@ const SPECS: Record<Attractor, AttractorSpec> = {
   lorenz: {
     dt: 0.005,
     warmup: 900,
+    initialTrace: 6000,
     start: [0.1, 0, 0],
     derivative: (x, y, z, sigma, rho, beta) => ({
       dx: sigma * (y - x),
@@ -107,6 +109,7 @@ const SPECS: Record<Attractor, AttractorSpec> = {
   rossler: {
     dt: 0.02,
     warmup: 2000,
+    initialTrace: 3000,
     start: [0.1, 0, 0],
     derivative: (x, y, z) => ({
       dx: -y - z,
@@ -125,6 +128,7 @@ const SPECS: Record<Attractor, AttractorSpec> = {
   thomas: {
     dt: 0.05,
     warmup: 1500,
+    initialTrace: 1800,
     start: [0.1, 0, 0],
     derivative: (x, y, z) => ({
       dx: Math.sin(y) - 0.208186 * x,
@@ -143,6 +147,7 @@ const SPECS: Record<Attractor, AttractorSpec> = {
   aizawa: {
     dt: 0.01,
     warmup: 2000,
+    initialTrace: 3000,
     start: [0.1, 0, 0],
     derivative: (x, y, z) => {
       const a = 0.95;
@@ -174,6 +179,7 @@ const SPECS: Record<Attractor, AttractorSpec> = {
   halvorsen: {
     dt: 0.008,
     warmup: 1500,
+    initialTrace: 3500,
     start: [-5, 0, 0],
     derivative: (x, y, z) => {
       const a = 1.89;
@@ -302,6 +308,15 @@ export class LorenzAttractorKernel implements SimKernel {
       step: 0.001,
     },
     {
+      key: "ribbonWidth",
+      label: "Ribbon width",
+      type: "number",
+      default: DEFAULT_RIBBON_WIDTH,
+      min: 0.75,
+      max: 4,
+      step: 0.05,
+    },
+    {
       key: "colourByHeight",
       label: "Colour by height",
       type: "boolean",
@@ -321,6 +336,7 @@ export class LorenzAttractorKernel implements SimKernel {
   private beta = DEFAULT_BETA;
   private stepsPerFrame = DEFAULT_STEPS_PER_FRAME;
   private fade = DEFAULT_FADE;
+  private ribbonWidth = DEFAULT_RIBBON_WIDTH;
   private colourByHeight = DEFAULT_COLOUR_BY_HEIGHT;
   private x = 0.1;
   private y = 0;
@@ -360,6 +376,13 @@ export class LorenzAttractorKernel implements SimKernel {
       ),
     );
     this.fade = boundedNumber(params, "fade", DEFAULT_FADE, 0, 1);
+    this.ribbonWidth = boundedNumber(
+      params,
+      "ribbonWidth",
+      DEFAULT_RIBBON_WIDTH,
+      0.75,
+      4,
+    );
     this.colourByHeight = boolParam(
       params,
       "colourByHeight",
@@ -441,11 +464,16 @@ export class LorenzAttractorKernel implements SimKernel {
 
     for (let step = 0; step < this.warmup; step += 1) {
       this.integrate();
-      this.deposit();
+    }
+    this.previousGridX = null;
+    this.previousGridY = null;
+    for (let step = 0; step < this.spec.initialTrace; step += 1) {
+      this.integrate();
+      this.deposit(0.35);
     }
   }
 
-  private deposit(): void {
+  private deposit(intensityScale = 1): void {
     const spec = this.spec;
     const px = spec.projX(this.x, this.y, this.z);
     const py = spec.projY(this.x, this.y, this.z);
@@ -453,8 +481,8 @@ export class LorenzAttractorKernel implements SimKernel {
       (px - spec.xRange[0]) / (spec.xRange[1] - spec.xRange[0]);
     const yNorm =
       (py - spec.yRange[0]) / (spec.yRange[1] - spec.yRange[0]);
-    const gridX = Math.floor(xNorm * (this.width - 1));
-    const gridY = this.height - 1 - Math.floor(yNorm * (this.height - 1));
+    const gridX = xNorm * (this.width - 1);
+    const gridY = this.height - 1 - yNorm * (this.height - 1);
 
     if (
       gridX < 0 ||
@@ -467,7 +495,7 @@ export class LorenzAttractorKernel implements SimKernel {
       return;
     }
 
-    const intensity = this.depositIntensity();
+    const intensity = this.depositIntensity() * intensityScale;
 
     if (this.previousGridX !== null && this.previousGridY !== null) {
       this.depositLine(
@@ -511,11 +539,14 @@ export class LorenzAttractorKernel implements SimKernel {
     endY: number,
     intensity: number,
   ): void {
-    const steps = Math.max(Math.abs(endX - startX), Math.abs(endY - startY), 1);
-    for (let index = 0; index <= steps; index += 1) {
+    const distance = Math.hypot(endX - startX, endY - startY);
+    const steps = Math.max(Math.ceil(distance * 2), 1);
+    // The previous segment already deposited the shared endpoint. Starting at
+    // one avoids a regular double-strength bead at every integration step.
+    for (let index = 1; index <= steps; index += 1) {
       const t = index / steps;
-      const x = Math.round(startX + (endX - startX) * t);
-      const y = Math.round(startY + (endY - startY) * t);
+      const x = startX + (endX - startX) * t;
+      const y = startY + (endY - startY) * t;
       this.depositPoint(x, y, intensity);
     }
   }
@@ -525,20 +556,26 @@ export class LorenzAttractorKernel implements SimKernel {
     gridY: number,
     intensity: number,
   ): void {
-    for (let dy = -DEPOSIT_RADIUS; dy <= DEPOSIT_RADIUS; dy += 1) {
-      for (let dx = -DEPOSIT_RADIUS; dx <= DEPOSIT_RADIUS; dx += 1) {
-        const px = gridX + dx;
-        const py = gridY + dy;
+    const radius = this.ribbonWidth;
+    const sigma = radius * 0.48;
+    const minX = Math.floor(gridX - radius);
+    const maxX = Math.ceil(gridX + radius);
+    const minY = Math.floor(gridY - radius);
+    const maxY = Math.ceil(gridY + radius);
+    for (let py = minY; py <= maxY; py += 1) {
+      for (let px = minX; px <= maxX; px += 1) {
         if (px < 0 || px >= this.width || py < 0 || py >= this.height) {
           continue;
         }
 
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > DEPOSIT_RADIUS) {
+        const dx = px + 0.5 - gridX;
+        const dy = py + 0.5 - gridY;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared > radius * radius) {
           continue;
         }
 
-        const falloff = 1 - distance / (DEPOSIT_RADIUS + 1);
+        const falloff = Math.exp(-distanceSquared / (2 * sigma * sigma));
         const index = py * this.width + px;
         this.state[index] = clamp01(this.state[index] + intensity * falloff);
       }

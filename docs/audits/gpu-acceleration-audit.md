@@ -2,9 +2,11 @@
 
 ## Scope
 
-This audit covers the 12 simulation kernels listed in `HANDOFF.md:17-22`. The current WebGL2 path is a renderer backend, not a compute backend: `WebGLRendererBackend.draw()` receives a `Float32Array` state from the kernel, configures a texture, uploads that state, and draws a fragment shader (`src/app/webglRenderer.ts:336-358`, `src/app/webglRenderer.ts:484-506`). The Canvas path similarly maps the kernel state on the CPU (`src/app/canvasRenderer.ts:42-72`). Current backend below therefore means the simulation compute backend.
+The classification table records the original 12-kernel audit. The live registry now contains 18 kernels, including Ising and Kuramoto. WebGL2 GPU-accelerates display sampling, palettes, trails, bloom, and compositing. Mandelbrot, Julia, and Burning Ship now also calculate escape-time values directly in a fragment shader while the complex-plane distance between adjacent pixels remains safe for WebGL2 high-precision floats; deeper views retain the CPU double-precision kernels. All other TypeScript simulation kernels still compute a `Float32Array` on the CPU and upload it for drawing. The Canvas path remains the CPU fallback. Current backend below therefore means the simulation compute backend.
 
-The relevant interface constraint is that `step(dt)` is synchronous, workers/WASM/GPU are internal kernel details, and `readState()` returns a stable pre-allocated `Float32Array` (`docs/INTERFACE.md:61-90`). That contract can tolerate internal GPU compute only if the kernel can still expose a current CPU-readable `Float32Array` without making `step()` async. A true GPU-resident state path would create interface tension because the renderer currently consumes CPU state after every `step()`.
+The new Ising and Kuramoto kernels are also CPU implementations. Both are local/grid-friendly algorithms and plausible future GPU-compute candidates, but neither changes the renderer contract in this release.
+
+The relevant interface constraint is that `step(dt)` is synchronous and `readState()` returns a stable pre-allocated `Float32Array` (`docs/INTERFACE.md:61-90`). The direct fractal path avoids changing that boundary: the kernels remain deterministic CPU fallbacks, while an optional renderer capability bypasses their field when the GPU can represent the requested coordinates safely. Stateful GPU simulations would still need a versioned contract decision or a per-frame readback.
 
 ## Kernel Classification
 
@@ -31,4 +33,4 @@ The relevant interface constraint is that `step(dt)` is synchronous, workers/WAS
 
 3. **Gray-Scott - WebGL2 ping-pong textures first, WebGPU later.** This has the biggest visible payoff because the default performs 12 full-grid stencil passes per app step. Follow-on card deliverable: prototype a two-channel floating-point ping-pong compute path, measure whether CPU readback erases the gain, and document any need for a future renderer contract that can consume GPU-resident state.
 
-Fractals are also strong GPU fits, but the current kernels do their expensive escape iteration on init or parameter changes and only phase-shift during `step()`. They are good second-wave targets once there is a clearer answer on whether the renderer can bypass CPU `Float32Array` state for direct shader rendering.
+The fractal target is now implemented as a direct WebGL2 fragment path with 1.5× supersampling. The CPU kernels remain both the Canvas fallback and the precision fallback for deep zooms.

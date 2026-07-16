@@ -1,4 +1,9 @@
-import { isCyclic, type ColourMapOptions, type ColourPreset } from "./colormap.ts";
+import {
+  buildMapper,
+  isCyclic,
+  type ColourMapOptions,
+  type ColourPreset,
+} from "./colormap.ts";
 import {
   containRect,
   type DisplayOptions,
@@ -40,6 +45,8 @@ uniform bool u_boidsGlyph;
 uniform float u_boidsGlyphRadius;
 uniform vec2 u_boidsMeanDir;
 uniform bool u_trailMode;
+uniform bool u_streamerMode;
+uniform float u_streamerWidth;
 
 in vec2 v_uv;
 out vec4 outColor;
@@ -160,6 +167,10 @@ float signalAt(vec4 raw) {
   if (u_channelCount >= 3) signal = max(signal, normalise(raw.b, u_ranges[2]));
   if (u_channelCount >= 4) signal = max(signal, normalise(raw.a, u_ranges[3]));
   return clamp01(signal);
+}
+
+float streamerSignal(vec2 uv) {
+  return normalise(sampleChannels(uv).r, u_ranges[0]);
 }
 
 float quantise(float t) {
@@ -292,6 +303,50 @@ void main() {
     return;
   }
 
+  if (u_streamerMode) {
+    vec2 texel = 1.0 / u_sourceSize;
+    float radius = clamp(u_streamerWidth, 0.75, 4.0);
+    vec2 nearX = vec2(texel.x * radius, 0.0);
+    vec2 nearY = vec2(0.0, texel.y * radius);
+    vec2 diagonal = vec2(texel.x, texel.y) * radius * 0.72;
+    float centre = streamerSignal(v_uv);
+    float cardinalAverage = (
+      streamerSignal(v_uv + nearX) +
+      streamerSignal(v_uv - nearX) +
+      streamerSignal(v_uv + nearY) +
+      streamerSignal(v_uv - nearY)
+    ) * 0.25;
+    float diagonalAverage = (
+      streamerSignal(v_uv + diagonal) +
+      streamerSignal(v_uv - diagonal) +
+      streamerSignal(v_uv + vec2(diagonal.x, -diagonal.y)) +
+      streamerSignal(v_uv + vec2(-diagonal.x, diagonal.y))
+    ) * 0.25;
+    float innerSignal = centre * 0.46 + cardinalAverage * 0.34 + diagonalAverage * 0.2;
+    vec2 farX = nearX * 2.1;
+    vec2 farY = nearY * 2.1;
+    float farAverage = (
+      streamerSignal(v_uv + farX) +
+      streamerSignal(v_uv - farX) +
+      streamerSignal(v_uv + farY) +
+      streamerSignal(v_uv - farY)
+    ) * 0.25;
+
+    float bodySignal = clamp01(innerSignal * 0.88 + farAverage * 0.12);
+    float body = smoothstep(0.012, 0.3, bodySignal);
+    float veil = smoothstep(0.004, 0.13, farAverage * 0.65 + bodySignal * 0.35);
+    float hotCore = smoothstep(0.48, 0.88, bodySignal);
+    float paletteValue = min(0.76, bodySignal * 0.9);
+    vec3 silk = colourFromRaw(vec4(paletteValue, 0.0, 0.0, 0.0));
+    vec3 violetVeil = vec3(48.0, 8.0, 92.0) / 255.0;
+    vec3 ember = vec3(255.0, 178.0, 72.0) / 255.0;
+    vec3 colour = violetVeil * veil * 0.65;
+    colour = mix(colour, silk, body * 0.94);
+    colour += ember * hotCore * 0.22;
+    outColor = vec4(colour, 1.0);
+    return;
+  }
+
   if (u_dotRadius > 0) {
     vec4 raw = readChannels(coord);
     if (signalAt(raw) <= 0.02) {
@@ -311,6 +366,101 @@ void main() {
   vec4 raw = u_smoothSampling ? sampleChannels(v_uv) : readChannels(coord);
   float alpha = u_trailMode ? (signalAt(raw) > 0.02 ? 1.0 : 0.0) : 1.0;
   outColor = vec4(colourFromRaw(raw), alpha);
+}
+`;
+
+const FRACTAL_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform int u_kind;
+uniform vec2 u_resolution;
+uniform vec2 u_center;
+uniform float u_zoom;
+uniform int u_maxIterations;
+uniform vec2 u_juliaC;
+uniform sampler2D u_palette;
+uniform float u_modelPhase;
+uniform float u_palettePhase;
+uniform bool u_paletteReverse;
+uniform bool u_paletteCyclic;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+const int MAX_ITERATIONS = 4096;
+
+bool mandelbrotMainBody(vec2 c) {
+  float x = c.x - 0.25;
+  float q = x * x + c.y * c.y;
+  if (q * (q + x) <= 0.25 * c.y * c.y) return true;
+  vec2 bulb = c - vec2(-1.0, 0.0);
+  return dot(bulb, bulb) <= 0.0625;
+}
+
+vec2 complexCoordinate() {
+  vec2 pixel = v_uv * u_resolution - vec2(0.5);
+  vec2 centrePixel = (u_resolution - vec2(1.0)) * 0.5;
+  if (u_kind == 0) {
+    float scale = 3.0 / (min(u_resolution.x, u_resolution.y) * u_zoom);
+    return u_center + (pixel - centrePixel) * scale;
+  }
+  if (u_kind == 1) {
+    float viewHeight = 3.0 / u_zoom;
+    float viewWidth = viewHeight * (u_resolution.x / u_resolution.y);
+    vec2 divisor = max(u_resolution - vec2(1.0), vec2(1.0));
+    return u_center - vec2(viewWidth, viewHeight) * 0.5 +
+      pixel / divisor * vec2(viewWidth, viewHeight);
+  }
+  float viewWidth = 3.4 / u_zoom;
+  float viewHeight = viewWidth * (u_resolution.y / u_resolution.x);
+  vec2 divisor = max(u_resolution - vec2(1.0), vec2(1.0));
+  return u_center + (pixel / divisor - vec2(0.5)) * vec2(viewWidth, viewHeight);
+}
+
+float escapeValue(vec2 point) {
+  if (u_kind == 0 && mandelbrotMainBody(point)) return 0.0;
+
+  vec2 z = u_kind == 1 ? point : vec2(0.0);
+  float magnitudeSquared = dot(z, z);
+  int escapedAt = -1;
+  for (int iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    if (iteration >= u_maxIterations) break;
+    if (u_kind != 2 && magnitudeSquared > 4.0) {
+      escapedAt = iteration;
+      break;
+    }
+
+    vec2 source = u_kind == 2 ? abs(z) : z;
+    vec2 constant = u_kind == 1 ? u_juliaC : point;
+    z = vec2(
+      source.x * source.x - source.y * source.y,
+      2.0 * source.x * source.y
+    ) + constant;
+    magnitudeSquared = dot(z, z);
+    if (u_kind == 2 && magnitudeSquared > 4.0) {
+      escapedAt = iteration;
+      break;
+    }
+  }
+
+  if (escapedAt < 0) return 0.0;
+  float magnitude = sqrt(max(magnitudeSquared, 4.000001));
+  float smoothValue = float(escapedAt) + 1.0 - log2(max(log2(magnitude), 0.000001));
+  return clamp(smoothValue / float(max(u_maxIterations, 1)), 0.0, 1.0);
+}
+
+void main() {
+  float value = escapeValue(complexCoordinate());
+  if (value > 0.001) value = fract(value + u_modelPhase);
+  if (u_paletteReverse) value = 1.0 - value;
+  float shifted = value;
+  if (u_palettePhase != 0.0) {
+    if (u_paletteCyclic) shifted = fract(value + u_palettePhase);
+    else if (value > 0.001 && value < 0.999) shifted = fract(value + u_palettePhase);
+  }
+  vec3 colour = texture(u_palette, vec2(clamp(shifted, 0.0, 1.0), 0.5)).rgb;
+  outColor = vec4(colour, 1.0);
 }
 `;
 
@@ -415,6 +565,8 @@ interface UniformLocations {
   boidsGlyphRadius: WebGLUniformLocation;
   boidsMeanDir: WebGLUniformLocation;
   trailMode: WebGLUniformLocation;
+  streamerMode: WebGLUniformLocation;
+  streamerWidth: WebGLUniformLocation;
 }
 
 interface PostUniformLocations {
@@ -423,15 +575,33 @@ interface PostUniformLocations {
   bg: WebGLUniformLocation;
 }
 
+interface FractalUniformLocations {
+  kind: WebGLUniformLocation;
+  resolution: WebGLUniformLocation;
+  center: WebGLUniformLocation;
+  zoom: WebGLUniformLocation;
+  maxIterations: WebGLUniformLocation;
+  juliaC: WebGLUniformLocation;
+  modelPhase: WebGLUniformLocation;
+  palettePhase: WebGLUniformLocation;
+  paletteReverse: WebGLUniformLocation;
+  paletteCyclic: WebGLUniformLocation;
+}
+
 export class WebGLRendererBackend implements RendererBackend {
   readonly kind = "webgl2" as const;
   readonly maxTextureSize: number;
 
   private readonly gl: WebGL2RenderingContext;
   private readonly program: WebGLProgram;
+  private readonly fractalProgram: WebGLProgram;
   private readonly texture: WebGLTexture;
+  private readonly fractalPaletteTexture: WebGLTexture;
+  private readonly fractalPaletteData = new Uint8Array(256 * 4);
+  private fractalPaletteKey = "";
   private readonly quadBuffer: WebGLBuffer;
   private readonly vao: WebGLVertexArrayObject;
+  private readonly fractalVao: WebGLVertexArrayObject;
   private readonly postProgram: WebGLProgram;
   private readonly postVao: WebGLVertexArrayObject;
   private readonly extractProgram: WebGLProgram;
@@ -444,6 +614,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly blurDirection: WebGLUniformLocation;
   private readonly compositeIntensity: WebGLUniformLocation;
   private readonly uniforms: UniformLocations;
+  private readonly fractalUniforms: FractalUniformLocations;
   private readonly postUniforms: PostUniformLocations;
   private textureFormat: TextureFormat | null = null;
   private uploadBuffer: Float32Array | null = null;
@@ -482,8 +653,13 @@ export class WebGLRendererBackend implements RendererBackend {
     this.gl = gl;
     this.maxTextureSize = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 4096;
     this.program = createProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
+    this.fractalProgram = createProgram(gl, VERTEX_SHADER, FRACTAL_FRAGMENT_SHADER);
     this.postProgram = createProgram(gl, VERTEX_SHADER, POST_FRAGMENT_SHADER);
     this.texture = mustCreate(gl.createTexture(), "texture");
+    this.fractalPaletteTexture = mustCreate(
+      gl.createTexture(),
+      "fractal palette texture",
+    );
     this.quadBuffer = mustCreate(gl.createBuffer(), "quad buffer");
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
     gl.bufferData(
@@ -495,11 +671,13 @@ export class WebGLRendererBackend implements RendererBackend {
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
     this.vao = this.createQuadVao(this.program);
+    this.fractalVao = this.createQuadVao(this.fractalProgram);
     this.postVao = this.createQuadVao(this.postProgram);
     this.extractVao = this.createQuadVao(this.extractProgram);
     this.blurVao = this.createQuadVao(this.blurProgram);
     this.compositeVao = this.createQuadVao(this.compositeProgram);
     this.uniforms = this.getUniformLocations();
+    this.fractalUniforms = this.getFractalUniformLocations();
     this.postUniforms = this.getPostUniformLocations();
     this.extractThreshold = mustCreate(
       gl.getUniformLocation(this.extractProgram, "u_threshold"),
@@ -525,6 +703,25 @@ export class WebGLRendererBackend implements RendererBackend {
 
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "u_state"), 0);
+    gl.useProgram(this.fractalProgram);
+    gl.uniform1i(gl.getUniformLocation(this.fractalProgram, "u_palette"), 3);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.fractalPaletteTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA8,
+      256,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.fractalPaletteData,
+    );
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.clearColor(0, 0, 0, 1);
   }
@@ -534,14 +731,41 @@ export class WebGLRendererBackend implements RendererBackend {
     this.displayHeight = Math.max(1, Math.floor(displayHeight));
   }
 
-  setGrid(gridWidth: number, gridHeight: number, kernel: SimKernel): void {
+  supportsDirectRendering(
+    mode: RenderMode,
+    kernel: SimKernel,
+    params: Record<string, number | boolean | string>,
+  ): boolean {
+    if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
+    // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
+    // adjacent complex coordinates collapse together, so retain the CPU
+    // double-precision kernel for very deep views.
+    const zoom = numericParam(params, "zoom", 1);
+    const pixelSpan = 3 / (Math.max(1, Math.min(this.displayWidth, this.displayHeight)) * zoom);
+    return pixelSpan >= 1e-7;
+  }
+
+  setGrid(
+    gridWidth: number,
+    gridHeight: number,
+    kernel: SimKernel,
+    mode: RenderMode = "grid",
+    params: Record<string, number | boolean | string> = {},
+  ): void {
     this.gridWidth = Math.max(1, Math.floor(gridWidth));
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    if (this.supportsDirectRendering(mode, kernel, params)) return;
     this.configureTexture(kernel.channelCount);
   }
 
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
+    if (this.supportsDirectRendering(mode, kernel, frame.params)) {
+      this.drawGpuFractal(frame);
+      return;
+    }
+    delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalRenderer;
+    delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
     const expectedLength = this.gridWidth * this.gridHeight * kernel.channelCount;
     if (state.length !== expectedLength) return;
 
@@ -591,6 +815,154 @@ export class WebGLRendererBackend implements RendererBackend {
         : this.renderPlainScene(rect);
     if (!sceneTexture) return;
     this.present(rect, sceneTexture, bloom);
+  }
+
+  private drawGpuFractal(frame: RendererBackendFrame): void {
+    const rect = containRect(
+      this.displayWidth,
+      this.displayHeight,
+      this.gridWidth,
+      this.gridHeight,
+    );
+    const basePixels = Math.max(1, rect.width * rect.height);
+    const qualityScale = Math.min(
+      1,
+      this.gridWidth / Math.max(1, this.displayWidth),
+      this.gridHeight / Math.max(1, this.displayHeight),
+    );
+    const scale =
+      qualityScale < 0.99
+        ? Math.max(0.2, qualityScale)
+        : Math.max(
+            1,
+            Math.min(
+              1.5,
+              this.maxTextureSize / Math.max(rect.width, rect.height),
+              Math.sqrt(8_388_608 / basePixels),
+            ),
+          );
+    const renderWidth = Math.max(1, Math.round(rect.width * scale));
+    const renderHeight = Math.max(1, Math.round(rect.height * scale));
+    this.ensureSceneTarget(renderWidth, renderHeight);
+    if (!this.sceneTexture || !this.sceneFbo) return;
+
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    canvas.dataset.fractalRenderer = "gpu-fragment";
+    canvas.dataset.fractalSupersample = scale.toFixed(2);
+
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
+    gl.viewport(0, 0, renderWidth, renderHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.setFractalUniforms(frame, renderWidth, renderHeight);
+    gl.useProgram(this.fractalProgram);
+    gl.bindVertexArray(this.fractalVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.present(
+      rect,
+      this.sceneTexture,
+      bloomIntensityFor(frame.displayOptions),
+    );
+  }
+
+  private setFractalUniforms(
+    frame: RendererBackendFrame,
+    width: number,
+    height: number,
+  ): void {
+    const gl = this.gl;
+    const kind = fractalKind(frame.kernel);
+    const params = frame.params;
+    const zoom = Math.max(0.25, numericParam(params, "zoom", 1));
+    const fallbackCenterX = kind === 0 ? -0.5 : 0;
+    const baseIterations = numericParam(
+      params,
+      "maxIterations",
+      kind === 0 ? 128 : 180,
+    );
+    const maxIterations = fractalIterationLimit(
+      baseIterations,
+      zoom,
+      params.autoIterations !== false,
+    );
+
+    this.updateFractalPalette(frame.colourOptions);
+    gl.useProgram(this.fractalProgram);
+    gl.uniform1i(this.fractalUniforms.kind, kind);
+    gl.uniform2f(this.fractalUniforms.resolution, width, height);
+    gl.uniform2f(
+      this.fractalUniforms.center,
+      numericParam(params, "centerX", fallbackCenterX),
+      numericParam(params, "centerY", 0),
+    );
+    gl.uniform1f(this.fractalUniforms.zoom, zoom);
+    gl.uniform1i(this.fractalUniforms.maxIterations, maxIterations);
+    gl.uniform2f(
+      this.fractalUniforms.juliaC,
+      numericParam(params, "cRe", -0.74543),
+      numericParam(params, "cIm", 0.11301),
+    );
+    gl.uniform1f(
+      this.fractalUniforms.modelPhase,
+      numericParam(params, "palettePhase", 0),
+    );
+    gl.uniform1f(
+      this.fractalUniforms.palettePhase,
+      palettePhase(
+        params,
+        frame.elapsedTime,
+        frame.colourOptions,
+        frame.speedScale,
+      ),
+    );
+    gl.uniform1i(
+      this.fractalUniforms.paletteReverse,
+      frame.colourOptions.paletteCycleReverse ? 1 : 0,
+    );
+    gl.uniform1i(
+      this.fractalUniforms.paletteCyclic,
+      isCyclic(frame.colourOptions.preset) ? 1 : 0,
+    );
+  }
+
+  private updateFractalPalette(options: ColourMapOptions): void {
+    const key = [
+      options.preset,
+      options.invert ? 1 : 0,
+      options.gamma,
+      options.contrast,
+      options.steps,
+    ].join(":");
+    if (key === this.fractalPaletteKey) return;
+    this.fractalPaletteKey = key;
+    const mapper = buildMapper(1, [[0, 1]], {
+      ...options,
+      paletteCycleReverse: false,
+    });
+    const sample = new Float32Array(1);
+    for (let index = 0; index < 256; index += 1) {
+      sample[0] = index / 255;
+      const [r, g, b] = mapper(sample, 0);
+      const offset = index * 4;
+      this.fractalPaletteData[offset] = r;
+      this.fractalPaletteData[offset + 1] = g;
+      this.fractalPaletteData[offset + 2] = b;
+      this.fractalPaletteData[offset + 3] = 255;
+    }
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.fractalPaletteTexture);
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      0,
+      256,
+      1,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.fractalPaletteData,
+    );
   }
 
   /**
@@ -881,13 +1253,16 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseSceneTarget();
     this.releaseBloomTargets();
     gl.deleteTexture(this.texture);
+    gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);
+    gl.deleteVertexArray(this.fractalVao);
     gl.deleteVertexArray(this.postVao);
     gl.deleteVertexArray(this.extractVao);
     gl.deleteVertexArray(this.blurVao);
     gl.deleteVertexArray(this.compositeVao);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.program);
+    gl.deleteProgram(this.fractalProgram);
     gl.deleteProgram(this.postProgram);
     gl.deleteProgram(this.extractProgram);
     gl.deleteProgram(this.blurProgram);
@@ -964,6 +1339,14 @@ export class WebGLRendererBackend implements RendererBackend {
         this.gl.getUniformLocation(this.program, "u_trailMode"),
         "u_trailMode uniform",
       ),
+      streamerMode: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_streamerMode"),
+        "u_streamerMode uniform",
+      ),
+      streamerWidth: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_streamerWidth"),
+        "u_streamerWidth uniform",
+      ),
     };
   }
 
@@ -981,6 +1364,26 @@ export class WebGLRendererBackend implements RendererBackend {
         this.gl.getUniformLocation(this.postProgram, "u_bg"),
         "u_bg uniform",
       ),
+    };
+  }
+
+  private getFractalUniformLocations(): FractalUniformLocations {
+    const uniform = (name: string): WebGLUniformLocation =>
+      mustCreate(
+        this.gl.getUniformLocation(this.fractalProgram, name),
+        `${name} uniform`,
+      );
+    return {
+      kind: uniform("u_kind"),
+      resolution: uniform("u_resolution"),
+      center: uniform("u_center"),
+      zoom: uniform("u_zoom"),
+      maxIterations: uniform("u_maxIterations"),
+      juliaC: uniform("u_juliaC"),
+      modelPhase: uniform("u_modelPhase"),
+      palettePhase: uniform("u_palettePhase"),
+      paletteReverse: uniform("u_paletteReverse"),
+      paletteCyclic: uniform("u_paletteCyclic"),
     };
   }
 
@@ -1128,6 +1531,8 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.uniform1i(this.uniforms.boidsGlyph, isBoidsState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.boidsGlyphRadius, boidsGlyphRadius(params, displayOptions));
     gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
+    gl.uniform1i(this.uniforms.streamerMode, isAttractorState(kernel) ? 1 : 0);
+    gl.uniform1f(this.uniforms.streamerWidth, numericParam(params, "ribbonWidth", 2.1));
     const meanDir = boidsMeanDirection(
       state,
       kernel.channelCount,
@@ -1241,6 +1646,37 @@ function isBoidsState(kernel: SimKernel): boolean {
     kernel.channelLabels[2] === "Velocity X" &&
     kernel.channelLabels[3] === "Velocity Y"
   );
+}
+
+function isAttractorState(kernel: SimKernel): boolean {
+  return kernel.name === "Strange Attractor" && kernel.channelLabels[0] === "Density";
+}
+
+function numericParam(
+  params: Record<string, number | boolean | string>,
+  key: string,
+  fallback: number,
+): number {
+  const value = params[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function fractalKind(kernel: SimKernel): number {
+  if (kernel.name === "Mandelbrot") return 0;
+  if (kernel.name === "Julia Set") return 1;
+  if (kernel.name === "Burning Ship") return 2;
+  return -1;
+}
+
+function fractalIterationLimit(
+  base: number,
+  zoom: number,
+  automatic: boolean,
+): number {
+  const boundedBase = Math.max(16, Math.min(2048, Math.round(base)));
+  if (!automatic) return boundedBase;
+  const boost = Math.floor(48 * Math.log2(Math.max(1, zoom)));
+  return Math.min(4096, boundedBase + boost);
 }
 
 function boidsMeanDirection(

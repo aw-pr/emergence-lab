@@ -1,3 +1,9 @@
+import {
+  effectiveIterationLimit,
+  MAX_BASE_ITERATIONS,
+  MAX_FRACTAL_ZOOM,
+} from "../fractal/detail.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -29,6 +35,7 @@ const DEFAULT_CENTER_X = 0;
 const DEFAULT_CENTER_Y = 0;
 const DEFAULT_ZOOM = 1.45;
 const DEFAULT_MAX_ITERATIONS = 180;
+const DEFAULT_AUTO_ITERATIONS = true;
 const DEFAULT_PALETTE_PHASE = 0.38;
 const DEFAULT_CYCLE_SPEED = 0.1;
 const CHANNEL_COUNT = 1;
@@ -121,7 +128,7 @@ export class JuliaSetKernel implements SimKernel {
       type: "number",
       default: DEFAULT_ZOOM,
       min: 0.25,
-      max: 500,
+      max: MAX_FRACTAL_ZOOM,
       step: 0.01,
     },
     {
@@ -130,8 +137,14 @@ export class JuliaSetKernel implements SimKernel {
       type: "number",
       default: DEFAULT_MAX_ITERATIONS,
       min: 16,
-      max: 512,
+      max: MAX_BASE_ITERATIONS,
       step: 1,
+    },
+    {
+      key: "autoIterations",
+      label: "Adaptive detail",
+      type: "boolean",
+      default: DEFAULT_AUTO_ITERATIONS,
     },
     {
       key: "palettePhase",
@@ -183,13 +196,28 @@ export class JuliaSetKernel implements SimKernel {
     this.cIm = boundedNumber(params, "cIm", DEFAULT_C_IM, -1.5, 1.5);
     this.centerX = boundedNumber(params, "centerX", DEFAULT_CENTER_X, -2, 2);
     this.centerY = boundedNumber(params, "centerY", DEFAULT_CENTER_Y, -2, 2);
-    this.zoom = boundedNumber(params, "zoom", DEFAULT_ZOOM, 0.25, 500);
-    this.maxIterations = boundedInteger(
+    this.zoom = boundedNumber(
+      params,
+      "zoom",
+      DEFAULT_ZOOM,
+      0.25,
+      MAX_FRACTAL_ZOOM,
+    );
+    const baseIterations = boundedInteger(
       params,
       "maxIterations",
       DEFAULT_MAX_ITERATIONS,
       16,
-      512,
+      MAX_BASE_ITERATIONS,
+    );
+    const autoIterations =
+      typeof params.autoIterations === "boolean"
+        ? params.autoIterations
+        : DEFAULT_AUTO_ITERATIONS;
+    this.maxIterations = effectiveIterationLimit(
+      baseIterations,
+      this.zoom,
+      autoIterations,
     );
     this.palettePhase = boundedNumber(
       params,

@@ -3,7 +3,6 @@ import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
 import {
   Renderer,
-  DEFAULT_RESOLUTION,
   RESOLUTION_TARGETS,
   type DisplayOptions,
   type ResolutionPreset,
@@ -32,6 +31,8 @@ import {
   getRenderMode,
   shouldUseSmoothCanvasPresentation,
 } from "./renderModes.ts";
+import { isFractalViewSlug, zoomAroundPoint } from "./fractalView.ts";
+import { qualityProfileFor } from "./qualityProfiles.ts";
 
 const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
   "gray-scott": [
@@ -59,6 +60,12 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
   ],
   "abelian-sandpile": [
     "z_i \\ge 4:\\quad z_i \\to z_i - 4,\\ \\ z_{\\partial i} \\to z_{\\partial i} + 1",
+  ],
+  "ising-model": [
+    "H = -J\\sum_{\\langle i,j\\rangle}s_i s_j - h\\sum_i s_i,\\quad s_i\\in\\{-1,+1\\}",
+  ],
+  "kuramoto-oscillators": [
+    "\\dot{\\theta_i} = \\omega_i + \\frac{K}{N}\\sum_j \\sin(\\theta_j-\\theta_i)",
   ],
   "elementary-cellular-automata": [
     "s_i^{\\,t+1} = R\\!\\left(s_{i-1}^{\\,t},\\, s_i^{\\,t},\\, s_{i+1}^{\\,t}\\right)",
@@ -158,8 +165,9 @@ export async function renderSimView(
   const speedProfile = speedProfileFor(slug);
   let stepsPerFrame = speedProfile.initial;
   const fractal = isFractalSlug(slug);
-  const defaultResolution = defaultResolutionFor(slug);
-  const resolution = resolveResolution(slug);
+  const qualityProfile = qualityProfileFor(slug, renderMode);
+  const defaultResolution = qualityProfile.defaultPreset;
+  const resolution = resolveResolution(slug, defaultResolution);
 
   // Sims whose kernel reports run completion (currently DLA) can auto-cycle
   // into a fresh randomised run when they finish. On by default when supported.
@@ -180,6 +188,7 @@ export async function renderSimView(
     renderMode,
     resolution,
     autoCycle: initialAutoCycle,
+    qualityProfile,
   });
 
   const controls = new ControlsPanel({
@@ -254,6 +263,7 @@ export async function renderSimView(
 
   let detachFractalInteractions: (() => void) | undefined;
   let detachFractalPaletteKeys: (() => void) | undefined;
+  let detachFractalViewKeys: (() => void) | undefined;
   let detachPointerImpulse: (() => void) | undefined;
   if (!fractal && renderer.supportsImpulse()) {
     // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
@@ -263,29 +273,103 @@ export async function renderSimView(
   }
   if (fractal) {
     layout.canvas.classList.add("sim-view__canvas--fractal");
-    const pushFractalParams = (next: SimParams): void => {
-      renderer.updateParams(next);
+    const updateZoomHud = (next: SimParams): void => {
+      if (!layout.fractalHud) return;
+      const raw = next.zoom;
+      const zoom = typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
+      layout.fractalHud.zoomLabel.value = formatZoom(zoom);
+      layout.fractalHud.root.dataset.quality =
+        layout.canvas.dataset.renderQuality ?? "full";
+    };
+    const previewFractalParams = (next: SimParams): void => {
+      renderer.previewParams(next);
+      controls.syncParamsFromExternal(next, false);
+      updateZoomHud(next);
+    };
+    const commitFractalParams = (next: SimParams): void => {
+      renderer.commitParams(next);
       controls.syncParamsFromExternal(next);
+      updateZoomHud(next);
     };
     detachFractalInteractions = attachFractalCanvasInteractions({
       slug,
       canvas: layout.canvas,
       paramSchema: kernel.paramSchema,
       getParams: () => controls.getParams(),
-      setParams: pushFractalParams,
+      previewParams: previewFractalParams,
+      commitParams: commitFractalParams,
     });
     detachFractalPaletteKeys = attachFractalPaletteCycleKeyboard({
       slug,
       paramSchema: kernel.paramSchema,
       getParams: () => controls.getParams(),
-      setParams: pushFractalParams,
+      setParams: commitFractalParams,
     });
+
+    if (layout.fractalHud && isFractalViewSlug(slug)) {
+      const zoomDescriptor = kernel.paramSchema.find((p) => p.key === "zoom");
+      const minZoom = zoomDescriptor?.type === "number" ? zoomDescriptor.min ?? 0.25 : 0.25;
+      const maxZoom = zoomDescriptor?.type === "number" ? zoomDescriptor.max ?? 1e8 : 1e8;
+      const zoomBy = (factor: number): void => {
+        const current = controls.getParams();
+        const zoom = typeof current.zoom === "number" ? current.zoom : 1;
+        const centerX = typeof current.centerX === "number" ? current.centerX : 0;
+        const centerY = typeof current.centerY === "number" ? current.centerY : 0;
+        const target = Math.min(maxZoom, Math.max(minZoom, zoom * factor));
+        const next = zoomAroundPoint(
+          slug,
+          { centerX, centerY, zoom },
+          layout.canvas.width,
+          layout.canvas.height,
+          {
+            x: (layout.canvas.width - 1) / 2,
+            y: (layout.canvas.height - 1) / 2,
+          },
+          target,
+        );
+        commitFractalParams({ ...current, ...next });
+      };
+      const home = (): void => {
+        commitFractalParams({
+          ...controls.getParams(),
+          centerX: factoryParams.centerX,
+          centerY: factoryParams.centerY,
+          zoom: factoryParams.zoom,
+        });
+      };
+
+      layout.fractalHud.zoomIn.addEventListener("click", () => zoomBy(2));
+      layout.fractalHud.zoomOut.addEventListener("click", () => zoomBy(0.5));
+      layout.fractalHud.home.addEventListener("click", home);
+
+      const keyAbort = new AbortController();
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (isEditableTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+          if (event.key === "+" || event.key === "=") {
+            event.preventDefault();
+            zoomBy(2);
+          } else if (event.key === "-") {
+            event.preventDefault();
+            zoomBy(0.5);
+          } else if (event.key === "0") {
+            event.preventDefault();
+            home();
+          }
+        },
+        { signal: keyAbort.signal, capture: true },
+      );
+      detachFractalViewKeys = () => keyAbort.abort();
+      updateZoomHud(controls.getParams());
+    }
   }
 
   return {
     dispose() {
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
+      detachFractalViewKeys?.();
       detachPointerImpulse?.();
       renderer.destroy();
     },
@@ -298,6 +382,33 @@ interface SimLayout {
   canvas: HTMLCanvasElement;
   sidebar: HTMLElement;
   legend: HTMLElement;
+  fractalHud?: FractalHud;
+}
+
+interface FractalHud {
+  root: HTMLElement;
+  zoomLabel: HTMLOutputElement;
+  zoomIn: HTMLButtonElement;
+  zoomOut: HTMLButtonElement;
+  home: HTMLButtonElement;
+}
+
+function formatZoom(zoom: number): string {
+  const suffixes = ["", "K", "M", "B"] as const;
+  let value = Math.max(0, zoom);
+  let suffix = 0;
+  while (value >= 1000 && suffix < suffixes.length - 1) {
+    value /= 1000;
+    suffix += 1;
+  }
+  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `×${value.toFixed(digits)}${suffixes[suffix]}`;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName);
 }
 
 interface SimHeader {
@@ -365,6 +476,9 @@ function buildLayout(
   canvas.className = "sim-view__canvas";
   stage.appendChild(canvas);
 
+  const fractalHud = isFractalSlug(slug) ? buildFractalHud() : undefined;
+  if (fractalHud) stage.appendChild(fractalHud.root);
+
   const legend = document.createElement("div");
   legend.className = "sim-view__legend";
   stage.appendChild(legend);
@@ -378,7 +492,37 @@ function buildLayout(
   page.appendChild(body);
   container.appendChild(page);
 
-  return { body, stage, canvas, sidebar, legend };
+  return { body, stage, canvas, sidebar, legend, fractalHud };
+}
+
+function buildFractalHud(): FractalHud {
+  const root = document.createElement("div");
+  root.className = "fractal-hud";
+
+  const zoomLabel = document.createElement("output");
+  zoomLabel.className = "fractal-hud__zoom";
+  zoomLabel.setAttribute("aria-live", "polite");
+  root.appendChild(zoomLabel);
+
+  const controls = document.createElement("div");
+  controls.className = "fractal-hud__controls";
+
+  const makeButton = (text: string, label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "fractal-hud__button";
+    button.textContent = text;
+    button.setAttribute("aria-label", label);
+    controls.appendChild(button);
+    return button;
+  };
+
+  const zoomOut = makeButton("−", "Zoom out");
+  const home = makeButton("⌂", "Reset fractal view");
+  const zoomIn = makeButton("+", "Zoom in");
+  root.appendChild(controls);
+
+  return { root, zoomLabel, zoomIn, zoomOut, home };
 }
 
 function renderFormula(container: HTMLElement, slug: string): void {
@@ -463,6 +607,7 @@ function speedProfileFor(slug: string): SpeedProfile {
       return { initial: 5, control: swarm };
     case "mandelbrot":
     case "julia-set":
+      return { initial: 1.8, control: fractal };
     case "burning-ship":
       return { initial: 0.5, control: fractal };
     default:
@@ -510,9 +655,11 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   if (slug === "particle-life") {
     return { dotSize: 2, trailFade: 0, bloom: 0 };
   }
+  if (slug === "lorenz-attractor") {
+    return { dotSize: 1, trailFade: 0, bloom: 0.4 };
+  }
   switch (slug) {
     // Modest glow on the bright-trace and fractal sims; off elsewhere.
-    case "lorenz-attractor":
     case "mandelbrot":
     case "julia-set":
     case "burning-ship":
@@ -540,49 +687,16 @@ function restoreDisplayOptions(
   return next;
 }
 
-function defaultResolutionFor(slug: string): ResolutionPreset {
-  switch (slug) {
-    case "gray-scott":
-      return "balanced";
-    case "lenia":
-      // CPU convolution cost is cells x kernel taps; 384^2 keeps the default
-      // regime at ~27 ms/step (30+ fps) in plain JS.
-      return "performance";
-    case "belousov-zhabotinsky":
-      // Finer medium carries more spiral detail; paired with the slower default
-      // speed it stays smooth on the 3-channel CPU reaction step.
-      return "high";
-    case "physarum":
-      // Finer than the old balanced default for sharper veins, but the CPU 3×3
-      // diffusion pass over the grid makes true ultra (~1 step/s) unusable, and
-      // the network never gets enough steps to form. High is the sweet spot.
-      return "high";
-    case "abelian-sandpile":
-      // The mandala's growth rate is fixed by relaxation physics (radius ~
-      // total-topples^0.22), so a coarser grid is what makes it fill the
-      // frame in tens of seconds rather than hours; ~2px cells also read as
-      // deliberate terraces instead of 1px dither.
-      return "balanced";
-    case "lorenz-attractor":
-    case "elementary-cellular-automata":
-    case "game-of-life":
-    case "diffusion-limited-aggregation":
-    case "boids":
-    case "cyclic-ca":
-    case "particle-life":
-      return "ultra";
-    default:
-      return DEFAULT_RESOLUTION;
-  }
-}
-
 /** Persisted resolution preset if valid, otherwise the per-sim default. */
-function resolveResolution(slug: string): ResolutionPreset {
+function resolveResolution(
+  slug: string,
+  fallback: ResolutionPreset,
+): ResolutionPreset {
   const stored = loadResolution(slug);
   if (stored && Object.prototype.hasOwnProperty.call(RESOLUTION_TARGETS, stored)) {
     return stored as ResolutionPreset;
   }
-  return defaultResolutionFor(slug);
+  return fallback;
 }
 
 /** Persisted auto-cycle preference if stored, otherwise the per-sim default. */

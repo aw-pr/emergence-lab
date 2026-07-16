@@ -42,7 +42,7 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade", "colourByHeight"],
+    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade", "ribbonWidth", "colourByHeight"],
   );
 
   for (const descriptor of kernel.paramSchema) {
@@ -191,6 +191,13 @@ test("colourByHeight defaults on and modulates the deposited field", () => {
       `${attractor} height-coloured field must stay bounded`,
     );
   }
+});
+
+test("ribbon width changes the subpixel trail footprint", () => {
+  const fine = runKernel({ ribbonWidth: 0.75, fade: 1 }, 20);
+  const silk = runKernel({ ribbonWidth: 3, fade: 1 }, 20);
+  assert.ok(occupiedCells(silk) > occupiedCells(fine));
+  assert.notDeepEqual(silk, fine);
 });
 
 test("colourByHeight off is deterministic and matches the schema-default toggle", () => {

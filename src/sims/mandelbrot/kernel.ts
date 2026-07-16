@@ -1,3 +1,10 @@
+import {
+  effectiveIterationLimit,
+  isInMandelbrotMainBodies,
+  MAX_BASE_ITERATIONS,
+  MAX_FRACTAL_ZOOM,
+} from "../fractal/detail.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -27,6 +34,7 @@ const DEFAULT_CENTER_X = -0.5;
 const DEFAULT_CENTER_Y = 0;
 const DEFAULT_ZOOM = 1;
 const DEFAULT_MAX_ITERATIONS = 128;
+const DEFAULT_AUTO_ITERATIONS = true;
 const DEFAULT_PALETTE_PHASE = 0;
 const DEFAULT_CYCLE_SPEED = 0.1;
 const CHANNEL_COUNT = 1;
@@ -86,7 +94,7 @@ export class MandelbrotKernel implements SimKernel {
       type: "number",
       default: DEFAULT_ZOOM,
       min: 0.25,
-      max: 500,
+      max: MAX_FRACTAL_ZOOM,
       step: 0.01,
     },
     {
@@ -95,8 +103,14 @@ export class MandelbrotKernel implements SimKernel {
       type: "number",
       default: DEFAULT_MAX_ITERATIONS,
       min: 16,
-      max: 512,
+      max: MAX_BASE_ITERATIONS,
       step: 1,
+    },
+    {
+      key: "autoIterations",
+      label: "Adaptive detail",
+      type: "boolean",
+      default: DEFAULT_AUTO_ITERATIONS,
     },
     {
       key: "palettePhase",
@@ -148,12 +162,21 @@ export class MandelbrotKernel implements SimKernel {
       -1.5,
       1.5,
     );
-    const zoom = boundedNumber(numberParam(params, "zoom", DEFAULT_ZOOM), 0.25, 500);
-    const maxIterations = boundedInteger(
+    const zoom = boundedNumber(
+      numberParam(params, "zoom", DEFAULT_ZOOM),
+      0.25,
+      MAX_FRACTAL_ZOOM,
+    );
+    const baseIterations = boundedInteger(
       numberParam(params, "maxIterations", DEFAULT_MAX_ITERATIONS),
       16,
-      512,
+      MAX_BASE_ITERATIONS,
     );
+    const autoIterations =
+      typeof params.autoIterations === "boolean"
+        ? params.autoIterations
+        : DEFAULT_AUTO_ITERATIONS;
+    const maxIterations = effectiveIterationLimit(baseIterations, zoom, autoIterations);
     this.phase = boundedNumber(
       numberParam(params, "palettePhase", DEFAULT_PALETTE_PHASE),
       0,
@@ -210,6 +233,11 @@ export class MandelbrotKernel implements SimKernel {
 
       for (let x = 0; x < width; x += 1) {
         const cx = centerX + (x - (width - 1) / 2) * scale;
+        const index = y * width + x;
+        if (isInMandelbrotMainBodies(cx, cy)) {
+          this.base[index] = 0;
+          continue;
+        }
         let zx = 0;
         let zy = 0;
         let iteration = 0;
@@ -221,7 +249,6 @@ export class MandelbrotKernel implements SimKernel {
           iteration += 1;
         }
 
-        const index = y * width + x;
         if (iteration >= maxIterations) {
           this.base[index] = 0;
           continue;

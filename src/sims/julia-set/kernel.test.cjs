@@ -45,6 +45,7 @@ test("metadata matches the renderer contract", () => {
       "centerY",
       "zoom",
       "maxIterations",
+      "autoIterations",
       "palettePhase",
       "cycleSpeed",
     ],
@@ -55,13 +56,21 @@ test("metadata matches the renderer contract", () => {
     cIm: { default: 0.6, min: -1.5, max: 1.5, step: 0.001 },
     centerX: { default: 0, min: -2, max: 2, step: 0.001 },
     centerY: { default: 0, min: -2, max: 2, step: 0.001 },
-    zoom: { default: 1.45, min: 0.25, max: 500, step: 0.01 },
-    maxIterations: { default: 180, min: 16, max: 512, step: 1 },
+    zoom: { default: 1.45, min: 0.25, max: 100000000, step: 0.01 },
+    maxIterations: { default: 180, min: 16, max: 2048, step: 1 },
+    autoIterations: { default: true },
     palettePhase: { default: 0.38, min: 0, max: 1, step: 0.001 },
     cycleSpeed: { default: 0.1, min: 0, max: 5, step: 0.001 },
   };
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.type === "boolean") {
+      assert.deepEqual(
+        { default: descriptor.default },
+        expected[descriptor.key],
+      );
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -163,7 +172,7 @@ test("params are finite-checked and clamped", () => {
       centerX: -100,
       centerY: 100,
       zoom: -1,
-      maxIterations: 1000,
+      maxIterations: 10000,
       palettePhase: 3,
       cycleSpeed: 10,
     }),
@@ -173,7 +182,7 @@ test("params are finite-checked and clamped", () => {
       centerX: -2,
       centerY: 2,
       zoom: 0.25,
-      maxIterations: 512,
+      maxIterations: 2048,
       palettePhase: 1,
       cycleSpeed: 5,
     }),

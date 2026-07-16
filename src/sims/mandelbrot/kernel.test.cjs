@@ -5,6 +5,10 @@ const {
   MandelbrotKernel,
   selfTest,
 } = require("../../../.test-build/sims/mandelbrot/kernel.js");
+const {
+  effectiveIterationLimit,
+  isInMandelbrotMainBodies,
+} = require("../../../.test-build/sims/fractal/detail.js");
 
 const FRAME_DT_SECONDS = 1 / 60;
 
@@ -49,12 +53,18 @@ test("metadata matches the renderer contract", () => {
       "centerY",
       "zoom",
       "maxIterations",
+      "autoIterations",
       "palettePhase",
       "cycleSpeed",
     ],
   );
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.type === "boolean") {
+      assert.equal(descriptor.key, "autoIterations");
+      assert.equal(descriptor.default, true);
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -135,6 +145,20 @@ test("selfTest passes", () => {
   assert.equal(selfTest(), true);
 });
 
+test("adaptive detail grows logarithmically and remains capped", () => {
+  assert.equal(effectiveIterationLimit(180, 1, true), 180);
+  assert.ok(effectiveIterationLimit(180, 1024, true) > 180);
+  assert.equal(effectiveIterationLimit(2048, 100000000, true), 3323);
+  assert.equal(effectiveIterationLimit(2048, 1e100, true), 4096);
+  assert.equal(effectiveIterationLimit(180, 100000000, false), 180);
+});
+
+test("analytic Mandelbrot interior tests cover the cardioid and period-2 bulb", () => {
+  assert.equal(isInMandelbrotMainBodies(0, 0), true);
+  assert.equal(isInMandelbrotMainBodies(-1, 0), true);
+  assert.equal(isInMandelbrotMainBodies(0.5, 0.5), false);
+});
+
 test("zoom, center and maxIterations affect the cached field", () => {
   const baseline = runKernel({ cycleSpeed: 0 });
 
@@ -176,7 +200,7 @@ test("params are finite-checked and clamped", () => {
     centerX: Number.POSITIVE_INFINITY,
     centerY: -100,
     zoom: Number.NaN,
-    maxIterations: 999,
+    maxIterations: 9999,
     palettePhase: 2,
     cycleSpeed: -1,
   });
@@ -184,7 +208,7 @@ test("params are finite-checked and clamped", () => {
     centerX: -2,
     centerY: -1.5,
     zoom: 0.25,
-    maxIterations: 512,
+    maxIterations: 2048,
     palettePhase: 1,
     cycleSpeed: 0,
   });

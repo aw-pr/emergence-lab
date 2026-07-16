@@ -57,9 +57,10 @@ npm run build
 
 ## Stack
 
-Vite and TypeScript throughout. Kernels are pure deterministic numerics  
-with no runtime dependencies. The renderer is moving to a quality-first  
-WebGL2/GPU path, with Canvas 2D kept as a fallback and debug surface.  
+Vite and TypeScript throughout. Kernels are pure deterministic numerics
+with no runtime dependencies. The renderer uses a quality-first WebGL2/GPU
+path, including direct fragment-shader fractals, with Canvas 2D kept as a
+fallback and debug surface.
 Legacy browsers are not a target.
 
 ## Adding a simulation
@@ -87,4 +88,3 @@ emergence-lab/
     PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
   HANDOFF.md              # current state and next-run brief
 ```
-

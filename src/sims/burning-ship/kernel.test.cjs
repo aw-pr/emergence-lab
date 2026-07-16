@@ -47,6 +47,7 @@ test("metadata matches the renderer contract", () => {
       "centerY",
       "zoom",
       "maxIterations",
+      "autoIterations",
       "palettePhase",
       "cycleSpeed",
     ],
@@ -63,14 +64,19 @@ test("metadata matches the renderer contract", () => {
     [
       ["centerX", -1.755, -2.2, 1.2, 0.001],
       ["centerY", -0.03, -2, 1, 0.001],
-      ["zoom", 14, 0.25, 500, 0.01],
-      ["maxIterations", 260, 16, 512, 1],
+      ["zoom", 14, 0.25, 100000000, 0.01],
+      ["maxIterations", 260, 16, 2048, 1],
+      ["autoIterations", true, undefined, undefined, undefined],
       ["palettePhase", 0.1, 0, 1, 0.001],
       ["cycleSpeed", 0.35, 0, 5, 0.001],
     ],
   );
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.type === "boolean") {
+      assert.equal(typeof descriptor.default, "boolean");
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -146,6 +152,7 @@ test("finite and clamp behavior is schema-driven", () => {
       centerY: Number.POSITIVE_INFINITY,
       zoom: Number.NEGATIVE_INFINITY,
       maxIterations: Number.NaN,
+      autoIterations: true,
       palettePhase: Number.POSITIVE_INFINITY,
       cycleSpeed: Number.NEGATIVE_INFINITY,
     }),
@@ -156,16 +163,17 @@ test("finite and clamp behavior is schema-driven", () => {
     runKernel({
       centerX: -99,
       centerY: 99,
-      zoom: 999,
-      maxIterations: 999,
+      zoom: 999999999,
+      maxIterations: 9999,
       palettePhase: 99,
       cycleSpeed: 99,
     }),
     runKernel({
       centerX: -2.2,
       centerY: 1,
-      zoom: 500,
-      maxIterations: 512,
+      zoom: 100000000,
+      maxIterations: 2048,
+      autoIterations: true,
       palettePhase: 1,
       cycleSpeed: 5,
     }),

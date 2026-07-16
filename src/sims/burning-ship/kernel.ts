@@ -1,3 +1,9 @@
+import {
+  effectiveIterationLimit,
+  MAX_BASE_ITERATIONS,
+  MAX_FRACTAL_ZOOM,
+} from "../fractal/detail.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -30,6 +36,7 @@ const DEFAULT_CENTER_X = -1.755;
 const DEFAULT_CENTER_Y = -0.03;
 const DEFAULT_ZOOM = 14;
 const DEFAULT_MAX_ITERATIONS = 260;
+const DEFAULT_AUTO_ITERATIONS = true;
 const DEFAULT_PALETTE_PHASE = 0.1;
 const DEFAULT_CYCLE_SPEED = 0.35;
 const CHANNEL_COUNT = 1;
@@ -86,7 +93,7 @@ export class BurningShipKernel implements SimKernel {
       type: "number",
       default: DEFAULT_ZOOM,
       min: 0.25,
-      max: 500,
+      max: MAX_FRACTAL_ZOOM,
       step: 0.01,
     },
     {
@@ -95,8 +102,14 @@ export class BurningShipKernel implements SimKernel {
       type: "number",
       default: DEFAULT_MAX_ITERATIONS,
       min: 16,
-      max: 512,
+      max: MAX_BASE_ITERATIONS,
       step: 1,
+    },
+    {
+      key: "autoIterations",
+      label: "Adaptive detail",
+      type: "boolean",
+      default: DEFAULT_AUTO_ITERATIONS,
     },
     {
       key: "palettePhase",
@@ -141,9 +154,18 @@ export class BurningShipKernel implements SimKernel {
     const centerX = this.paramNumber(params, "centerX");
     const centerY = this.paramNumber(params, "centerY");
     const zoom = this.paramNumber(params, "zoom");
-    const maxIterations = Math.max(
+    const baseIterations = Math.max(
       1,
       Math.floor(this.paramNumber(params, "maxIterations")),
+    );
+    const autoIterations =
+      typeof params.autoIterations === "boolean"
+        ? params.autoIterations
+        : DEFAULT_AUTO_ITERATIONS;
+    const maxIterations = effectiveIterationLimit(
+      baseIterations,
+      zoom,
+      autoIterations,
     );
     this.phase = wrap01(this.paramNumber(params, "palettePhase"));
     this.cycleSpeed = this.paramNumber(params, "cycleSpeed");

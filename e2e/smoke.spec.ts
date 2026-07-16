@@ -8,13 +8,18 @@ const SHOT_DIR = "e2e/artifacts/smoke";
 const ALL_SLUGS = [
   "gray-scott",
   "abelian-sandpile",
+  "ising-model",
+  "kuramoto-oscillators",
   "game-of-life",
   "belousov-zhabotinsky",
+  "physarum",
   "boids",
+  "particle-life",
   "lorenz-attractor",
   "diffusion-limited-aggregation",
   "elementary-cellular-automata",
   "brians-brain",
+  "cyclic-ca",
   "mandelbrot",
   "julia-set",
   "burning-ship",
@@ -78,11 +83,78 @@ for (const slug of ALL_SLUGS) {
       expect(after, `${slug} should be stepping`).toBeGreaterThan(before);
     } else {
       await page.waitForTimeout(800);
+      if ((await canvas.getAttribute("data-renderer")) === "webgl2") {
+        await expect(canvas).toHaveAttribute("data-fractal-renderer", "gpu-fragment");
+        expect(Number(await canvas.getAttribute("data-fractal-supersample"))).toBeGreaterThanOrEqual(1);
+      }
     }
 
     await canvas.screenshot({ path: `${SHOT_DIR}/${slug}.png` });
   });
 }
+
+for (const slug of ["mandelbrot", "julia-set"]) {
+  test(`colour cycle multiplier defaults to 1.8: ${slug}`, async ({ page }) => {
+    await page.goto(`/#/${slug}`);
+    const control = page
+      .locator("label.control--number")
+      .filter({ hasText: "Colour cycle multiplier" });
+
+    await expect(control.locator('input[type="range"]')).toHaveValue("1.8");
+    await expect(control.locator(".control__value")).toHaveText("1.80x");
+  });
+
+  test(`progressive pointer-centred zoom settles at full quality: ${slug}`, async ({ page }) => {
+    await page.goto(`/#/${slug}`);
+    const canvas = page.locator(".sim-view__canvas");
+    const zoomInput = page.locator('[data-param-key="zoom"]');
+    const centerXInput = page.locator('[data-param-key="centerX"]');
+    const beforeZoom = Number(await zoomInput.inputValue());
+    const beforeCenterX = Number(await centerXInput.inputValue());
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+
+    await canvas.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width * 0.78,
+        clientY: rect.top + rect.height * 0.42,
+        deltaY: -90,
+      }));
+    });
+
+    await expect(canvas).toHaveAttribute("data-render-quality", "preview");
+    expect(Number(await canvas.getAttribute("data-fractal-supersample"))).toBeLessThan(1);
+    await expect(canvas).toHaveAttribute("data-render-quality", "full", { timeout: 10_000 });
+    expect(Number(await canvas.getAttribute("data-fractal-supersample"))).toBeGreaterThanOrEqual(1);
+    expect(Number(await zoomInput.inputValue())).toBeGreaterThan(beforeZoom);
+    expect(Number(await centerXInput.inputValue())).not.toBe(beforeCenterX);
+    await expect(page.locator(".fractal-hud__zoom")).toContainText("×");
+
+    await page.getByRole("button", { name: "Reset fractal view" }).click();
+    expect(Number(await zoomInput.inputValue())).toBe(beforeZoom);
+    expect(Number(await centerXInput.inputValue())).toBe(beforeCenterX);
+  });
+}
+
+test("shared fractal transforms preserve the pointer coordinate", async ({ page }) => {
+  const errors = await page.evaluate(async () => {
+    const { complexAtPoint, zoomAroundPoint } = await import("/src/app/fractalView.ts");
+    const point = { x: 777.25, y: 193.75 };
+    const width = 1280;
+    const height = 720;
+    const view = { centerX: -0.43, centerY: 0.17, zoom: 37.5 };
+    return (["mandelbrot", "julia-set", "burning-ship"] as const).map((slug) => {
+      const before = complexAtPoint(slug, view, width, height, point);
+      const zoomed = zoomAroundPoint(slug, view, width, height, point, 913.25);
+      const after = complexAtPoint(slug, zoomed, width, height, point);
+      return Math.max(Math.abs(before.x - after.x), Math.abs(before.y - after.y));
+    });
+  });
+  for (const error of errors) expect(error).toBeLessThan(1e-10);
+});
 
 // Owed live-browser smoke checks (previously verified headless only).
 

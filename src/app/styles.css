@@ -291,6 +291,72 @@ code {
   cursor: grabbing;
 }
 
+.fractal-hud {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  pointer-events: none;
+  color: rgba(225, 248, 255, 0.94);
+  font-variant-numeric: tabular-nums;
+}
+
+.fractal-hud__zoom {
+  min-width: 78px;
+  padding: 6px 9px 6px 18px;
+  border-right: 2px solid rgba(90, 200, 250, 0.82);
+  background: linear-gradient(90deg, transparent, rgba(4, 12, 22, 0.82));
+  font: 600 12px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-align: right;
+  text-shadow: 0 1px 8px #000;
+}
+
+.fractal-hud[data-quality="preview"] .fractal-hud__zoom {
+  border-right-style: dotted;
+  opacity: 0.72;
+}
+
+.fractal-hud__controls {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(90, 200, 250, 0.28);
+  border-radius: 6px;
+  background: rgba(4, 9, 17, 0.76);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.fractal-hud__button {
+  width: 31px;
+  height: 29px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid rgba(90, 200, 250, 0.18);
+  background: transparent;
+  color: rgba(225, 248, 255, 0.86);
+  font: 500 16px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  cursor: pointer;
+}
+
+.fractal-hud__button:last-child {
+  border-right: 0;
+}
+
+.fractal-hud__button:hover {
+  background: rgba(90, 200, 250, 0.14);
+  color: #fff;
+}
+
+.fractal-hud__button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid rgba(90, 200, 250, 0.9);
+  outline-offset: -2px;
+}
+
 .sim-view__legend {
   position: absolute;
   left: 16px;
