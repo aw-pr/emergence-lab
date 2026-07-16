@@ -28,6 +28,16 @@ export function renderGallery(container: HTMLElement): void {
   const header = document.createElement("header");
   header.className = "gallery__header";
 
+  // Only when embedded in the site (base is /labs/app/), not the standalone
+  // Netlify deploy (base /), offer a way back to the site.
+  if (import.meta.env.BASE_URL !== "/") {
+    const back = document.createElement("a");
+    back.className = "gallery__back-to-site";
+    back.href = "/labs";
+    back.textContent = "← anthonywest.co.uk/labs";
+    header.appendChild(back);
+  }
+
   const title = document.createElement("h1");
   title.textContent = "emergence-lab";
   header.appendChild(title);
