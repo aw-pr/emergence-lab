@@ -604,7 +604,7 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "boids":
       return { initial: 5, control: swarm };
     case "particle-life":
-      return { initial: 5, control: swarm };
+      return { initial: 1, control: swarm };
     case "mandelbrot":
     case "julia-set":
       return { initial: 1.8, control: fractal };
