@@ -165,8 +165,9 @@ export class GrayScottKernel implements SimKernel {
 
     const width = this.width;
     const height = this.height;
-    const state = this.state;
-    const next = this.next;
+    const output = this.state;
+    let state = output;
+    let next = this.next;
     const du = this.du;
     const dv = this.dv;
     const feed = this.feed;
@@ -206,7 +207,16 @@ export class GrayScottKernel implements SimKernel {
         }
       }
 
-      state.set(next);
+      const swap = state;
+      state = next;
+      next = swap;
+    }
+
+    // readState() must retain its stable reference. Even step counts finish in
+    // the canonical output buffer; odd counts need one final copy instead of a
+    // full-field copy after every internal reaction-diffusion pass.
+    if (state !== output) {
+      output.set(state);
     }
   }
 
