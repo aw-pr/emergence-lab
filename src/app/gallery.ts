@@ -19,6 +19,17 @@ interface CardModel {
   thumbKey: string;
 }
 
+/** True unless this document is rendered inside another document's iframe.
+ * Wrapped in try/catch because cross-origin frames throw on window.top
+ * access; same-origin here, but this must never break the standalone build. */
+function isTopLevelWindow(): boolean {
+  try {
+    return window.self === window.top;
+  } catch {
+    return false;
+  }
+}
+
 export function renderGallery(container: HTMLElement): void {
   container.innerHTML = "";
 
@@ -29,8 +40,11 @@ export function renderGallery(container: HTMLElement): void {
   header.className = "gallery__header";
 
   // Only when embedded in the site (base is /labs/app/), not the standalone
-  // Netlify deploy (base /), offer a way back to the site.
-  if (import.meta.env.BASE_URL !== "/") {
+  // Netlify deploy (base /), offer a way back to the site. Skip it when the
+  // site itself has framed this app in an iframe shell (/labs/run) - that
+  // shell already provides the site's own navigation, so the link would be
+  // redundant and visually noisy.
+  if (import.meta.env.BASE_URL !== "/" && isTopLevelWindow()) {
     const back = document.createElement("a");
     back.className = "gallery__back-to-site";
     back.href = "/labs";
