@@ -183,8 +183,9 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "sand", gamma: 0.9, contrast: 1.1 };
     case "belousov-zhabotinsky":
     case "gray-scott":
-    case "boids":
       return { ...base, preset: "chemical", contrast: 1.2 };
+    case "boids":
+      return { ...base, preset: "twilight", contrast: 1.2 };
     case "brians-brain":
       return { ...base, preset: "brian", contrast: 1.2 };
     case "game-of-life":

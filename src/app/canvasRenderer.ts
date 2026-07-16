@@ -148,6 +148,8 @@ export class CanvasRendererBackend implements RendererBackend {
       kernel.channelCount,
       cellCount,
     );
+    const paletteMapper = buildMapper(1, [[0, 1]], frame.colourOptions);
+    const paletteSample = new Float32Array(1);
 
     // Trail persistence: a translucent background fill fades the previous
     // frame instead of erasing it, the cheap canvas2d equivalent of the WebGL
@@ -173,14 +175,22 @@ export class CanvasRendererBackend implements RendererBackend {
         const alignment =
           magnitude <= 0.0001 ? 0 : (vx * meanX + vy * meanY) / magnitude;
         const t = (1 - alignment) / 2; // 0 = aligned with flock, 1 = opposed
-        const grey = Math.round((1 - t) * 235); // bright (aligned) .. dark
+        paletteSample[0] =
+          magnitude <= 0.0001
+            ? 0.5
+            : ((Math.atan2(vy, vx) / (Math.PI * 2)) + 1) % 1;
+        const [baseR, baseG, baseB] = paletteMapper(paletteSample, 0);
+        const brightness = 0.35 + (1 - t) * 0.95 * 0.65;
+        const r = Math.round(baseR * brightness);
+        const g = Math.round(baseG * brightness);
+        const b = Math.round(baseB * brightness);
 
         const px = x + 0.5;
         const py = y + 0.5;
         const grad = ctx.createRadialGradient(px, py, 0, px, py, radius);
-        grad.addColorStop(0, `rgba(${grey}, ${grey}, ${grey}, 0.92)`);
-        grad.addColorStop(0.35, `rgba(${grey}, ${grey}, ${grey}, 0.6)`);
-        grad.addColorStop(1, `rgba(${grey}, ${grey}, ${grey}, 0)`);
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.92)`);
+        grad.addColorStop(0.35, `rgba(${r}, ${g}, ${b}, 0.6)`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(px, py, radius, 0, Math.PI * 2);

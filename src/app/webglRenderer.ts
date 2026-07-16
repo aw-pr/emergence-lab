@@ -57,6 +57,8 @@ uniform float u_streamerWidth;
 in vec2 v_uv;
 out vec4 outColor;
 
+const float TAU = 6.283185307179586;
+
 float clamp01(float value) {
   return clamp(value, 0.0, 1.0);
 }
@@ -172,7 +174,6 @@ vec4 sampleChannels(vec2 uv) {
   vec4 raw01 = readChannels(c01);
   vec4 raw11 = readChannels(c11);
   if (u_circularPhase) {
-    const float TAU = 6.283185307179586;
     vec2 phase00 = vec2(cos(raw00.r * TAU), sin(raw00.r * TAU));
     vec2 phase10 = vec2(cos(raw10.r * TAU), sin(raw10.r * TAU));
     vec2 phase01 = vec2(cos(raw01.r * TAU), sin(raw01.r * TAU));
@@ -316,6 +317,16 @@ float boidAlignmentGrey(vec2 velocity) {
   return (1.0 - t) * 0.95;           // bright (aligned) .. dark (opposed)
 }
 
+vec3 boidPaletteColour(vec2 velocity) {
+  float magnitude = length(velocity);
+  float direction = magnitude <= 0.0001
+    ? 0.5
+    : fract(atan(velocity.y, velocity.x) / TAU + 1.0);
+  if (u_paletteCycleReverse) direction = 1.0 - direction;
+  float brightness = 0.35 + boidAlignmentGrey(velocity) * 0.65;
+  return singleChannelColour(direction) * brightness;
+}
+
 void main() {
   ivec2 size = ivec2(u_sourceSize);
   ivec2 coord = ivec2(clamp(floor(v_uv * u_sourceSize), vec2(0.0), u_sourceSize - vec2(1.0)));
@@ -326,7 +337,7 @@ void main() {
     float core = u_boidsGlyphRadius * 0.2;
     int radius = int(ceil(halo + 1.0));
     vec2 fragPos = v_uv * u_sourceSize - vec2(0.5);
-    float greyWeighted = 0.0;
+    vec3 colourWeighted = vec3(0.0);
     float weightSum = 0.0;
     float coverage = 0.0;
     for (int y = -10; y <= 10; y += 1) {
@@ -339,13 +350,13 @@ void main() {
         vec2 local = fragPos - vec2(sampleCoord);
         float falloff = 1.0 - smoothstep(core, halo, length(local));
         if (falloff <= 0.0) continue;
-        greyWeighted += boidAlignmentGrey(raw.ba) * falloff;
+        colourWeighted += boidPaletteColour(raw.ba) * falloff;
         weightSum += falloff;
         coverage = max(coverage, falloff);
       }
     }
 
-    vec3 dotColour = weightSum > 0.0 ? vec3(greyWeighted / weightSum) : bg;
+    vec3 dotColour = weightSum > 0.0 ? colourWeighted / weightSum : bg;
     float glyphMix = min(coverage * 0.92, 1.0);
     if (u_trailMode) {
       // Trail accumulation: emit only the glyph with coverage alpha so the

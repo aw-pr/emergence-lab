@@ -267,3 +267,69 @@ test("boids stay responsive and occupy space at 5k and 12k", async ({ page }) =>
     expect(occ).toBeLessThan(0.9);
   }
 });
+
+test("boids glyphs respond to the selected colour scheme", async ({ page }) => {
+  const colours = await page.evaluate(async () => {
+    const { createWebGLRendererBackend } = await import("/src/app/webglRenderer.ts");
+    const canvas = document.createElement("canvas");
+    const backend = createWebGLRendererBackend(canvas);
+    if (!backend) return null;
+
+    const state = new Float32Array([1, 1, 1, 0]);
+    const kernel = {
+      name: "Boids",
+      channelCount: 4,
+      channelLabels: ["Density", "Speed", "Velocity X", "Velocity Y"],
+      channelRanges: [[0, 1], [0, 1], [-1, 1], [-1, 1]],
+      paramSchema: [],
+      init() {},
+      step() {},
+      readState: () => state,
+      destroy() {},
+    };
+    const draw = (preset: "plasma" | "ice") => {
+      backend.draw({
+        state,
+        kernel,
+        colourOptions: {
+          preset,
+          invert: false,
+          gamma: 1,
+          contrast: 1,
+          paletteCycleReverse: false,
+          steps: 0,
+        },
+        displayOptions: { dotSize: 6, trailFade: 0, bloom: 0 },
+        mode: "particle",
+        params: { pointSize: 12 },
+        elapsedTime: 0,
+        speedScale: 1,
+      });
+      const gl = canvas.getContext("webgl2");
+      if (!gl) return null;
+      const rgba = new Uint8Array(4);
+      gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+      return Array.from(rgba);
+    };
+
+    backend.resizeDisplay(64, 64);
+    backend.setGrid(1, 1, kernel, "particle", { pointSize: 12 });
+    const plasma = draw("plasma");
+    const ice = draw("ice");
+    backend.destroy();
+    return { plasma, ice };
+  });
+
+  test.skip(colours === null, "WebGL2 is unavailable");
+  expect(colours?.plasma).not.toEqual(colours?.ice);
+});
+
+test("boids behaviour presets preserve the full flock population", async ({ page }) => {
+  const counts = await page.evaluate(async () => {
+    const { presetsFor } = await import("/src/app/presets.ts");
+    return presetsFor("boids").map((preset) => preset.params.boidCount);
+  });
+
+  expect(counts).toHaveLength(3);
+  expect(new Set(counts)).toEqual(new Set([17777]));
+});

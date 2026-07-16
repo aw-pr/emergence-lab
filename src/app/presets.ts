@@ -201,7 +201,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "balanced-flock",
       label: "Balanced flock",
       params: {
-        boidCount: 700,
+        boidCount: 17777,
         visualRadius: 36,
         separationRadius: 6,
         maxSpeed: 16,
@@ -214,7 +214,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "tight-flock",
       label: "Tight flock",
       params: {
-        boidCount: 900,
+        boidCount: 17777,
         visualRadius: 30,
         separationRadius: 5,
         maxSpeed: 20,
@@ -227,7 +227,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "scatter",
       label: "Scatter",
       params: {
-        boidCount: 450,
+        boidCount: 17777,
         visualRadius: 24,
         separationRadius: 10,
         maxSpeed: 26,
