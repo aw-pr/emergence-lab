@@ -76,6 +76,28 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  "ising-model": [
+    {
+      id: "critical",
+      label: "Critical domains",
+      params: { temperature: 2.269, coupling: 1, externalField: 0, sweepsPerStep: 0.5, initialState: "random" },
+    },
+    {
+      id: "cold-quench",
+      label: "Cold quench",
+      params: { temperature: 0.7, coupling: 1, externalField: 0, sweepsPerStep: 0.8, initialState: "random" },
+    },
+    {
+      id: "hot-noise",
+      label: "Hot noise",
+      params: { temperature: 4.5, coupling: 1, externalField: 0, sweepsPerStep: 1, initialState: "random" },
+    },
+    {
+      id: "field-sweep",
+      label: "Positive field",
+      params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random" },
+    },
+  ],
   "game-of-life": [
     {
       id: "conway",

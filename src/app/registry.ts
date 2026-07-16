@@ -100,6 +100,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "ising-model",
+    name: "2D Ising Model",
+    family: "Statistical Physics",
+    subtitle: "Thermal noise and local spin agreement assemble critical domains.",
+    description:
+      "A magnetic lattice near its phase transition: local alignment competes with heat until islands suddenly organise across the whole field.",
+    load: async () => {
+      const mod = await import("../sims/ising-model/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "game-of-life",
     name: "Game of Life",
     family: "Cellular Automata",
