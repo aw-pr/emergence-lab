@@ -132,7 +132,10 @@ Observations).
   literally meet. The audit trail records whose error it was.
 - Card amended per the dispatch contract, amendment noted on the card
   (`93c09c1`); verifier re-dispatched against the corrected criterion.
-- Verifier attempt 2: in verification at time of writing.
+- Verifier attempt 2 (Sol): 7.3 min, PASS on all six criteria, 175,424
+  tokens.
+- Committed `9c09efc`. Run complete: five stages, five green verdicts,
+  final budget 23.33M/25M raw tokens recorded.
 
 ## Incident summary
 
@@ -184,7 +187,7 @@ Observations).
 | `97830da` | 20: cascade animations | GPT-5.6 Sol (verify: Opus) |
 | `c05da3c` | Fable reinstated for 21 | Claude Fable 5 |
 | `93c09c1` | Card 21 criterion amended | Claude Fable 5 |
-| _pending_ | 21: gallery polish | Claude Fable 5 (verify: Sol) |
+| `9c09efc` | 21: gallery polish | Claude Fable 5 (verify: Sol) |
 
 autometta fixes this run: `557f225`, `de4c1b1`, `0d90d89`, `b907207`,
 `a6f46ae`; mcp-hub: `65a9a3e`.
