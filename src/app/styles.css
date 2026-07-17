@@ -1,14 +1,16 @@
 @import "katex/dist/katex.min.css";
 
+/* Blue-slate ladder matched to the promo-flow site (slate-950 base, blue-grey
+ * signal text) so the app reads as the same surface when framed at /labs/run. */
 :root {
-  --bg: #0b0e14;
-  --bg-elev: #131722;
-  --bg-elev-2: #1c2230;
-  --fg: #e6e8ec;
-  --fg-dim: #9aa2b1;
+  --bg: #020617;
+  --bg-elev: #101a33;
+  --bg-elev-2: #18233a;
+  --fg: #e8ecf4;
+  --fg-dim: #a8b9d1;
   --accent: #5ac8fa;
   --accent-warm: #ffb86b;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(168, 185, 209, 0.16);
   --radius: 10px;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
@@ -67,7 +69,7 @@ code {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-color: #030712;
+  background-color: #020617;
   background-image:
     radial-gradient(1100px 700px at 78% -8%, rgba(0, 102, 204, 0.12), transparent 60%),
     radial-gradient(900px 620px at 12% 108%, rgba(90, 200, 250, 0.08), transparent 62%),
@@ -232,7 +234,7 @@ code {
   margin: 0;
   font-size: 13px;
   line-height: 1.4;
-  color: rgba(230, 232, 236, 0.65);
+  color: rgba(232, 236, 244, 0.65);
   max-width: min(860px, calc(100vw - 160px));
 }
 
@@ -244,8 +246,8 @@ code {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: rgba(230, 232, 236, 0.85);
-  background: rgba(255, 255, 255, 0.06);
+  color: rgba(232, 236, 244, 0.85);
+  background: rgba(168, 185, 209, 0.1);
   border: 1px solid var(--border);
   border-radius: 999px;
   vertical-align: middle;
@@ -263,8 +265,8 @@ code {
   gap: 6px 12px;
   max-width: min(860px, calc(100vw - 160px));
   padding: 8px 10px;
-  color: rgba(230, 232, 236, 0.9);
-  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 236, 244, 0.9);
+  background: rgba(168, 185, 209, 0.06);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow-x: auto;
