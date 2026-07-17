@@ -199,3 +199,27 @@ Observations).
 
 autometta fixes this run: `557f225`, `de4c1b1`, `0d90d89`, `b907207`,
 `a6f46ae`; mcp-hub: `65a9a3e`.
+
+## Follow-up stages (same evening)
+
+After the operator's first real-GPU session confirmed the sim
+spectacular but partially clipped, two follow-up stages ran through the
+same loop:
+
+- **22-clipping** (Sol → Opus, `2ce4a32`): the hard truncation boundary
+  was not camera clipping — the point budget was applied as a row-major
+  truncation, so trailing c-grid rows never emitted points. Replaced
+  with deterministic reservoir sampling across the domain, plus a
+  load-time `assertOrbit3DGeometry()` guard pinning plane extents to
+  the sampler grid and the bounding volume inside the clip planes.
+  Worker 6.3 min / 161,228 tokens; verifier 17.2 min / 688,660.
+- **23-colours** (Fable → Sol, `80cd467`): period / height / mono
+  colour modes, period as the new default — categorical hues per
+  detected period softened 20% toward white for additive saturation,
+  ice-family height ramp, mono preserved verbatim (HEAD-diff-proven).
+  Worker 9.1 min / 5,085,354 tokens (cache-inflated); verifier 2.8 min
+  / 107,662.
+
+The operator's one-shot screenshot embedded at the top of this log was
+taken before the stage-22 fix; the clipping visible at its edges is the
+bug stage 22 removed.
