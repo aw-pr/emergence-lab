@@ -22,6 +22,9 @@ const ULTRA_DEFAULTS = new Set([
   "brians-brain",
   "ising-model",
   "kuramoto-oscillators",
+  // The mandala's finest terraces are one cell wide, so a grid below the
+  // canvas resolution loses them to resampling before the eye ever sees them.
+  "abelian-sandpile",
 ]);
 
 export function qualityProfileFor(slug: string, mode: RenderMode): QualityProfile {

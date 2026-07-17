@@ -7,6 +7,10 @@ const GRID_SLUGS = new Set([
   "brians-brain",
   "cyclic-ca",
   "ising-model",
+  // Grain counts on a lattice, not a continuous field. Smoothing interpolated
+  // between neighbouring terraces and resampled the fractal, which read as
+  // blur plus moire; the terraces are the whole point of the model.
+  "abelian-sandpile",
 ]);
 
 const FRACTAL_SLUGS = new Set(["mandelbrot", "julia-set", "burning-ship"]);

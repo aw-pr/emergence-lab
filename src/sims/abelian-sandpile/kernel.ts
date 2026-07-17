@@ -24,13 +24,20 @@ interface SimKernel {
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
-// A large default pile so the settled mandala fills a big share of the frame
-// (final radius grows ~sqrt of the grain count). Relaxation is bulk-toppling:
+// Pile size trades final size against whether the viewer ever sees the thing
+// settle. Radius grows ~sqrt(grains) but the topples needed to relax grow far
+// faster, and topples/second is CPU-bound, so raising "topples per step" buys
+// nothing: it only trades frame rate for topples per frame. 3,000,000 grains
+// wanted a radius of ~674 cells (wider than the grid, so it clipped) and was
+// still a formless speckle after a minute of watching, because the terraces
+// only resolve once the bulk has relaxed. This settles in well under a minute
+// at a radius that fits the frame, which is what makes the terraces visible.
+// Relaxation is bulk-toppling:
 // each queue visit topples a cell floor(z/threshold) times at once, which the
 // abelian property guarantees reaches the same stable state as one-at-a-time
 // toppling. "Topples per step" therefore budgets cell relaxations per frame —
 // it bounds frame cost while each relaxation moves arbitrarily many grains.
-const DEFAULT_INITIAL_PILE = 3000000;
+const DEFAULT_INITIAL_PILE = 450000;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
 const DEFAULT_GRAINS_PER_STEP = 32;
 const DEFAULT_TOPPLES_PER_STEP = 120000;

@@ -57,7 +57,7 @@ test("metadata matches the renderer contract", () => {
   const initialPileDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "initialPile",
   );
-  assert.equal(initialPileDescriptor?.default, 3000000);
+  assert.equal(initialPileDescriptor?.default, 450000);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
