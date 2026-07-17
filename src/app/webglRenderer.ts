@@ -1444,6 +1444,10 @@ export class WebGLRendererBackend implements RendererBackend {
     this.orbit3d?.orbit(deltaAzimuth, deltaElevation);
   }
 
+  orbit3dSyncCameraToSweep(progress: number, maxDelta: number): void {
+    this.orbit3d?.syncCameraToSweep(progress, maxDelta);
+  }
+
   orbit3dDolly(factor: number): void {
     this.orbit3d?.dolly(factor);
   }

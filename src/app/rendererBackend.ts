@@ -69,6 +69,7 @@ export interface RendererBackend {
   updateOrbit3dParams?(params: SimParams): boolean;
   orbit3dReady?(): boolean;
   orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
+  orbit3dSyncCameraToSweep?(progress: number, maxDelta: number): void;
   orbit3dDolly?(factor: number): void;
   resetOrbit3dCamera?(): void;
   /** Snap the orbit3d camera to a named pose ("default" or "side"). */

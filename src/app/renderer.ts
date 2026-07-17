@@ -54,6 +54,9 @@ const CYCLE_HOLD_SECONDS = 1.5;
 const ORBIT_SWEEP_START = 0.25;
 const ORBIT_SWEEP_END = -2;
 const ORBIT_SWEEP_HOLD_SECONDS = 0.9;
+const ORBIT_AUTO_ROTATE_RADIANS_PER_SECOND = 0.05;
+const ORBIT_AUTO_ROTATE_CATCHUP_RADIANS_PER_SECOND = 0.7;
+const ORBIT_AUTO_ROTATE_RESUME_SECONDS = 4;
 
 export type { DisplayOptions } from "./rendererBackend.ts";
 
@@ -121,6 +124,8 @@ export class Renderer {
   private cascadePosition = 1;
   private sweepRe = ORBIT_SWEEP_START;
   private sweepHold = 0;
+  private orbitAutoRotateHold = 0;
+  private readonly orbitAutoRotateEnabled: boolean;
 
   private resizeObserver: ResizeObserver | null = null;
   private resizeFrame = 0;
@@ -140,6 +145,9 @@ export class Renderer {
     this.resolution = options.resolution ?? DEFAULT_RESOLUTION;
     this.autoCycle = options.autoCycle ?? false;
     this.qualityProfile = options.qualityProfile;
+    this.orbitAutoRotateEnabled =
+      this.renderMode === "orbit3d" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     this.backend =
       createWebGLRendererBackend(this.canvas) ?? new CanvasRendererBackend(this.canvas);
@@ -358,6 +366,7 @@ export class Renderer {
     clientX: number,
     clientY: number,
   ): Orbit3DMarkerClientSnapshot | null {
+    this.pauseOrbit3dAutoRotate();
     if (booleanParam(this.params, "realAxisSweep", false)) {
       this.params = { ...this.params, realAxisSweep: false };
       this.notifyParamsChange();
@@ -372,6 +381,7 @@ export class Renderer {
   orbitOrbit3d(deltaCssX: number, deltaCssY: number): void {
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
+    this.pauseOrbit3dAutoRotate();
     this.backend.orbit3dOrbit?.(
       -deltaCssX / rect.width * Math.PI * 2,
       deltaCssY / rect.height * Math.PI,
@@ -380,11 +390,13 @@ export class Renderer {
   }
 
   dollyOrbit3d(factor: number): void {
+    this.pauseOrbit3dAutoRotate();
     this.backend.orbit3dDolly?.(factor);
     this.draw();
   }
 
   resetOrbit3dCamera(): void {
+    this.pauseOrbit3dAutoRotate();
     this.backend.resetOrbit3dCamera?.();
     this.draw();
   }
@@ -604,7 +616,48 @@ export class Renderer {
       }
     }
 
+    this.advanceOrbit3dCamera(dt);
+
     if (paramsChanged) this.notifyParamsChange();
+  }
+
+  private advanceOrbit3dCamera(dt: number): void {
+    if (this.orbitAutoRotateHold > 0) {
+      this.orbitAutoRotateHold = Math.max(0, this.orbitAutoRotateHold - dt);
+      return;
+    }
+    if (!this.orbitAutoRotateEnabled) return;
+
+    if (booleanParam(this.params, "realAxisSweep", false)) {
+      const sweepSpeed = Math.max(
+        0.001,
+        numericParam(this.params, "sweepSpeed", 0.15),
+      );
+      const progress = Math.min(
+        1,
+        Math.max(
+          0,
+          (ORBIT_SWEEP_START - this.sweepRe) /
+            (ORBIT_SWEEP_START - ORBIT_SWEEP_END),
+        ),
+      );
+      this.backend.orbit3dSyncCameraToSweep?.(
+        progress,
+        Math.max(
+          ORBIT_AUTO_ROTATE_CATCHUP_RADIANS_PER_SECOND,
+          sweepSpeed * 4,
+        ) * dt,
+      );
+      return;
+    }
+
+    this.backend.orbit3dOrbit?.(ORBIT_AUTO_ROTATE_RADIANS_PER_SECOND * dt, 0);
+  }
+
+  private pauseOrbit3dAutoRotate(): void {
+    if (this.renderMode === "orbit3d") {
+      this.orbitAutoRotateHold = ORBIT_AUTO_ROTATE_RESUME_SECONDS;
+    }
   }
 
   private setOrbit3dMarker(re: number, im: number): void {

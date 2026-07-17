@@ -23,6 +23,7 @@ uniform float u_markerRe;
 uniform float u_fanActive;
 out vec3 v_colour;
 out float v_fanGlow;
+out float v_sliceGlow;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -74,6 +75,8 @@ void main() {
     v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
   }
 
+  v_sliceGlow = 1.0 - smoothstep(0.0, 0.025, abs(a_position.y));
+
   // The real-axis tracer leaves a tapered wake through the complex c-plane.
   // Points farther behind the moving front spread farther from Im(c)=0,
   // revealing the off-axis continuation without generating new geometry.
@@ -95,19 +98,24 @@ precision highp float;
 
 in vec3 v_colour;
 in float v_fanGlow;
+in float v_sliceGlow;
 out vec4 outColor;
 
 void main() {
   vec2 offset = gl_PointCoord - vec2(0.5);
   float radius = length(offset);
-  float haze = 1.0 - smoothstep(0.16, 0.5, radius);
+  float haze = 1.0 - smoothstep(0.08, 0.5, radius);
   float core = 1.0 - smoothstep(0.035, 0.25, radius);
   float sparkle = 1.0 - smoothstep(0.0, 0.09, radius);
   vec3 fanColour = mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58);
   vec3 pointLight =
-    v_colour * (haze * 0.014 + core * 0.042) + vec3(1.0) * sparkle * 0.02;
-  vec3 fanLight = fanColour * v_fanGlow * (haze * 0.045 + core * 0.05);
-  outColor = vec4(pointLight + fanLight, max(core, haze * 0.45));
+    v_colour * (haze * 0.026 + core * 0.046)
+    + vec3(0.72, 0.9, 1.0) * haze * 0.008
+    + vec3(1.0) * sparkle * 0.024;
+  vec3 fanLight = fanColour * v_fanGlow * (haze * 0.055 + core * 0.052);
+  vec3 sliceColour = mix(v_colour, vec3(0.78, 0.94, 1.0), 0.45);
+  vec3 sliceLight = sliceColour * v_sliceGlow * (haze * 0.02 + core * 0.025);
+  outColor = vec4(pointLight + fanLight + sliceLight, max(core, haze * 0.62));
 }
 `;
 
@@ -183,21 +191,24 @@ void main() {
   vec2 uv = (v_complex - u_texCentre) / u_texSpan + 0.5;
   vec3 colour = texture(u_texture, uv).rgb;
   float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
-  vec3 dimmed = mix(vec3(luma), colour, 0.55) * 0.055;
-  float axis = 1.0 - smoothstep(0.008, 0.03, abs(v_complex.y));
+  vec3 planeInk = pow(
+    clamp(mix(vec3(luma), colour, 0.45), vec3(0.0), vec3(1.0)),
+    vec3(1.45)
+  ) * 0.04;
+  float axis = 1.0 - smoothstep(0.003, 0.014, abs(v_complex.y));
   float age = v_complex.x - u_markerRe;
   float behindFront = smoothstep(-0.025, 0.035, age);
   float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
-  float inside = 1.0 - smoothstep(max(0.0, reach - 0.18), reach, abs(v_complex.y));
-  float rim = 1.0 - smoothstep(0.018, 0.065, abs(abs(v_complex.y) - reach));
+  float inside = 1.0 - smoothstep(max(0.0, reach - 0.1), reach, abs(v_complex.y));
+  float rim = 1.0 - smoothstep(0.005, 0.022, abs(abs(v_complex.y) - reach));
   float wake = (1.0 - smoothstep(0.8, 2.1, age))
-    * behindFront * max(inside * 0.28, rim);
-  float front = (1.0 - smoothstep(0.012, 0.055, abs(age)))
-    * (1.0 - smoothstep(0.04, 0.16, abs(v_complex.y)));
+    * behindFront * max(inside * 0.025, rim * 0.5);
+  float front = (1.0 - smoothstep(0.004, 0.018, abs(age)))
+    * (1.0 - smoothstep(0.012, 0.045, abs(v_complex.y)));
   float fan = u_fanActive * max(front, wake);
-  vec3 axisGlow = vec3(0.018, 0.03, 0.05) * axis;
-  vec3 fanGlow = vec3(0.035, 0.18, 0.23) * fan;
-  outColor = vec4(dimmed + axisGlow + fanGlow, 1.0);
+  vec3 axisLine = vec3(0.01, 0.018, 0.03) * axis;
+  vec3 fanLine = vec3(0.012, 0.052, 0.066) * fan;
+  outColor = vec4(planeInk + axisLine + fanLine, 1.0);
 }
 `;
 
@@ -535,6 +546,33 @@ export class Orbit3DPointCloud {
     this.camera.elevation = Math.min(
       Math.PI / 2 - 0.08,
       Math.max(0.08, this.camera.elevation + deltaElevation),
+    );
+  }
+
+  syncCameraToSweep(progress: number, maxDelta: number): void {
+    const start = defaultCameraState();
+    const squareOn = sideCameraState();
+    const phase = Math.min(1, Math.max(0, progress));
+    const targetAzimuth = start.azimuth + (squareOn.azimuth - start.azimuth) * phase;
+    const azimuthDelta = Math.atan2(
+      Math.sin(targetAzimuth - this.camera.azimuth),
+      Math.cos(targetAzimuth - this.camera.azimuth),
+    );
+    const targetElevation =
+      start.elevation + (squareOn.elevation - start.elevation) * phase;
+    const targetDistance =
+      start.distance + (squareOn.distance - start.distance) * phase;
+    this.camera.azimuth += Math.min(
+      maxDelta,
+      Math.max(-maxDelta, azimuthDelta),
+    );
+    this.camera.elevation += Math.min(
+      maxDelta,
+      Math.max(-maxDelta, targetElevation - this.camera.elevation),
+    );
+    this.camera.distance += Math.min(
+      maxDelta * 2,
+      Math.max(-maxDelta * 2, targetDistance - this.camera.distance),
     );
   }
 
@@ -1039,10 +1077,10 @@ function defaultCameraState(): OrbitCameraState {
   };
 }
 
-/** Looking along +z at the re/orbit plane: the bifurcation-curtain view. */
+/** Looking along -z at the re/orbit plane, with the large bifurcation on the right. */
 function sideCameraState(): OrbitCameraState {
   return {
-    azimuth: 0,
+    azimuth: Math.PI,
     elevation: 0.14,
     distance: 3.7,
     target: [0, 0, 0],
