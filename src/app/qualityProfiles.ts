@@ -36,10 +36,17 @@ export function qualityProfileFor(slug: string, mode: RenderMode): QualityProfil
   if (slug === "lenia") defaultPreset = "performance";
 
   let computeScale = mode === "field" || mode === "smooth" ? 1.2 : 1;
+  // orbit3d derives its quality tier from this capped compute grid, then
+  // converts that tier into a point budget in the WebGL point-cloud builder.
+  if (slug === "logistic-mandelbrot") computeScale = 1.5;
   if (slug === "gray-scott") computeScale = 1.25;
   if (slug === "physarum" || slug === "lenia") computeScale = 1;
 
-  const expensiveDisplay = mode === "field" || mode === "smooth" || mode === "fractal";
+  const expensiveDisplay =
+    mode === "field" ||
+    mode === "smooth" ||
+    mode === "fractal" ||
+    mode === "orbit3d";
   return {
     defaultPreset,
     computeScale,

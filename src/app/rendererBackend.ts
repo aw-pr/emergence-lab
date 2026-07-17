@@ -15,7 +15,13 @@ export interface DisplayOptions {
   bloom: number;
 }
 
-export type RenderMode = "grid" | "field" | "smooth" | "fractal" | "particle";
+export type RenderMode =
+  | "grid"
+  | "field"
+  | "smooth"
+  | "fractal"
+  | "particle"
+  | "orbit3d";
 
 export interface RendererBackendFrame {
   state: Float32Array;

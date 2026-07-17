@@ -12,6 +12,7 @@ import {
   type RendererBackendFrame,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
+import { Orbit3DPointCloud } from "./orbit3d.ts";
 import {
   createKuramotoInitialFields,
   KURAMOTO_TAU,
@@ -1165,6 +1166,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly program: WebGLProgram;
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
+  private readonly orbit3d: Orbit3DPointCloud | null;
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -1237,9 +1239,11 @@ export class WebGLRendererBackend implements RendererBackend {
       new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
       gl.STATIC_DRAW,
     );
-    this.kuramoto = gl.getExtension("EXT_color_buffer_float")
+    const floatTargets = gl.getExtension("EXT_color_buffer_float");
+    this.kuramoto = floatTargets
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
+    this.orbit3d = floatTargets ? new Orbit3DPointCloud(gl) : null;
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
@@ -1309,6 +1313,7 @@ export class WebGLRendererBackend implements RendererBackend {
     kernel: SimKernel,
     params: Record<string, number | boolean | string>,
   ): boolean {
+    if (this.supportsOrbit3d(mode, kernel)) return true;
     if (this.supportsGpuKuramoto(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
@@ -1328,6 +1333,12 @@ export class WebGLRendererBackend implements RendererBackend {
   ): void {
     this.gridWidth = Math.max(1, Math.floor(gridWidth));
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    if (this.supportsOrbit3d(mode, kernel)) {
+      this.kuramoto?.releaseState();
+      this.orbit3d?.rebuild(this.gridWidth, this.gridHeight, params);
+      return;
+    }
+    this.orbit3d?.cancelBuild();
     if (this.supportsGpuKuramoto(mode, kernel)) {
       this.kuramoto?.initialise(this.gridWidth, this.gridHeight, params);
       return;
@@ -1355,6 +1366,10 @@ export class WebGLRendererBackend implements RendererBackend {
 
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
+    if (this.supportsOrbit3d(mode, kernel)) {
+      this.drawOrbit3d();
+      return;
+    }
     if (this.supportsGpuKuramoto(mode, kernel)) {
       this.drawGpuKuramoto(frame);
       return;
@@ -1366,7 +1381,12 @@ export class WebGLRendererBackend implements RendererBackend {
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalRenderer;
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
     const canvas = this.gl.canvas as HTMLCanvasElement;
-    if (isKuramotoState(kernel)) canvas.dataset.simulationRenderer = "cpu-kernel";
+    delete canvas.dataset.orbit3dPoints;
+    delete canvas.dataset.orbit3dPointBudget;
+    delete canvas.dataset.orbit3dBuild;
+    if (mode === "orbit3d" && isLogisticMandelbrotState(kernel)) {
+      canvas.dataset.simulationRenderer = "orbit3d-fallback-field";
+    } else if (isKuramotoState(kernel)) canvas.dataset.simulationRenderer = "cpu-kernel";
     else delete canvas.dataset.simulationRenderer;
     const expectedLength = this.gridWidth * this.gridHeight * kernel.channelCount;
     if (state.length !== expectedLength) return;
@@ -1384,6 +1404,18 @@ export class WebGLRendererBackend implements RendererBackend {
       state,
     );
     this.drawMappedState(kernel, mode, displayOptions);
+  }
+
+  private drawOrbit3d(): void {
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    const stats = this.orbit3d?.stats;
+    if (!stats || !this.orbit3d?.draw(this.displayWidth, this.displayHeight)) return;
+    delete canvas.dataset.fractalRenderer;
+    delete canvas.dataset.fractalSupersample;
+    canvas.dataset.simulationRenderer = "gpu-orbit3d";
+    canvas.dataset.orbit3dPoints = String(stats.pointCount);
+    canvas.dataset.orbit3dPointBudget = String(stats.pointBudget);
+    canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
   }
 
   private drawGpuKuramoto(frame: RendererBackendFrame): void {
@@ -1453,6 +1485,14 @@ export class WebGLRendererBackend implements RendererBackend {
       this.kuramoto !== null &&
       mode === "field" &&
       isKuramotoState(kernel)
+    );
+  }
+
+  private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.orbit3d?.available === true &&
+      mode === "orbit3d" &&
+      isLogisticMandelbrotState(kernel)
     );
   }
 
@@ -1892,6 +1932,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseSceneTarget();
     this.releaseBloomTargets();
     this.kuramoto?.destroy();
+    this.orbit3d?.destroy();
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);
@@ -2255,7 +2296,12 @@ function presetIndex(preset: ColourPreset): number {
 }
 
 function shouldSmoothSample(mode: RenderMode): boolean {
-  return mode === "field" || mode === "smooth" || mode === "fractal";
+  return (
+    mode === "field" ||
+    mode === "smooth" ||
+    mode === "fractal" ||
+    mode === "orbit3d"
+  );
 }
 
 /** Effective trail fade factor; trails apply to particle mode only. */
@@ -2309,6 +2355,15 @@ function isKuramotoState(kernel: SimKernel): boolean {
     kernel.name === "Kuramoto Oscillators" &&
     kernel.channelCount === 1 &&
     kernel.channelLabels[0] === "Phase"
+  );
+}
+
+function isLogisticMandelbrotState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Logistic Mandelbrot" &&
+    kernel.channelCount === 2 &&
+    kernel.channelLabels[0] === "Attractor density" &&
+    kernel.channelLabels[1] === "Estimated period"
   );
 }
 
