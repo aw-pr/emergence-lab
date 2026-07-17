@@ -1516,6 +1516,7 @@ export class WebGLRendererBackend implements RendererBackend {
         exposure,
         ground,
         colourMode,
+        frame.params.realAxisSweep === true,
       )
     ) {
       return;

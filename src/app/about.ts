@@ -169,6 +169,8 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
       "Robert May's 1976 Nature review made the logistic map x → rx(1 − x) the emblem of chaos from simplicity, and Mitchell Feigenbaum found universal constants in its period-doubling cascade. The map is secretly the same iteration as the Mandelbrot set: a linear change of variable turns one into the other, so the bifurcation diagram every textbook prints is the real slice of the set, a connection this view makes literal by standing the diagram on the plane it came from.",
     maths:
       "For each c, iterate z → z² + c past its transient and plot the next K values of Re(z) as height over the plane. The substitution z = r/2 − rx carries the logistic map onto this iteration with c = (r/2)(1 − r/2), so the sheet hanging over the real axis is exactly the bifurcation diagram, and every hyperbolic bulb of the Mandelbrot ground plane holds its attracting period-q cycle up as a stack of q sheets.",
+    interaction:
+      "Click and drag anywhere in the scene to pivot around the object, then scroll or pinch to zoom through its three-dimensional sheets. Drag the glowing tracer itself to inspect another point on the Mandelbrot plane; double-click or double-tap to return to the opening view.",
   },
   "cyclic-ca": {
     history:

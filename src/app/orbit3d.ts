@@ -19,7 +19,10 @@ in float a_period;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
 uniform int u_colourMode;
+uniform float u_markerRe;
+uniform float u_fanActive;
 out vec3 v_colour;
+out float v_fanGlow;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -70,6 +73,20 @@ void main() {
     vec3 high = vec3(1.0, 0.35, 0.12);
     v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
   }
+
+  // The real-axis tracer leaves a tapered wake through the complex c-plane.
+  // Points farther behind the moving front spread farther from Im(c)=0,
+  // revealing the off-axis continuation without generating new geometry.
+  float age = a_position.x - u_markerRe;
+  float behindFront = smoothstep(-0.02, 0.04, age);
+  float wake = 1.0 - smoothstep(0.55, 1.8, age);
+  float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
+  float lateral = 1.0 - smoothstep(max(0.0, reach - 0.16), reach, abs(a_position.y));
+  float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(a_position.y) - reach));
+  float front = (1.0 - smoothstep(0.015, 0.06, abs(age)))
+    * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+  v_fanGlow = u_fanActive
+    * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
 `;
 
@@ -77,12 +94,15 @@ const POINT_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 in vec3 v_colour;
+in float v_fanGlow;
 out vec4 outColor;
 
 void main() {
   vec2 offset = gl_PointCoord - vec2(0.5);
   float coverage = 1.0 - smoothstep(0.18, 0.5, length(offset));
-  outColor = vec4(v_colour * coverage * 0.032, coverage);
+  vec3 fanColour = mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58);
+  vec3 colour = v_colour * 0.032 + fanColour * v_fanGlow * 0.075;
+  outColor = vec4(colour * coverage, coverage);
 }
 `;
 
@@ -112,8 +132,13 @@ out vec4 outColor;
 
 void main() {
   vec2 offset = gl_PointCoord - vec2(0.5);
-  float coverage = 1.0 - smoothstep(0.24, 0.5, length(offset));
-  outColor = vec4(u_colour * coverage * 0.42, coverage);
+  float radius = length(offset);
+  float halo = 1.0 - smoothstep(0.22, 0.5, radius);
+  float body = 1.0 - smoothstep(0.12, 0.31, radius);
+  float core = 1.0 - smoothstep(0.0, 0.11, radius);
+  vec3 colour =
+    u_colour * (halo * 0.22 + body * 0.62) + vec3(1.0) * core * 1.35;
+  outColor = vec4(colour, max(body, halo * 0.55));
 }
 `;
 
@@ -144,6 +169,8 @@ precision highp float;
 uniform sampler2D u_texture;
 uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
+uniform float u_markerRe;
+uniform float u_fanActive;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -153,7 +180,19 @@ void main() {
   float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
   vec3 dimmed = mix(vec3(luma), colour, 0.55) * 0.055;
   float axis = 1.0 - smoothstep(0.008, 0.03, abs(v_complex.y));
-  outColor = vec4(dimmed + vec3(0.018, 0.03, 0.05) * axis, 1.0);
+  float age = v_complex.x - u_markerRe;
+  float behindFront = smoothstep(-0.025, 0.035, age);
+  float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
+  float inside = 1.0 - smoothstep(max(0.0, reach - 0.18), reach, abs(v_complex.y));
+  float rim = 1.0 - smoothstep(0.018, 0.065, abs(abs(v_complex.y) - reach));
+  float wake = (1.0 - smoothstep(0.8, 2.1, age))
+    * behindFront * max(inside * 0.28, rim);
+  float front = (1.0 - smoothstep(0.012, 0.055, abs(age)))
+    * (1.0 - smoothstep(0.04, 0.16, abs(v_complex.y)));
+  float fan = u_fanActive * max(front, wake);
+  vec3 axisGlow = vec3(0.018, 0.03, 0.05) * axis;
+  vec3 fanGlow = vec3(0.035, 0.18, 0.23) * fan;
+  outColor = vec4(dimmed + axisGlow + fanGlow, 1.0);
 }
 `;
 
@@ -305,12 +344,16 @@ export class Orbit3DPointCloud {
   private readonly viewProjectionUniform: WebGLUniformLocation;
   private readonly pointSizeUniform: WebGLUniformLocation;
   private readonly colourModeUniform: WebGLUniformLocation;
+  private readonly markerReUniform: WebGLUniformLocation;
+  private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
   private readonly groundViewProjectionUniform: WebGLUniformLocation;
   private readonly groundTexCentreUniform: WebGLUniformLocation;
   private readonly groundTexSpanUniform: WebGLUniformLocation;
+  private readonly groundMarkerReUniform: WebGLUniformLocation;
+  private readonly groundFanActiveUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -398,6 +441,14 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_colourMode"),
       "orbit3d colour-mode uniform",
     );
+    this.markerReUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_markerRe"),
+      "orbit3d marker-re uniform",
+    );
+    this.fanActiveUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_fanActive"),
+      "orbit3d fan-active uniform",
+    );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
       "orbit3d marker view-projection uniform",
@@ -421,6 +472,14 @@ export class Orbit3DPointCloud {
     this.groundTexSpanUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_texSpan"),
       "orbit3d ground texture-span uniform",
+    );
+    this.groundMarkerReUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_markerRe"),
+      "orbit3d ground marker-re uniform",
+    );
+    this.groundFanActiveUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_fanActive"),
+      "orbit3d ground fan-active uniform",
     );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
@@ -718,6 +777,7 @@ export class Orbit3DPointCloud {
     exposure = 1.35,
     ground: Orbit3DGroundPlane | null = null,
     colourMode: Orbit3DColourMode = "period",
+    fanActive = false,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -732,6 +792,8 @@ export class Orbit3DPointCloud {
       gl.uniformMatrix4fv(this.groundViewProjectionUniform, false, viewProjection);
       gl.uniform2f(this.groundTexCentreUniform, ground.centre[0], ground.centre[1]);
       gl.uniform2f(this.groundTexSpanUniform, ground.span[0], ground.span[1]);
+      gl.uniform1f(this.groundMarkerReUniform, this.marker.re);
+      gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
       gl.bindVertexArray(this.groundVao);
@@ -748,6 +810,8 @@ export class Orbit3DPointCloud {
     );
     gl.uniform1f(this.pointSizeUniform, Math.min(2, Math.max(1, width / 900)));
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
+    gl.uniform1f(this.markerReUniform, this.marker.re);
+    gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
     gl.bindVertexArray(this.pointVao);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
 
@@ -755,11 +819,23 @@ export class Orbit3DPointCloud {
     gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
     gl.bindVertexArray(this.markerVao);
     if (this.markerOrbitPointCount > 0) {
-      gl.uniform1f(this.markerPointSizeUniform, Math.min(8, Math.max(5, width / 180)));
+      gl.uniform1f(
+        this.markerPointSizeUniform,
+        Math.min(11, Math.max(7, width / 145)),
+      );
       gl.uniform3f(this.markerColourUniform, 0.12, 0.95, 1);
       gl.drawArrays(gl.POINTS, 0, this.markerOrbitPointCount);
     }
-    gl.uniform1f(this.markerPointSizeUniform, Math.min(14, Math.max(9, width / 100)));
+    gl.uniform1f(
+      this.markerPointSizeUniform,
+      Math.min(30, Math.max(20, width / 62)),
+    );
+    gl.uniform3f(this.markerColourUniform, 0.3, 0.12, 0.015);
+    gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
+    gl.uniform1f(
+      this.markerPointSizeUniform,
+      Math.min(20, Math.max(13, width / 82)),
+    );
     gl.uniform3f(this.markerColourUniform, 1, 0.72, 0.12);
     gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
     gl.disable(gl.BLEND);

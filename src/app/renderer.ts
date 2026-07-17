@@ -53,6 +53,7 @@ export interface RendererOptions {
 const CYCLE_HOLD_SECONDS = 1.5;
 const ORBIT_SWEEP_START = 0.25;
 const ORBIT_SWEEP_END = -2;
+const ORBIT_SWEEP_HOLD_SECONDS = 0.9;
 
 export type { DisplayOptions } from "./rendererBackend.ts";
 
@@ -119,6 +120,7 @@ export class Renderer {
     | null = null;
   private cascadePosition = 1;
   private sweepRe = ORBIT_SWEEP_START;
+  private sweepHold = 0;
 
   private resizeObserver: ResizeObserver | null = null;
   private resizeFrame = 0;
@@ -251,6 +253,7 @@ export class Renderer {
         !booleanParam(previous, "realAxisSweep", false);
       if (sweepStarted) {
         this.sweepRe = ORBIT_SWEEP_START;
+        this.sweepHold = 0;
         this.setOrbit3dMarker(this.sweepRe, 0);
       }
 
@@ -533,6 +536,7 @@ export class Renderer {
       this.cascadePosition = numericParam(this.params, "plottedIterations", 1);
     }
     this.sweepRe = ORBIT_SWEEP_START;
+    this.sweepHold = 0;
   }
 
   private applyOrbit3dCameraPose(): void {
@@ -581,12 +585,22 @@ export class Renderer {
     }
 
     if (booleanParam(this.params, "realAxisSweep", false)) {
-      const speed = Math.max(0.001, numericParam(this.params, "sweepSpeed", 0.15));
-      this.sweepRe = Math.max(ORBIT_SWEEP_END, this.sweepRe - dt * speed);
-      this.setOrbit3dMarker(this.sweepRe, 0);
-      if (this.sweepRe <= ORBIT_SWEEP_END) {
-        this.params = { ...this.params, realAxisSweep: false };
-        paramsChanged = true;
+      if (this.sweepHold > 0) {
+        this.sweepHold = Math.max(0, this.sweepHold - dt);
+        if (this.sweepHold === 0) {
+          this.sweepRe = ORBIT_SWEEP_START;
+          this.setOrbit3dMarker(this.sweepRe, 0);
+        }
+      } else {
+        const speed = Math.max(
+          0.001,
+          numericParam(this.params, "sweepSpeed", 0.15),
+        );
+        this.sweepRe = Math.max(ORBIT_SWEEP_END, this.sweepRe - dt * speed);
+        this.setOrbit3dMarker(this.sweepRe, 0);
+        if (this.sweepRe <= ORBIT_SWEEP_END) {
+          this.sweepHold = ORBIT_SWEEP_HOLD_SECONDS;
+        }
       }
     }
 

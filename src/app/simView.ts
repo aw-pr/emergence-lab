@@ -401,6 +401,13 @@ export async function renderSimView(
   }
   if (slug === "logistic-mandelbrot") {
     layout.canvas.classList.add("sim-view__canvas--interactive");
+    if (about?.interaction && layout.about) {
+      layout.about.insertBefore(
+        buildAboutSection("Try it", about.interaction),
+        layout.about.querySelector(".sim-view__about-section--maths"),
+      );
+      syncAboutColumns(layout.about);
+    }
     detachOrbit3dInteractions = attachLogisticMandelbrotCanvasInteractions({
       slug,
       canvas: layout.canvas,

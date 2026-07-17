@@ -142,7 +142,7 @@ export function attachLogisticMandelbrotCanvasInteractions(
   const markerHit = (ev: PointerEvent): boolean => {
     const marker = options.getMarker();
     if (!marker) return false;
-    const radius = ev.pointerType === "touch" ? 26 : 15;
+    const radius = ev.pointerType === "touch" ? 32 : 21;
     return Math.hypot(ev.clientX - marker.clientX, ev.clientY - marker.clientY) <= radius;
   };
 
