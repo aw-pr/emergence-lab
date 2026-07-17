@@ -667,7 +667,11 @@ function defaultParamOverridesFor(slug: string): SimParams {
       // the rolling fronts readable (2+ reads as flicker).
       return { stepsPerFrame: 1 };
     case "lorenz-attractor":
-      return { stepsPerFrame: 6, fade: 0.992 };
+      // Fade is per frame, so the trail's half-life is ln(0.5)/ln(fade): 0.992
+      // was ~86 frames, under a second and a half, which erased the far lobe
+      // before the orbit returned to it. This holds roughly 8 seconds, long
+      // enough to see the whole attractor at once rather than a short comet.
+      return { stepsPerFrame: 6, fade: 0.9985, cycleSpeed: 0.05 };
     case "diffusion-limited-aggregation":
       return { walkersPerStep: 96, maxWalkSteps: 256 };
     case "elementary-cellular-automata":

@@ -29,7 +29,12 @@ const DEFAULT_BETA = 2.6666667;
 const DEFAULT_STEPS_PER_FRAME = 24;
 const DEFAULT_FADE = 0.997;
 const DEFAULT_COLOUR_BY_HEIGHT = true;
-const CHANNEL_COUNT = 1;
+/** Density (brightness) and hue (palette position). Hue has to be its own
+ * channel: density already means brightness, so cycling it would strobe the
+ * trail rather than recolour it. The pair lets the ribbon hold the colour it
+ * was laid down in while the live head advances through the palette. */
+const CHANNEL_COUNT = 2;
+const DEFAULT_CYCLE_SPEED = 0.05;
 const HEIGHT_FLOOR = 0.35;
 const HEIGHT_SPAN = 0.65;
 const DEPOSIT = 0.26;
@@ -208,6 +213,13 @@ function clamp01(value: number): number {
   return value;
 }
 
+/** Wrap into [0,1). Hue is a position on a cyclic palette, so it wraps rather
+ * than clamping: clamping would park the cycle at pure red forever. */
+function wrap01(value: number): number {
+  const wrapped = value % 1;
+  return wrapped < 0 ? wrapped + 1 : wrapped;
+}
+
 function numberParam(
   params: SimParams,
   key: string,
@@ -252,8 +264,8 @@ function enumParam(
 export class LorenzAttractorKernel implements SimKernel {
   readonly name = "Strange Attractor";
   readonly channelCount = CHANNEL_COUNT;
-  readonly channelLabels = ["Density"] as const;
-  readonly channelRanges = [[0, 1]] as const;
+  readonly channelLabels = ["Density", "Hue"] as const;
+  readonly channelRanges = [[0, 1], [0, 1]] as const;
   readonly paramSchema = [
     {
       key: "attractor",
@@ -322,6 +334,15 @@ export class LorenzAttractorKernel implements SimKernel {
       type: "boolean",
       default: DEFAULT_COLOUR_BY_HEIGHT,
     },
+    {
+      key: "cycleSpeed",
+      label: "Colour cycle",
+      type: "number",
+      default: DEFAULT_CYCLE_SPEED,
+      min: 0,
+      max: 1,
+      step: 0.01,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
@@ -338,6 +359,8 @@ export class LorenzAttractorKernel implements SimKernel {
   private fade = DEFAULT_FADE;
   private ribbonWidth = DEFAULT_RIBBON_WIDTH;
   private colourByHeight = DEFAULT_COLOUR_BY_HEIGHT;
+  private cycleSpeed = DEFAULT_CYCLE_SPEED;
+  private phase = 0;
   private x = 0.1;
   private y = 0;
   private z = 0;
@@ -388,6 +411,8 @@ export class LorenzAttractorKernel implements SimKernel {
       "colourByHeight",
       DEFAULT_COLOUR_BY_HEIGHT,
     );
+    this.cycleSpeed = boundedNumber(params, "cycleSpeed", DEFAULT_CYCLE_SPEED, 0, 1);
+    this.phase = 0;
 
     this.x = this.spec.start[0];
     this.y = this.spec.start[1];
@@ -405,9 +430,14 @@ export class LorenzAttractorKernel implements SimKernel {
 
     const state = this.state;
     const fade = this.fade;
-    for (let index = 0; index < state.length; index += 1) {
+    // Density only. Hue is a palette position, not a quantity: fading it would
+    // slide every trail towards hue 0 as it dims instead of letting it keep
+    // the colour it was drawn in.
+    for (let index = 0; index < state.length; index += CHANNEL_COUNT) {
       state[index] *= fade;
     }
+
+    this.phase = wrap01(this.phase + this.cycleSpeed * (1 / 60));
 
     for (let step = 0; step < this.stepsPerFrame; step += 1) {
       this.integrate();
@@ -576,8 +606,11 @@ export class LorenzAttractorKernel implements SimKernel {
         }
 
         const falloff = Math.exp(-distanceSquared / (2 * sigma * sigma));
-        const index = py * this.width + px;
+        const index = (py * this.width + px) * CHANNEL_COUNT;
         this.state[index] = clamp01(this.state[index] + intensity * falloff);
+        // The freshest deposit owns the cell's hue, so a crossing ribbon reads
+        // as passing in front rather than blending to an average colour.
+        this.state[index + 1] = this.phase;
       }
     }
   }

@@ -32,17 +32,71 @@ function occupiedCells(state) {
   return state.filter((value) => value > 0).length;
 }
 
+test("fade dims density without dragging hue towards zero", () => {
+  const kernel = new LorenzAttractorKernel();
+  kernel.init(64, 48, { attractor: "lorenz", cycleSpeed: 0.5, fade: 0.9 });
+
+  // The phase starts at zero, so the seeded trail is laid down at hue zero:
+  // step first to let the cycle advance and deposit a non-zero hue.
+  for (let step = 0; step < 10; step += 1) kernel.step(1);
+
+  const state = kernel.readState();
+  let index = -1;
+  for (let i = 0; i < state.length; i += 2) {
+    if (state[i] > 0.05 && state[i + 1] > 0.05) {
+      index = i;
+      break;
+    }
+  }
+  assert.ok(index >= 0, "expected a cell carrying both density and hue");
+
+  const densityBefore = state[index];
+  const hueBefore = state[index + 1];
+
+  // Step without letting the orbit re-deposit into this cell: fade alone.
+  for (let step = 0; step < 5; step += 1) kernel.step(1);
+
+  const after = kernel.readState();
+  if (after[index] < densityBefore) {
+    assert.ok(
+      after[index + 1] === hueBefore || after[index + 1] > 0.05,
+      `hue decayed with density: ${hueBefore} -> ${after[index + 1]}`,
+    );
+  }
+});
+
+test("colour cycling is off when cycleSpeed is zero", () => {
+  const kernel = new LorenzAttractorKernel();
+  kernel.init(64, 48, { attractor: "lorenz", cycleSpeed: 0 });
+  for (let step = 0; step < 20; step += 1) kernel.step(1);
+
+  const state = kernel.readState();
+  for (let i = 1; i < state.length; i += 2) {
+    assert.equal(state[i], 0, "hue must stay put when the cycle is disabled");
+  }
+});
+
 test("metadata matches the renderer contract", () => {
   const kernel = new LorenzAttractorKernel();
 
   assert.equal(kernel.name, "Strange Attractor");
-  assert.equal(kernel.channelCount, 1);
-  assert.deepEqual(kernel.channelLabels, ["Density"]);
-  assert.deepEqual(kernel.channelRanges, [[0, 1]]);
+  assert.equal(kernel.channelCount, 2);
+  assert.deepEqual(kernel.channelLabels, ["Density", "Hue"]);
+  assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["attractor", "sigma", "rho", "beta", "stepsPerFrame", "fade", "ribbonWidth", "colourByHeight"],
+    [
+      "attractor",
+      "sigma",
+      "rho",
+      "beta",
+      "stepsPerFrame",
+      "fade",
+      "ribbonWidth",
+      "colourByHeight",
+      "cycleSpeed",
+    ],
   );
 
   for (const descriptor of kernel.paramSchema) {

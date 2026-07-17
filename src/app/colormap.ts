@@ -72,9 +72,17 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
  * (fract) without a visible seam sweeping through the image. Consumed by the
  * renderer's palette-cycling path.
  */
-const CYCLIC_PRESETS: ReadonlySet<ColourPreset> = new Set(["twilight", "phase"]);
+type CyclicPreset = "twilight" | "phase";
 
-export function isCyclic(preset: ColourPreset): boolean {
+const CYCLIC_PRESETS: ReadonlySet<string> = new Set<CyclicPreset>([
+  "twilight",
+  "phase",
+]);
+
+/** Narrows to the ramp presets, which is what lets callers hand a cyclic
+ * preset straight to rampColour: the composite presets (sand, chemical, rgb)
+ * have no ramp to sample and are excluded by the type, not just by luck. */
+export function isCyclic(preset: ColourPreset): preset is CyclicPreset {
   return CYCLIC_PRESETS.has(preset);
 }
 
@@ -205,7 +213,9 @@ export function defaultColourOptionsFor(
       // the near-black background while saturated cores read yellow.
       return { ...base, preset: "viridis", gamma: 0.9, contrast: 1.35 };
     case "lorenz-attractor":
-      return { ...base, preset: "inferno", gamma: 1.8, contrast: 1.55 };
+      // Cyclic: the hue channel wraps, so the palette has to join at its ends
+      // or every lap of the colour cycle would snap through a hard seam.
+      return { ...base, preset: "phase", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
@@ -275,6 +285,11 @@ function rampColour(
   return stops[stops.length - 1][1];
 }
 
+function wrap01(value: number): number {
+  const wrapped = value % 1;
+  return wrapped < 0 ? wrapped + 1 : wrapped;
+}
+
 function mix(left: Rgb, right: Rgb, t: number): Rgb {
   const x = clamp01(t);
   return [
@@ -285,6 +300,14 @@ function mix(left: Rgb, right: Rgb, t: number): Rgb {
 }
 
 function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rgb {
+  // Cyclic presets carry a hue channel (the attractors): c1 picks the colour,
+  // c0 only says how brightly it burns. Fading towards black rather than
+  // towards the palette's dark end keeps an empty cell black, which the ramp
+  // presets cannot promise.
+  if (isCyclic(options.preset)) {
+    const hue = rampColour(options.preset, wrap01(c1));
+    return mix([0, 0, 0], hue, adjust(c0, options));
+  }
   if (options.preset === "sand") {
     const base = rampColour("amber", adjust(c0, options));
     const density = smoothstep01(c0 / 0.7);
