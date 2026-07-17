@@ -164,6 +164,12 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
     maths:
       "Iterate z → (|Re z| + i|Im z|)² + c. The absolute values are not analytic, which breaks the complex-differentiability that keeps the Mandelbrot boundary self-similar, and that fracture is exactly what produces the sharp masts and antennae.",
   },
+  "logistic-mandelbrot": {
+    history:
+      "Robert May's 1976 Nature review made the logistic map x → rx(1 − x) the emblem of chaos from simplicity, and Mitchell Feigenbaum found universal constants in its period-doubling cascade. The map is secretly the same iteration as the Mandelbrot set: a linear change of variable turns one into the other, so the bifurcation diagram every textbook prints is the real slice of the set, a connection this view makes literal by standing the diagram on the plane it came from.",
+    maths:
+      "For each c, iterate z → z² + c past its transient and plot the next K values of Re(z) as height over the plane. The substitution z = r/2 − rx carries the logistic map onto this iteration with c = (r/2)(1 − r/2), so the sheet hanging over the real axis is exactly the bifurcation diagram, and every hyperbolic bulb of the Mandelbrot ground plane holds its attracting period-q cycle up as a stack of q sheets.",
+  },
   "cyclic-ca": {
     history:
       "David Griffeath and colleagues studied it in the late 1980s, naming the phases it passes through: droplets, then defects, then demons, then spirals. It is the cleanest demonstration that cyclic dominance, the rock-paper-scissors relation found in real ecologies and in some bacterial strains, is enough to organise a whole field from noise.",

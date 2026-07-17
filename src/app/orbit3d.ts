@@ -79,6 +79,46 @@ void main() {
 }
 `;
 
+const GROUND_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+uniform mat4 u_viewProjection;
+uniform vec2 u_planeCentre;
+uniform vec2 u_planeHalfSpan;
+uniform float u_planeHeight;
+out vec2 v_complex;
+
+void main() {
+  vec2 c = u_planeCentre + a_position * u_planeHalfSpan;
+  v_complex = c;
+  vec3 world = vec3((c.x + 0.5) * 0.78, u_planeHeight, c.y * 0.85);
+  gl_Position = u_viewProjection * vec4(world, 1.0);
+}
+`;
+
+// The plane writes into the shared HDR accumulation target before the additive
+// point passes, so its colours are scaled well below the cloud's saturation
+// point to keep the sheets legible above it.
+const GROUND_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_texture;
+uniform vec2 u_texCentre;
+uniform vec2 u_texSpan;
+in vec2 v_complex;
+out vec4 outColor;
+
+void main() {
+  vec2 uv = (v_complex - u_texCentre) / u_texSpan + 0.5;
+  vec3 colour = texture(u_texture, uv).rgb;
+  float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
+  vec3 dimmed = mix(vec3(luma), colour, 0.55) * 0.055;
+  float axis = 1.0 - smoothstep(0.008, 0.03, abs(v_complex.y));
+  outColor = vec4(dimmed + vec3(0.018, 0.03, 0.05) * axis, 1.0);
+}
+`;
+
 const TONEMAP_VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 out vec2 v_uv;
@@ -128,6 +168,22 @@ const DEFAULT_MARKER_IM = 0;
 
 type OrbitParams = Record<string, number | boolean | string>;
 
+/** The c-plane rectangle covered by the point cloud and the ground plane. */
+export const GROUND_DOMAIN = {
+  centre: [(RE_MIN + RE_MAX) / 2, (IM_MIN + IM_MAX) / 2] as const,
+  span: [RE_MAX - RE_MIN, IM_MAX - IM_MIN] as const,
+};
+
+export interface Orbit3DGroundPlane {
+  texture: WebGLTexture;
+  /** (re, im) at the texture's centre. */
+  centre: readonly [number, number];
+  /** (re, im) extent the texture covers edge to edge. */
+  span: readonly [number, number];
+}
+
+export type Orbit3DCameraPose = "default" | "side";
+
 export interface Orbit3DStats {
   pointCount: number;
   pointBudget: number;
@@ -158,9 +214,11 @@ export class Orbit3DPointCloud {
   private readonly gl: WebGL2RenderingContext;
   private readonly pointProgram: WebGLProgram;
   private readonly markerProgram: WebGLProgram;
+  private readonly groundProgram: WebGLProgram;
   private readonly toneMapProgram: WebGLProgram;
   private readonly pointVao: WebGLVertexArrayObject;
   private readonly markerVao: WebGLVertexArrayObject;
+  private readonly groundVao: WebGLVertexArrayObject;
   private readonly toneMapVao: WebGLVertexArrayObject;
   private readonly pointBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
@@ -170,6 +228,9 @@ export class Orbit3DPointCloud {
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
+  private readonly groundViewProjectionUniform: WebGLUniformLocation;
+  private readonly groundTexCentreUniform: WebGLUniformLocation;
+  private readonly groundTexSpanUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -183,6 +244,7 @@ export class Orbit3DPointCloud {
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
+  private pendingSlice: ((budgetMs: number) => void) | null = null;
   private camera = defaultCameraState();
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
@@ -195,6 +257,7 @@ export class Orbit3DPointCloud {
     this.gl = gl;
     this.pointProgram = createProgram(gl, POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER);
     this.markerProgram = createProgram(gl, MARKER_VERTEX_SHADER, MARKER_FRAGMENT_SHADER);
+    this.groundProgram = createProgram(gl, GROUND_VERTEX_SHADER, GROUND_FRAGMENT_SHADER);
     this.toneMapProgram = createProgram(
       gl,
       TONEMAP_VERTEX_SHADER,
@@ -205,6 +268,7 @@ export class Orbit3DPointCloud {
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
     this.markerVao = requireResource(gl.createVertexArray(), "orbit3d marker VAO");
+    this.groundVao = requireResource(gl.createVertexArray(), "orbit3d ground VAO");
     this.toneMapVao = requireResource(gl.createVertexArray(), "orbit3d tone-map VAO");
 
     gl.bindVertexArray(this.pointVao);
@@ -229,6 +293,12 @@ export class Orbit3DPointCloud {
     const quadLocation = gl.getAttribLocation(this.toneMapProgram, "a_position");
     gl.enableVertexAttribArray(quadLocation);
     gl.vertexAttribPointer(quadLocation, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindVertexArray(this.groundVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    const groundLocation = gl.getAttribLocation(this.groundProgram, "a_position");
+    gl.enableVertexAttribArray(groundLocation);
+    gl.vertexAttribPointer(groundLocation, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
 
     this.viewProjectionUniform = requireResource(
@@ -251,9 +321,37 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.markerProgram, "u_colour"),
       "orbit3d marker colour uniform",
     );
+    this.groundViewProjectionUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_viewProjection"),
+      "orbit3d ground view-projection uniform",
+    );
+    this.groundTexCentreUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_texCentre"),
+      "orbit3d ground texture-centre uniform",
+    );
+    this.groundTexSpanUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_texSpan"),
+      "orbit3d ground texture-span uniform",
+    );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
       "orbit3d exposure uniform",
+    );
+    gl.useProgram(this.groundProgram);
+    gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_texture"), 0);
+    gl.uniform2f(
+      gl.getUniformLocation(this.groundProgram, "u_planeCentre"),
+      GROUND_DOMAIN.centre[0],
+      GROUND_DOMAIN.centre[1],
+    );
+    gl.uniform2f(
+      gl.getUniformLocation(this.groundProgram, "u_planeHalfSpan"),
+      GROUND_DOMAIN.span[0] / 2,
+      GROUND_DOMAIN.span[1] / 2,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.groundProgram, "u_planeHeight"),
+      MARKER_PLANE_ORBIT_VALUE * 0.56,
     );
     gl.useProgram(this.toneMapProgram);
     gl.uniform1i(gl.getUniformLocation(this.toneMapProgram, "u_accumulation"), 0);
@@ -294,6 +392,10 @@ export class Orbit3DPointCloud {
 
   resetCamera(): void {
     this.camera = defaultCameraState();
+  }
+
+  setCameraPose(pose: Orbit3DCameraPose): void {
+    this.camera = pose === "side" ? sideCameraState() : defaultCameraState();
   }
 
   projectMarker(width: number, height: number): Orbit3DProjectedPoint | null {
@@ -408,9 +510,9 @@ export class Orbit3DPointCloud {
     this.building = true;
     const gl = this.gl;
 
-    const buildSlice = (): void => {
+    const buildSlice = (budgetMs: number): void => {
       if (generation !== this.buildGeneration) return;
-      const stopAt = performance.now() + BUILD_SLICE_MS;
+      const stopAt = performance.now() + budgetMs;
       while (
         cell < sampleWidth * sampleHeight &&
         survivingCells < maxSurvivingCells &&
@@ -444,7 +546,7 @@ export class Orbit3DPointCloud {
       }
 
       if (cell < sampleWidth * sampleHeight && survivingCells < maxSurvivingCells) {
-        this.buildTimer = window.setTimeout(buildSlice, 0);
+        this.buildTimer = window.setTimeout(() => buildSlice(BUILD_SLICE_MS), 0);
         return;
       }
       for (let sample = 1; sample < sampleCount; sample += 1) {
@@ -462,9 +564,25 @@ export class Orbit3DPointCloud {
       this.refreshPointCount();
       this.buildTimer = null;
       this.building = false;
+      this.pendingSlice = null;
     };
 
-    buildSlice();
+    this.pendingSlice = buildSlice;
+    buildSlice(BUILD_SLICE_MS);
+  }
+
+  /**
+   * Run the remaining build slices to completion on the calling thread. Used
+   * by one-shot render paths (thumbnails) that cannot wait for timer slices.
+   */
+  finishBuild(): void {
+    while (this.building && this.pendingSlice) {
+      if (this.buildTimer !== null) {
+        window.clearTimeout(this.buildTimer);
+        this.buildTimer = null;
+      }
+      this.pendingSlice(Number.POSITIVE_INFINITY);
+    }
   }
 
   cancelBuild(): void {
@@ -474,6 +592,7 @@ export class Orbit3DPointCloud {
       this.buildTimer = null;
     }
     this.building = false;
+    this.pendingSlice = null;
   }
 
   private refreshPointCount(): void {
@@ -485,17 +604,34 @@ export class Orbit3DPointCloud {
     this.pointCount = cells * this.visibleIterations;
   }
 
-  draw(width: number, height: number, exposure = 1.35): boolean {
+  draw(
+    width: number,
+    height: number,
+    exposure = 1.35,
+    ground: Orbit3DGroundPlane | null = null,
+  ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.accumulationFbo);
     gl.viewport(0, 0, this.targetWidth, this.targetHeight);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
+
+    if (ground) {
+      gl.useProgram(this.groundProgram);
+      gl.uniformMatrix4fv(this.groundViewProjectionUniform, false, viewProjection);
+      gl.uniform2f(this.groundTexCentreUniform, ground.centre[0], ground.centre[1]);
+      gl.uniform2f(this.groundTexSpanUniform, ground.span[0], ground.span[1]);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, ground.texture);
+      gl.bindVertexArray(this.groundVao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(this.pointProgram);
-    const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
     gl.uniformMatrix4fv(
       this.viewProjectionUniform,
       false,
@@ -538,12 +674,14 @@ export class Orbit3DPointCloud {
     const gl = this.gl;
     gl.deleteVertexArray(this.pointVao);
     gl.deleteVertexArray(this.markerVao);
+    gl.deleteVertexArray(this.groundVao);
     gl.deleteVertexArray(this.toneMapVao);
     gl.deleteBuffer(this.pointBuffer);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);
     gl.deleteProgram(this.markerProgram);
+    gl.deleteProgram(this.groundProgram);
     gl.deleteProgram(this.toneMapProgram);
   }
 
@@ -678,6 +816,16 @@ function defaultCameraState(): OrbitCameraState {
     azimuth: Math.atan2(DEFAULT_CAMERA_EYE[0], DEFAULT_CAMERA_EYE[2]),
     elevation: Math.asin(DEFAULT_CAMERA_EYE[1] / distance),
     distance,
+    target: [0, 0, 0],
+  };
+}
+
+/** Looking along +z at the re/orbit plane: the bifurcation-curtain view. */
+function sideCameraState(): OrbitCameraState {
+  return {
+    azimuth: 0,
+    elevation: 0.14,
+    distance: 3.7,
     target: [0, 0, 0],
   };
 }

@@ -93,8 +93,6 @@ async function renderThumbnail(
 
   try {
     const backend = acquireBackend(width, height);
-    backend.setGrid(width, height, kernel);
-
     const renderMode = getRenderMode(slug);
     const params = {
       ...defaultParamsFromSchema(kernel.paramSchema),
@@ -102,6 +100,7 @@ async function renderThumbnail(
       ...(options.params ?? {}),
       seed: 1,
     };
+    backend.setGrid(width, height, kernel, renderMode, params);
     kernel.init(width, height, params);
 
     const dt = 1 / 30;
@@ -112,6 +111,10 @@ async function renderThumbnail(
         kernel.step(dt);
       }
     }
+
+    // Direct-rendering backends may build their scene in background time
+    // slices; a one-shot still needs that work completed before the draw.
+    backend.finishPendingWork?.();
 
     const colourOptions = defaultColourOptionsFor(slug, kernel.channelCount);
     const displayOptions = {

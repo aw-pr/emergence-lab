@@ -13,7 +13,11 @@ import {
   type Orbit3DMarkerSnapshot,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
-import { Orbit3DPointCloud } from "./orbit3d.ts";
+import {
+  GROUND_DOMAIN,
+  Orbit3DPointCloud,
+  type Orbit3DGroundPlane,
+} from "./orbit3d.ts";
 import {
   createKuramotoInitialFields,
   KURAMOTO_TAU,
@@ -1159,6 +1163,13 @@ class GpuKuramotoSimulation {
   }
 }
 
+/**
+ * Backing store for the orbit3d ground plane: the Mandelbrot set rendered once
+ * per palette via the shared fractal program, spanning the sampled c-domain.
+ */
+const ORBIT3D_GROUND_TEXTURE_WIDTH = 1024;
+const ORBIT3D_GROUND_ITERATIONS = 160;
+
 export class WebGLRendererBackend implements RendererBackend {
   readonly kind = "webgl2" as const;
   readonly maxTextureSize: number;
@@ -1169,6 +1180,9 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly kuramoto: GpuKuramotoSimulation | null;
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
+  private orbit3dGroundTexture: WebGLTexture | null = null;
+  private orbit3dGroundFbo: WebGLFramebuffer | null = null;
+  private orbit3dGroundKey = "";
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -1479,11 +1493,25 @@ export class WebGLRendererBackend implements RendererBackend {
     this.drawMappedState(kernel, mode, displayOptions);
   }
 
+  setOrbit3dCameraPose(pose: string): void {
+    this.orbit3d?.setCameraPose(pose === "side" ? "side" : "default");
+  }
+
+  finishPendingWork(): void {
+    this.orbit3d?.finishBuild();
+  }
+
   private drawOrbit3d(frame: RendererBackendFrame): void {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const stats = this.orbit3d?.stats;
     const exposure = numericParam(frame.params, "exposure", 1.35);
-    if (!stats || !this.orbit3d?.draw(this.displayWidth, this.displayHeight, exposure)) return;
+    const ground = this.ensureOrbit3dGround(frame);
+    if (
+      !stats ||
+      !this.orbit3d?.draw(this.displayWidth, this.displayHeight, exposure, ground)
+    ) {
+      return;
+    }
     const marker = this.orbit3d.markerReadout;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
@@ -1494,6 +1522,109 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dMarkerRe = marker.re.toFixed(6);
     canvas.dataset.orbit3dMarkerIm = marker.im.toFixed(6);
     canvas.dataset.orbit3dMarkerPeriod = String(marker.period);
+  }
+
+  /**
+   * Render (or fetch the cached) Mandelbrot ground-plane texture covering the
+   * orbit3d c-domain, reusing the fractal escape-time program and palette.
+   * Re-rendered only when the palette configuration changes.
+   */
+  private ensureOrbit3dGround(
+    frame: RendererBackendFrame,
+  ): Orbit3DGroundPlane | null {
+    const gl = this.gl;
+    this.updateFractalPalette(frame.colourOptions);
+    const width = ORBIT3D_GROUND_TEXTURE_WIDTH;
+    const scale = GROUND_DOMAIN.span[0] / width;
+    const height = Math.round(GROUND_DOMAIN.span[1] / scale);
+    const key = [
+      this.fractalPaletteKey,
+      frame.colourOptions.paletteCycleReverse ? 1 : 0,
+    ].join(":");
+    if (this.orbit3dGroundTexture && this.orbit3dGroundKey === key) {
+      return {
+        texture: this.orbit3dGroundTexture,
+        centre: GROUND_DOMAIN.centre,
+        span: [width * scale, height * scale],
+      };
+    }
+
+    if (!this.orbit3dGroundTexture || !this.orbit3dGroundFbo) {
+      const texture = gl.createTexture();
+      const fbo = gl.createFramebuffer();
+      if (!texture || !fbo) return null;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA8,
+        width,
+        height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      );
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        texture,
+        0,
+      );
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.deleteFramebuffer(fbo);
+        gl.deleteTexture(texture);
+        return null;
+      }
+      this.orbit3dGroundTexture = texture;
+      this.orbit3dGroundFbo = fbo;
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.orbit3dGroundFbo);
+    }
+
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(this.fractalProgram);
+    gl.uniform1i(this.fractalUniforms.kind, 0);
+    gl.uniform2f(this.fractalUniforms.resolution, width, height);
+    gl.uniform2f(
+      this.fractalUniforms.center,
+      GROUND_DOMAIN.centre[0],
+      GROUND_DOMAIN.centre[1],
+    );
+    gl.uniform1f(
+      this.fractalUniforms.zoom,
+      3 / (Math.min(width, height) * scale),
+    );
+    gl.uniform1i(this.fractalUniforms.maxIterations, ORBIT3D_GROUND_ITERATIONS);
+    gl.uniform2f(this.fractalUniforms.juliaC, 0, 0);
+    gl.uniform1f(this.fractalUniforms.modelPhase, 0);
+    gl.uniform1f(this.fractalUniforms.palettePhase, 0);
+    gl.uniform1i(
+      this.fractalUniforms.paletteReverse,
+      frame.colourOptions.paletteCycleReverse ? 1 : 0,
+    );
+    gl.uniform1i(
+      this.fractalUniforms.paletteCyclic,
+      isCyclic(frame.colourOptions.preset) ? 1 : 0,
+    );
+    gl.bindVertexArray(this.fractalVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.orbit3dGroundKey = key;
+    return {
+      texture: this.orbit3dGroundTexture,
+      centre: GROUND_DOMAIN.centre,
+      span: [width * scale, height * scale],
+    };
   }
 
   private drawGpuKuramoto(frame: RendererBackendFrame): void {
@@ -2011,6 +2142,8 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseBloomTargets();
     this.kuramoto?.destroy();
     this.orbit3d?.destroy();
+    if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
+    if (this.orbit3dGroundFbo) gl.deleteFramebuffer(this.orbit3dGroundFbo);
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);

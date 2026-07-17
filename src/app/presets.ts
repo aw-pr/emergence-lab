@@ -539,6 +539,52 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  "logistic-mandelbrot": [
+    {
+      id: "full-object",
+      label: "The full object",
+      params: {
+        warmupIterations: 200,
+        sampleCount: 48,
+        plottedIterations: 48,
+        cascadeReveal: false,
+        realAxisSweep: false,
+        realSliceOnly: false,
+        exposure: 1.35,
+        pointDensity: 1,
+      },
+    },
+    {
+      id: "bifurcation-curtain",
+      label: "Bifurcation curtain",
+      params: {
+        warmupIterations: 400,
+        sampleCount: 64,
+        plottedIterations: 64,
+        cascadeReveal: false,
+        realAxisSweep: false,
+        realSliceOnly: true,
+        exposure: 1.6,
+        pointDensity: 1,
+      },
+    },
+    {
+      id: "cascade",
+      label: "Cascade",
+      params: {
+        warmupIterations: 200,
+        sampleCount: 48,
+        plottedIterations: 1,
+        cascadeReveal: true,
+        cascadeDuration: 18,
+        realAxisSweep: true,
+        sweepSpeed: 0.12,
+        realSliceOnly: false,
+        exposure: 1.35,
+        pointDensity: 1,
+      },
+    },
+  ],
   "cyclic-ca": [
     {
       id: "demons",

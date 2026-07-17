@@ -155,6 +155,7 @@ export class Renderer {
     this.resizeDisplay();
     this.reinitGrid();
     this.resetOrbit3dSweepMarker();
+    this.applyOrbit3dCameraPose();
   }
 
   /** Set or clear an FPS observer. Called once per ~500ms with a smoothed value. */
@@ -226,6 +227,7 @@ export class Renderer {
     this.prepareOrbit3dAnimations();
     this.reinitGrid();
     this.resetOrbit3dSweepMarker();
+    this.applyOrbit3dCameraPose();
     this.notifyParamsChange();
   }
 
@@ -250,6 +252,14 @@ export class Renderer {
       if (sweepStarted) {
         this.sweepRe = ORBIT_SWEEP_START;
         this.setOrbit3dMarker(this.sweepRe, 0);
+      }
+
+      // Toggling the real-slice curtain snaps the camera to the matching pose
+      // (side-on for the bifurcation diagram, the default orbit otherwise);
+      // free orbiting stays available after the snap.
+      const realSliceOnly = booleanParam(this.params, "realSliceOnly", false);
+      if (realSliceOnly !== booleanParam(previous, "realSliceOnly", false)) {
+        this.backend.setOrbit3dCameraPose?.(realSliceOnly ? "side" : "default");
       }
 
       if (this.backend.updateOrbit3dParams?.(this.params)) {
@@ -523,6 +533,13 @@ export class Renderer {
       this.cascadePosition = numericParam(this.params, "plottedIterations", 1);
     }
     this.sweepRe = ORBIT_SWEEP_START;
+  }
+
+  private applyOrbit3dCameraPose(): void {
+    if (this.renderMode !== "orbit3d") return;
+    this.backend.setOrbit3dCameraPose?.(
+      booleanParam(this.params, "realSliceOnly", false) ? "side" : "default",
+    );
   }
 
   private resetOrbit3dSweepMarker(): void {

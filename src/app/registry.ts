@@ -313,9 +313,9 @@ export const REGISTRY: readonly SimEntry[] = [
     slug: "logistic-mandelbrot",
     name: "Logistic Mandelbrot",
     family: "Escape-Time Fractals",
-    subtitle: "Orbit attractors over the c-plane hide the bifurcation diagram.",
+    subtitle: "Orbit attractors stacked over the c-plane reveal the bifurcation diagram.",
     description:
-      "For each c the post-transient orbit of z² + c is sampled: bulbs resolve into period bands and the real axis carries the logistic-map bifurcation cascade.",
+      "For each c the settled orbit of z² + c is plotted as height: bulbs fan into period sheets, the real axis hangs the logistic cascade as a curtain, and the Mandelbrot set anchors the floor.",
     load: async () => {
       const mod = await import("../sims/logistic-mandelbrot/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);

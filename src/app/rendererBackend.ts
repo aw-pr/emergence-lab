@@ -71,6 +71,11 @@ export interface RendererBackend {
   orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
   orbit3dDolly?(factor: number): void;
   resetOrbit3dCamera?(): void;
+  /** Snap the orbit3d camera to a named pose ("default" or "side"). */
+  setOrbit3dCameraPose?(pose: string): void;
+  /** Complete any time-sliced background work (e.g. orbit3d point builds)
+   * synchronously, for one-shot render paths such as thumbnails. */
+  finishPendingWork?(): void;
   /**
    * Resize the on-screen backing store (device pixels). Cheap: it does not
    * reallocate simulation buffers. The grid is letterboxed into this area.
