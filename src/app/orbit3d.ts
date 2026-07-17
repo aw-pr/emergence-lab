@@ -99,10 +99,15 @@ out vec4 outColor;
 
 void main() {
   vec2 offset = gl_PointCoord - vec2(0.5);
-  float coverage = 1.0 - smoothstep(0.18, 0.5, length(offset));
+  float radius = length(offset);
+  float haze = 1.0 - smoothstep(0.16, 0.5, radius);
+  float core = 1.0 - smoothstep(0.035, 0.25, radius);
+  float sparkle = 1.0 - smoothstep(0.0, 0.09, radius);
   vec3 fanColour = mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58);
-  vec3 colour = v_colour * 0.032 + fanColour * v_fanGlow * 0.075;
-  outColor = vec4(colour * coverage, coverage);
+  vec3 pointLight =
+    v_colour * (haze * 0.014 + core * 0.042) + vec3(1.0) * sparkle * 0.02;
+  vec3 fanLight = fanColour * v_fanGlow * (haze * 0.045 + core * 0.05);
+  outColor = vec4(pointLight + fanLight, max(core, haze * 0.45));
 }
 `;
 
@@ -808,7 +813,10 @@ export class Orbit3DPointCloud {
       false,
       viewProjection,
     );
-    gl.uniform1f(this.pointSizeUniform, Math.min(2, Math.max(1, width / 900)));
+    gl.uniform1f(
+      this.pointSizeUniform,
+      Math.min(3, Math.max(1.8, width / 650)),
+    );
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1f(this.markerReUniform, this.marker.re);
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
