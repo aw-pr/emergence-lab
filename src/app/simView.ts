@@ -1,4 +1,5 @@
 import katex from "katex";
+import { aboutFor, type SimAbout } from "./about.ts";
 import { isFramedBySite } from "./embed.ts";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
@@ -118,6 +119,7 @@ export async function renderSimView(
       name: variantDef?.name ?? entry.name,
       family: entry.family,
       subtitle: variantDef?.subtitle ?? entry.subtitle,
+      about: aboutFor(slug, variantDef?.variant),
     },
     slug,
   );
@@ -416,6 +418,7 @@ interface SimHeader {
   name: string;
   family?: string;
   subtitle?: string;
+  about?: SimAbout;
 }
 
 function buildLayout(
@@ -472,6 +475,10 @@ function buildLayout(
   titleBlock.appendChild(formula);
 
   top.appendChild(titleBlock);
+
+  if (header.about) {
+    top.appendChild(buildAbout(header.about));
+  }
 
   page.appendChild(top);
 
@@ -532,6 +539,35 @@ function buildFractalHud(): FractalHud {
   root.appendChild(controls);
 
   return { root, zoomLabel, zoomIn, zoomOut, home };
+}
+
+/** The narrative panel filling the header space beside the title: where the
+ * model came from, and what its equations say. */
+function buildAbout(about: SimAbout): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "sim-view__about";
+
+  for (const [label, body] of [
+    ["Origin", about.history],
+    ["The maths", about.maths],
+  ] as const) {
+    const section = document.createElement("section");
+    section.className = "sim-view__about-section";
+
+    const heading = document.createElement("h2");
+    heading.className = "sim-view__about-label";
+    heading.textContent = label;
+    section.appendChild(heading);
+
+    const text = document.createElement("p");
+    text.className = "sim-view__about-text";
+    text.textContent = body;
+    section.appendChild(text);
+
+    root.appendChild(section);
+  }
+
+  return root;
 }
 
 function renderFormula(container: HTMLElement, slug: string): void {
