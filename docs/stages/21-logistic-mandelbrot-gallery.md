@@ -69,9 +69,12 @@ The verifier will check each of these. Failure of any one is a failure of the st
    hangs from the real axis), and the cloud remains clearly legible.
 3. All three presets load and match their descriptions.
 4. The gallery grid shows the sim with a non-blank thumbnail and final copy.
-5. Essay renders on the sim page and its mathematical claims are consistent
-   with what the sim shows (spot-check the conjugacy statement and the
-   period-3 window).
+5. Essay exists at `essays/logistic-mandelbrot.md` in the house format, its
+   mathematical claims are consistent with what the sim shows (spot-check
+   the conjugacy statement and the period-3 window), and the sim page's
+   about entry summarises it. (Amended after verifier attempt 1: the
+   original wording required in-app rendering, but `essays/` is a repo
+   documentation convention — no sim renders its essay on the page.)
 6. No regressions on two spot-checked existing sims.
 
 ## Contract test
