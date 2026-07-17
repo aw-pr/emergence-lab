@@ -91,6 +91,201 @@ export interface FractalCanvasInteractionOptions {
   commitParams: (next: SimParams) => void;
 }
 
+export interface Orbit3DMarkerClientSnapshot {
+  re: number;
+  im: number;
+  period: number;
+  clientX: number;
+  clientY: number;
+}
+
+export interface LogisticMandelbrotCanvasInteractionOptions {
+  slug: string;
+  canvas: HTMLCanvasElement;
+  getMarker: () => Orbit3DMarkerClientSnapshot | null;
+  moveMarker: (
+    clientX: number,
+    clientY: number,
+  ) => Orbit3DMarkerClientSnapshot | null;
+  orbit: (deltaCssX: number, deltaCssY: number) => void;
+  dolly: (factor: number) => void;
+  resetCamera: () => void;
+  onMarkerChange: (marker: Orbit3DMarkerClientSnapshot) => void;
+}
+
+interface ActiveOrbitPointer {
+  clientX: number;
+  clientY: number;
+  pointerType: string;
+  moved: boolean;
+}
+
+/** Logistic-Mandelbrot only: orbit camera, dolly, reset, and c-marker drag. */
+export function attachLogisticMandelbrotCanvasInteractions(
+  options: LogisticMandelbrotCanvasInteractionOptions,
+): () => void {
+  if (options.slug !== "logistic-mandelbrot") return () => {};
+
+  const { canvas } = options;
+  const abort = new AbortController();
+  const { signal } = abort;
+  const pointers = new Map<number, ActiveOrbitPointer>();
+  const originalTouchAction = canvas.style.touchAction;
+  let markerPointerId: number | null = null;
+  let lastTapAt = 0;
+  let lastTapX = 0;
+  let lastTapY = 0;
+  let multiTouchGesture = false;
+
+  canvas.style.touchAction = "none";
+
+  const markerHit = (ev: PointerEvent): boolean => {
+    const marker = options.getMarker();
+    if (!marker) return false;
+    const radius = ev.pointerType === "touch" ? 26 : 15;
+    return Math.hypot(ev.clientX - marker.clientX, ev.clientY - marker.clientY) <= radius;
+  };
+
+  const releasePointer = (pointerId: number): void => {
+    try {
+      canvas.releasePointerCapture(pointerId);
+    } catch {
+      /* capture may already have been released */
+    }
+  };
+
+  canvas.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      pointers.set(ev.pointerId, {
+        clientX: ev.clientX,
+        clientY: ev.clientY,
+        pointerType: ev.pointerType,
+        moved: false,
+      });
+      canvas.setPointerCapture(ev.pointerId);
+
+      if (pointers.size === 1 && markerHit(ev)) {
+        markerPointerId = ev.pointerId;
+      } else if (pointers.size > 1) {
+        markerPointerId = null;
+        multiTouchGesture = true;
+      }
+    },
+    { passive: false, signal },
+  );
+
+  canvas.addEventListener(
+    "pointermove",
+    (ev) => {
+      const previous = pointers.get(ev.pointerId);
+      if (!previous) return;
+      ev.preventDefault();
+
+      const before = Array.from(pointers.values());
+      const dx = ev.clientX - previous.clientX;
+      const dy = ev.clientY - previous.clientY;
+      pointers.set(ev.pointerId, {
+        ...previous,
+        clientX: ev.clientX,
+        clientY: ev.clientY,
+        moved: previous.moved || Math.hypot(dx, dy) > 2,
+      });
+
+      if (pointers.size >= 2) {
+        const after = Array.from(pointers.values());
+        const beforeDistance = Math.hypot(
+          before[0].clientX - before[1].clientX,
+          before[0].clientY - before[1].clientY,
+        );
+        const afterDistance = Math.hypot(
+          after[0].clientX - after[1].clientX,
+          after[0].clientY - after[1].clientY,
+        );
+        if (beforeDistance > 0 && afterDistance > 0) {
+          options.dolly(Math.min(1.25, Math.max(0.8, beforeDistance / afterDistance)));
+        }
+        return;
+      }
+
+      if (markerPointerId === ev.pointerId) {
+        const marker = options.moveMarker(ev.clientX, ev.clientY);
+        if (marker) options.onMarkerChange(marker);
+        return;
+      }
+      options.orbit(dx, dy);
+    },
+    { passive: false, signal },
+  );
+
+  const endPointer = (ev: PointerEvent): void => {
+    const pointer = pointers.get(ev.pointerId);
+    if (!pointer) return;
+    ev.preventDefault();
+    releasePointer(ev.pointerId);
+    pointers.delete(ev.pointerId);
+    if (markerPointerId === ev.pointerId) markerPointerId = null;
+
+    if (
+      ev.type === "pointerup" &&
+      pointer.pointerType === "touch" &&
+      !pointer.moved &&
+      !multiTouchGesture
+    ) {
+      const now = performance.now();
+      const nearPrevious = Math.hypot(ev.clientX - lastTapX, ev.clientY - lastTapY) < 32;
+      if (now - lastTapAt < 320 && nearPrevious) {
+        options.resetCamera();
+        lastTapAt = 0;
+      } else {
+        lastTapAt = now;
+        lastTapX = ev.clientX;
+        lastTapY = ev.clientY;
+      }
+    }
+    if (pointers.size === 0) multiTouchGesture = false;
+  };
+
+  canvas.addEventListener("pointerup", endPointer, { passive: false, signal });
+  canvas.addEventListener("pointercancel", endPointer, { passive: false, signal });
+
+  canvas.addEventListener(
+    "wheel",
+    (ev) => {
+      ev.preventDefault();
+      const sensitivity = ev.ctrlKey
+        ? 0.012
+        : ev.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 0.08
+          : 0.0015;
+      const factor = Math.exp(ev.deltaY * sensitivity);
+      options.dolly(Math.min(1.35, Math.max(1 / 1.35, factor)));
+    },
+    { passive: false, signal },
+  );
+
+  canvas.addEventListener(
+    "dblclick",
+    (ev) => {
+      ev.preventDefault();
+      options.resetCamera();
+    },
+    { signal },
+  );
+
+  const initialMarker = options.getMarker();
+  if (initialMarker) options.onMarkerChange(initialMarker);
+
+  return () => {
+    abort.abort();
+    for (const pointerId of pointers.keys()) releasePointer(pointerId);
+    pointers.clear();
+    canvas.style.touchAction = originalTouchAction;
+  };
+}
+
 /**
  * Wheel zoom around pointer and drag-to-pan for fractal sims only.
  * Coordinate math matches each kernel's pixel → complex-plane mapping.

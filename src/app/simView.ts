@@ -27,7 +27,9 @@ import {
 import {
   attachFractalCanvasInteractions,
   attachFractalPaletteCycleKeyboard,
+  attachLogisticMandelbrotCanvasInteractions,
   isFractalSlug,
+  type Orbit3DMarkerClientSnapshot,
 } from "./fractalCanvas.ts";
 import { attachPointerImpulse } from "./pointerImpulse.ts";
 import {
@@ -233,6 +235,7 @@ export async function renderSimView(
         controls.setPlayState(renderer.isRunning());
       },
       onReset: () => {
+        if (slug === "logistic-mandelbrot") renderer.resetOrbit3dCamera();
         renderer.reset(controls.getParams());
       },
       onToggleFullscreen: () => {
@@ -263,6 +266,11 @@ export async function renderSimView(
     },
   });
 
+  const orbitMarkerReadout =
+    slug === "logistic-mandelbrot"
+      ? buildOrbitMarkerReadout(layout.sidebar)
+      : undefined;
+
   renderer.setFpsListener((fps) => controls.setFps(fps));
   renderer.setIterationListener((iterations) => controls.setIterations(iterations));
 
@@ -274,6 +282,7 @@ export async function renderSimView(
   let detachFractalInteractions: (() => void) | undefined;
   let detachFractalPaletteKeys: (() => void) | undefined;
   let detachFractalViewKeys: (() => void) | undefined;
+  let detachOrbit3dInteractions: (() => void) | undefined;
   let detachPointerImpulse: (() => void) | undefined;
   if (!fractal && renderer.supportsImpulse()) {
     // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
@@ -384,12 +393,28 @@ export async function renderSimView(
       updateZoomHud(controls.getParams());
     }
   }
+  if (slug === "logistic-mandelbrot") {
+    layout.canvas.classList.add("sim-view__canvas--interactive");
+    detachOrbit3dInteractions = attachLogisticMandelbrotCanvasInteractions({
+      slug,
+      canvas: layout.canvas,
+      getMarker: () => renderer.orbit3dMarker(),
+      moveMarker: (clientX, clientY) =>
+        renderer.moveOrbit3dMarker(clientX, clientY),
+      orbit: (deltaCssX, deltaCssY) =>
+        renderer.orbitOrbit3d(deltaCssX, deltaCssY),
+      dolly: (factor) => renderer.dollyOrbit3d(factor),
+      resetCamera: () => renderer.resetOrbit3dCamera(),
+      onMarkerChange: (marker) => orbitMarkerReadout?.set(marker),
+    });
+  }
 
   return {
     dispose() {
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
       detachFractalViewKeys?.();
+      detachOrbit3dInteractions?.();
       detachPointerImpulse?.();
       renderer.destroy();
     },
@@ -413,6 +438,50 @@ interface FractalHud {
   zoomIn: HTMLButtonElement;
   zoomOut: HTMLButtonElement;
   home: HTMLButtonElement;
+}
+
+interface OrbitMarkerReadout {
+  set(marker: Orbit3DMarkerClientSnapshot): void;
+}
+
+function buildOrbitMarkerReadout(container: HTMLElement): OrbitMarkerReadout {
+  const section = document.createElement("section");
+  section.className = "controls__params";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Orbit marker";
+  section.appendChild(heading);
+
+  const cRow = document.createElement("div");
+  cRow.className = "control control--enum";
+  const cLabel = document.createElement("span");
+  cLabel.className = "control__label";
+  cLabel.textContent = "c";
+  const cValue = document.createElement("output");
+  cValue.className = "control__value";
+  cValue.setAttribute("aria-live", "polite");
+  cRow.append(cLabel, cValue);
+  section.appendChild(cRow);
+
+  const periodRow = document.createElement("div");
+  periodRow.className = "control control--enum";
+  const periodLabel = document.createElement("span");
+  periodLabel.className = "control__label";
+  periodLabel.textContent = "Detected period";
+  const periodValue = document.createElement("output");
+  periodValue.className = "control__value";
+  periodValue.setAttribute("aria-live", "polite");
+  periodRow.append(periodLabel, periodValue);
+  section.appendChild(periodRow);
+  container.appendChild(section);
+
+  return {
+    set(marker) {
+      const sign = marker.im < 0 ? "−" : "+";
+      cValue.value = `${marker.re.toFixed(4)} ${sign} ${Math.abs(marker.im).toFixed(4)}i`;
+      periodValue.value = marker.period > 0 ? String(marker.period) : "none";
+    },
+  };
 }
 
 function formatZoom(zoom: number): string {

@@ -10,6 +10,7 @@ import {
   type RenderMode,
   type RendererBackend,
   type RendererBackendFrame,
+  type Orbit3DMarkerSnapshot,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
 import { Orbit3DPointCloud } from "./orbit3d.ts";
@@ -1364,6 +1365,48 @@ export class WebGLRendererBackend implements RendererBackend {
     return this.kuramoto?.applyImpulse(x, y, radius, strength) ?? false;
   }
 
+  orbit3dMarker(): Orbit3DMarkerSnapshot | null {
+    const marker = this.orbit3d?.markerReadout;
+    const projected = this.orbit3d?.projectMarker(this.displayWidth, this.displayHeight);
+    if (!marker || !projected) return null;
+    return {
+      ...marker,
+      viewportX: projected.x,
+      viewportY: projected.y,
+    };
+  }
+
+  moveOrbit3dMarker(
+    viewportX: number,
+    viewportY: number,
+  ): Orbit3DMarkerSnapshot | null {
+    const marker = this.orbit3d?.setMarkerFromViewport(
+      viewportX,
+      viewportY,
+      this.displayWidth,
+      this.displayHeight,
+    );
+    const projected = this.orbit3d?.projectMarker(this.displayWidth, this.displayHeight);
+    if (!marker || !projected) return null;
+    return {
+      ...marker,
+      viewportX: projected.x,
+      viewportY: projected.y,
+    };
+  }
+
+  orbit3dOrbit(deltaAzimuth: number, deltaElevation: number): void {
+    this.orbit3d?.orbit(deltaAzimuth, deltaElevation);
+  }
+
+  orbit3dDolly(factor: number): void {
+    this.orbit3d?.dolly(factor);
+  }
+
+  resetOrbit3dCamera(): void {
+    this.orbit3d?.resetCamera();
+  }
+
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
     if (this.supportsOrbit3d(mode, kernel)) {
@@ -1410,12 +1453,16 @@ export class WebGLRendererBackend implements RendererBackend {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const stats = this.orbit3d?.stats;
     if (!stats || !this.orbit3d?.draw(this.displayWidth, this.displayHeight)) return;
+    const marker = this.orbit3d.markerReadout;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
     canvas.dataset.simulationRenderer = "gpu-orbit3d";
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
     canvas.dataset.orbit3dPointBudget = String(stats.pointBudget);
     canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
+    canvas.dataset.orbit3dMarkerRe = marker.re.toFixed(6);
+    canvas.dataset.orbit3dMarkerIm = marker.im.toFixed(6);
+    canvas.dataset.orbit3dMarkerPeriod = String(marker.period);
   }
 
   private drawGpuKuramoto(frame: RendererBackendFrame): void {

@@ -48,6 +48,37 @@ void main() {
 }
 `;
 
+const MARKER_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec3 a_position;
+uniform mat4 u_viewProjection;
+uniform float u_pointSize;
+
+void main() {
+  vec3 world = vec3(
+    (a_position.x + 0.5) * 0.78,
+    a_position.z * 0.56,
+    a_position.y * 0.85
+  );
+  gl_Position = u_viewProjection * vec4(world, 1.0);
+  gl_PointSize = u_pointSize;
+}
+`;
+
+const MARKER_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform vec3 u_colour;
+out vec4 outColor;
+
+void main() {
+  vec2 offset = gl_PointCoord - vec2(0.5);
+  float coverage = 1.0 - smoothstep(0.24, 0.5, length(offset));
+  outColor = vec4(u_colour * coverage * 0.42, coverage);
+}
+`;
+
 const TONEMAP_VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 out vec2 v_uv;
@@ -89,6 +120,11 @@ const POINT_BUDGETS = {
 
 const SURVIVING_CELL_ESTIMATE = 0.22;
 const BUILD_SLICE_MS = 8;
+const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
+const MARKER_PLANE_ORBIT_VALUE = -2.08;
+const DEFAULT_CAMERA_EYE = [2.9, 2.15, 3.6] as const;
+const DEFAULT_MARKER_RE = -1;
+const DEFAULT_MARKER_IM = 0;
 
 type OrbitParams = Record<string, number | boolean | string>;
 
@@ -98,18 +134,42 @@ export interface Orbit3DStats {
   building: boolean;
 }
 
+export interface Orbit3DMarkerReadout {
+  re: number;
+  im: number;
+  period: number;
+}
+
+export interface Orbit3DProjectedPoint {
+  x: number;
+  y: number;
+}
+
+interface OrbitCameraState {
+  azimuth: number;
+  elevation: number;
+  distance: number;
+  target: [number, number, number];
+}
+
 export class Orbit3DPointCloud {
   readonly available: boolean;
 
   private readonly gl: WebGL2RenderingContext;
   private readonly pointProgram: WebGLProgram;
+  private readonly markerProgram: WebGLProgram;
   private readonly toneMapProgram: WebGLProgram;
   private readonly pointVao: WebGLVertexArrayObject;
+  private readonly markerVao: WebGLVertexArrayObject;
   private readonly toneMapVao: WebGLVertexArrayObject;
   private readonly pointBuffer: WebGLBuffer;
+  private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
   private readonly pointSizeUniform: WebGLUniformLocation;
+  private readonly markerViewProjectionUniform: WebGLUniformLocation;
+  private readonly markerPointSizeUniform: WebGLUniformLocation;
+  private readonly markerColourUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -120,18 +180,28 @@ export class Orbit3DPointCloud {
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
+  private camera = defaultCameraState();
+  private marker: Orbit3DMarkerReadout = {
+    re: DEFAULT_MARKER_RE,
+    im: DEFAULT_MARKER_IM,
+    period: 0,
+  };
+  private markerOrbitPointCount = 0;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.pointProgram = createProgram(gl, POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER);
+    this.markerProgram = createProgram(gl, MARKER_VERTEX_SHADER, MARKER_FRAGMENT_SHADER);
     this.toneMapProgram = createProgram(
       gl,
       TONEMAP_VERTEX_SHADER,
       TONEMAP_FRAGMENT_SHADER,
     );
     this.pointBuffer = requireResource(gl.createBuffer(), "orbit3d point buffer");
+    this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
+    this.markerVao = requireResource(gl.createVertexArray(), "orbit3d marker VAO");
     this.toneMapVao = requireResource(gl.createVertexArray(), "orbit3d tone-map VAO");
 
     gl.bindVertexArray(this.pointVao);
@@ -139,6 +209,12 @@ export class Orbit3DPointCloud {
     const pointLocation = gl.getAttribLocation(this.pointProgram, "a_position");
     gl.enableVertexAttribArray(pointLocation);
     gl.vertexAttribPointer(pointLocation, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindVertexArray(this.markerVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
+    const markerLocation = gl.getAttribLocation(this.markerProgram, "a_position");
+    gl.enableVertexAttribArray(markerLocation);
+    gl.vertexAttribPointer(markerLocation, 3, gl.FLOAT, false, 0, 0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
     gl.bufferData(
@@ -160,12 +236,26 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_pointSize"),
       "orbit3d point-size uniform",
     );
+    this.markerViewProjectionUniform = requireResource(
+      gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
+      "orbit3d marker view-projection uniform",
+    );
+    this.markerPointSizeUniform = requireResource(
+      gl.getUniformLocation(this.markerProgram, "u_pointSize"),
+      "orbit3d marker point-size uniform",
+    );
+    this.markerColourUniform = requireResource(
+      gl.getUniformLocation(this.markerProgram, "u_colour"),
+      "orbit3d marker colour uniform",
+    );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
       "orbit3d exposure uniform",
     );
     gl.useProgram(this.toneMapProgram);
     gl.uniform1i(gl.getUniformLocation(this.toneMapProgram, "u_accumulation"), 0);
+
+    this.updateMarker(DEFAULT_MARKER_RE, DEFAULT_MARKER_IM);
 
     this.available = this.createAccumulationTarget(1, 1);
   }
@@ -176,6 +266,74 @@ export class Orbit3DPointCloud {
       pointBudget: this.pointBudget,
       building: this.building,
     };
+  }
+
+  get markerReadout(): Orbit3DMarkerReadout {
+    return { ...this.marker };
+  }
+
+  orbit(deltaAzimuth: number, deltaElevation: number): void {
+    this.camera.azimuth += deltaAzimuth;
+    this.camera.elevation = Math.min(
+      Math.PI / 2 - 0.08,
+      Math.max(0.08, this.camera.elevation + deltaElevation),
+    );
+  }
+
+  dolly(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) return;
+    this.camera.distance = Math.min(12, Math.max(1.6, this.camera.distance * factor));
+  }
+
+  resetCamera(): void {
+    this.camera = defaultCameraState();
+  }
+
+  projectMarker(width: number, height: number): Orbit3DProjectedPoint | null {
+    const aspect = Math.max(0.25, width / Math.max(1, height));
+    const matrix = cameraMatrix(aspect, this.camera);
+    const world = markerWorldPosition(this.marker.re, this.marker.im);
+    const clip = transformPoint(matrix, world);
+    if (clip[3] <= 0) return null;
+    return {
+      x: clip[0] / clip[3] * 0.5 + 0.5,
+      y: 0.5 - clip[1] / clip[3] * 0.5,
+    };
+  }
+
+  setMarkerFromViewport(
+    viewportX: number,
+    viewportY: number,
+    width: number,
+    height: number,
+  ): Orbit3DMarkerReadout | null {
+    const aspect = Math.max(0.25, width / Math.max(1, height));
+    const eye = cameraEye(this.camera);
+    const forward = normalise3([
+      this.camera.target[0] - eye[0],
+      this.camera.target[1] - eye[1],
+      this.camera.target[2] - eye[2],
+    ]);
+    const right = normalise3(cross3(forward, [0, 1, 0]));
+    const cameraUp = normalise3(cross3(right, forward));
+    const tangent = Math.tan(CAMERA_FIELD_OF_VIEW / 2);
+    const ndcX = viewportX * 2 - 1;
+    const ndcY = 1 - viewportY * 2;
+    const ray = normalise3([
+      forward[0] + right[0] * ndcX * tangent * aspect + cameraUp[0] * ndcY * tangent,
+      forward[1] + right[1] * ndcX * tangent * aspect + cameraUp[1] * ndcY * tangent,
+      forward[2] + right[2] * ndcX * tangent * aspect + cameraUp[2] * ndcY * tangent,
+    ]);
+    const planeY = MARKER_PLANE_ORBIT_VALUE * 0.56;
+    if (Math.abs(ray[1]) < 1e-6) return null;
+    const distance = (planeY - eye[1]) / ray[1];
+    if (distance <= 0) return null;
+    const worldX = eye[0] + ray[0] * distance;
+    const worldZ = eye[2] + ray[2] * distance;
+    const re = Math.min(RE_MAX, Math.max(RE_MIN, worldX / 0.78 - 0.5));
+    const im = Math.min(IM_MAX, Math.max(IM_MIN, worldZ / 0.85));
+    this.updateMarker(re, im);
+    return this.markerReadout;
   }
 
   rebuild(width: number, height: number, params: OrbitParams): void {
@@ -302,14 +460,27 @@ export class Orbit3DPointCloud {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(this.pointProgram);
+    const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
     gl.uniformMatrix4fv(
       this.viewProjectionUniform,
       false,
-      fixedCameraMatrix(this.targetWidth / this.targetHeight),
+      viewProjection,
     );
     gl.uniform1f(this.pointSizeUniform, Math.min(2, Math.max(1, width / 900)));
     gl.bindVertexArray(this.pointVao);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
+
+    gl.useProgram(this.markerProgram);
+    gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
+    gl.bindVertexArray(this.markerVao);
+    if (this.markerOrbitPointCount > 0) {
+      gl.uniform1f(this.markerPointSizeUniform, Math.min(8, Math.max(5, width / 180)));
+      gl.uniform3f(this.markerColourUniform, 0.12, 0.95, 1);
+      gl.drawArrays(gl.POINTS, 0, this.markerOrbitPointCount);
+    }
+    gl.uniform1f(this.markerPointSizeUniform, Math.min(14, Math.max(9, width / 100)));
+    gl.uniform3f(this.markerColourUniform, 1, 0.72, 0.12);
+    gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
     gl.disable(gl.BLEND);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -331,10 +502,13 @@ export class Orbit3DPointCloud {
     this.releaseAccumulationTarget();
     const gl = this.gl;
     gl.deleteVertexArray(this.pointVao);
+    gl.deleteVertexArray(this.markerVao);
     gl.deleteVertexArray(this.toneMapVao);
     gl.deleteBuffer(this.pointBuffer);
+    gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);
+    gl.deleteProgram(this.markerProgram);
     gl.deleteProgram(this.toneMapProgram);
   }
 
@@ -403,6 +577,35 @@ export class Orbit3DPointCloud {
     this.targetWidth = 0;
     this.targetHeight = 0;
   }
+
+  private updateMarker(re: number, im: number): void {
+    const samples = new Float32Array(DEFAULT_SAMPLE_COUNT);
+    const detected = sampleAttractorCell(
+      re,
+      im,
+      DEFAULT_WARMUP_ITERATIONS,
+      DEFAULT_SAMPLE_COUNT,
+      samples,
+      0,
+    );
+    const period = detected === ESCAPED ? 0 : detected;
+    const highlighted = Math.min(period, DEFAULT_SAMPLE_COUNT);
+    const positions = new Float32Array((highlighted + 1) * 3);
+    for (let index = 0; index < highlighted; index += 1) {
+      const offset = index * 3;
+      positions[offset] = re;
+      positions[offset + 1] = im;
+      positions[offset + 2] = samples[index];
+    }
+    const markerOffset = highlighted * 3;
+    positions[markerOffset] = re;
+    positions[markerOffset + 1] = im;
+    positions[markerOffset + 2] = MARKER_PLANE_ORBIT_VALUE;
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.markerBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, positions, this.gl.DYNAMIC_DRAW);
+    this.markerOrbitPointCount = highlighted;
+    this.marker = { re, im, period };
+  }
 }
 
 function pointBudgetFor(cellCount: number): number {
@@ -423,10 +626,51 @@ function boundedInteger(
     : fallback;
 }
 
-function fixedCameraMatrix(aspect: number): Float32Array {
-  const projection = perspectiveMatrix(Math.PI / 4.8, Math.max(0.25, aspect), 0.1, 20);
-  const view = lookAtMatrix([2.9, 2.15, 3.6], [0, 0, 0], [0, 1, 0]);
+function defaultCameraState(): OrbitCameraState {
+  const distance = Math.hypot(...DEFAULT_CAMERA_EYE);
+  return {
+    azimuth: Math.atan2(DEFAULT_CAMERA_EYE[0], DEFAULT_CAMERA_EYE[2]),
+    elevation: Math.asin(DEFAULT_CAMERA_EYE[1] / distance),
+    distance,
+    target: [0, 0, 0],
+  };
+}
+
+function cameraEye(camera: OrbitCameraState): [number, number, number] {
+  const horizontal = Math.cos(camera.elevation) * camera.distance;
+  return [
+    camera.target[0] + Math.sin(camera.azimuth) * horizontal,
+    camera.target[1] + Math.sin(camera.elevation) * camera.distance,
+    camera.target[2] + Math.cos(camera.azimuth) * horizontal,
+  ];
+}
+
+function cameraMatrix(aspect: number, camera: OrbitCameraState): Float32Array {
+  const projection = perspectiveMatrix(
+    CAMERA_FIELD_OF_VIEW,
+    Math.max(0.25, aspect),
+    0.1,
+    20,
+  );
+  const view = lookAtMatrix(cameraEye(camera), camera.target, [0, 1, 0]);
   return multiplyMatrices(projection, view);
+}
+
+function markerWorldPosition(re: number, im: number): [number, number, number] {
+  return [(re + 0.5) * 0.78, MARKER_PLANE_ORBIT_VALUE * 0.56, im * 0.85];
+}
+
+function transformPoint(
+  matrix: Float32Array,
+  point: readonly [number, number, number],
+): [number, number, number, number] {
+  const [x, y, z] = point;
+  return [
+    matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12],
+    matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13],
+    matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14],
+    matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15],
+  ];
 }
 
 function perspectiveMatrix(

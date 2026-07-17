@@ -34,6 +34,14 @@ export interface RendererBackendFrame {
   speedScale: number;
 }
 
+export interface Orbit3DMarkerSnapshot {
+  re: number;
+  im: number;
+  period: number;
+  viewportX: number;
+  viewportY: number;
+}
+
 export interface RendererBackend {
   readonly kind: "webgl2" | "canvas2d";
   readonly maxTextureSize?: number;
@@ -52,6 +60,14 @@ export interface RendererBackend {
     radius: number,
     strength: number,
   ): boolean;
+  orbit3dMarker?(): Orbit3DMarkerSnapshot | null;
+  moveOrbit3dMarker?(
+    viewportX: number,
+    viewportY: number,
+  ): Orbit3DMarkerSnapshot | null;
+  orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
+  orbit3dDolly?(factor: number): void;
+  resetOrbit3dCamera?(): void;
   /**
    * Resize the on-screen backing store (device pixels). Cheap: it does not
    * reallocate simulation buffers. The grid is letterboxed into this area.

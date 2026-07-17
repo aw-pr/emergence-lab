@@ -3,6 +3,7 @@ import { DEFAULT_COLOUR_OPTIONS, type ColourMapOptions } from "./colormap.ts";
 import {
   containRect,
   type DisplayOptions,
+  type Orbit3DMarkerSnapshot,
   type RenderMode,
   type RendererBackend,
 } from "./rendererBackend.ts";
@@ -52,6 +53,14 @@ export interface RendererOptions {
 const CYCLE_HOLD_SECONDS = 1.5;
 
 export type { DisplayOptions } from "./rendererBackend.ts";
+
+export interface Orbit3DMarkerClientSnapshot {
+  re: number;
+  im: number;
+  period: number;
+  clientX: number;
+  clientY: number;
+}
 
 /** A non-zero 32-bit seed handed to kernel.init for run-to-run variety. */
 function nextSeed(): number {
@@ -275,6 +284,41 @@ export class Renderer {
     return true;
   }
 
+  orbit3dMarker(): Orbit3DMarkerClientSnapshot | null {
+    return this.markerSnapshotToClient(this.backend.orbit3dMarker?.() ?? null);
+  }
+
+  moveOrbit3dMarker(
+    clientX: number,
+    clientY: number,
+  ): Orbit3DMarkerClientSnapshot | null {
+    const viewport = this.pointerToViewport(clientX, clientY);
+    if (!viewport) return null;
+    const marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
+    if (marker) this.draw();
+    return this.markerSnapshotToClient(marker);
+  }
+
+  orbitOrbit3d(deltaCssX: number, deltaCssY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    this.backend.orbit3dOrbit?.(
+      -deltaCssX / rect.width * Math.PI * 2,
+      deltaCssY / rect.height * Math.PI,
+    );
+    this.draw();
+  }
+
+  dollyOrbit3d(factor: number): void {
+    this.backend.orbit3dDolly?.(factor);
+    this.draw();
+  }
+
+  resetOrbit3dCamera(): void {
+    this.backend.resetOrbit3dCamera?.();
+    this.draw();
+  }
+
   /**
    * CSS pixel -> grid cell through the letterbox contain-rect. The WebGL backend
    * samples the state texture with row 0 at the bottom, so its vertical axis is
@@ -305,6 +349,32 @@ export class Renderer {
     const yTop = v * this.gridHeight;
     const y = this.backend.kind === "webgl2" ? this.gridHeight - yTop : yTop;
     return { x, y };
+  }
+
+  private pointerToViewport(
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } | null {
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return { x, y };
+  }
+
+  private markerSnapshotToClient(
+    marker: Orbit3DMarkerSnapshot | null,
+  ): Orbit3DMarkerClientSnapshot | null {
+    if (!marker) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      re: marker.re,
+      im: marker.im,
+      period: marker.period,
+      clientX: rect.left + marker.viewportX * rect.width,
+      clientY: rect.top + marker.viewportY * rect.height,
+    };
   }
 
   /** Pointer brush radius: ~3% of the shorter grid axis, clamped to [4, 64] cells. */
