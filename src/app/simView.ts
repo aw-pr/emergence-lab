@@ -656,7 +656,11 @@ function speedProfileFor(slug: string): SpeedProfile {
     case "brians-brain":
       return { initial: 1, control: careful };
     case "lorenz-attractor":
-      return { initial: 1.5, control: careful };
+      // All five attractors share this slug, so they all open at 1x. The orbit
+      // speed people actually feel is the kernel's stepsPerFrame (integration
+      // substeps per frame); this slider multiplies on top of it, and starting
+      // it anywhere but 1 makes "reset to defaults" look like a speed change.
+      return { initial: 1, control: careful };
     case "boids":
       return { initial: 5, control: swarm };
     case "particle-life":
@@ -678,11 +682,14 @@ function defaultParamOverridesFor(slug: string): SimParams {
       // the rolling fronts readable (2+ reads as flicker).
       return { stepsPerFrame: 1 };
     case "lorenz-attractor":
-      // Fade is per frame, so the trail's half-life is ln(0.5)/ln(fade): 0.992
-      // was ~86 frames, under a second and a half, which erased the far lobe
-      // before the orbit returned to it. This holds roughly 8 seconds, long
-      // enough to see the whole attractor at once rather than a short comet.
-      return { stepsPerFrame: 6, fade: 0.9985, cycleSpeed: 0.05 };
+      // The speed slider scales how many times step() runs per frame, and
+      // step() applies fade and advances the colour phase once per call, so the
+      // slider stretches the trail and the colour cycle as well as the orbit.
+      // Only stepsPerFrame (integration substeps) belongs to the orbit alone.
+      // Values are therefore quoted at the 1x default: 9 substeps/frame, a
+      // trail half-life of ln(0.5)/ln(fade) ~= 5s (long enough that the far
+      // lobe survives until the orbit returns to it), and a ~13s colour lap.
+      return { stepsPerFrame: 9, fade: 0.9978, cycleSpeed: 0.08 };
     case "diffusion-limited-aggregation":
       return { walkersPerStep: 96, maxWalkSteps: 256 };
     case "elementary-cellular-automata":
