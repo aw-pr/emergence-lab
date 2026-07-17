@@ -6,6 +6,7 @@ import {
   IM_MIN,
   RE_MAX,
   RE_MIN,
+  SAMPLE_CLIP,
   cellCoordinate,
   sampleAttractorCell,
 } from "../sims/logistic-mandelbrot/model.ts";
@@ -161,10 +162,17 @@ const POINT_BUDGETS = {
 const SURVIVING_CELL_ESTIMATE = 0.22;
 const BUILD_SLICE_MS = 8;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
+const CAMERA_NEAR_PLANE = 0.1;
+const CAMERA_FAR_PLANE = 20;
+const CAMERA_MIN_DISTANCE = 2.1;
+const CAMERA_MAX_DISTANCE = 12;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, 3.6] as const;
 const DEFAULT_MARKER_RE = -1;
 const DEFAULT_MARKER_IM = 0;
+const WORLD_RE_SCALE = 0.78;
+const WORLD_ORBIT_SCALE = 0.56;
+const WORLD_IM_SCALE = 0.85;
 
 type OrbitParams = Record<string, number | boolean | string>;
 
@@ -173,6 +181,31 @@ export const GROUND_DOMAIN = {
   centre: [(RE_MIN + RE_MAX) / 2, (IM_MIN + IM_MAX) / 2] as const,
   span: [RE_MAX - RE_MIN, IM_MAX - IM_MIN] as const,
 };
+
+const ORBIT3D_BOUNDING_RADIUS = Math.hypot(
+  Math.max(
+    Math.abs((RE_MIN - GROUND_DOMAIN.centre[0]) * WORLD_RE_SCALE),
+    Math.abs((RE_MAX - GROUND_DOMAIN.centre[0]) * WORLD_RE_SCALE),
+  ),
+  Math.max(SAMPLE_CLIP, Math.abs(MARKER_PLANE_ORBIT_VALUE)) * WORLD_ORBIT_SCALE,
+  Math.max(Math.abs(IM_MIN), Math.abs(IM_MAX)) * WORLD_IM_SCALE,
+);
+
+/** Headless regression evidence for the orbit3d geometry and depth range. */
+export const ORBIT3D_GEOMETRY_GUARD = {
+  samplerDomain: [RE_MIN, RE_MAX, IM_MIN, IM_MAX] as const,
+  planeDomain: [
+    GROUND_DOMAIN.centre[0] - GROUND_DOMAIN.span[0] / 2,
+    GROUND_DOMAIN.centre[0] + GROUND_DOMAIN.span[0] / 2,
+    GROUND_DOMAIN.centre[1] - GROUND_DOMAIN.span[1] / 2,
+    GROUND_DOMAIN.centre[1] + GROUND_DOMAIN.span[1] / 2,
+  ] as const,
+  boundingRadius: ORBIT3D_BOUNDING_RADIUS,
+  cameraDistance: [CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE] as const,
+  clipPlanes: [CAMERA_NEAR_PLANE, CAMERA_FAR_PLANE] as const,
+};
+
+assertOrbit3DGeometry();
 
 export interface Orbit3DGroundPlane {
   texture: WebGLTexture;
@@ -387,7 +420,10 @@ export class Orbit3DPointCloud {
 
   dolly(factor: number): void {
     if (!Number.isFinite(factor) || factor <= 0) return;
-    this.camera.distance = Math.min(12, Math.max(1.6, this.camera.distance * factor));
+    this.camera.distance = Math.min(
+      CAMERA_MAX_DISTANCE,
+      Math.max(CAMERA_MIN_DISTANCE, this.camera.distance * factor),
+    );
   }
 
   resetCamera(): void {
@@ -500,7 +536,7 @@ export class Orbit3DPointCloud {
     const positions = new Float32Array(pointBudget * 3);
     const orbitSamples = new Float32Array(sampleCount);
     let cell = 0;
-    let survivingCells = 0;
+    let survivorsSeen = 0;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -515,7 +551,6 @@ export class Orbit3DPointCloud {
       const stopAt = performance.now() + budgetMs;
       while (
         cell < sampleWidth * sampleHeight &&
-        survivingCells < maxSurvivingCells &&
         performance.now() < stopAt
       ) {
         const x = cell % sampleWidth;
@@ -534,21 +569,25 @@ export class Orbit3DPointCloud {
           0,
         );
         if (result !== ESCAPED) {
-          for (let sample = 0; sample < sampleCount; sample += 1) {
-            const offset = (sample * maxSurvivingCells + survivingCells) * 3;
-            positions[offset] = cRe;
-            positions[offset + 1] = cIm;
-            positions[offset + 2] = orbitSamples[sample];
+          const slot = reservoirSlot(survivorsSeen, maxSurvivingCells);
+          survivorsSeen += 1;
+          if (slot >= 0) {
+            for (let sample = 0; sample < sampleCount; sample += 1) {
+              const offset = (sample * maxSurvivingCells + slot) * 3;
+              positions[offset] = cRe;
+              positions[offset + 1] = cIm;
+              positions[offset + 2] = orbitSamples[sample];
+            }
           }
-          survivingCells += 1;
         }
         cell += 1;
       }
 
-      if (cell < sampleWidth * sampleHeight && survivingCells < maxSurvivingCells) {
+      if (cell < sampleWidth * sampleHeight) {
         this.buildTimer = window.setTimeout(() => buildSlice(BUILD_SLICE_MS), 0);
         return;
       }
+      const survivingCells = Math.min(survivorsSeen, maxSurvivingCells);
       for (let sample = 1; sample < sampleCount; sample += 1) {
         const source = sample * maxSurvivingCells * 3;
         const target = sample * survivingCells * 3;
@@ -810,6 +849,30 @@ function boundedNumber(
     : fallback;
 }
 
+/** Deterministic reservoir sampling keeps a full-domain point budget. */
+function reservoirSlot(itemIndex: number, capacity: number): number {
+  if (itemIndex < capacity) return itemIndex;
+  let hash = (itemIndex + 0x9e3779b9) >>> 0;
+  hash = Math.imul(hash ^ (hash >>> 16), 0x21f0aaad);
+  hash = Math.imul(hash ^ (hash >>> 15), 0x735a2d97);
+  hash = (hash ^ (hash >>> 15)) >>> 0;
+  const candidate = Math.floor(hash / 0x1_0000_0000 * (itemIndex + 1));
+  return candidate < capacity ? candidate : -1;
+}
+
+function assertOrbit3DGeometry(): void {
+  const guard = ORBIT3D_GEOMETRY_GUARD;
+  if (guard.planeDomain.some((value, index) => value !== guard.samplerDomain[index])) {
+    throw new Error("orbit3d ground plane must match the sampler c-domain");
+  }
+  if (
+    CAMERA_MIN_DISTANCE - guard.boundingRadius <= CAMERA_NEAR_PLANE ||
+    CAMERA_MAX_DISTANCE + guard.boundingRadius >= CAMERA_FAR_PLANE
+  ) {
+    throw new Error("orbit3d camera limits must fit inside the depth clip planes");
+  }
+}
+
 function defaultCameraState(): OrbitCameraState {
   const distance = Math.hypot(...DEFAULT_CAMERA_EYE);
   return {
@@ -843,15 +906,19 @@ function cameraMatrix(aspect: number, camera: OrbitCameraState): Float32Array {
   const projection = perspectiveMatrix(
     CAMERA_FIELD_OF_VIEW,
     Math.max(0.25, aspect),
-    0.1,
-    20,
+    CAMERA_NEAR_PLANE,
+    CAMERA_FAR_PLANE,
   );
   const view = lookAtMatrix(cameraEye(camera), camera.target, [0, 1, 0]);
   return multiplyMatrices(projection, view);
 }
 
 function markerWorldPosition(re: number, im: number): [number, number, number] {
-  return [(re + 0.5) * 0.78, MARKER_PLANE_ORBIT_VALUE * 0.56, im * 0.85];
+  return [
+    (re - GROUND_DOMAIN.centre[0]) * WORLD_RE_SCALE,
+    MARKER_PLANE_ORBIT_VALUE * WORLD_ORBIT_SCALE,
+    im * WORLD_IM_SCALE,
+  ];
 }
 
 function transformPoint(
