@@ -90,7 +90,10 @@ interface AttractorSpec {
   depthRange: readonly [number, number];
 }
 
-const SPECS: Record<Attractor, AttractorSpec> = {
+/** Exported for the tests, which integrate these directly: whether an orbit is
+ *  chaotic is a property of the equations and their constants, and cannot be
+ *  read back out of the rendered density field. */
+export const SPECS: Record<Attractor, AttractorSpec> = {
   // Classic butterfly. Projects x -> screen X, z -> screen Y (depth axis: y).
   lorenz: {
     dt: 0.005,
@@ -128,24 +131,35 @@ const SPECS: Record<Attractor, AttractorSpec> = {
     yRange: [-13, 10],
     depthRange: [0, 23],
   },
-  // Thomas cyclically symmetric sin-flow (b=0.208186): a slow, tightly wound
+  // Thomas cyclically symmetric sin-flow (b=0.1998): a slow, tightly wound
   // coil — larger dt and warmup than the faster attractors. Depth axis: z.
+  //
+  // b=0.208186 is the critical value *at which* this system stops being
+  // chaotic, not a value to run it at: it is quoted as the bound in "chaotic
+  // for b < 0.208186", and sitting on the bound gave a limit cycle (measured
+  // lambda +0.010, against +0.037 here). b does not simply divide into chaotic
+  // and periodic either — 0.19 and 0.12 are periodic windows while 0.1998 and
+  // 0.1 are chaotic — so pick a value that is measured, not interpolated.
+  // 0.1998 is the canonical one and its lambda matches the ~0.0349 in the
+  // literature, which is the check that this integration is faithful.
   thomas: {
     dt: 0.05,
     warmup: 1500,
     initialTrace: 1800,
     start: [0.1, 0, 0],
     derivative: (x, y, z) => ({
-      dx: Math.sin(y) - 0.208186 * x,
-      dy: Math.sin(z) - 0.208186 * y,
-      dz: Math.sin(x) - 0.208186 * z,
+      dx: Math.sin(y) - 0.1998 * x,
+      dy: Math.sin(z) - 0.1998 * y,
+      dz: Math.sin(x) - 0.1998 * z,
     }),
     projX: (x) => x,
     projY: (_x, y) => y,
     depth: (_x, _y, z) => z,
-    xRange: [-1.6, 4.3],
-    yRange: [-1.6, 4.3],
-    depthRange: [-1.4, 4.1],
+    // Re-measured at b=0.1998: the chaotic orbit spans a slightly smaller box
+    // than the cycle did, so the old ranges left it short of the frame.
+    xRange: [-1.4, 4.0],
+    yRange: [-1.4, 4.0],
+    depthRange: [-1.4, 4.0],
   },
   // Aizawa (a=0.95,b=0.7,c=0.6,d=3.5,e=0.25,f=0.1): a spindle/onion with a
   // spike. Projects the x-z profile so the spike shows; depth axis: y.
@@ -179,15 +193,25 @@ const SPECS: Record<Attractor, AttractorSpec> = {
     yRange: [-0.6, 2.1],
     depthRange: [-1.6, 1.6],
   },
-  // Halvorsen (a=1.89): cyclically symmetric three-armed spiral bloom.
+  // Halvorsen (a=1.4): cyclically symmetric three-armed spiral bloom.
   // Projects x -> screen X, y -> screen Y; depth axis: z.
+  //
+  // a=1.89 is the value usually quoted for this system, and it is not chaotic:
+  // it settles onto a limit cycle that retraces one closed loop forever. That
+  // is a property of the system, not of the integrator, and the warmup here
+  // makes it plain by landing on the cycle before the first frame. Measured
+  // largest Lyapunov exponent (Benettin, RK4): -0.0001 at a=1.89, identical
+  // from dt=0.008 down to dt=0.0005, against +0.93 for this file's Lorenz.
+  // Chaos lives in roughly a in [1.24, 1.6); below ~1.2 the orbit escapes to
+  // infinity. a=1.4 gives lambda ~ +0.70, clear of both edges, and the orbit
+  // spans the same extent, so the screen ranges below still frame it.
   halvorsen: {
     dt: 0.008,
     warmup: 1500,
     initialTrace: 3500,
     start: [-5, 0, 0],
     derivative: (x, y, z) => {
-      const a = 1.89;
+      const a = 1.4;
       return {
         dx: -a * x - 4 * y - 4 * z - y * y,
         dy: -a * y - 4 * z - 4 * x - z * z,
