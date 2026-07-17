@@ -182,8 +182,9 @@ export function defaultColourOptionsFor(
     case "abelian-sandpile":
       return { ...base, preset: "sand", gamma: 0.9, contrast: 1.1 };
     case "belousov-zhabotinsky":
-    case "gray-scott":
       return { ...base, preset: "chemical", contrast: 1.2 };
+    case "gray-scott":
+      return { ...base, preset: "ice", contrast: 1.2 };
     case "boids":
       return { ...base, preset: "twilight", contrast: 1.2 };
     case "brians-brain":
