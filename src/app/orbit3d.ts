@@ -176,7 +176,10 @@ export class Orbit3DPointCloud {
   private targetWidth = 0;
   private targetHeight = 0;
   private pointCount = 0;
+  private fullPointCount = 0;
   private pointBudget = 0;
+  private sampleCount = DEFAULT_SAMPLE_COUNT;
+  private visibleIterations = DEFAULT_SAMPLE_COUNT;
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
@@ -272,6 +275,10 @@ export class Orbit3DPointCloud {
     return { ...this.marker };
   }
 
+  get ready(): boolean {
+    return !this.building && this.fullPointCount > 0;
+  }
+
   orbit(deltaAzimuth: number, deltaElevation: number): void {
     this.camera.azimuth += deltaAzimuth;
     this.camera.elevation = Math.min(
@@ -336,6 +343,19 @@ export class Orbit3DPointCloud {
     return this.markerReadout;
   }
 
+  setMarker(re: number, im: number): Orbit3DMarkerReadout {
+    this.updateMarker(
+      Math.min(RE_MAX, Math.max(RE_MIN, re)),
+      Math.min(IM_MAX, Math.max(IM_MIN, im)),
+    );
+    return this.markerReadout;
+  }
+
+  setPlottedIterations(value: number): void {
+    this.visibleIterations = boundedInteger(value, 1, this.sampleCount, 1);
+    this.refreshPointCount();
+  }
+
   rebuild(width: number, height: number, params: OrbitParams): void {
     this.cancelBuild();
     const generation = this.buildGeneration;
@@ -358,14 +378,19 @@ export class Orbit3DPointCloud {
       DEFAULT_WARMUP_ITERATIONS,
     );
     const realSliceOnly = params.realSliceOnly === true;
-    const pointBudget = pointBudgetFor(inputWidth * inputHeight);
+    const density = boundedNumber(params.pointDensity, 0.25, 1, 1);
+    const pointBudget = Math.max(
+      sampleCount,
+      Math.floor(pointBudgetFor(inputWidth * inputHeight) * density),
+    );
+    const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
     const desiredCells = Math.ceil(
-      pointBudget / (plottedIterations * SURVIVING_CELL_ESTIMATE),
+      pointBudget / (sampleCount * SURVIVING_CELL_ESTIMATE),
     );
     const candidateCells = Math.min(inputWidth * inputHeight, desiredCells);
     const aspect = inputWidth / inputHeight;
     const sampleWidth = realSliceOnly
-      ? candidateCells
+      ? maxSurvivingCells
       : Math.max(1, Math.min(inputWidth, Math.round(Math.sqrt(candidateCells * aspect))));
     const sampleHeight = realSliceOnly
       ? 1
@@ -373,22 +398,22 @@ export class Orbit3DPointCloud {
     const positions = new Float32Array(pointBudget * 3);
     const orbitSamples = new Float32Array(sampleCount);
     let cell = 0;
-    let points = 0;
-    let uploadedPoints = 0;
+    let survivingCells = 0;
 
     this.pointCount = 0;
+    this.fullPointCount = 0;
     this.pointBudget = pointBudget;
+    this.sampleCount = sampleCount;
+    this.visibleIterations = plottedIterations;
     this.building = true;
     const gl = this.gl;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions.byteLength, gl.DYNAMIC_DRAW);
 
     const buildSlice = (): void => {
       if (generation !== this.buildGeneration) return;
       const stopAt = performance.now() + BUILD_SLICE_MS;
       while (
         cell < sampleWidth * sampleHeight &&
-        points < pointBudget &&
+        survivingCells < maxSurvivingCells &&
         performance.now() < stopAt
       ) {
         const x = cell % sampleWidth;
@@ -407,33 +432,34 @@ export class Orbit3DPointCloud {
           0,
         );
         if (result !== ESCAPED) {
-          const count = Math.min(plottedIterations, pointBudget - points);
-          for (let sample = 0; sample < count; sample += 1) {
-            const offset = (points + sample) * 3;
+          for (let sample = 0; sample < sampleCount; sample += 1) {
+            const offset = (sample * maxSurvivingCells + survivingCells) * 3;
             positions[offset] = cRe;
             positions[offset + 1] = cIm;
             positions[offset + 2] = orbitSamples[sample];
           }
-          points += count;
+          survivingCells += 1;
         }
         cell += 1;
       }
 
-      if (points > uploadedPoints) {
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
-        gl.bufferSubData(
-          gl.ARRAY_BUFFER,
-          uploadedPoints * 3 * Float32Array.BYTES_PER_ELEMENT,
-          positions.subarray(uploadedPoints * 3, points * 3),
-        );
-        uploadedPoints = points;
-        this.pointCount = points;
-      }
-
-      if (cell < sampleWidth * sampleHeight && points < pointBudget) {
+      if (cell < sampleWidth * sampleHeight && survivingCells < maxSurvivingCells) {
         this.buildTimer = window.setTimeout(buildSlice, 0);
         return;
       }
+      for (let sample = 1; sample < sampleCount; sample += 1) {
+        const source = sample * maxSurvivingCells * 3;
+        const target = sample * survivingCells * 3;
+        positions.copyWithin(target, source, source + survivingCells * 3);
+      }
+      this.fullPointCount = survivingCells * sampleCount;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        positions.subarray(0, this.fullPointCount * 3),
+        gl.STATIC_DRAW,
+      );
+      this.refreshPointCount();
       this.buildTimer = null;
       this.building = false;
     };
@@ -448,6 +474,15 @@ export class Orbit3DPointCloud {
       this.buildTimer = null;
     }
     this.building = false;
+  }
+
+  private refreshPointCount(): void {
+    if (this.fullPointCount === 0 || this.sampleCount <= 0) {
+      this.pointCount = 0;
+      return;
+    }
+    const cells = Math.floor(this.fullPointCount / this.sampleCount);
+    this.pointCount = cells * this.visibleIterations;
   }
 
   draw(width: number, height: number, exposure = 1.35): boolean {
@@ -623,6 +658,17 @@ function boundedInteger(
 ): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(min, Math.min(max, Math.round(value)))
+    : fallback;
+}
+
+function boundedNumber(
+  value: number | boolean | string | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, value))
     : fallback;
 }
 

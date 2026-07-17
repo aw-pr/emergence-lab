@@ -1168,6 +1168,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
   private readonly orbit3d: Orbit3DPointCloud | null;
+  private orbit3dBuildKey = "";
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -1336,7 +1337,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
     if (this.supportsOrbit3d(mode, kernel)) {
       this.kuramoto?.releaseState();
-      this.orbit3d?.rebuild(this.gridWidth, this.gridHeight, params);
+      this.updateOrbit3dParams(params);
       return;
     }
     this.orbit3d?.cancelBuild();
@@ -1395,6 +1396,35 @@ export class WebGLRendererBackend implements RendererBackend {
     };
   }
 
+  setOrbit3dMarker(re: number, im: number): Orbit3DMarkerSnapshot | null {
+    const marker = this.orbit3d?.setMarker(re, im);
+    const projected = this.orbit3d?.projectMarker(this.displayWidth, this.displayHeight);
+    if (!marker || !projected) return null;
+    return {
+      ...marker,
+      viewportX: projected.x,
+      viewportY: projected.y,
+    };
+  }
+
+  updateOrbit3dParams(
+    params: Record<string, number | boolean | string>,
+  ): boolean {
+    if (!this.orbit3d?.available) return false;
+    const buildKey = orbit3dBuildKey(this.gridWidth, this.gridHeight, params);
+    if (buildKey !== this.orbit3dBuildKey) {
+      this.orbit3dBuildKey = buildKey;
+      this.orbit3d.rebuild(this.gridWidth, this.gridHeight, params);
+    } else {
+      this.orbit3d.setPlottedIterations(numericParam(params, "plottedIterations", 1));
+    }
+    return true;
+  }
+
+  orbit3dReady(): boolean {
+    return this.orbit3d?.ready === true;
+  }
+
   orbit3dOrbit(deltaAzimuth: number, deltaElevation: number): void {
     this.orbit3d?.orbit(deltaAzimuth, deltaElevation);
   }
@@ -1410,7 +1440,7 @@ export class WebGLRendererBackend implements RendererBackend {
   draw(frame: RendererBackendFrame): void {
     const { state, kernel, colourOptions, displayOptions, mode } = frame;
     if (this.supportsOrbit3d(mode, kernel)) {
-      this.drawOrbit3d();
+      this.drawOrbit3d(frame);
       return;
     }
     if (this.supportsGpuKuramoto(mode, kernel)) {
@@ -1449,10 +1479,11 @@ export class WebGLRendererBackend implements RendererBackend {
     this.drawMappedState(kernel, mode, displayOptions);
   }
 
-  private drawOrbit3d(): void {
+  private drawOrbit3d(frame: RendererBackendFrame): void {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const stats = this.orbit3d?.stats;
-    if (!stats || !this.orbit3d?.draw(this.displayWidth, this.displayHeight)) return;
+    const exposure = numericParam(frame.params, "exposure", 1.35);
+    if (!stats || !this.orbit3d?.draw(this.displayWidth, this.displayHeight, exposure)) return;
     const marker = this.orbit3d.markerReadout;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
@@ -2422,6 +2453,21 @@ function isCircularPhaseState(kernel: SimKernel): boolean {
     range?.[0] === 0 &&
     range[1] === 1
   );
+}
+
+function orbit3dBuildKey(
+  width: number,
+  height: number,
+  params: Record<string, number | boolean | string>,
+): string {
+  return [
+    width,
+    height,
+    numericParam(params, "warmupIterations", 0),
+    numericParam(params, "sampleCount", 0),
+    params.realSliceOnly === true ? 1 : 0,
+    numericParam(params, "pointDensity", 1),
+  ].join(":");
 }
 
 function numericParam(

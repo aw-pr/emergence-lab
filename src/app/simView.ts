@@ -271,6 +271,12 @@ export async function renderSimView(
       ? buildOrbitMarkerReadout(layout.sidebar)
       : undefined;
 
+  renderer.setParamsListener((next) => {
+    controls.syncParamsFromExternal(next, false);
+  });
+  renderer.setOrbit3dMarkerListener((marker) => orbitMarkerReadout?.set(marker));
+  controls.syncParamsFromExternal(renderer.currentParams(), false);
+
   renderer.setFpsListener((fps) => controls.setFps(fps));
   renderer.setIterationListener((iterations) => controls.setIterations(iterations));
 

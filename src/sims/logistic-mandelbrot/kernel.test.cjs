@@ -61,7 +61,18 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["warmupIterations", "sampleCount", "plottedIterations", "realSliceOnly"],
+    [
+      "warmupIterations",
+      "sampleCount",
+      "plottedIterations",
+      "cascadeReveal",
+      "cascadeDuration",
+      "realAxisSweep",
+      "sweepSpeed",
+      "realSliceOnly",
+      "exposure",
+      "pointDensity",
+    ],
   );
 
   for (const descriptor of kernel.paramSchema) {

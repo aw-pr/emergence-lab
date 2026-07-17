@@ -51,6 +51,8 @@ export interface RendererOptions {
 
 /** Seconds a completed run stays on screen before auto-cycling to a new one. */
 const CYCLE_HOLD_SECONDS = 1.5;
+const ORBIT_SWEEP_START = 0.25;
+const ORBIT_SWEEP_END = -2;
 
 export type { DisplayOptions } from "./rendererBackend.ts";
 
@@ -111,6 +113,12 @@ export class Renderer {
   private onFpsChange: ((fps: number) => void) | null = null;
   private iterationCount = 0;
   private onIterationChange: ((iterations: number) => void) | null = null;
+  private onParamsChange: ((params: SimParams) => void) | null = null;
+  private onOrbitMarkerChange:
+    | ((marker: Orbit3DMarkerClientSnapshot) => void)
+    | null = null;
+  private cascadePosition = 1;
+  private sweepRe = ORBIT_SWEEP_START;
 
   private resizeObserver: ResizeObserver | null = null;
   private resizeFrame = 0;
@@ -142,9 +150,11 @@ export class Renderer {
     );
 
     this.seed = nextSeed();
+    this.prepareOrbit3dAnimations();
     this.observeResize();
     this.resizeDisplay();
     this.reinitGrid();
+    this.resetOrbit3dSweepMarker();
   }
 
   /** Set or clear an FPS observer. Called once per ~500ms with a smoothed value. */
@@ -156,6 +166,16 @@ export class Renderer {
   setIterationListener(listener: ((iterations: number) => void) | null): void {
     this.onIterationChange = listener;
     listener?.(this.iterationCount);
+  }
+
+  setParamsListener(listener: ((params: SimParams) => void) | null): void {
+    this.onParamsChange = listener;
+  }
+
+  setOrbit3dMarkerListener(
+    listener: ((marker: Orbit3DMarkerClientSnapshot) => void) | null,
+  ): void {
+    this.onOrbitMarkerChange = listener;
   }
 
   setStepsPerFrame(value: number): void {
@@ -180,6 +200,10 @@ export class Renderer {
     return this.running;
   }
 
+  currentParams(): SimParams {
+    return { ...this.params };
+  }
+
   play(): void {
     if (this.running) return;
     this.running = true;
@@ -199,12 +223,41 @@ export class Renderer {
       this.params = { ...nextParams };
     }
     this.seed = nextSeed();
+    this.prepareOrbit3dAnimations();
     this.reinitGrid();
+    this.resetOrbit3dSweepMarker();
+    this.notifyParamsChange();
   }
 
   /** Update params in-place and re-init (the kernel only consumes params on init). */
   updateParams(nextParams: SimParams): void {
+    const previous = this.params;
     this.params = { ...nextParams };
+    if (this.renderMode === "orbit3d") {
+      const cascadeStarted =
+        booleanParam(this.params, "cascadeReveal", false) &&
+        !booleanParam(previous, "cascadeReveal", false);
+      if (cascadeStarted) {
+        this.cascadePosition = 1;
+        this.params.plottedIterations = 1;
+      } else if (!booleanParam(this.params, "cascadeReveal", false)) {
+        this.cascadePosition = numericParam(this.params, "plottedIterations", 1);
+      }
+
+      const sweepStarted =
+        booleanParam(this.params, "realAxisSweep", false) &&
+        !booleanParam(previous, "realAxisSweep", false);
+      if (sweepStarted) {
+        this.sweepRe = ORBIT_SWEEP_START;
+        this.setOrbit3dMarker(this.sweepRe, 0);
+      }
+
+      if (this.backend.updateOrbit3dParams?.(this.params)) {
+        if (cascadeStarted) this.notifyParamsChange();
+        this.draw();
+        return;
+      }
+    }
     this.reinitGrid();
   }
 
@@ -292,6 +345,10 @@ export class Renderer {
     clientX: number,
     clientY: number,
   ): Orbit3DMarkerClientSnapshot | null {
+    if (booleanParam(this.params, "realAxisSweep", false)) {
+      this.params = { ...this.params, realAxisSweep: false };
+      this.notifyParamsChange();
+    }
     const viewport = this.pointerToViewport(clientX, clientY);
     if (!viewport) return null;
     const marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
@@ -397,6 +454,7 @@ export class Renderer {
     const dt = Math.max(0, (timestamp - this.lastTimestamp) / 1000);
     this.lastTimestamp = timestamp;
     this.elapsedTime += dt;
+    this.advanceOrbit3dAnimations(dt);
 
     this.stepAccumulator += this.stepsPerFrame;
     const stepCount = Math.floor(this.stepAccumulator);
@@ -454,6 +512,78 @@ export class Renderer {
     if (this.kernel.isComplete?.()) {
       this.cycleHold = CYCLE_HOLD_SECONDS;
     }
+  }
+
+  private prepareOrbit3dAnimations(): void {
+    if (this.renderMode !== "orbit3d") return;
+    if (booleanParam(this.params, "cascadeReveal", false)) {
+      this.cascadePosition = 1;
+      this.params.plottedIterations = 1;
+    } else {
+      this.cascadePosition = numericParam(this.params, "plottedIterations", 1);
+    }
+    this.sweepRe = ORBIT_SWEEP_START;
+  }
+
+  private resetOrbit3dSweepMarker(): void {
+    if (
+      this.renderMode === "orbit3d" &&
+      booleanParam(this.params, "realAxisSweep", false)
+    ) {
+      this.setOrbit3dMarker(ORBIT_SWEEP_START, 0);
+    }
+  }
+
+  private advanceOrbit3dAnimations(dt: number): void {
+    if (this.renderMode !== "orbit3d" || dt <= 0) return;
+    let paramsChanged = false;
+
+    if (
+      booleanParam(this.params, "cascadeReveal", false) &&
+      this.backend.orbit3dReady?.()
+    ) {
+      const sampleCount = Math.max(
+        1,
+        Math.min(96, Math.round(numericParam(this.params, "sampleCount", 1))),
+      );
+      const duration = Math.max(0.1, numericParam(this.params, "cascadeDuration", 12));
+      this.cascadePosition = Math.min(
+        sampleCount,
+        this.cascadePosition + dt * Math.max(0, sampleCount - 1) / duration,
+      );
+      const plottedIterations = Math.max(1, Math.floor(this.cascadePosition));
+      if (this.params.plottedIterations !== plottedIterations) {
+        this.params = { ...this.params, plottedIterations };
+        this.backend.updateOrbit3dParams?.(this.params);
+        paramsChanged = true;
+      }
+      if (this.cascadePosition >= sampleCount) {
+        this.params = { ...this.params, cascadeReveal: false };
+        paramsChanged = true;
+      }
+    }
+
+    if (booleanParam(this.params, "realAxisSweep", false)) {
+      const speed = Math.max(0.001, numericParam(this.params, "sweepSpeed", 0.15));
+      this.sweepRe = Math.max(ORBIT_SWEEP_END, this.sweepRe - dt * speed);
+      this.setOrbit3dMarker(this.sweepRe, 0);
+      if (this.sweepRe <= ORBIT_SWEEP_END) {
+        this.params = { ...this.params, realAxisSweep: false };
+        paramsChanged = true;
+      }
+    }
+
+    if (paramsChanged) this.notifyParamsChange();
+  }
+
+  private setOrbit3dMarker(re: number, im: number): void {
+    const marker = this.backend.setOrbit3dMarker?.(re, im) ?? null;
+    const clientMarker = this.markerSnapshotToClient(marker);
+    if (clientMarker) this.onOrbitMarkerChange?.(clientMarker);
+  }
+
+  private notifyParamsChange(): void {
+    this.onParamsChange?.({ ...this.params });
   }
 
   private draw(): void {
@@ -675,4 +805,14 @@ export class Renderer {
       ) ?? false
     );
   }
+}
+
+function numericParam(params: SimParams, key: string, fallback: number): number {
+  const value = params[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function booleanParam(params: SimParams, key: string, fallback: boolean): boolean {
+  const value = params[key];
+  return typeof value === "boolean" ? value : fallback;
 }

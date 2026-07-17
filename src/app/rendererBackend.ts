@@ -65,6 +65,9 @@ export interface RendererBackend {
     viewportX: number,
     viewportY: number,
   ): Orbit3DMarkerSnapshot | null;
+  setOrbit3dMarker?(re: number, im: number): Orbit3DMarkerSnapshot | null;
+  updateOrbit3dParams?(params: SimParams): boolean;
+  orbit3dReady?(): boolean;
   orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
   orbit3dDolly?(factor: number): void;
   resetOrbit3dCamera?(): void;
