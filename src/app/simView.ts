@@ -275,9 +275,13 @@ export async function renderSimView(
     layout.canvas.classList.add("sim-view__canvas--interactive");
     detachPointerImpulse = attachPointerImpulse(layout.canvas, renderer);
     // The note lives on the same condition as the handler, so it can never
-    // advertise a poke the sim would ignore.
+    // advertise a poke the sim would ignore. It reads between the model's
+    // origin and its equations, so insert it rather than append.
     if (about?.interaction && layout.about) {
-      layout.about.appendChild(buildAboutSection("Try it", about.interaction));
+      layout.about.insertBefore(
+        buildAboutSection("Try it", about.interaction),
+        layout.about.querySelector(`.${MATHS_SECTION_CLASS}`),
+      );
     }
   }
   if (fractal) {
@@ -477,14 +481,9 @@ function buildLayout(
     titleBlock.appendChild(subtitle);
   }
 
-  const formula = document.createElement("div");
-  formula.className = "sim-view__formula";
-  renderFormula(formula, slug);
-  titleBlock.appendChild(formula);
-
   top.appendChild(titleBlock);
 
-  const about = header.about ? buildAbout(header.about) : undefined;
+  const about = header.about ? buildAbout(header.about, slug) : undefined;
   if (about) top.appendChild(about);
 
   page.appendChild(top);
@@ -550,23 +549,34 @@ function buildFractalHud(): FractalHud {
 
 /** The narrative panel filling the header space beside the title: where the
  * model came from, and what its equations say. */
-function buildAbout(about: SimAbout): HTMLElement {
+function buildAbout(about: SimAbout, slug: string): HTMLElement {
   const root = document.createElement("div");
   root.className = "sim-view__about";
 
-  for (const [label, body] of [
-    ["Origin", about.history],
-    ["The maths", about.maths],
-  ] as const) {
-    root.appendChild(buildAboutSection(label, body));
-  }
+  root.appendChild(buildAboutSection("Origin", about.history));
+
+  // The equations sit with the prose that explains them rather than under the
+  // title. "Try it" is inserted between the two later, by the pointer wiring.
+  const maths = buildAboutSection("The maths", about.maths, MATHS_SECTION_CLASS);
+  const formula = document.createElement("div");
+  formula.className = "sim-view__formula";
+  renderFormula(formula, slug);
+  maths.insertBefore(formula, maths.querySelector(".sim-view__about-text"));
+  root.appendChild(maths);
 
   return root;
 }
 
-function buildAboutSection(label: string, body: string): HTMLElement {
+const MATHS_SECTION_CLASS = "sim-view__about-section--maths";
+
+function buildAboutSection(
+  label: string,
+  body: string,
+  modifier?: string,
+): HTMLElement {
   const section = document.createElement("section");
   section.className = "sim-view__about-section";
+  if (modifier) section.classList.add(modifier);
 
   const heading = document.createElement("h2");
   heading.className = "sim-view__about-label";

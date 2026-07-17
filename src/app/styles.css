@@ -208,7 +208,9 @@ code {
 .sim-view__header {
   display: flex;
   align-items: flex-start;
-  gap: 16px 28px;
+  /* Wide column gap so the narrative reads as its own panel rather than as
+   * runover from the title. */
+  gap: 16px 56px;
   flex-wrap: wrap;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
@@ -254,12 +256,13 @@ code {
   vertical-align: middle;
 }
 
+/* Title and subtitle only: the equations moved in beside the prose that
+ * explains them, so this no longer needs a formula box's width. */
 .sim-view__title-block {
   display: grid;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 340px;
-  max-width: 560px;
+  flex: 0 1 300px;
 }
 
 /* Narrative filling the header space beside the title. Bounded in height so a
@@ -279,7 +282,11 @@ code {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: 10px 28px;
-  max-height: 205px;
+  /* A cap, not a height: only the longest entry (Belousov-Zhabotinsky, whose
+   * three equations alone run 91px) reaches it, so the rest of the header
+   * stays as short as its own content. Sized to clear that worst case without
+   * scrolling; the media queries below still bound it on small screens. */
+  max-height: 245px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -319,11 +326,16 @@ code {
   }
 }
 
+/* Sits inside the narrative's maths column now, so it can be no wider than one
+ * column. Keep the wrap rather than stacking outright: short equations still
+ * share a row (the attractors' three fit on one), and only the wide ones
+ * (Gray-Scott, Belousov-Zhabotinsky) drop onto their own line. */
 .sim-view__formula {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
   max-width: 100%;
+  margin-bottom: 8px;
   padding: 8px 10px;
   color: rgba(232, 236, 244, 0.9);
   background: rgba(168, 185, 209, 0.06);
