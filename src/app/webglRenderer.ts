@@ -16,6 +16,7 @@ import type { SimKernel } from "./types.ts";
 import {
   GROUND_DOMAIN,
   Orbit3DPointCloud,
+  type Orbit3DColourMode,
   type Orbit3DGroundPlane,
 } from "./orbit3d.ts";
 import {
@@ -1505,10 +1506,17 @@ export class WebGLRendererBackend implements RendererBackend {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const stats = this.orbit3d?.stats;
     const exposure = numericParam(frame.params, "exposure", 1.35);
+    const colourMode = orbit3dColourMode(frame.params);
     const ground = this.ensureOrbit3dGround(frame);
     if (
       !stats ||
-      !this.orbit3d?.draw(this.displayWidth, this.displayHeight, exposure, ground)
+      !this.orbit3d?.draw(
+        this.displayWidth,
+        this.displayHeight,
+        exposure,
+        ground,
+        colourMode,
+      )
     ) {
       return;
     }
@@ -2610,6 +2618,13 @@ function numericParam(
 ): number {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function orbit3dColourMode(
+  params: Record<string, number | boolean | string>,
+): Orbit3DColourMode {
+  const value = params.colourMode;
+  return value === "height" || value === "mono" ? value : "period";
 }
 
 function fractalKind(kernel: SimKernel): number {

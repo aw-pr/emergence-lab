@@ -72,6 +72,7 @@ test("metadata matches the renderer contract", () => {
       "realSliceOnly",
       "exposure",
       "pointDensity",
+      "colourMode",
     ],
   );
 
@@ -80,11 +81,20 @@ test("metadata matches the renderer contract", () => {
       assert.equal(typeof descriptor.default, "boolean");
       continue;
     }
+    if (descriptor.type === "enum") {
+      assert.equal(typeof descriptor.default, "string");
+      assert.ok(descriptor.options.includes(descriptor.default));
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.ok(descriptor.min <= descriptor.default);
     assert.ok(descriptor.default <= descriptor.max);
   }
+
+  const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
+  assert.equal(colourMode?.default, "period");
+  assert.deepEqual(colourMode?.options, ["period", "height", "mono"]);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
   assert.equal(warmup?.default, 200);

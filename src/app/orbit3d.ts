@@ -15,9 +15,38 @@ const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec3 a_position;
+in float a_period;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
+uniform int u_colourMode;
 out vec3 v_colour;
+
+// Categorical hues for periods 1..7 drawn from the repo's ramp language
+// (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
+// periods above seven reuse the wheel. Every hue is softened toward white in
+// main() so additive stacking saturates gracefully instead of clipping.
+vec3 periodHue(int p) {
+  int index = (p - 1) % 7;
+  if (index == 0) return vec3(0.129, 0.569, 0.549);
+  if (index == 1) return vec3(0.255, 0.431, 0.686);
+  if (index == 2) return vec3(0.800, 0.278, 0.471);
+  if (index == 3) return vec3(0.933, 0.612, 0.094);
+  if (index == 4) return vec3(0.165, 0.863, 0.863);
+  if (index == 5) return vec3(0.369, 0.788, 0.384);
+  return vec3(0.549, 0.314, 0.745);
+}
+
+// Ice-family ramp over normalised Re(z), lifted at the dark end so low sheets
+// stay visible against the near-black background.
+vec3 heightRamp(float t) {
+  vec3 deep = vec3(0.06, 0.16, 0.40);
+  vec3 mid = vec3(0.10, 0.45, 0.72);
+  vec3 glow = vec3(0.35, 0.85, 0.86);
+  vec3 pale = vec3(0.93, 0.98, 1.00);
+  if (t < 0.4) return mix(deep, mid, t / 0.4);
+  if (t < 0.75) return mix(mid, glow, (t - 0.4) / 0.35);
+  return mix(glow, pale, (t - 0.75) / 0.25);
+}
 
 void main() {
   vec3 world = vec3(
@@ -29,10 +58,18 @@ void main() {
   gl_PointSize = u_pointSize;
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
-  float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
-  vec3 low = vec3(0.08, 0.38, 0.92);
-  vec3 high = vec3(1.0, 0.35, 0.12);
-  v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
+  if (u_colourMode == 0) {
+    int p = int(a_period + 0.5);
+    vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
+    v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
+  } else if (u_colourMode == 1) {
+    v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
+  } else {
+    float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
+    vec3 low = vec3(0.08, 0.38, 0.92);
+    vec3 high = vec3(1.0, 0.35, 0.12);
+    v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
+  }
 }
 `;
 
@@ -217,6 +254,14 @@ export interface Orbit3DGroundPlane {
 
 export type Orbit3DCameraPose = "default" | "side";
 
+export type Orbit3DColourMode = "period" | "height" | "mono";
+
+const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
+  period: 0,
+  height: 1,
+  mono: 2,
+};
+
 export interface Orbit3DStats {
   pointCount: number;
   pointBudget: number;
@@ -254,10 +299,12 @@ export class Orbit3DPointCloud {
   private readonly groundVao: WebGLVertexArrayObject;
   private readonly toneMapVao: WebGLVertexArrayObject;
   private readonly pointBuffer: WebGLBuffer;
+  private readonly periodBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
   private readonly pointSizeUniform: WebGLUniformLocation;
+  private readonly colourModeUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
@@ -297,6 +344,7 @@ export class Orbit3DPointCloud {
       TONEMAP_FRAGMENT_SHADER,
     );
     this.pointBuffer = requireResource(gl.createBuffer(), "orbit3d point buffer");
+    this.periodBuffer = requireResource(gl.createBuffer(), "orbit3d period buffer");
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
@@ -309,6 +357,10 @@ export class Orbit3DPointCloud {
     const pointLocation = gl.getAttribLocation(this.pointProgram, "a_position");
     gl.enableVertexAttribArray(pointLocation);
     gl.vertexAttribPointer(pointLocation, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
+    const periodLocation = gl.getAttribLocation(this.pointProgram, "a_period");
+    gl.enableVertexAttribArray(periodLocation);
+    gl.vertexAttribPointer(periodLocation, 1, gl.FLOAT, false, 0, 0);
 
     gl.bindVertexArray(this.markerVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
@@ -341,6 +393,10 @@ export class Orbit3DPointCloud {
     this.pointSizeUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_pointSize"),
       "orbit3d point-size uniform",
+    );
+    this.colourModeUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_colourMode"),
+      "orbit3d colour-mode uniform",
     );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
@@ -534,6 +590,7 @@ export class Orbit3DPointCloud {
       ? 1
       : Math.max(1, Math.min(inputHeight, Math.ceil(candidateCells / sampleWidth)));
     const positions = new Float32Array(pointBudget * 3);
+    const periods = new Float32Array(pointBudget);
     const orbitSamples = new Float32Array(sampleCount);
     let cell = 0;
     let survivorsSeen = 0;
@@ -577,6 +634,7 @@ export class Orbit3DPointCloud {
               positions[offset] = cRe;
               positions[offset + 1] = cIm;
               positions[offset + 2] = orbitSamples[sample];
+              periods[sample * maxSurvivingCells + slot] = result;
             }
           }
         }
@@ -592,12 +650,23 @@ export class Orbit3DPointCloud {
         const source = sample * maxSurvivingCells * 3;
         const target = sample * survivingCells * 3;
         positions.copyWithin(target, source, source + survivingCells * 3);
+        periods.copyWithin(
+          sample * survivingCells,
+          sample * maxSurvivingCells,
+          sample * maxSurvivingCells + survivingCells,
+        );
       }
       this.fullPointCount = survivingCells * sampleCount;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
         positions.subarray(0, this.fullPointCount * 3),
+        gl.STATIC_DRAW,
+      );
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        periods.subarray(0, this.fullPointCount),
         gl.STATIC_DRAW,
       );
       this.refreshPointCount();
@@ -648,6 +717,7 @@ export class Orbit3DPointCloud {
     height: number,
     exposure = 1.35,
     ground: Orbit3DGroundPlane | null = null,
+    colourMode: Orbit3DColourMode = "period",
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -677,6 +747,7 @@ export class Orbit3DPointCloud {
       viewProjection,
     );
     gl.uniform1f(this.pointSizeUniform, Math.min(2, Math.max(1, width / 900)));
+    gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.bindVertexArray(this.pointVao);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
 
@@ -716,6 +787,7 @@ export class Orbit3DPointCloud {
     gl.deleteVertexArray(this.groundVao);
     gl.deleteVertexArray(this.toneMapVao);
     gl.deleteBuffer(this.pointBuffer);
+    gl.deleteBuffer(this.periodBuffer);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);

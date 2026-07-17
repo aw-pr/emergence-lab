@@ -63,6 +63,8 @@ in every direction, not just along the real line.
   window near c = −1.75.
 - Orbit the camera around the full object to see off-axis bulbs hold their
   cycles as separate sheets exactly above their bulbs on the ground plane.
+- Switch the colour mode: period tints each bulb by the length of its cycle,
+  height grades the sheets by Re(z), and mono keeps the plain additive glow.
 
 ## Further reading
 

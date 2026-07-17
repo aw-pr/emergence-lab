@@ -552,6 +552,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         realSliceOnly: false,
         exposure: 1.35,
         pointDensity: 1,
+        colourMode: "period",
       },
     },
     {
@@ -566,6 +567,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         realSliceOnly: true,
         exposure: 1.6,
         pointDensity: 1,
+        colourMode: "height",
       },
     },
     {
@@ -582,6 +584,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         realSliceOnly: false,
         exposure: 1.35,
         pointDensity: 1,
+        colourMode: "mono",
       },
     },
   ],
