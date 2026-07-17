@@ -3,7 +3,7 @@
 ## Phase: hone
 
 emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 16 simulations. See `MODELS.md`.
+performance, and UX polish on a working set of 18 simulations. See `MODELS.md`.
 
 There is **no per-model ownership** of areas of this repo. Whichever agent is
 working a task may edit any part of it — code (`src/**`), docs, architecture.
@@ -13,11 +13,9 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
-Refinement of defaults, initial conditions, and controls UX across all 12
-sims, plus landing the in-flight WebGL2 renderer work. The diffusion model
-(Gray-Scott) is the priority kernel. The controls panel is gaining
-user-overridable slider min/max with localStorage persistence and a
-"Reset to defaults" button. See `HANDOFF.md`.
+The requested GPU rendering work and visual tuning have landed. Further model
+tuning is optional; no required implementation work remains. Gray-Scott stays
+the priority kernel for future refinement.
 
 ## Interface contract
 
@@ -48,5 +46,5 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 
 - `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.0.1)
 - `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
-- `HANDOFF.md` — current status and next-run brief
+- `state/handoffs/README.md` — structured handoff envelope
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks
