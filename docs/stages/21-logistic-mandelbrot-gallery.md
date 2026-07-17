@@ -4,10 +4,10 @@
 
 - **Authored:** 2026-07-17
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
-- **Worker:** Claude Fable 5 <claude-fable-5@local>
-- **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Verifier:** Claude Opus 4.8 <claude-opus-4-8@local>
 - **Verifier panel:** false
-- **Pairing rationale:** The closing stage mixes shader reuse with expository writing (essay, presets, card copy) where the frontier Claude tier is strongest; Codex cross-family-verifies the build, the gallery wiring, and that the essay's claims match the sim's behaviour.
+- **Pairing rationale:** The closing stage mixes shader reuse with expository writing (essay, presets, card copy); Sol carries the implementation and drafts the essay, Opus cross-family-verifies the build, the gallery wiring, and that the essay's claims match the sim's behaviour. (Fable, the original worker for this stage, dropped off subscription mid-run.)
 
 ## Objective
 
@@ -99,7 +99,8 @@ vs cloud (criterion 2) and an essay fact-check note (criterion 5).
 
 ## Family-specific notes
 
-- Claude worker: do not commit; leave changes uncommitted for orchestrator
-  integration.
-- Codex/GPT verifier: for criterion 5, verify the essay against the sim and
+- Codex worker: do not commit; leave changes uncommitted for orchestrator
+  integration. The essay is a Sol deliverable this stage — keep UK English
+  and no em dashes in card-facing copy.
+- Claude/Opus verifier: for criterion 5, verify the essay against the sim and
   the card, not against external sources.

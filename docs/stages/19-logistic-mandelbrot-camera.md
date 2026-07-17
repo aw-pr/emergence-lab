@@ -5,7 +5,7 @@
 - **Authored:** 2026-07-17
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
 - **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
-- **Verifier:** Claude Fable 5 <claude-fable-5@local>
+- **Verifier:** Claude Opus 4.8 <claude-opus-4-8@local>
 - **Verifier panel:** false
 - **Pairing rationale:** Pointer/gesture plumbing mirrors the existing fractalCanvas idiom — mechanical adaptation suited to the Codex tier; Claude verifies interaction feel and mathematical readability (period ↔ sheet count).
 

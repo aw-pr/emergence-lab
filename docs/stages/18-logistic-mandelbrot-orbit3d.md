@@ -5,9 +5,9 @@
 - **Authored:** 2026-07-17
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
 - **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
-- **Verifier:** Claude Fable 5 <claude-fable-5@local>
+- **Verifier:** Claude Opus 4.8 <claude-opus-4-8@local>
 - **Verifier panel:** false
-- **Pairing rationale:** GPU pipeline plumbing (new render mode, float textures, additive point pass) is well-scoped implementation work for the Codex tier; the frontier Claude tier verifies visual correctness against the stage-17 reference kernel it authored.
+- **Pairing rationale:** GPU pipeline plumbing (new render mode, float textures, additive point pass) is well-scoped implementation work for the Codex tier; Opus cross-family verifies visual correctness against the stage-17 reference kernel. (Fable dropped off subscription mid-run; Opus is the substitute Claude verifier.)
 
 ## Objective
 
