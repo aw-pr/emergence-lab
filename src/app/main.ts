@@ -1,3 +1,4 @@
+import { setSimDocumentTitle } from "./docTitle.ts";
 import { renderGallery } from "./gallery.ts";
 import { renderSimView, type SimViewHandle } from "./simView.ts";
 import { startRouter, type Route } from "./router.ts";
@@ -19,6 +20,7 @@ async function show(route: Route): Promise<void> {
 
   switch (route.kind) {
     case "gallery":
+      setSimDocumentTitle(null);
       renderGallery(appRoot);
       return;
 
@@ -35,6 +37,7 @@ async function show(route: Route): Promise<void> {
     }
 
     case "not-found":
+      setSimDocumentTitle(null);
       appRoot.innerHTML = `
         <section class="not-found">
           <h1>Not found</h1>

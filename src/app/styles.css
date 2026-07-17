@@ -265,6 +265,11 @@ code {
   flex: 0 1 300px;
 }
 
+/* display:grid above would otherwise beat the hidden attribute. */
+.sim-view__title-block[hidden] {
+  display: none;
+}
+
 /* Narrative filling the header space beside the title. Bounded in height so a
  * long entry can never push the stage below the fold; the sim is the point.
  *
@@ -278,15 +283,27 @@ code {
 .sim-view__about {
   flex: 1 1 420px;
   min-width: 0;
-  max-width: 1140px;
   display: grid;
+  /* auto-fit sizes the count from the track minimum, so the columns reflow on
+   * their own as the panel narrows, and any track a two-section sim does not
+   * use collapses to 0px.
+   *
+   * The width cap has to come from the panel rather than the track: a
+   * minmax(270px, 520px) track would have auto-fit count repetitions against
+   * the 520px maximum, which drops a 1236px panel to two columns when three
+   * would have fitted. So cap the panel at what the section count needs at
+   * ~520px a column, which is about 70 characters a line. A fixed cap cannot
+   * do this: 1140px is right for three columns and far too wide for two. */
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  max-width: calc(
+    var(--about-columns, 2) * 520px + (var(--about-columns, 2) - 1) * 28px
+  );
   gap: 10px 28px;
   /* A cap, not a height: only the longest entry (Belousov-Zhabotinsky, whose
-   * three equations alone run 91px) reaches it, so the rest of the header
-   * stays as short as its own content. Sized to clear that worst case without
-   * scrolling; the media queries below still bound it on small screens. */
-  max-height: 245px;
+   * three equations alone run 91px) comes near it, so the rest of the header
+   * stays as short as its own content. The media queries below bound it
+   * harder on small screens, where scrolling is the accepted trade. */
+  max-height: 220px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

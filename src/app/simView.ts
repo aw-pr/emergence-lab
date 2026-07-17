@@ -1,5 +1,6 @@
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
+import { setSimDocumentTitle } from "./docTitle.ts";
 import { isFramedBySite } from "./embed.ts";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
@@ -103,6 +104,7 @@ export async function renderSimView(
 
   const entry = findEntry(slug);
   if (!entry) {
+    setSimDocumentTitle(null);
     renderUnknownSim(container, slug);
     return { dispose() {} };
   }
@@ -113,11 +115,14 @@ export async function renderSimView(
     ? entry.variants?.find((v) => v.variant === variant)
     : undefined;
 
+  const name = variantDef?.name ?? entry.name;
+  setSimDocumentTitle(name);
+
   const about = aboutFor(slug, variantDef?.variant);
   const layout = buildLayout(
     container,
     {
-      name: variantDef?.name ?? entry.name,
+      name,
       family: entry.family,
       subtitle: variantDef?.subtitle ?? entry.subtitle,
       about,
@@ -282,6 +287,7 @@ export async function renderSimView(
         buildAboutSection("Try it", about.interaction),
         layout.about.querySelector(`.${MATHS_SECTION_CLASS}`),
       );
+      syncAboutColumns(layout.about);
     }
   }
   if (fractal) {
@@ -458,8 +464,13 @@ function buildLayout(
   back.textContent = "← Gallery";
   top.appendChild(back);
 
+  // Framed by the site, the /labs/run bar directly above already names the sim,
+  // so a title block here is a second copy of it sitting in a column of its own
+  // with the narrative's full height beside it. Drop it and let the narrative
+  // have the width. Standalone there is no bar, so the title stays.
   const titleBlock = document.createElement("div");
   titleBlock.className = "sim-view__title-block";
+  titleBlock.hidden = isFramedBySite();
 
   const title = document.createElement("h1");
   title.className = "sim-view__title";
@@ -564,7 +575,15 @@ function buildAbout(about: SimAbout, slug: string): HTMLElement {
   maths.insertBefore(formula, maths.querySelector(".sim-view__about-text"));
   root.appendChild(maths);
 
+  syncAboutColumns(root);
   return root;
+}
+
+/** The panel's width cap is per column, so it has to track the section count.
+ *  Call after adding or removing a section. */
+function syncAboutColumns(root: HTMLElement): void {
+  const count = root.querySelectorAll(".sim-view__about-section").length;
+  root.style.setProperty("--about-columns", String(count));
 }
 
 const MATHS_SECTION_CLASS = "sim-view__about-section--maths";

@@ -66,7 +66,7 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
     history:
       "Boris Belousov found a chemical reaction that oscillated in colour around 1951, and journals rejected it twice as impossible: chemistry was supposed to run downhill to equilibrium, not tick like a clock. Anatol Zhabotinsky revived the work in the early 1960s, and the reaction became the classic demonstration that a system held far from equilibrium can organise itself in both time and space.",
     maths:
-      "Three species chase each other in a loop, each catalysing the next and consuming the one before, while diffusion couples neighbouring patches. The cycle sets the tempo and diffusion turns it into travelling fronts that wind up into spirals. A simplified three-species model, not the full Oregonator.",
+      "Three species chase each other in a loop, each catalysing the next and consuming the one before, while diffusion couples neighbouring patches. The local cycle sets the tempo and diffusion turns it into travelling fronts, so pacemaker points wind up into spiral waves. This is a simplified three-species approximation, not the full Oregonator.",
     interaction:
       "Click and drag to inject reagent and start a new pacemaker, which sends a circular front out across the medium. Cut across an existing front and the broken end curls around itself: a free wave tip is what a spiral is made of, and this is how you make one on purpose.",
   },
