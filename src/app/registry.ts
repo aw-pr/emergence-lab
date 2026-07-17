@@ -310,6 +310,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "logistic-mandelbrot",
+    name: "Logistic Mandelbrot",
+    family: "Escape-Time Fractals",
+    subtitle: "Orbit attractors over the c-plane hide the bifurcation diagram.",
+    description:
+      "For each c the post-transient orbit of z² + c is sampled: bulbs resolve into period bands and the real axis carries the logistic-map bifurcation cascade.",
+    load: async () => {
+      const mod = await import("../sims/logistic-mandelbrot/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "cyclic-ca",
     name: "Cyclic Cellular Automaton",
     family: "Cellular Automata",
