@@ -1,5 +1,13 @@
 # Run log: logistic-mandelbrot, 2026-07-17
 
+![The one-shot result: the orbit-attractor sheets over the Mandelbrot
+plane, first real-GPU session after the five-stage
+run](2026-07-17-logistic-mandelbrot-oneshot.png)
+
+*The image above is the operator's screenshot from the first real-GPU
+session, taken minutes after stage 21 landed — the run's one-shot
+result, unretouched.*
+
 First live autometta run pairing Claude Fable 5 and GPT-5.6 Sol, manually
 dispatched (no tick loop), both on subscription billing. Five stages
 (cards 17-21 in `docs/stages/`) building a new sim: the Mandelbrot set in
