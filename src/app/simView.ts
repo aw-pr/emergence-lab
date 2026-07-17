@@ -113,13 +113,14 @@ export async function renderSimView(
     ? entry.variants?.find((v) => v.variant === variant)
     : undefined;
 
+  const about = aboutFor(slug, variantDef?.variant);
   const layout = buildLayout(
     container,
     {
       name: variantDef?.name ?? entry.name,
       family: entry.family,
       subtitle: variantDef?.subtitle ?? entry.subtitle,
-      about: aboutFor(slug, variantDef?.variant),
+      about,
     },
     slug,
   );
@@ -273,6 +274,11 @@ export async function renderSimView(
     // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
     layout.canvas.classList.add("sim-view__canvas--interactive");
     detachPointerImpulse = attachPointerImpulse(layout.canvas, renderer);
+    // The note lives on the same condition as the handler, so it can never
+    // advertise a poke the sim would ignore.
+    if (about?.interaction && layout.about) {
+      layout.about.appendChild(buildAboutSection("Try it", about.interaction));
+    }
   }
   if (fractal) {
     layout.canvas.classList.add("sim-view__canvas--fractal");
@@ -385,6 +391,8 @@ interface SimLayout {
   canvas: HTMLCanvasElement;
   sidebar: HTMLElement;
   legend: HTMLElement;
+  /** The narrative panel, so the pointer wiring can add its own note to it. */
+  about?: HTMLElement;
   fractalHud?: FractalHud;
 }
 
@@ -476,9 +484,8 @@ function buildLayout(
 
   top.appendChild(titleBlock);
 
-  if (header.about) {
-    top.appendChild(buildAbout(header.about));
-  }
+  const about = header.about ? buildAbout(header.about) : undefined;
+  if (about) top.appendChild(about);
 
   page.appendChild(top);
 
@@ -508,7 +515,7 @@ function buildLayout(
   page.appendChild(body);
   container.appendChild(page);
 
-  return { body, stage, canvas, sidebar, legend, fractalHud };
+  return { body, stage, canvas, sidebar, legend, about, fractalHud };
 }
 
 function buildFractalHud(): FractalHud {
@@ -551,23 +558,27 @@ function buildAbout(about: SimAbout): HTMLElement {
     ["Origin", about.history],
     ["The maths", about.maths],
   ] as const) {
-    const section = document.createElement("section");
-    section.className = "sim-view__about-section";
-
-    const heading = document.createElement("h2");
-    heading.className = "sim-view__about-label";
-    heading.textContent = label;
-    section.appendChild(heading);
-
-    const text = document.createElement("p");
-    text.className = "sim-view__about-text";
-    text.textContent = body;
-    section.appendChild(text);
-
-    root.appendChild(section);
+    root.appendChild(buildAboutSection(label, body));
   }
 
   return root;
+}
+
+function buildAboutSection(label: string, body: string): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "sim-view__about-section";
+
+  const heading = document.createElement("h2");
+  heading.className = "sim-view__about-label";
+  heading.textContent = label;
+  section.appendChild(heading);
+
+  const text = document.createElement("p");
+  text.className = "sim-view__about-text";
+  text.textContent = body;
+  section.appendChild(text);
+
+  return section;
 }
 
 function renderFormula(container: HTMLElement, slug: string): void {

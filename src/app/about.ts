@@ -12,6 +12,13 @@ export interface SimAbout {
   history: string;
   /** What the equations on screen are doing, in words. */
   maths: string;
+  /**
+   * What a click-and-drag on the canvas does to this particular sim, in its own
+   * terms. Only for kernels that implement applyImpulse; the header renders it
+   * solely when the pointer handler is actually attached, so an entry here
+   * cannot promise interactivity the sim does not have.
+   */
+  interaction?: string;
 }
 
 const ABOUT: Readonly<Record<string, SimAbout>> = {
@@ -20,48 +27,64 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
       "Alan Turing argued in 1952 that two chemicals diffusing at different rates could break their own symmetry and paint an embryo's stripes and spots, which was a startling claim: structure with no blueprint. Peter Gray and Stephen Scott studied such an autocatalytic reaction in the early 1980s, and John Pearson's 1993 map of its parameter space showed a single pair of equations producing spots, stripes, worms and self-replicating blobs depending only on two dials.",
     maths:
       "U is fed in and consumed, V is autocatalytic: the UV² term means V makes more of itself wherever it already is. F sets the feed rate, k the kill rate, and D_u > D_v means the inhibitor spreads faster than the activator. That imbalance is the whole trick, and it is what Turing predicted.",
+    interaction:
+      "Click and drag on the canvas to paint V into the medium and deplete U beneath it, which is exactly how the sim seeds itself. Each stroke is a new origin: it will grow into whatever the current F and k dictate, so the same gesture makes spots in one regime and worms in another.",
   },
   "abelian-sandpile": {
     history:
       "Per Bak, Chao Tang and Kurt Wiesenfeld introduced it in 1987 as the founding model of self-organised criticality: a system that tunes itself to the knife edge where avalanches follow a power law, with no parameter set by hand. Deepak Dhar proved in 1990 that the final configuration does not depend on the order you drop the grains, which is the abelian property the model is named for.",
     maths:
       "Every site holds a grain count. Reach four and the site topples, giving one grain to each of its four neighbours, which can tip them over in turn. The rule is trivial and local; the fractal terraces and scale-free avalanches are entirely emergent.",
+    interaction:
+      "Click and drag to pour grains onto the pile. Drop them on a site already near the threshold and the avalanche can run far beyond the patch you touched, which is the power-law tail Bak's argument is about. The abelian property means the terraces settle the same way regardless of where or in what order you poured.",
   },
   "ising-model": {
     history:
       "Wilhelm Lenz posed it in 1920 and gave it to his student Ernst Ising, who solved the one-dimensional case in 1924 and found no phase transition, concluding the model was a failure. Lars Onsager's exact two-dimensional solution in 1944 proved him wrong and became one of the landmarks of statistical physics: it is the simplest model that undergoes a genuine phase transition.",
     maths:
       "Each spin is +1 or -1. The energy H rewards neighbouring spins for agreeing (coupling J) and for following any external field h. Sampling at temperature T, order wins below the critical point and noise wins above it, and exactly at it correlations become scale-free.",
+    interaction:
+      "Click and drag to force every spin under the pointer to +1, making an aligned domain by hand. What happens next reads the temperature for you: below the critical point the domain holds and grows, above it thermal noise eats it within moments, and near the transition it lingers and frays.",
   },
   "kuramoto-oscillators": {
     history:
       "Yoshiki Kuramoto published it in 1975, building on Arthur Winfree's 1967 insight that biological rhythms synchronise. It explains fireflies flashing together, pacemaker cells in the heart, and the Millennium Bridge wobble of 2000, and it is remarkable for being solvable: Kuramoto found the exact threshold at which coupling defeats disorder.",
     maths:
       "Each oscillator runs at its own natural frequency ωᵢ and is pulled towards its neighbours' phases by the coupling K. Below a critical K the phases drift apart, above it a fraction locks together and moves as one. The transition is sharp, not gradual.",
+    interaction:
+      "Click and drag to drag the oscillators under the pointer towards a common phase, synchronising a patch by force. Whether it survives is the coupling's answer, not yours: above the critical K the patch spreads into its neighbours, below it the spread of natural frequencies pulls it apart again.",
   },
   "game-of-life": {
     history:
       "John Conway devised it in 1970, tuning the rules by hand until the population neither exploded nor died out, and Martin Gardner's Scientific American column that October made it a phenomenon. It is Turing complete: with gliders and glider guns you can build a computer inside it, which means no shortcut can predict its future in general. You have to run it.",
     maths:
       "One rule, counting the eight neighbours: a dead cell with exactly three live neighbours is born, a live cell with two or three survives, everything else dies. Nothing in that rule mentions gliders, oscillators or guns; all of them fall out of it.",
+    interaction:
+      "Click and drag to bring cells to life under the pointer. A solid blob is far too crowded to survive, so it collapses from the inside and burns outward, and the debris throws gliders. Draw a long stroke and the same thing happens along its whole edge.",
   },
   "belousov-zhabotinsky": {
     history:
       "Boris Belousov found a chemical reaction that oscillated in colour around 1951, and journals rejected it twice as impossible: chemistry was supposed to run downhill to equilibrium, not tick like a clock. Anatol Zhabotinsky revived the work in the early 1960s, and the reaction became the classic demonstration that a system held far from equilibrium can organise itself in both time and space.",
     maths:
       "Three species chase each other in a loop, each catalysing the next and consuming the one before, while diffusion couples neighbouring patches. The local cycle sets the tempo and diffusion turns it into travelling fronts, so pacemaker points wind up into spiral waves. This is a simplified three-species approximation, not the full Oregonator.",
+    interaction:
+      "Click and drag to inject reagent and start a new pacemaker, which sends a circular front out across the medium. Cut across an existing front and the broken end curls around itself: a free wave tip is what a spiral is made of, and this is how you make one on purpose.",
   },
   physarum: {
     history:
       "Physarum polycephalum is a single-celled slime mould with no brain. Toshiyuki Nakagaki showed in 2000 that it solves mazes, and Atsushi Tero's team in 2010 let it grow over a map of Tokyo and watched it reproduce the rail network's topology. Jeff Jones' 2010 agent model, which this follows, gets the same transport networks from particles that only sense and steer.",
     maths:
       "Each agent deposits a chemical trail, samples it at three points ahead, and turns towards the strongest. The trail diffuses and decays. Reinforcement plus decay means useful paths thicken and unused ones fade, and the network optimises with no agent knowing anything about the network.",
+    interaction:
+      "Click and drag to lay chemical trail directly onto the field. You are not steering the agents, you are baiting them: they sense the trail you left and turn up its gradient, and if enough of them follow it the path reinforces itself into a real vein of the network. Stop feeding it and decay takes it back.",
   },
   boids: {
     history:
       "Craig Reynolds published Boids at SIGGRAPH in 1987, and it changed how animation handles crowds: the bats in Batman Returns (1992) were boids. The argument it settled is that a flock needs no leader and no choreography. Three local rules, each bird watching only its neighbours, produce the whole thing.",
     maths:
       "Every step, each agent adds three steering urges to its velocity: separation away from crowding neighbours, alignment towards their average heading, cohesion towards their average position. The weights w_s, w_a and w_c set the character of the flock, and the perception radius decides who counts as a neighbour.",
+    interaction:
+      "Click and drag through the flock and the birds under the pointer swoop away from it, exactly as a real flock parts around a hawk. Only the ones you touch feel it, yet the wake travels much further, because alignment and cohesion carry the disturbance outward through birds that never saw the pointer at all.",
   },
   "particle-life": {
     history:
@@ -152,6 +175,8 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
       "Bert Wang-Chak Chan published Lenia in 2019 after making Life continuous in space, time and state. The payoff was not a smoother Life but a zoo of hundreds of self-organising creatures, many of them with a smooth, unmistakably biological glide, discovered by search rather than designed.",
     maths:
       "Convolve the field with a ring-shaped kernel, then feed the result into a Gaussian growth function centred at μ with width σ: near-perfect neighbourhood density grows, too much or too little shrinks. Because the update is continuous, the same rule supports creatures at any scale.",
+    interaction:
+      "Click and drag to add mass to the field. Most blobs you draw are simply the wrong density and dissolve, since the growth function only rewards a neighbourhood close to μ. Some condense into a creature and glide away, which is roughly how Lenia's zoo was found: not designed, but stumbled on.",
   },
 };
 

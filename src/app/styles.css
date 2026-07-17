@@ -268,14 +268,18 @@ code {
  * Capped in width too: left to fill a 2560px viewport the two columns reach
  * ~900px, which is about 140 characters a line and stops being readable. The
  * cap trades trailing space at ultra-wide for a sane measure. */
+/* Interactive sims carry a third column ("Try it"), which narrows the columns
+ * and makes the prose taller. Sized so three fit without scrolling on a wide
+ * screen: past ~1200px auto-fit opens an empty fourth track, so cap below it
+ * and let the max-height catch the narrower viewports. */
 .sim-view__about {
   flex: 1 1 420px;
   min-width: 0;
-  max-width: 930px;
+  max-width: 1140px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: 10px 28px;
-  max-height: 190px;
+  max-height: 205px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
