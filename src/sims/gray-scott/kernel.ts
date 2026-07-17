@@ -32,6 +32,15 @@ const DEFAULT_F = 0.018;
 const DEFAULT_K = 0.0487;
 const CHANNEL_COUNT = 2;
 
+/** Seed-blob rings as [radius as a fraction of the shorter axis, blob count].
+ * Spacing is the tuning that matters: blobs must start far enough apart to grow
+ * before they meet, or they merge into one front and the regime's character
+ * (splitting, spotting) never shows. */
+const SEED_RINGS: readonly (readonly [number, number])[] = [
+  [0.22, 8],
+  [0.4, 16],
+];
+
 function clamp01(value: number): number {
   if (value < 0) {
     return 0;
@@ -155,7 +164,7 @@ export class GrayScottKernel implements SimKernel {
       this.state[index + 1] = 0;
     }
 
-    this.seedWarmStart();
+    this.seedOrigins();
   }
 
   step(_dt: number): void {
@@ -277,48 +286,72 @@ export class GrayScottKernel implements SimKernel {
     this.next = new Float32Array(0);
   }
 
-  private seedWarmStart(): void {
+  /**
+   * Seed rings of small V blobs in an otherwise full U field.
+   *
+   * Every regime needs the same local starting condition: a compact patch of V
+   * sitting in undepleted U, which it then feeds on. That is what decides
+   * whether V survives at all — the UV² term needs the reservoir. A previous
+   * version painted one large pre-grown wave instead, fitted to the waves
+   * regime; it depleted U across a third of the domain and left V spread too
+   * thin to sustain, so mitosis (high k) went extinct within a few hundred
+   * steps and spots decayed. A painted approximation can only ever be correct
+   * for the regime it was fitted to.
+   *
+   * Many origins rather than one is what fills a 960² grid quickly, which is
+   * what the warm start was reaching for: real dynamics from correct seeds,
+   * rather than an approximation of where those dynamics would have arrived.
+   * Concentric rings keep the radial symmetry that makes the pattern read as a
+   * mandala, and the whole layout is deterministic so the tests can lock it.
+   */
+  private seedOrigins(): void {
     if (this.width === 0 || this.height === 0) {
       return;
     }
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
     const minAxis = Math.min(this.width, this.height);
-    const seedHalf = Math.max(4, Math.floor(minAxis * 0.08));
-    const halfExtent = Math.min(minAxis * 0.36, seedHalf + 80);
-    const cornerRadius = halfExtent * 0.28;
-    const straightHalf = halfExtent - cornerRadius;
-    const bandWidth = Math.max(1, Math.min(3.2, minAxis * 0.08));
-    const twoBandVariance = 2 * bandWidth * bandWidth;
+    // Floor of 3: below roughly this radius a blob dies on contact with a
+    // high kill rate however much reservoir surrounds it, so mitosis needs it
+    // even though the live grids (384² and up) never reach the floor.
+    const radius = Math.max(3, Math.round(minAxis * 0.022));
+    // Blobs that touch are one blob, and a ring that swallows the reservoir
+    // starves the field exactly as the old painted band did. Below this much
+    // clearance a ring is dropped rather than crowded in, which leaves tiny
+    // grids with the centre origin alone.
+    const clearance = 3 * radius;
 
-    // Approximate the single rounded wave present around displayed iteration
-    // 120. A signed-distance band avoids calculating ~1,440 Euler passes on load.
-    for (let y = 0; y < this.height; y += 1) {
-      const dy = Math.abs(y - centreY);
-      for (let x = 0; x < this.width; x += 1) {
-        const dx = Math.abs(x - centreX);
-        const qx = dx - straightHalf;
-        const qy = dy - straightHalf;
-        const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
-        const inside = Math.min(Math.max(qx, qy), 0);
-        const signedDistance = outside + inside - cornerRadius;
+    this.seedBlob(centreX, centreY, radius);
+    for (const [ringFraction, count] of SEED_RINGS) {
+      const ringRadius = minAxis * ringFraction;
+      if (ringRadius < clearance) continue;
+      if ((2 * Math.PI * ringRadius) / count < clearance) continue;
+      // Offset alternate rings so blobs interleave rather than lining up into
+      // spokes, which would bias growth along those radii.
+      const phase = count % 16 === 0 ? Math.PI / count : 0;
+      for (let i = 0; i < count; i += 1) {
+        const angle = (i / count) * Math.PI * 2 + phase;
+        this.seedBlob(
+          Math.round(centreX + Math.cos(angle) * ringRadius),
+          Math.round(centreY + Math.sin(angle) * ringRadius),
+          radius,
+        );
+      }
+    }
+  }
 
-        const horizontalWeight = dy / Math.max(1, dx + dy);
-        const ripple =
-          horizontalWeight *
-            (2.4 * Math.cos(dx * 0.09) + 1.2 * Math.cos(dx * 0.21)) +
-          (1 - horizontalWeight) * 0.8 * Math.cos(dy * 0.11);
-        const distance = signedDistance + ripple;
-        let activation = Math.exp(-(distance * distance) / twoBandVariance);
-
-        const split =
-          horizontalWeight * Math.exp(-(dx * dx) / (2 * 12 * 12));
-        activation *= 1 - 0.55 * split;
-        if (activation < 0.001) continue;
-
+  private seedBlob(centreX: number, centreY: number, radius: number): void {
+    const radiusSquared = radius * radius;
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      const y = centreY + dy;
+      if (y < 0 || y >= this.height) continue;
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const x = centreX + dx;
+        if (x < 0 || x >= this.width) continue;
+        if (dx * dx + dy * dy > radiusSquared) continue;
         const index = (y * this.width + x) * this.channelCount;
-        this.state[index] = clamp01(1 - 0.82 * activation);
-        this.state[index + 1] = clamp01(0.43 * activation);
+        this.state[index] = 0.5;
+        this.state[index + 1] = 0.25;
       }
     }
   }

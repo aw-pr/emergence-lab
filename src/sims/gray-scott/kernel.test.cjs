@@ -105,41 +105,33 @@ test("init floors dimensions and resets state idempotently", () => {
   assert.ok(vValues.some((value) => value < 0.1));
 });
 
-test("init creates one symmetric approximate warm-start wave", () => {
-  const width = 64;
-  const height = 48;
+test("init seeds compact V blobs into an otherwise undepleted U field", () => {
+  const width = 96;
+  const height = 96;
   const kernel = new GrayScottKernel();
   kernel.init(width, height, {});
 
   const state = kernel.readState();
   const centreX = Math.floor(width / 2);
   const centreY = Math.floor(height / 2);
-  const minAxis = Math.min(width, height);
-  const seedHalf = Math.max(4, Math.floor(minAxis * 0.08));
-  const halfExtent = Math.min(minAxis * 0.36, seedHalf + 80);
 
   const centreCell = readCell(state, width, centreX, centreY);
-  assert.equal(centreCell.u, 1);
-  assert.equal(centreCell.v, 0);
+  assert.equal(centreCell.u, 0.5);
+  assert.equal(centreCell.v, 0.25);
 
-  const waveFront = readCell(
-    state,
-    width,
-    Math.round(centreX + halfExtent),
-    centreY,
-  );
-  assert.ok(waveFront.u < 0.7);
-  assert.ok(waveFront.v > 0.2);
-
-  let activeV = 0;
+  // The reservoir is what every regime feeds on: seeds must be a small
+  // minority of the field, not a structure spanning it.
+  let seeded = 0;
   for (let index = 1; index < state.length; index += kernel.channelCount) {
-    if (state[index] > 0.1) activeV += 1;
+    if (state[index] > 0.1) seeded += 1;
   }
-  assert.ok(activeV > 500);
+  const seededFraction = seeded / (width * height);
+  assert.ok(seededFraction > 0.01, `seeded ${seededFraction}`);
+  assert.ok(seededFraction < 0.12, `seeded ${seededFraction}`);
 
   const farCell = readCell(state, width, 0, 0);
-  assert.ok(farCell.u > 0.99);
-  assert.ok(farCell.v < 0.001);
+  assert.equal(farCell.u, 1);
+  assert.equal(farCell.v, 0);
 
   for (let offset = 0; offset <= 15; offset += 3) {
     const left = readCell(state, width, centreX - offset, centreY);
@@ -151,6 +143,73 @@ test("init creates one symmetric approximate warm-start wave", () => {
     const down = readCell(state, width, centreX, centreY + offset);
     assert.equal(up.u, down.u);
     assert.equal(up.v, down.v);
+  }
+});
+
+test("init seeds several separated origins, not one merged structure", () => {
+  const width = 96;
+  const height = 96;
+  const kernel = new GrayScottKernel();
+  kernel.init(width, height, {});
+  const state = kernel.readState();
+
+  // Count 4-connected components of seeded V. One origin means the seed spans
+  // the domain as a single painted structure, which is the shape that starved
+  // the high-k regimes.
+  const seen = new Uint8Array(width * height);
+  let origins = 0;
+  for (let start = 0; start < width * height; start += 1) {
+    if (seen[start] || state[start * 2 + 1] <= 0.1) continue;
+    origins += 1;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const cell = stack.pop();
+      const x = cell % width;
+      const y = Math.floor(cell / width);
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ]) {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const next = ny * width + nx;
+        if (seen[next] || state[next * 2 + 1] <= 0.1) continue;
+        seen[next] = 1;
+        stack.push(next);
+      }
+    }
+  }
+
+  assert.ok(origins > 4, `expected several origins, got ${origins}`);
+});
+
+// Regression guard. A warm start fitted to the waves regime drove mitosis
+// extinct within ~400 steps: V has a high kill rate here and dies unless each
+// blob starts compact in undepleted U. Assert survival, not a fixed shape.
+test("high-kill-rate regimes survive the seed rather than going extinct", () => {
+  const regimes = [
+    { label: "mitosis", F: 0.0367, k: 0.0649 },
+    { label: "spots", F: 0.026, k: 0.0597 },
+  ];
+
+  for (const { label, F, k } of regimes) {
+    const width = 96;
+    const height = 96;
+    const kernel = new GrayScottKernel();
+    kernel.init(width, height, { Du: 0.2097, Dv: 0.105, F, k });
+
+    for (let step = 0; step < 900; step += 1) {
+      kernel.step(1);
+    }
+
+    const state = kernel.readState();
+    let alive = 0;
+    for (let index = 1; index < state.length; index += kernel.channelCount) {
+      if (state[index] > 0.2) alive += 1;
+    }
+    assert.ok(alive > 0.02 * width * height, `${label} died out: ${alive} cells`);
   }
 });
 
