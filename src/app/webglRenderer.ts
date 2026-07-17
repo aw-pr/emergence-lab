@@ -43,13 +43,14 @@ uniform float u_contrast;
 uniform bool u_paletteCycleReverse;
 uniform bool u_paletteCyclic;
 uniform int u_steps;
-uniform int u_dotRadius;
 uniform bool u_smoothSampling;
 uniform bool u_circularPhase;
 uniform float u_palettePhase;
 uniform bool u_boidsGlyph;
 uniform float u_boidsGlyphRadius;
 uniform vec2 u_boidsMeanDir;
+uniform bool u_particleGlyph;
+uniform float u_particleGlyphRadius;
 uniform bool u_trailMode;
 uniform bool u_streamerMode;
 uniform float u_streamerWidth;
@@ -58,6 +59,13 @@ in vec2 v_uv;
 out vec4 outColor;
 
 const float TAU = 6.283185307179586;
+
+/** Particle-mode sphere lighting: key light from the upper left, toward the eye. */
+const vec3 PARTICLE_LIGHT = normalize(vec3(-0.42, 0.46, 0.78));
+/** Fraction of a particle's colour that survives on its unlit side. */
+const float PARTICLE_AMBIENT = 0.3;
+/** Disc fraction over which the rim fades out, antialiasing the silhouette. */
+const float PARTICLE_RIM = 0.86;
 
 float clamp01(float value) {
   return clamp(value, 0.0, 1.0);
@@ -368,6 +376,59 @@ void main() {
     return;
   }
 
+  if (u_particleGlyph) {
+    vec3 bg = vec3(5.0, 8.0, 18.0) / 255.0;
+    float glyphRadius = clamp(u_particleGlyphRadius, 0.5, 8.0);
+    // Bound the search by the actual radius rather than sweeping a fixed window
+    // and discarding: at the default radius of 2 that is 25 taps per fragment
+    // instead of 289, and this shader runs over every pixel of the display.
+    int radius = int(ceil(glyphRadius));
+    vec2 fragPos = v_uv * u_sourceSize - vec2(0.5);
+    vec3 lit = vec3(0.0);
+    float specular = 0.0;
+    float coverage = 0.0;
+    float nearestZ = -1.0;
+
+    for (int y = -radius; y <= radius; y += 1) {
+      for (int x = -radius; x <= radius; x += 1) {
+        ivec2 sampleCoord = clamp(coord + ivec2(x, y), ivec2(0), size - ivec2(1));
+        vec4 raw = readChannels(sampleCoord);
+        if (signalAt(raw) <= 0.02) continue;
+
+        vec2 local = fragPos - vec2(sampleCoord);
+        float d = length(local) / glyphRadius;
+        if (d >= 1.0) continue;
+        float alpha = 1.0 - smoothstep(PARTICLE_RIM, 1.0, d);
+        if (alpha <= 0.0) continue;
+
+        // Treat each particle as a sphere lit from the upper left: the height
+        // of its surface above the screen plane is sqrt(1 - d^2), which gives
+        // both the shading normal and a depth to resolve overlaps by.
+        float z = sqrt(max(0.0, 1.0 - d * d));
+        if (z > nearestZ) {
+          nearestZ = z;
+          vec3 normal = vec3(local / glyphRadius, z);
+          float lambert = clamp(dot(normal, PARTICLE_LIGHT), 0.0, 1.0);
+          lit = colourFromRaw(raw) * (PARTICLE_AMBIENT + (1.0 - PARTICLE_AMBIENT) * lambert);
+          specular = pow(lambert, 26.0) * 0.5;
+        }
+        coverage = max(coverage, alpha);
+      }
+    }
+
+    // Nearest surface wins the pixel rather than the contributions summing:
+    // these are opaque bodies, so overlapping particles should occlude each
+    // other. Summing also washes dense clusters out to white, and species hue
+    // is the whole signal in this model.
+    vec3 dotColour = lit + vec3(specular);
+    if (u_trailMode) {
+      outColor = vec4(dotColour, coverage);
+    } else {
+      outColor = vec4(mix(bg, dotColour, coverage), 1.0);
+    }
+    return;
+  }
+
   if (u_streamerMode) {
     vec2 texel = 1.0 / u_sourceSize;
     float radius = clamp(u_streamerWidth, 0.75, 4.0);
@@ -410,22 +471,6 @@ void main() {
     colour += ember * hotCore * 0.22;
     outColor = vec4(colour, 1.0);
     return;
-  }
-
-  if (u_dotRadius > 0) {
-    vec4 raw = readChannels(coord);
-    if (signalAt(raw) <= 0.02) {
-      for (int y = -8; y <= 8; y += 1) {
-        for (int x = -8; x <= 8; x += 1) {
-          if (abs(x) > u_dotRadius || abs(y) > u_dotRadius) continue;
-          ivec2 sampleCoord = clamp(coord + ivec2(x, y), ivec2(0), size - ivec2(1));
-          if (signalAt(readChannels(sampleCoord)) > 0.02) {
-            outColor = vec4(colourAt(sampleCoord), 1.0);
-            return;
-          }
-        }
-      }
-    }
   }
 
   vec4 raw = u_smoothSampling
@@ -732,13 +777,14 @@ interface UniformLocations {
   paletteCycleReverse: WebGLUniformLocation;
   paletteCyclic: WebGLUniformLocation;
   steps: WebGLUniformLocation;
-  dotRadius: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   circularPhase: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
   boidsGlyph: WebGLUniformLocation;
   boidsGlyphRadius: WebGLUniformLocation;
   boidsMeanDir: WebGLUniformLocation;
+  particleGlyph: WebGLUniformLocation;
+  particleGlyphRadius: WebGLUniformLocation;
   trailMode: WebGLUniformLocation;
   streamerMode: WebGLUniformLocation;
   streamerWidth: WebGLUniformLocation;
@@ -1905,10 +1951,6 @@ export class WebGLRendererBackend implements RendererBackend {
         this.gl.getUniformLocation(this.program, "u_steps"),
         "u_steps uniform",
       ),
-      dotRadius: mustCreate(
-        this.gl.getUniformLocation(this.program, "u_dotRadius"),
-        "u_dotRadius uniform",
-      ),
       smoothSampling: mustCreate(
         this.gl.getUniformLocation(this.program, "u_smoothSampling"),
         "u_smoothSampling uniform",
@@ -1928,6 +1970,14 @@ export class WebGLRendererBackend implements RendererBackend {
       boidsGlyphRadius: mustCreate(
         this.gl.getUniformLocation(this.program, "u_boidsGlyphRadius"),
         "u_boidsGlyphRadius uniform",
+      ),
+      particleGlyph: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_particleGlyph"),
+        "u_particleGlyph uniform",
+      ),
+      particleGlyphRadius: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_particleGlyphRadius"),
+        "u_particleGlyphRadius uniform",
       ),
       boidsMeanDir: mustCreate(
         this.gl.getUniformLocation(this.program, "u_boidsMeanDir"),
@@ -2103,10 +2153,6 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.paletteCyclic, isCyclic(colourOptions.preset) ? 1 : 0);
     gl.uniform1i(this.uniforms.steps, Math.max(0, Math.floor(colourOptions.steps || 0)));
-    gl.uniform1i(
-      this.uniforms.dotRadius,
-      mode === "particle" ? Math.floor(displayOptions.dotSize / 2) : 0,
-    );
     gl.uniform1i(this.uniforms.smoothSampling, shouldSmoothSample(mode) ? 1 : 0);
     gl.uniform1i(this.uniforms.circularPhase, isCircularPhaseState(kernel) ? 1 : 0);
     gl.uniform1f(
@@ -2117,6 +2163,11 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.boidsGlyph, isBoidsState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.boidsGlyphRadius, boidsGlyphRadius(params, displayOptions));
+    gl.uniform1i(this.uniforms.particleGlyph, isParticleLifeState(kernel) ? 1 : 0);
+    gl.uniform1f(
+      this.uniforms.particleGlyphRadius,
+      particleGlyphRadius(params, displayOptions),
+    );
     gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
     gl.uniform1i(this.uniforms.streamerMode, isAttractorState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.streamerWidth, numericParam(params, "ribbonWidth", 2.1));
@@ -2239,6 +2290,16 @@ function isBoidsState(kernel: SimKernel): boolean {
   );
 }
 
+function isParticleLifeState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Particle Life" &&
+    kernel.channelCount === 3 &&
+    kernel.channelLabels[0] === "Red" &&
+    kernel.channelLabels[1] === "Green" &&
+    kernel.channelLabels[2] === "Blue"
+  );
+}
+
 function isAttractorState(kernel: SimKernel): boolean {
   return kernel.name === "Strange Attractor" && kernel.channelLabels[0] === "Density";
 }
@@ -2317,6 +2378,24 @@ function boidsGlyphRadius(
       ? rawSize
       : displayOptions.dotSize;
   return Math.max(2, Math.min(8, size / 2));
+}
+
+/**
+ * Sphere radius in grid cells for particle-life. The kernel's own pointSize
+ * wins when set, so the sim's param and the display slider cannot disagree.
+ * The floor is 1.5: below that the disc is too few pixels across to shade, and
+ * the dot degenerates back into the square block this glyph replaced.
+ */
+function particleGlyphRadius(
+  params: Record<string, number | boolean | string>,
+  displayOptions: { dotSize: number },
+): number {
+  const rawSize = params.pointSize;
+  const size =
+    typeof rawSize === "number" && Number.isFinite(rawSize)
+      ? rawSize
+      : displayOptions.dotSize;
+  return Math.max(1.5, Math.min(8, size / 2));
 }
 
 function palettePhase(

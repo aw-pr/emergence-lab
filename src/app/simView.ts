@@ -218,6 +218,7 @@ export async function renderSimView(
     defaultResolution,
     showResolutionControl: !fractal,
     showTrailControl: renderMode === "particle",
+    showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
@@ -749,7 +750,10 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
   if (slug === "particle-life") {
-    return { dotSize: 2, trailFade: 0, bloom: 0 };
+    // Bloom carries the species colour a little past each sphere's rim, so
+    // clusters read as one glowing membrane while the bodies stay distinct.
+    // dotSize does not reach the glyph: the kernel's own pointSize param wins.
+    return { dotSize: 2, trailFade: 0, bloom: 0.35 };
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };

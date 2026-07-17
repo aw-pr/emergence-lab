@@ -73,6 +73,13 @@ export interface ControlsOptions {
   showResolutionControl?: boolean;
   /** Show the particle-trail fade slider (particle-mode sims only). */
   showTrailControl?: boolean;
+  /**
+   * Show the display "Point size (px)" slider. Off for sims whose kernel
+   * declares its own pointSize param: that one wins in the renderer, so
+   * showing both puts two identically-labelled sliders in the panel, only one
+   * of which does anything.
+   */
+  showDotSizeControl?: boolean;
   /** Show the "Auto-cycle runs" toggle (sims whose kernel reports isComplete()). */
   showAutoCycleControl?: boolean;
   /** Initial auto-cycle state (persisted or per-sim default). */
@@ -104,6 +111,7 @@ export class ControlsPanel {
   private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
   private readonly showTrailControl: boolean;
+  private readonly showDotSizeControl: boolean;
   private readonly showAutoCycleControl: boolean;
   private readonly defaultAutoCycle: boolean;
   private autoCycle: boolean;
@@ -158,6 +166,7 @@ export class ControlsPanel {
     this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
     this.showTrailControl = options.showTrailControl ?? false;
+    this.showDotSizeControl = options.showDotSizeControl ?? true;
     this.showAutoCycleControl = options.showAutoCycleControl ?? false;
     this.defaultAutoCycle = options.defaultAutoCycle ?? false;
     this.autoCycle = options.initialAutoCycle ?? this.defaultAutoCycle;
@@ -632,18 +641,20 @@ export class ControlsPanel {
         this.setColourOptions({ ...this.colourOptions, invert });
       }),
     );
-    section.appendChild(
-      this.buildColourRangeControl(
-        "Point size (px)",
-        this.displayOptions.dotSize,
-        1,
-        6,
-        1,
-        (dotSize) => {
-          this.setDisplayOptions({ ...this.displayOptions, dotSize });
-        },
-      ),
-    );
+    if (this.showDotSizeControl) {
+      section.appendChild(
+        this.buildColourRangeControl(
+          "Point size (px)",
+          this.displayOptions.dotSize,
+          1,
+          6,
+          1,
+          (dotSize) => {
+            this.setDisplayOptions({ ...this.displayOptions, dotSize });
+          },
+        ),
+      );
+    }
     if (this.showTrailControl) {
       section.appendChild(
         this.buildColourRangeControl(

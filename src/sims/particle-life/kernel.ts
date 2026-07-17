@@ -30,7 +30,12 @@ const DEFAULT_RMIN = 12;
 const DEFAULT_FORCE_SCALE = 55;
 const DEFAULT_FRICTION = 0.55;
 const DEFAULT_MATRIX_BIAS = 0;
-const DEFAULT_POINT_SIZE = 4;
+/**
+ * Sphere diameter in cells. Purely presentational: the kernel declares it for
+ * the panel but never reads it, and the renderer draws the glyph from it. 4 was
+ * the flat-square default and is too few pixels across to show the shading.
+ */
+const DEFAULT_POINT_SIZE = 7;
 
 const MAX_PARTICLE_COUNT = 20000;
 const MIN_SPECIES = 2;
