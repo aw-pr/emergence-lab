@@ -1,4 +1,5 @@
 import katex from "katex";
+import { isFramedBySite } from "./embed.ts";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
 import {
@@ -430,7 +431,15 @@ function buildLayout(
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
-  back.href = "#/";
+  // Framed by the site's /labs/run shell, the app's internal gallery is a
+  // redundant copy of the site's /labs page, so send the parent window there
+  // instead. Standalone (and direct /labs/app/ visits) keep the in-app gallery.
+  if (isFramedBySite()) {
+    back.href = "/labs";
+    back.target = "_top";
+  } else {
+    back.href = "#/";
+  }
   back.textContent = "← Gallery";
   top.appendChild(back);
 

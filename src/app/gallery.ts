@@ -1,3 +1,4 @@
+import { isTopLevelWindow } from "./embed.ts";
 import { REGISTRY, type SimEntry } from "./registry.ts";
 
 const UNGROUPED_FAMILY = "Other";
@@ -17,17 +18,6 @@ interface CardModel {
   /** Basename of the pre-rendered still in /thumbnails (see
    * scripts/generate-thumbnails.mjs). */
   thumbKey: string;
-}
-
-/** True unless this document is rendered inside another document's iframe.
- * Wrapped in try/catch because cross-origin frames throw on window.top
- * access; same-origin here, but this must never break the standalone build. */
-function isTopLevelWindow(): boolean {
-  try {
-    return window.self === window.top;
-  } catch {
-    return false;
-  }
 }
 
 export function renderGallery(container: HTMLElement): void {
