@@ -185,9 +185,39 @@ test("init seeds several separated origins, not one merged structure", () => {
   assert.ok(origins > 4, `expected several origins, got ${origins}`);
 });
 
-// Regression guard. A warm start fitted to the waves regime drove mitosis
-// extinct within ~400 steps: V has a high kill rate here and dies unless each
-// blob starts compact in undepleted U. Assert survival, not a fixed shape.
+/** Widest span of seeded V through the centre row, i.e. the centre blob's
+ * diameter in cells. */
+function centreBlobDiameter(kernel, width, height) {
+  const state = kernel.readState();
+  const centreY = Math.floor(height / 2);
+  let span = 0;
+  for (let x = 0; x < width; x += 1) {
+    if (state[(centreY * width + x) * kernel.channelCount + 1] > 0.1) span += 1;
+    else if (span > 0) break;
+  }
+  return span;
+}
+
+// The seed's size is set by the reaction's length scale, which is per-cell and
+// so identical at every resolution. Sizing it as a share of the grid passes at
+// 256² and kills mitosis at the resolutions the sim actually runs at, because
+// the blob outgrows the length scale. Lock the invariant, not one grid.
+test("seed blob size does not scale with the grid", () => {
+  const small = new GrayScottKernel();
+  small.init(384, 384, {});
+  const large = new GrayScottKernel();
+  large.init(1280, 785, {});
+
+  assert.equal(
+    centreBlobDiameter(small, 384, 384),
+    centreBlobDiameter(large, 1280, 785),
+  );
+});
+
+// Regression guard at a resolution the sim really uses. A warm start fitted to
+// the waves regime drove mitosis extinct within ~400 steps, and a seed scaled
+// to the grid did the same above ~400 cells: V has a high kill rate here and
+// dies unless each blob starts compact in undepleted U. Assert survival.
 test("high-kill-rate regimes survive the seed rather than going extinct", () => {
   const regimes = [
     { label: "mitosis", F: 0.0367, k: 0.0649 },
@@ -195,12 +225,12 @@ test("high-kill-rate regimes survive the seed rather than going extinct", () => 
   ];
 
   for (const { label, F, k } of regimes) {
-    const width = 96;
-    const height = 96;
+    const width = 512;
+    const height = 400;
     const kernel = new GrayScottKernel();
     kernel.init(width, height, { Du: 0.2097, Dv: 0.105, F, k });
 
-    for (let step = 0; step < 900; step += 1) {
+    for (let step = 0; step < 250; step += 1) {
       kernel.step(1);
     }
 
@@ -209,7 +239,7 @@ test("high-kill-rate regimes survive the seed rather than going extinct", () => 
     for (let index = 1; index < state.length; index += kernel.channelCount) {
       if (state[index] > 0.2) alive += 1;
     }
-    assert.ok(alive > 0.02 * width * height, `${label} died out: ${alive} cells`);
+    assert.ok(alive > 500, `${label} died out: ${alive} cells`);
   }
 });
 

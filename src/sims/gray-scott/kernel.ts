@@ -32,14 +32,23 @@ const DEFAULT_F = 0.018;
 const DEFAULT_K = 0.0487;
 const CHANNEL_COUNT = 2;
 
-/** Seed-blob rings as [radius as a fraction of the shorter axis, blob count].
- * Spacing is the tuning that matters: blobs must start far enough apart to grow
- * before they meet, or they merge into one front and the regime's character
- * (splitting, spotting) never shows. */
-const SEED_RINGS: readonly (readonly [number, number])[] = [
-  [0.22, 8],
-  [0.4, 16],
-];
+/**
+ * Seed geometry in cells, never as a fraction of the grid.
+ *
+ * The reaction's length scale is fixed by Du, Dv, F and k, which are per-cell,
+ * so it does not grow with the canvas. A blob much wider than that scale has a
+ * flat, U-depleted interior that a high kill rate empties from the middle out:
+ * measured on a 700x560 grid, mitosis blobs of radius 3 and 5 survive while 8,
+ * 13 and 20 all die. Sizing the seed as a share of the grid therefore works at
+ * 256² and silently kills mitosis at the resolutions the sim actually runs at.
+ *
+ * So radius is a constant, and a bigger grid gets more origins rather than
+ * bigger ones: spacing is what fills the frame, radius is what survives.
+ */
+const SEED_BLOB_RADIUS = 4;
+const SEED_SPACING = 56;
+/** Keep the outermost ring inside the frame rather than against the edge. */
+const SEED_EXTENT = 0.44;
 
 function clamp01(value: number): number {
   if (value < 0) {
@@ -303,6 +312,10 @@ export class GrayScottKernel implements SimKernel {
    * rather than an approximation of where those dynamics would have arrived.
    * Concentric rings keep the radial symmetry that makes the pattern read as a
    * mandala, and the whole layout is deterministic so the tests can lock it.
+   *
+   * See SEED_BLOB_RADIUS for why the geometry is in cells: sizing any of this
+   * as a share of the grid reproduces the extinction it was meant to fix, just
+   * at the larger resolutions rather than everywhere.
    */
   private seedOrigins(): void {
     if (this.width === 0 || this.height === 0) {
@@ -311,24 +324,27 @@ export class GrayScottKernel implements SimKernel {
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
     const minAxis = Math.min(this.width, this.height);
-    // Floor of 3: below roughly this radius a blob dies on contact with a
-    // high kill rate however much reservoir surrounds it, so mitosis needs it
-    // even though the live grids (384² and up) never reach the floor.
-    const radius = Math.max(3, Math.round(minAxis * 0.022));
-    // Blobs that touch are one blob, and a ring that swallows the reservoir
-    // starves the field exactly as the old painted band did. Below this much
-    // clearance a ring is dropped rather than crowded in, which leaves tiny
-    // grids with the centre origin alone.
-    const clearance = 3 * radius;
+    // Only a grid too small to hold the constant shrinks it, which the live
+    // resolutions (384² and up) never do.
+    const radius = Math.max(1, Math.min(SEED_BLOB_RADIUS, Math.floor(minAxis / 4)));
+    // Blobs closer than this merge into one front and no regime's character
+    // survives the merge. On a grid too small for the constant, fall back to
+    // whatever the grid can hold.
+    const spacing = Math.min(
+      SEED_SPACING,
+      Math.max(3 * radius + 4, Math.floor(minAxis / 4)),
+    );
+    const extent = minAxis * SEED_EXTENT;
 
     this.seedBlob(centreX, centreY, radius);
-    for (const [ringFraction, count] of SEED_RINGS) {
-      const ringRadius = minAxis * ringFraction;
-      if (ringRadius < clearance) continue;
-      if ((2 * Math.PI * ringRadius) / count < clearance) continue;
+    let ring = 0;
+    for (let ringRadius = spacing; ringRadius <= extent; ringRadius += spacing) {
+      // Constant arc spacing, so a wider ring carries more origins instead of
+      // stretching the same few apart.
+      const count = Math.max(6, Math.round((2 * Math.PI * ringRadius) / spacing));
       // Offset alternate rings so blobs interleave rather than lining up into
       // spokes, which would bias growth along those radii.
-      const phase = count % 16 === 0 ? Math.PI / count : 0;
+      const phase = ring % 2 === 1 ? Math.PI / count : 0;
       for (let i = 0; i < count; i += 1) {
         const angle = (i / count) * Math.PI * 2 + phase;
         this.seedBlob(
@@ -337,6 +353,7 @@ export class GrayScottKernel implements SimKernel {
           radius,
         );
       }
+      ring += 1;
     }
   }
 
