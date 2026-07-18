@@ -108,5 +108,5 @@ emergence-lab/
   docs/
     INTERFACE.md          # the SimKernel contract
     PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
-  HANDOFF.md              # current state and next-run brief
+  state/handoffs/         # autometta worker completion envelopes
 ```

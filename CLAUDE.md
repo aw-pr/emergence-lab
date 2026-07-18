@@ -13,9 +13,11 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
-The requested GPU rendering work and visual tuning have landed. Further model
-tuning is optional; no required implementation work remains. Gray-Scott stays
-the priority kernel for future refinement.
+The logistic-Mandelbrot bifurcation reveal is landed through the active-slice
+lighting work. A final uncommitted shader adjustment remains WIP: visually
+review its default-speed opening light before either banking it atomically or
+discarding it. Do not ship without explicit instruction. Gray-Scott stays the
+priority kernel for future refinement.
 
 ## Interface contract
 

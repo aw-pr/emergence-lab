@@ -90,8 +90,8 @@ void main() {
     * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
   v_markerGlow = u_fanActive
     * (1.0 - smoothstep(0.006, 0.025, abs(age)))
-    * (1.0 - smoothstep(0.008, 0.045, abs(a_position.y)));
-  gl_PointSize = u_pointSize * mix(1.0, 7.0, v_markerGlow);
+    * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+  gl_PointSize = u_pointSize * mix(1.0, 5.5, v_markerGlow);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
