@@ -239,6 +239,7 @@ uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
 uniform float u_markerRe;
 uniform float u_fanActive;
+uniform float u_axisVisible;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -261,7 +262,7 @@ void main() {
   float front = (1.0 - smoothstep(0.004, 0.018, abs(age)))
     * (1.0 - smoothstep(0.012, 0.045, abs(v_complex.y)));
   float fan = u_fanActive * max(front, wake);
-  vec3 axisLine = vec3(0.01, 0.018, 0.03) * axis;
+  vec3 axisLine = vec3(0.01, 0.018, 0.03) * axis * u_axisVisible;
   vec3 fanLine = vec3(0.012, 0.052, 0.066) * fan;
   outColor = vec4(planeInk + axisLine + fanLine, 1.0);
 }
@@ -433,6 +434,7 @@ export class Orbit3DPointCloud {
   private readonly groundTexSpanUniform: WebGLUniformLocation;
   private readonly groundMarkerReUniform: WebGLUniformLocation;
   private readonly groundFanActiveUniform: WebGLUniformLocation;
+  private readonly groundAxisVisibleUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -573,6 +575,10 @@ export class Orbit3DPointCloud {
     this.groundFanActiveUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_fanActive"),
       "orbit3d ground fan-active uniform",
+    );
+    this.groundAxisVisibleUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_axisVisible"),
+      "orbit3d ground axis-visible uniform",
     );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
@@ -931,6 +937,7 @@ export class Orbit3DPointCloud {
       gl.uniform2f(this.groundTexSpanUniform, ground.span[0], ground.span[1]);
       gl.uniform1f(this.groundMarkerReUniform, this.marker.re);
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
+      gl.uniform1f(this.groundAxisVisibleUniform, colourMode === "cycle" ? 0 : 1);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
       gl.bindVertexArray(this.groundVao);
