@@ -11,10 +11,22 @@ import { createWebGLRendererBackend } from "./webglRenderer.ts";
 import type { SimKernel, SimParams } from "./types.ts";
 import type { QualityProfile } from "./qualityProfiles.ts";
 
-export type { ResolutionPreset } from "./resolutionPreset.ts";
-export { RESOLUTION_TARGETS, DEFAULT_RESOLUTION } from "./resolutionPreset.ts";
-import type { ResolutionPreset } from "./resolutionPreset.ts";
-import { RESOLUTION_TARGETS, DEFAULT_RESOLUTION } from "./resolutionPreset.ts";
+/**
+ * Quality presets for the simulation's compute grid. They set a target cell
+ * count, NOT a pixel size — the grid is independent of the display, so the
+ * per-frame cost is the same on any screen. The actual grid dimensions are
+ * derived from the target and the viewport aspect ratio.
+ */
+export type ResolutionPreset = "performance" | "balanced" | "high" | "ultra";
+
+export const RESOLUTION_TARGETS: Readonly<Record<ResolutionPreset, number>> = {
+  performance: 384 * 384,
+  balanced: 640 * 640,
+  high: 960 * 960,
+  ultra: 1280 * 1280,
+};
+
+export const DEFAULT_RESOLUTION: ResolutionPreset = "balanced";
 
 export interface RendererOptions {
   canvas: HTMLCanvasElement;
@@ -40,10 +52,7 @@ export interface RendererOptions {
 /** Seconds a completed run stays on screen before auto-cycling to a new one. */
 const CYCLE_HOLD_SECONDS = 1.5;
 // Re(c)=+1 is minimum X under the reversed-X view and the XY plane's edge.
-// Start the sweep just ahead of the cardioid cusp at Re = 0.25 rather than
-// the domain edge, so the line has a short approach before it hits the set
-// instead of a long march across empty plane.
-const ORBIT_SWEEP_START = 0.5;
+const ORBIT_SWEEP_START = 1;
 const ORBIT_SWEEP_END = -2;
 const ORBIT_SWEEP_HOLD_SECONDS = 0.9;
 const ORBIT_AUTO_ROTATE_RADIANS_PER_SECOND = 0.05;
@@ -359,20 +368,13 @@ export class Renderer {
     clientY: number,
   ): Orbit3DMarkerClientSnapshot | null {
     this.pauseOrbit3dAutoRotate();
+    if (booleanParam(this.params, "realAxisSweep", false)) {
+      this.params = { ...this.params, realAxisSweep: false };
+      this.notifyParamsChange();
+    }
     const viewport = this.pointerToViewport(clientX, clientY);
     if (!viewport) return null;
-    let marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
-    if (marker && booleanParam(this.params, "realAxisSweep", false)) {
-      // Dragging the marker while the beam sweeps scrubs the beam: the sweep
-      // continues from the dragged position rather than being cancelled, and
-      // the marker stays pinned to the real axis the beam illuminates.
-      this.sweepRe = Math.min(
-        ORBIT_SWEEP_START,
-        Math.max(ORBIT_SWEEP_END, marker.re),
-      );
-      this.sweepHold = 0;
-      marker = this.backend.setOrbit3dMarker?.(this.sweepRe, 0) ?? marker;
-    }
+    const marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
     if (marker) this.draw();
     return this.markerSnapshotToClient(marker);
   }
@@ -391,17 +393,6 @@ export class Renderer {
   dollyOrbit3d(factor: number): void {
     this.pauseOrbit3dAutoRotate();
     this.backend.orbit3dDolly?.(factor);
-    this.draw();
-  }
-
-  panOrbit3d(deltaCssX: number, deltaCssY: number): void {
-    const rect = this.canvas.getBoundingClientRect();
-    if (rect.height <= 0) return;
-    this.pauseOrbit3dAutoRotate();
-    this.backend.orbit3dPan?.(
-      deltaCssX / rect.height,
-      deltaCssY / rect.height,
-    );
     this.draw();
   }
 
@@ -619,7 +610,7 @@ export class Renderer {
       } else {
         const speed = Math.max(
           0.001,
-          numericParam(this.params, "sweepSpeed", 0.1),
+          numericParam(this.params, "sweepSpeed", 0.15),
         );
         this.sweepRe = Math.max(ORBIT_SWEEP_END, this.sweepRe - dt * speed);
         this.setOrbit3dMarker(this.sweepRe, 0);
@@ -640,17 +631,11 @@ export class Renderer {
       return;
     }
     if (!this.orbitAutoRotateEnabled) return;
-    if (!booleanParam(this.params, "autoRotate", true)) return;
 
-    // Continuous spin circles the camera steadily instead of tracking and
-    // resetting with the sweep. With it off, the camera follows the sweep
-    // choreography whenever the beam is visible — cycle mode included, now
-    // that the beam sweeps there too.
-    const continuousSpin = booleanParam(this.params, "continuousSpin", false);
-    if (!continuousSpin && booleanParam(this.params, "realAxisSweep", false)) {
+    if (booleanParam(this.params, "realAxisSweep", false)) {
       const sweepSpeed = Math.max(
         0.001,
-        numericParam(this.params, "sweepSpeed", 0.1),
+        numericParam(this.params, "sweepSpeed", 0.15),
       );
       const progress = Math.min(
         1,
@@ -843,12 +828,6 @@ export class Renderer {
 
     const overCap = Math.sqrt(cap / (w * h));
     if (overCap < 1) {
-      w *= overCap;
-      h *= overCap;
-    } else if (this.resolution === "extreme" && overCap > 1) {
-      // Extreme is a floor as well as a ceiling: its whole point is a maximal
-      // candidate pool for the point-cloud builder, so a small window must not
-      // quietly shrink it back to the ultra tier.
       w *= overCap;
       h *= overCap;
     }
