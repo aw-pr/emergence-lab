@@ -1,9 +1,6 @@
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
-import { bakesFor, type BakedEntry } from "./bakedManifest.ts";
 import { setSimDocumentTitle } from "./docTitle.ts";
-import { getChrome, siteOwnsChrome } from "./chrome.ts";
-import { isEditableKeyboardEvent } from "./keyboardTarget.ts";
 import { isFramedBySite } from "./embed.ts";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
@@ -14,126 +11,12 @@ import {
   type ResolutionPreset,
 } from "./renderer.ts";
 import {
-  collapsibleSection,
   ControlsPanel,
   defaultParamsFromSchema,
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
 import { loadRenderOptions, loadResolution } from "./persistence.ts";
-
-/** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
-const LIVE_MODEL_SOURCE = "live";
-
-/**
- * Kernel params hoisted into the View section, per sim: everything about how
- * the object is drawn rather than what is simulated. Sims not listed keep
- * their whole schema below the View section.
- */
-const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
-  "logistic-mandelbrot": [
-    "colourMode",
-    "exposure",
-    "edgeGlow",
-    "tailRefinement",
-    "boundaryDetail",
-    "pointDensity",
-    "autoRotate",
-    "continuousSpin",
-    "cycleSpeed",
-    "cascadeReveal",
-    "cascadeDuration",
-    "realSliceOnly",
-    "modelSource",
-  ],
-  boids: ["pointSize"],
-  "particle-life": ["pointSize"],
-  "diffusion-limited-aggregation": ["colourByAge"],
-  "game-of-life": ["ageShading"],
-  "lorenz-attractor": ["fade", "ribbonWidth", "colourByHeight", "cycleSpeed"],
-  "clifford-dejong": ["exposure", "fade", "colourMode", "cycleSpeed"],
-  mandelbrot: ["palettePhase", "cycleSpeed"],
-  "julia-set": ["palettePhase", "cycleSpeed"],
-  "burning-ship": ["palettePhase", "cycleSpeed"],
-};
-
-/**
- * Named, collapsible sections for the remaining kernel params, per sim. Keys
- * left out of every group land in the trailing "Parameters" section; sims
- * with a handful of params skip grouping entirely rather than dressing three
- * sliders in three headings.
- */
-const PARAM_GROUPS: Readonly<
-  Record<string, readonly { label: string; keys: readonly string[] }[]>
-> = {
-  // logistic-mandelbrot's "Light beam" and "Sampling" groups come from its
-  // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
-  // this per-sim table — see ControlsPanel's schema-native grouping.
-  boids: [
-    { label: "Flock", keys: ["boidCount", "initialFlocks", "maxSpeed"] },
-    { label: "Perception", keys: ["visualRadius", "separationRadius"] },
-    { label: "Steering", keys: ["alignment", "cohesion", "separation"] },
-  ],
-  "particle-life": [
-    { label: "Population", keys: ["particleCount", "species"] },
-    {
-      label: "Forces",
-      keys: ["rmax", "rmin", "forceScale", "matrixBias", "friction"],
-    },
-  ],
-  physarum: [
-    { label: "Agents", keys: ["agentCount", "moveSpeed", "turnSpeed"] },
-    { label: "Sensing", keys: ["sensorAngle", "sensorDistance"] },
-    { label: "Trail", keys: ["depositAmount", "evaporation"] },
-  ],
-  "gray-scott": [
-    { label: "Diffusion", keys: ["Du", "Dv"] },
-    { label: "Reaction", keys: ["F", "k"] },
-  ],
-  "belousov-zhabotinsky": [
-    { label: "Diffusion", keys: ["diffusionA", "diffusionB", "diffusionC"] },
-    { label: "Reaction", keys: ["feed", "kill"] },
-  ],
-  "game-of-life": [
-    {
-      label: "Rules",
-      keys: ["birthMin", "birthMax", "surviveMin", "surviveMax"],
-    },
-    { label: "Seeding", keys: ["seedDensity", "sparkRate"] },
-  ],
-  "diffusion-limited-aggregation": [
-    { label: "Growth", keys: ["walkersPerStep", "maxWalkSteps", "stickiness"] },
-    { label: "Seeding", keys: ["spawnRadius", "seedCount"] },
-  ],
-  "kuramoto-oscillators": [
-    { label: "Coupling", keys: ["coupling", "couplingMode"] },
-    { label: "Oscillators", keys: ["frequencySpread", "noise"] },
-    { label: "Simulation", keys: ["timestep", "initialPattern"] },
-  ],
-  lenia: [
-    { label: "Growth", keys: ["mu", "sigma", "muDrift"] },
-    { label: "Kernel & timing", keys: ["radius", "dt", "stepsPerFrame"] },
-  ],
-  "lorenz-attractor": [
-    { label: "Attractor", keys: ["attractor", "sigma", "rho", "beta"] },
-  ],
-  "ising-model": [
-    { label: "Physics", keys: ["temperature", "coupling", "externalField"] },
-  ],
-  mandelbrot: [
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-  "julia-set": [
-    { label: "Seed", keys: ["cRe", "cIm"] },
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-  "burning-ship": [
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-};
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
@@ -175,10 +58,6 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
     "\\dot{y} = x(\\rho-z)-y",
     "\\dot{z} = xy-\\beta z",
   ],
-  "clifford-dejong": [
-    "x_{n+1} = \\sin(a y_n) + c\\cos(a x_n)",
-    "y_{n+1} = \\sin(b x_n) + d\\cos(b y_n)",
-  ],
   "belousov-zhabotinsky": [
     "\\dot{A} = D_a\\nabla^2A + f(1-A) + CA - AB",
     "\\dot{B} = D_b\\nabla^2B + AB - BC - kB",
@@ -216,12 +95,6 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
  */
 export interface SimViewHandle {
   dispose(): void;
-  /**
-   * Toggle immersive mode (the top-layer overlay that hides the description
-   * header and parameter sidebar). Optional because the early-error paths
-   * (unknown sim, kernel load failure) return before the toggle exists.
-   */
-  toggleImmersive?(): void;
 }
 
 export async function renderSimView(
@@ -263,156 +136,6 @@ export async function renderSimView(
     layout.canvas.classList.add("sim-view__canvas--smooth");
   }
 
-  // Immersive mode (header gone, settings as an auto-hiding edge drawer) is a
-  // CSS overlay first and native fullscreen second: requestFullscreen is
-  // denied in some contexts (no transient activation, embedded pages, iOS has
-  // no API at all), so the Maximise button never depends on it. The class
-  // also engages for browser/OS-level fullscreen, detected by the viewport
-  // matching the screen — standalone only, so an embedded lab can't hijack a
-  // full-screened host page.
-  // Promotes the immersive body into the UA's top layer, escaping every
-  // containing block/z-index in the document — including a host page's own
-  // transformed ancestor, which can trap a plain fixed+z-index overlay when
-  // this app is embedded (see the fixed/z-index fallback in styles.css for
-  // non-popover browsers). The `popover` attribute must only exist while
-  // immersive is forced: the UA rule `[popover]:not(:popover-open){display:
-  // none}` would otherwise hide the sim in normal layout.
-  const enterTopLayer = (body: HTMLElement) => {
-    if (!("showPopover" in body)) return;
-    body.setAttribute("popover", "manual");
-    try {
-      body.showPopover();
-    } catch {
-      // Already open, or the UA refuses mid-transition — the fixed/z-index
-      // fallback below still covers the viewport either way.
-    }
-  };
-  const exitTopLayer = (body: HTMLElement) => {
-    if (!("showPopover" in body)) return;
-    try {
-      body.hidePopover();
-    } catch {
-      // Already closed.
-    }
-    body.removeAttribute("popover");
-  };
-  let immersiveForced = false;
-  const immersiveAbort = new AbortController();
-  const updateImmersive = () => {
-    const native = document.fullscreenElement === layout.body;
-    const windowFullscreen =
-      !siteOwnsChrome() &&
-      window.innerWidth === window.screen.width &&
-      window.innerHeight === window.screen.height;
-    const immersive = immersiveForced || native || windowFullscreen;
-    layout.page.classList.toggle("sim-view--immersive", immersive);
-    if (!immersive) {
-      // Reset the drawer so re-entering immersive always starts parked,
-      // rather than reopening however it was left last time.
-      layout.sidebar.classList.remove("sim-view__sidebar--open");
-      const handle = layout.sidebar.querySelector<HTMLButtonElement>(
-        ".sim-view__drawer-handle",
-      );
-      handle?.setAttribute("aria-expanded", "false");
-      handle?.setAttribute("aria-label", "Show settings");
-    }
-  };
-  const toggleImmersive = () => {
-    if (immersiveForced || document.fullscreenElement) {
-      immersiveForced = false;
-      exitTopLayer(layout.body);
-      if (document.fullscreenElement) void document.exitFullscreen();
-      updateImmersive();
-      return;
-    }
-    immersiveForced = true;
-    updateImmersive();
-    enterTopLayer(layout.body);
-    // Opportunistic: hides the browser chrome too when the browser allows it.
-    layout.body.requestFullscreen?.().catch(() => {});
-    // The click leaves focus on the Maximise button inside the sidebar, whose
-    // :focus-within would pin the drawer open; drop it so the panel parks.
-    // Embedded inline, the app lives in a shadow root, so the focused button is
-    // the SHADOW root's activeElement — document.activeElement is only the host
-    // element. Blur the deepest active node so both mounts park the drawer.
-    const root = layout.body.getRootNode() as Document | ShadowRoot;
-    const focused = root.activeElement;
-    if (focused instanceof HTMLElement) focused.blur();
-  };
-  layout.immersiveExit.addEventListener("click", toggleImmersive, {
-    signal: immersiveAbort.signal,
-  });
-  document.addEventListener(
-    "fullscreenchange",
-    () => {
-      // The overlay is the source of truth; native fullscreen is only an
-      // opportunistic bonus. Do NOT clear immersiveForced when fullscreen
-      // exits: some browsers (seen on macOS Chrome) enter fullscreen on the
-      // Maximise click and then bounce straight back out, firing an exit event
-      // milliseconds later. Tearing down immersive on that spurious exit made
-      // the header snap back the instant the user pressed Maximise. Leaving
-      // immersiveForced set keeps the in-window overlay whether or not native
-      // fullscreen ever sticks — exactly what "the button never depends on it"
-      // was meant to guarantee. Explicit exits (Maximise again, Esc) still
-      // clear it below.
-      // Entering native fullscreen runs the UA's "hide all popovers" step, so
-      // the top-layer popover is gone by the time fullscreen exits — re-promote
-      // it here or the overlay would be left on the fixed/z-index fallback,
-      // which a host page's transformed ancestor can trap.
-      if (immersiveForced && !document.fullscreenElement) {
-        enterTopLayer(layout.body);
-      }
-      updateImmersive();
-    },
-    { signal: immersiveAbort.signal },
-  );
-  window.addEventListener(
-    "keydown",
-    (event) => {
-      // Esc exits immersive. When native fullscreen is active the browser
-      // swallows the first Esc to leave fullscreen (immersiveForced stays set,
-      // so the overlay persists); this handler then catches the next Esc, once
-      // no fullscreen element remains, and drops the overlay too.
-      if (
-        event.key === "Escape" &&
-        immersiveForced &&
-        !document.fullscreenElement
-      ) {
-        immersiveForced = false;
-        exitTopLayer(layout.body);
-        updateImmersive();
-      }
-    },
-    { signal: immersiveAbort.signal },
-  );
-  window.addEventListener("resize", updateImmersive, {
-    signal: immersiveAbort.signal,
-  });
-  layout.body.addEventListener(
-    "toggle",
-    (event) => {
-      // A popover `toggle` event with newState "closed" while immersiveForced
-      // is still true means the UA closed it out from under us — in practice
-      // native fullscreen entry, which runs "hide all popovers" (and a macOS
-      // Chrome fullscreen bounce can enter AND exit again before this async
-      // event even fires, so the fullscreen element may already be gone).
-      // Explicit exits clear immersiveForced before hiding, so any close seen
-      // here is UA-initiated: re-promote rather than tear down, or the overlay
-      // would be left on the fixed/z-index fallback a host page can trap.
-      // While a fullscreen element still exists, defer to the fullscreenchange
-      // handler, which re-promotes on exit.
-      if (
-        immersiveForced &&
-        (event as ToggleEvent).newState === "closed" &&
-        !document.fullscreenElement
-      ) {
-        enterTopLayer(layout.body);
-      }
-    },
-    { signal: immersiveAbort.signal },
-  );
-  updateImmersive();
-
   let kernel: SimKernel;
   try {
     kernel = await loadKernel(slug);
@@ -437,21 +160,6 @@ export async function renderSimView(
   const params: SimParams = variantDef
     ? { ...restored, ...variantDef.params }
     : restored;
-  // Prebaked clouds are machine-local, so the option list is only known once
-  // the manifest resolves; a persisted selection naming a bake this machine
-  // does not have falls back to the live build.
-  const controlsSchema = paramSchemaForControls(
-    slug,
-    kernel.paramSchema,
-    await bakesFor(slug),
-  );
-  const modelSource = controlsSchema.find((p) => p.key === "modelSource");
-  if (
-    typeof params.modelSource === "string" &&
-    !(modelSource?.options ?? [LIVE_MODEL_SOURCE]).includes(params.modelSource)
-  ) {
-    params.modelSource = LIVE_MODEL_SOURCE;
-  }
   const factoryColourOptions: ColourMapOptions = defaultColourOptionsFor(
     slug,
     kernel.channelCount,
@@ -498,7 +206,7 @@ export async function renderSimView(
     slug,
     container: layout.sidebar,
     simName: kernel.name,
-    paramSchema: controlsSchema,
+    paramSchema: paramSchemaForControls(slug, kernel.paramSchema),
     paramPresets: presetsFor(slug),
     initialParams: params,
     defaultParams: factoryParams,
@@ -511,15 +219,14 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
-    showExtremeResolution: slug === "logistic-mandelbrot",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
     fractalPaletteCycleUi: fractal,
-    viewParamKeys: VIEW_PARAM_KEYS[slug] ?? [],
-    paramGroups: PARAM_GROUPS[slug] ?? [],
+    viewParamKeys:
+      slug === "logistic-mandelbrot" ? ["colourMode", "continuousSpin"] : [],
     callbacks: {
       onPlayPause: () => {
         if (renderer.isRunning()) {
@@ -533,7 +240,9 @@ export async function renderSimView(
         if (slug === "logistic-mandelbrot") renderer.resetOrbit3dCamera();
         renderer.reset(controls.getParams());
       },
-      onToggleFullscreen: toggleImmersive,
+      onToggleFullscreen: () => {
+        toggleFullscreen(layout.stage);
+      },
       onStepsPerFrameChange: (value) => {
         stepsPerFrame = value;
         renderer.setStepsPerFrame(value);
@@ -559,11 +268,9 @@ export async function renderSimView(
     },
   });
 
-  layout.sidebar.prepend(layout.drawerHandle);
-
   const orbitMarkerReadout =
     slug === "logistic-mandelbrot"
-      ? buildOrbitMarkerReadout(slug, layout.sidebar)
+      ? buildOrbitMarkerReadout(layout.sidebar)
       : undefined;
 
   renderer.setParamsListener((next) => {
@@ -676,7 +383,7 @@ export async function renderSimView(
       window.addEventListener(
         "keydown",
         (event) => {
-          if (isEditableKeyboardEvent(event) || event.metaKey || event.ctrlKey || event.altKey) return;
+          if (isEditableTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
           if (event.key === "+" || event.key === "=") {
             event.preventDefault();
             zoomBy(2);
@@ -712,7 +419,6 @@ export async function renderSimView(
       orbit: (deltaCssX, deltaCssY) =>
         renderer.orbitOrbit3d(deltaCssX, deltaCssY),
       dolly: (factor) => renderer.dollyOrbit3d(factor),
-      pan: (deltaCssX, deltaCssY) => renderer.panOrbit3d(deltaCssX, deltaCssY),
       resetCamera: () => renderer.resetOrbit3dCamera(),
       onMarkerChange: (marker) => orbitMarkerReadout?.set(marker),
     });
@@ -720,33 +426,21 @@ export async function renderSimView(
 
   return {
     dispose() {
-      immersiveAbort.abort();
-      exitTopLayer(layout.body);
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
       detachFractalViewKeys?.();
       detachOrbit3dInteractions?.();
       detachPointerImpulse?.();
       renderer.destroy();
-      controls.dispose();
     },
-    toggleImmersive,
   };
 }
 
 interface SimLayout {
-  page: HTMLElement;
   body: HTMLElement;
   stage: HTMLElement;
   canvas: HTMLCanvasElement;
   sidebar: HTMLElement;
-  /** Attached to the sidebar after ControlsPanel renders — its render wipes
-   *  the sidebar's children, so mounting earlier would lose the handle. */
-  drawerHandle: HTMLElement;
-  /** Immersive-only exit control (an on-screen way back besides Esc/Maximise
-   *  again — the only option on touch, which has no Esc). Click listener is
-   *  attached in renderSimView, where toggleImmersive is in scope. */
-  immersiveExit: HTMLButtonElement;
   legend: HTMLElement;
   /** The narrative panel, so the pointer wiring can add its own note to it. */
   about?: HTMLElement;
@@ -765,11 +459,13 @@ interface OrbitMarkerReadout {
   set(marker: Orbit3DMarkerClientSnapshot): void;
 }
 
-function buildOrbitMarkerReadout(
-  slug: string,
-  container: HTMLElement,
-): OrbitMarkerReadout {
-  const section = collapsibleSection(slug, "Orbit marker", "controls__params");
+function buildOrbitMarkerReadout(container: HTMLElement): OrbitMarkerReadout {
+  const section = document.createElement("section");
+  section.className = "controls__params";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Orbit marker";
+  section.appendChild(heading);
 
   const cRow = document.createElement("div");
   cRow.className = "control control--enum";
@@ -815,6 +511,12 @@ function formatZoom(zoom: number): string {
   return `×${value.toFixed(digits)}${suffixes[suffix]}`;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName);
+}
+
 interface SimHeader {
   name: string;
   family?: string;
@@ -835,26 +537,25 @@ function buildLayout(
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
-  // Hosted by the site (framed or embedded inline), the app's internal gallery
-  // is a redundant copy of the site's /labs page, so send visitors there
+  // Framed by the site's /labs/run shell, the app's internal gallery is a
+  // redundant copy of the site's /labs page, so send the parent window there
   // instead. Standalone (and direct /labs/app/ visits) keep the in-app gallery.
-  if (siteOwnsChrome()) {
-    back.href = getChrome().siteGalleryHref;
-    // Only the iframe shell needs to break out of its frame.
-    if (isFramedBySite()) back.target = "_top";
+  if (isFramedBySite()) {
+    back.href = "/labs";
+    back.target = "_top";
   } else {
     back.href = "#/";
   }
   back.textContent = "← Gallery";
   top.appendChild(back);
 
-  // Hosted by the site, the bar directly above already names the sim, so a
-  // title block here is a second copy of it sitting in a column of its own
+  // Framed by the site, the /labs/run bar directly above already names the sim,
+  // so a title block here is a second copy of it sitting in a column of its own
   // with the narrative's full height beside it. Drop it and let the narrative
   // have the width. Standalone there is no bar, so the title stays.
   const titleBlock = document.createElement("div");
   titleBlock.className = "sim-view__title-block";
-  titleBlock.hidden = siteOwnsChrome();
+  titleBlock.hidden = isFramedBySite();
 
   const title = document.createElement("h1");
   title.className = "sim-view__title";
@@ -879,37 +580,12 @@ function buildLayout(
   top.appendChild(titleBlock);
 
   const about = header.about ? buildAbout(header.about, slug) : undefined;
-  if (about) {
-    // Phone widths collapse the narrative behind this disclosure (the stage
-    // and controls need the room more than the prose); the button itself only
-    // exists visually below the stacked-layout breakpoint.
-    const aboutToggle = document.createElement("button");
-    aboutToggle.type = "button";
-    aboutToggle.className = "sim-view__about-toggle";
-    aboutToggle.setAttribute("aria-expanded", "false");
-    aboutToggle.textContent = "About this simulation";
-    aboutToggle.addEventListener("click", () => {
-      const open = about.classList.toggle("sim-view__about--open");
-      aboutToggle.setAttribute("aria-expanded", String(open));
-    });
-    top.appendChild(aboutToggle);
-    top.appendChild(about);
-  }
+  if (about) top.appendChild(about);
 
   page.appendChild(top);
 
   const body = document.createElement("div");
   body.className = "sim-view__body";
-
-  // Immersive-only exit control: a visible way back that doesn't depend on
-  // Esc (touch has none) or remembering the Maximise button toggles too.
-  // Hidden outside immersive mode; click listener attached in renderSimView.
-  const immersiveExit = document.createElement("button");
-  immersiveExit.type = "button";
-  immersiveExit.className = "sim-view__immersive-exit";
-  immersiveExit.setAttribute("aria-label", "Exit fullscreen");
-  immersiveExit.textContent = "✕";
-  body.appendChild(immersiveExit);
 
   const stage = document.createElement("div");
   stage.className = "sim-view__stage";
@@ -927,58 +603,14 @@ function buildLayout(
 
   body.appendChild(stage);
 
-  // Phone-only bottom-drawer toggle: the sidebar starts collapsed below the
-  // 720px breakpoint (see styles.css) so the stage gets the room, and this
-  // pill opens it on demand. Hidden outside that breakpoint and in immersive
-  // mode, where the sidebar already has its own edge-handle reveal.
-  const paramsToggle = document.createElement("button");
-  paramsToggle.type = "button";
-  paramsToggle.className = "sim-view__params-toggle";
-  paramsToggle.setAttribute("aria-expanded", "false");
-  paramsToggle.textContent = "Parameters";
-  paramsToggle.addEventListener("click", () => {
-    const open = page.classList.toggle("sim-view--params-open");
-    paramsToggle.setAttribute("aria-expanded", String(open));
-  });
-  body.appendChild(paramsToggle);
-
   const sidebar = document.createElement("aside");
   sidebar.className = "sim-view__sidebar";
-
-  // Immersive-only edge handle: the hover/focus-within reveal below has no
-  // touch equivalent, so this button is the tap target that opens the drawer
-  // on touch devices (hidden outside immersive mode, see styles.css).
-  const drawerHandle = document.createElement("button");
-  drawerHandle.type = "button";
-  drawerHandle.className = "sim-view__drawer-handle";
-  drawerHandle.setAttribute("aria-expanded", "false");
-  drawerHandle.setAttribute("aria-label", "Show settings");
-  drawerHandle.addEventListener("click", () => {
-    const open = sidebar.classList.toggle("sim-view__sidebar--open");
-    drawerHandle.setAttribute("aria-expanded", String(open));
-    drawerHandle.setAttribute(
-      "aria-label",
-      open ? "Hide settings" : "Show settings",
-    );
-  });
-
   body.appendChild(sidebar);
 
   page.appendChild(body);
   container.appendChild(page);
 
-  return {
-    page,
-    body,
-    stage,
-    canvas,
-    sidebar,
-    drawerHandle,
-    immersiveExit,
-    legend,
-    about,
-    fractalHud,
-  };
+  return { body, stage, canvas, sidebar, legend, about, fractalHud };
 }
 
 function buildFractalHud(): FractalHud {
@@ -1143,16 +775,8 @@ function speedProfileFor(slug: string): SpeedProfile {
       // substeps per frame); this slider multiplies on top of it, and starting
       // it anywhere but 1 makes "reset to defaults" look like a speed change.
       return { initial: 1, control: careful };
-    case "clifford-dejong":
-      // The felt speed is pointsPerFrame; the slider multiplies whole step()
-      // calls (fade sweeps included), so it stays at 1x like the attractors.
-      return { initial: 1, control: careful };
     case "boids":
-      // 1x, not faster: the renderer samples positions once per rendered
-      // frame, so at Nx the trail accumulator sees every Nth position and the
-      // streaks bead into dotted chains. At 1x they draw as the continuous
-      // comet-tails the native viewer shows.
-      return { initial: 1, control: swarm };
+      return { initial: 5, control: swarm };
     case "particle-life":
       return { initial: 1, control: swarm };
     case "mandelbrot":
@@ -1210,18 +834,13 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
   if (slug === "particle-life") {
-    // Matched to the native viewer's starfield look: crisp grains on black,
-    // no trail smear, just enough bloom to let dense clusters glow.
+    // Bloom carries the species colour a little past each sphere's rim, so
+    // clusters read as one glowing membrane while the bodies stay distinct.
     // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0, bloom: 0.15 };
+    return { dotSize: 2, trailFade: 0, bloom: 0.35 };
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };
-  }
-  if (slug === "clifford-dejong") {
-    // Fading is kernel-side (its fade param); renderer trails would smear the
-    // histogram. A touch of bloom lifts the saturated filament cores.
-    return { dotSize: 1, trailFade: 0, bloom: 0.35 };
   }
   switch (slug) {
     // Modest glow on the bright-trace and fractal sims; off elsewhere.
@@ -1275,26 +894,11 @@ function resolveAutoCycle(slug: string, fallback: boolean): boolean {
 function paramSchemaForControls(
   slug: string,
   schema: readonly ParamDescriptor[],
-  bakes: readonly BakedEntry[],
 ): readonly ParamDescriptor[] {
-  // No bake on this machine means no choice to offer: drop the control rather
-  // than show one whose only option is the live build.
-  const withBakes =
-    bakes.length === 0
-      ? schema.filter((descriptor) => descriptor.key !== "modelSource")
-      : schema.map((descriptor) =>
-          descriptor.key === "modelSource"
-            ? {
-                ...descriptor,
-                options: [LIVE_MODEL_SOURCE, ...bakes.map((bake) => bake.id)],
-              }
-            : descriptor,
-        );
-
   const fractal = isFractalSlug(slug);
-  if (slug !== "lorenz-attractor" && !fractal) return withBakes;
+  if (slug !== "lorenz-attractor" && !fractal) return schema;
 
-  return withBakes.map((descriptor) => {
+  return schema.map((descriptor) => {
     if (descriptor.key === "fade" && descriptor.type === "number") {
       return {
         ...descriptor,
@@ -1315,6 +919,14 @@ function paramSchemaForControls(
     }
     return descriptor;
   });
+}
+
+function toggleFullscreen(element: HTMLElement): void {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen();
+    return;
+  }
+  void element.requestFullscreen();
 }
 
 function renderLegend(
