@@ -12,19 +12,22 @@ mode. There are three long-lived branches with different audiences:
 - **`dev`** — integration/staging branch. Topic branches
   (`feat/*`, `wip/*`, …) fast-forward here first. Never deploys, never
   publishes; it is the buffer where work accumulates before it advances
-  to `main`. Local and `origin` only.
+  to `main`. Local and `origin` only. It may contain tracked private-tier
+  files such as `HANDOFF.md`.
 - **`main`** — site trunk. Private origin (`tw-one/emergence-lab`).
   Netlify deploys from this branch on every push. `dev` fast-forwards
-  here via `git ff-dev-main`. May contain commits not yet visible on the
-  public mirror.
-- **`publish`** — public mirror trunk. Fast-forwards onto `main` only
-  when you deliberately publish. Pushed to `public` (`aw-pr/emergence-lab`)
-  as `main`. Append-only and always publish-clean.
+  here via `git ff-dev-main`. It is private and may contain private-tier
+  files as well as commits not yet visible on the public mirror.
+- **`publish`** — curated public mirror trunk. Publish-safe commits are
+  fast-forwarded here from a release branch based on `publish`, excluding
+  private-tier files and commits. It is pushed to `public`
+  (`aw-pr/emergence-lab`) as `main`, append-only and always publish-clean.
 
-The flow is one direction: `feat/* → dev → main → publish → public`.
-The site deploy and the public mirror are decoupled. Advancing `main`
-(via `git ff-dev-main`) updates the site. Running `git publish` updates
-the public mirror. You choose when to do each. Both aliases require a
+The site flow is `feat/* → dev → main`. The public flow is
+`publish → release/* → publish → public`, cherry-picking the publish-safe
+commits from the private line when necessary. Advancing `main` (via
+`git ff-dev-main`) updates the site. Running `git publish` pushes an already
+curated `publish` head. You choose when to do each. Both aliases require a
 local `dev` branch to exist.
 
 ## The one hard invariant
@@ -56,9 +59,13 @@ git push origin dev
 # When dev is ready to deploy, advance main (this deploys the site):
 git ff-dev-main               # ff main onto dev, push origin main -> Netlify
 
-# When main is publish-ready, mirror it:
-git publish                   # ff publish onto main, push origin publish,
-                              # push public publish:main
+# Curate the public release without private-tier commits:
+git switch -c release/<slug> publish
+git cherry-pick <publish-safe-commit>...
+git switch publish
+git merge --ff-only release/<slug>
+git publish                   # push origin publish, then public publish:main
+git branch -d release/<slug>
 ```
 
 The `git ff-dev-main` alias (advance the site):
@@ -71,13 +78,12 @@ The `git ff-dev-main` alias (advance the site):
 5. Pushes `origin main` — **this is what triggers the Netlify deploy.**
 6. Returns to the branch you started on.
 
-The `git publish` alias (advance the public mirror):
+The `git publish` alias (push the curated public mirror):
 
 1. Refuses if the working tree is dirty.
 2. Requires a local `dev` branch to exist (aborts otherwise).
 3. Switches to `publish`.
-4. Fast-forwards `publish` onto `main` (fails if `main` is not a
-   descendant of `publish` — investigate before forcing).
+4. Refuses if a configured private-tier file exists at the `publish` head.
 5. Pushes `publish` to the private remote (`origin`, for backup).
 6. Pushes `publish:main` to the public remote (`public`), with the
    `PUBLISH_GUARD_OK=1` sentinel the pre-push hook requires.
@@ -88,6 +94,9 @@ Do **not** hand-type `git push public main` to publish. Route through
 
 ## What never goes public
 
+- Tracked private-tier files: `HANDOFF.md`, `RUNBOOK.md`, `runs/`, and
+  `archive/`. They remain portable on private branches and are excluded from
+  the curated `publish` history.
 - Topic branches (`wip/*`, `tuning-and-visual-fixes`, etc.) — these are
   for `origin` only. The pre-push hook on `public` rejects anything other
   than the `main` ref.
@@ -172,7 +181,8 @@ in your git config (they're set locally per-checkout in this repo).
 5. Bundle backup taken:
    `git bundle create ~/emergence-lab-history-$(date +%Y%m%d-%H%M%S).bundle --all`.
 
-Then `git publish`.
+Then fast-forward the audited release branch onto `publish` and run
+`git publish`.
 
 ## Site deploy and publish are independent
 
@@ -180,7 +190,7 @@ Then `git publish`.
   `git ff-dev-main` (advances `main`, pushes `origin main`). Netlify
   rebuilds. `publish` does not move; the public mirror is unchanged.
 - **Publish without site update**: not really meaningful in this repo —
-  `git publish` fast-forwards `publish` onto `main`, so the public
-  mirror only ever lags or equals the deployed site, never leads it.
+  the public mirror should only contain work already deployed from private
+  `main`, so it lags or reflects the deployed site and never leads it.
 - **Both**: ordinary case. Push to `main` (site updates), then
-  `git publish` when ready (public mirror catches up).
+  curate `publish` and run `git publish` when ready (public mirror catches up).

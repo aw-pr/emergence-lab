@@ -5,10 +5,11 @@ alwaysApply: true
 
 # Git strategy
 
-`main` is the hub: it must always be green and publish-clean. Real work happens
-on a short-lived branch, integrates on `dev`, and only reaches `main` after
-tests pass. The flow is one direction: `feat/* → dev → main → publish → public`
-(`historymode = preserve` — atomic commits land as-is, not squashed).
+`main` is the private site hub: it must always be green, but may contain tracked
+private-tier files. Real work happens on a short-lived branch, integrates on
+`dev`, and only reaches `main` after tests pass. Public-safe commits are curated
+from the private line onto an append-only `publish` branch (`historymode =
+preserve` — atomic commits remain atomic rather than being squashed).
 
 ## Workflow
 
