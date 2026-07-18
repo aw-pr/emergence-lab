@@ -77,10 +77,11 @@ void main() {
   } else if (u_colourMode == 1) {
     v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    // Deep bulb interiors are points of order: steady grey, no cycling.
-    // Complexity rises toward the set boundary and the chaotic band, where
-    // the palette takes over and the self-glow strengthens.
-    float complexity = smoothstep(0.45, 0.85, a_interior);
+    // Cells with a detected period sit inside a black bulb of the 2D view:
+    // steady grey, no cycling, no glow. Only the complexity cells (chaotic
+    // band and the unresolved fringe at bulb boundaries) take the cycling
+    // palette and the self-glow.
+    float complexity = a_period > 0.5 ? 0.0 : 1.0;
     vec3 hue = texture(
       u_palette,
       vec2(fract(a_interior + u_phase), 0.5)
