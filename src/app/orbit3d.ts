@@ -24,6 +24,7 @@ uniform float u_fanActive;
 out vec3 v_colour;
 out float v_fanGlow;
 out float v_sliceGlow;
+out float v_markerGlow;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -59,7 +60,6 @@ void main() {
     a_position.y * 0.85
   );
   gl_Position = u_viewProjection * vec4(world, 1.0);
-  gl_PointSize = u_pointSize;
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
   if (u_colourMode == 0) {
@@ -88,6 +88,10 @@ void main() {
   float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(a_position.y) - reach));
   float front = (1.0 - smoothstep(0.015, 0.06, abs(age)))
     * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+  v_markerGlow = u_fanActive
+    * (1.0 - smoothstep(0.006, 0.025, abs(age)))
+    * (1.0 - smoothstep(0.008, 0.045, abs(a_position.y)));
+  gl_PointSize = u_pointSize * mix(1.0, 7.0, v_markerGlow);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
@@ -99,6 +103,7 @@ precision highp float;
 in vec3 v_colour;
 in float v_fanGlow;
 in float v_sliceGlow;
+in float v_markerGlow;
 out vec4 outColor;
 
 void main() {
@@ -115,7 +120,15 @@ void main() {
   vec3 fanLight = fanColour * v_fanGlow * (haze * 0.055 + core * 0.052);
   vec3 sliceColour = mix(v_colour, vec3(0.78, 0.94, 1.0), 0.45);
   vec3 sliceLight = sliceColour * v_sliceGlow * (haze * 0.02 + core * 0.025);
-  outColor = vec4(pointLight + fanLight + sliceLight, max(core, haze * 0.62));
+  vec3 markerLight = v_markerGlow * (
+    vec3(0.18, 0.82, 1.0) * haze * 0.7
+    + vec3(0.72, 0.96, 1.0) * core * 0.85
+    + vec3(1.0) * sparkle * 1.8
+  );
+  outColor = vec4(
+    pointLight + fanLight + sliceLight + markerLight,
+    max(core, haze * 0.62)
+  );
 }
 `;
 
@@ -864,14 +877,6 @@ export class Orbit3DPointCloud {
     gl.useProgram(this.markerProgram);
     gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
     gl.bindVertexArray(this.markerVao);
-    if (this.markerOrbitPointCount > 0) {
-      gl.uniform1f(
-        this.markerPointSizeUniform,
-        Math.min(11, Math.max(7, width / 145)),
-      );
-      gl.uniform3f(this.markerColourUniform, 0.12, 0.95, 1);
-      gl.drawArrays(gl.POINTS, 0, this.markerOrbitPointCount);
-    }
     gl.uniform1f(
       this.markerPointSizeUniform,
       Math.min(30, Math.max(20, width / 62)),
