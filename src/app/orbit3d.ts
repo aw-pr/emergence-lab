@@ -47,26 +47,6 @@ vec3 periodHue(int p) {
   return vec3(0.549, 0.314, 0.745);
 }
 
-// Dedicated cycle-mode wheel: six vivid, luminance-balanced hues with
-// matching endpoints, so the chaotic dots never dip through a dark segment
-// mid-cycle the way a ramp palette would. The plane keeps its own picker
-// palette (dark at zero, preserving black bulbs); only the dots use this.
-vec3 cycleWheel(float t) {
-  vec3 cyan = vec3(0.25, 0.86, 0.94);
-  vec3 azure = vec3(0.25, 0.44, 1.00);
-  vec3 violet = vec3(0.66, 0.33, 1.00);
-  vec3 rose = vec3(1.00, 0.32, 0.55);
-  vec3 amber = vec3(1.00, 0.67, 0.20);
-  vec3 green = vec3(0.35, 0.86, 0.44);
-  float u = fract(t) * 6.0;
-  if (u < 1.0) return mix(cyan, azure, u);
-  if (u < 2.0) return mix(azure, violet, u - 1.0);
-  if (u < 3.0) return mix(violet, rose, u - 2.0);
-  if (u < 4.0) return mix(rose, amber, u - 3.0);
-  if (u < 5.0) return mix(amber, green, u - 4.0);
-  return mix(green, cyan, u - 5.0);
-}
-
 // Ice-family ramp over normalised Re(z), lifted at the dark end so low sheets
 // stay visible against the near-black background.
 vec3 heightRamp(float t) {
@@ -102,11 +82,16 @@ void main() {
     // band and the unresolved fringe at bulb boundaries) take the cycling
     // palette and the self-glow.
     float complexity = a_period > 0.5 ? 0.0 : 1.0;
-    // Height drifts the wheel slightly so the shared phase reads as colour
-    // flowing up the chaotic curtain rather than a flat flicker.
-    vec3 hue = cycleWheel(a_interior + u_phase + height * 0.15);
+    // Faithful to the picker palette: the dots march through the same ramp
+    // the plane's bands do, including its dark end, so they wink out and
+    // return as the dark band passes. Height drifts the sample slightly so
+    // that passage sweeps up the curtain instead of blinking all at once.
+    vec3 hue = texture(
+      u_palette,
+      vec2(fract(a_interior + u_phase + height * 0.15), 0.5)
+    ).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
-    v_colour = mix(steady, mix(hue, vec3(1.0), 0.12) * 1.1, complexity);
+    v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
     v_selfGlow = complexity * 1.7;
     // A period-q cell lands sampleCount/q coincident samples on each sheet
     // dot, so additive stacking turns even a glow-free grey dot white.
