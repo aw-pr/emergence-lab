@@ -218,8 +218,11 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "phase", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
     case "julia-set":
-    case "logistic-mandelbrot":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
+    case "logistic-mandelbrot":
+      // Chosen by eye against the cycle colour mode: viridis with a strong
+      // lift keeps the plane's bands cool while the cycling dots stay legible.
+      return { ...base, preset: "viridis", gamma: 1.65, contrast: 2.4 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
     case "cyclic-ca":

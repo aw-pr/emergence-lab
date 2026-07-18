@@ -12,6 +12,7 @@ export interface QualityProfile {
 }
 
 const ULTRA_DEFAULTS = new Set([
+  "logistic-mandelbrot",
   "lorenz-attractor",
   "elementary-cellular-automata",
   "game-of-life",

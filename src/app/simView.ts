@@ -225,6 +225,8 @@ export async function renderSimView(
     initialAutoCycle,
     defaultAutoCycle,
     fractalPaletteCycleUi: fractal,
+    viewParamKeys:
+      slug === "logistic-mandelbrot" ? ["colourMode", "continuousSpin"] : [],
     callbacks: {
       onPlayPause: () => {
         if (renderer.isRunning()) {
@@ -846,6 +848,8 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     case "julia-set":
     case "burning-ship":
       return { dotSize: 1, trailFade: 0, bloom: 0.3 };
+    case "logistic-mandelbrot":
+      return { dotSize: 1, trailFade: 0, bloom: 0.15 };
     default:
       return { dotSize: 1, trailFade: 0, bloom: 0 };
   }

@@ -97,11 +97,11 @@ test("metadata matches the renderer contract", () => {
   }
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
-  assert.equal(colourMode?.default, "period");
+  assert.equal(colourMode?.default, "cycle");
   assert.deepEqual(colourMode?.options, ["period", "height", "mono", "cycle"]);
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
-  assert.equal(cycleSpeed?.default, 0.1);
+  assert.equal(cycleSpeed?.default, 0.151);
   assert.equal(cycleSpeed?.min, 0);
   assert.equal(cycleSpeed?.max, 5);
   assert.equal(cycleSpeed?.step, 0.001);
@@ -113,9 +113,9 @@ test("metadata matches the renderer contract", () => {
   assert.equal(continuousSpin?.default, true);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
-  assert.equal(warmup?.default, 200);
+  assert.equal(warmup?.default, 72);
   const samples = kernel.paramSchema.find((d) => d.key === "sampleCount");
-  assert.equal(samples?.default, 48);
+  assert.equal(samples?.default, 8);
   const plotted = kernel.paramSchema.find((d) => d.key === "plottedIterations");
   assert.equal(plotted?.default, 48);
   assert.equal(plotted?.min, 1);
