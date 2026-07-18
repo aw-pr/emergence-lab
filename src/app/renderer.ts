@@ -632,7 +632,13 @@ export class Renderer {
     }
     if (!this.orbitAutoRotateEnabled) return;
 
-    if (booleanParam(this.params, "realAxisSweep", false)) {
+    // Cycle mode's continuous-spin toggle overrides the sweep-synced pan:
+    // the camera circles steadily instead of tracking and resetting with
+    // the sweep. Other colour modes keep the sweep choreography.
+    const continuousSpin =
+      this.params.colourMode === "cycle" &&
+      booleanParam(this.params, "continuousSpin", true);
+    if (!continuousSpin && booleanParam(this.params, "realAxisSweep", false)) {
       const sweepSpeed = Math.max(
         0.001,
         numericParam(this.params, "sweepSpeed", 0.15),

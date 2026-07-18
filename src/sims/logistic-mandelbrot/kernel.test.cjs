@@ -64,6 +64,9 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
     [
+      "colourMode",
+      "cycleSpeed",
+      "continuousSpin",
       "warmupIterations",
       "sampleCount",
       "plottedIterations",
@@ -74,8 +77,6 @@ test("metadata matches the renderer contract", () => {
       "realSliceOnly",
       "exposure",
       "pointDensity",
-      "colourMode",
-      "cycleSpeed",
     ],
   );
 
@@ -104,6 +105,12 @@ test("metadata matches the renderer contract", () => {
   assert.equal(cycleSpeed?.min, 0);
   assert.equal(cycleSpeed?.max, 5);
   assert.equal(cycleSpeed?.step, 0.001);
+
+  const continuousSpin = kernel.paramSchema.find(
+    (d) => d.key === "continuousSpin",
+  );
+  assert.equal(continuousSpin?.type, "boolean");
+  assert.equal(continuousSpin?.default, true);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
   assert.equal(warmup?.default, 200);
