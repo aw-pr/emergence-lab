@@ -51,7 +51,8 @@ export interface RendererOptions {
 
 /** Seconds a completed run stays on screen before auto-cycling to a new one. */
 const CYCLE_HOLD_SECONDS = 1.5;
-const ORBIT_SWEEP_START = 0.25;
+// Re(c)=+1 is minimum X under the reversed-X view and the XY plane's edge.
+const ORBIT_SWEEP_START = 1;
 const ORBIT_SWEEP_END = -2;
 const ORBIT_SWEEP_HOLD_SECONDS = 0.9;
 const ORBIT_AUTO_ROTATE_RADIANS_PER_SECOND = 0.05;
@@ -596,7 +597,10 @@ export class Renderer {
       }
     }
 
-    if (booleanParam(this.params, "realAxisSweep", false)) {
+    if (
+      booleanParam(this.params, "realAxisSweep", false) &&
+      this.backend.orbit3dReady?.() !== false
+    ) {
       if (this.sweepHold > 0) {
         this.sweepHold = Math.max(0, this.sweepHold - dt);
         if (this.sweepHold === 0) {

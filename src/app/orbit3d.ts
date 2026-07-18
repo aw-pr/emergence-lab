@@ -88,9 +88,9 @@ void main() {
   float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(a_position.y) - reach));
   float front = (1.0 - smoothstep(0.015, 0.06, abs(age)))
     * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+  // Light every Im(c) depth at the active Re(c), forming a full orbit slice.
   v_markerGlow = u_fanActive
-    * (1.0 - smoothstep(0.006, 0.025, abs(age)))
-    * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+    * (1.0 - smoothstep(0.006, 0.025, abs(age)));
   gl_PointSize = u_pointSize * mix(1.0, 5.5, v_markerGlow);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
@@ -272,7 +272,7 @@ const CAMERA_FAR_PLANE = 20;
 const CAMERA_MIN_DISTANCE = 2.1;
 const CAMERA_MAX_DISTANCE = 12;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
-const DEFAULT_CAMERA_EYE = [2.9, 2.15, 3.6] as const;
+const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
 const DEFAULT_MARKER_RE = -1;
 const DEFAULT_MARKER_IM = 0;
 const WORLD_RE_SCALE = 0.78;
