@@ -13,11 +13,9 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
-The logistic-Mandelbrot bifurcation reveal is landed through the active-slice
-lighting work. A final uncommitted shader adjustment remains WIP: visually
-review its default-speed opening light before either banking it atomically or
-discarding it. Do not ship without explicit instruction. Gray-Scott stays the
-priority kernel for future refinement.
+The logistic-Mandelbrot bifurcation reveal, including the final active-slice
+lighting adjustment, is landed and validated. No required implementation work
+remains. Gray-Scott stays the priority kernel for future refinement.
 
 ## Interface contract
 
