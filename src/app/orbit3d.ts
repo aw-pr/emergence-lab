@@ -16,13 +16,12 @@ precision highp float;
 
 in vec3 a_position;
 in float a_period;
+in float a_interior;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
 uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
-uniform int u_cellCount;
-uniform int u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
 out vec3 v_colour;
@@ -73,11 +72,9 @@ void main() {
   } else if (u_colourMode == 1) {
     v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    int n = gl_VertexID / u_cellCount;
-    float palettePosition = float(n) / float(u_sampleCount);
     vec3 hue = texture(
       u_palette,
-      vec2(fract(palettePosition + u_phase), 0.5)
+      vec2(fract(a_interior + u_phase), 0.5)
     ).rgb;
     v_colour = mix(hue, vec3(1.0), 0.16) * 1.1;
   } else {
@@ -381,6 +378,7 @@ export class Orbit3DPointCloud {
   private readonly toneMapVao: WebGLVertexArrayObject;
   private readonly pointBuffer: WebGLBuffer;
   private readonly periodBuffer: WebGLBuffer;
+  private readonly interiorBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
@@ -388,8 +386,6 @@ export class Orbit3DPointCloud {
   private readonly colourModeUniform: WebGLUniformLocation;
   private readonly paletteUniform: WebGLUniformLocation;
   private readonly phaseUniform: WebGLUniformLocation;
-  private readonly cellCountUniform: WebGLUniformLocation;
-  private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
@@ -434,6 +430,7 @@ export class Orbit3DPointCloud {
     );
     this.pointBuffer = requireResource(gl.createBuffer(), "orbit3d point buffer");
     this.periodBuffer = requireResource(gl.createBuffer(), "orbit3d period buffer");
+    this.interiorBuffer = requireResource(gl.createBuffer(), "orbit3d interior buffer");
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
@@ -450,6 +447,10 @@ export class Orbit3DPointCloud {
     const periodLocation = gl.getAttribLocation(this.pointProgram, "a_period");
     gl.enableVertexAttribArray(periodLocation);
     gl.vertexAttribPointer(periodLocation, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
+    const interiorLocation = gl.getAttribLocation(this.pointProgram, "a_interior");
+    gl.enableVertexAttribArray(interiorLocation);
+    gl.vertexAttribPointer(interiorLocation, 1, gl.FLOAT, false, 0, 0);
 
     gl.bindVertexArray(this.markerVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
@@ -494,14 +495,6 @@ export class Orbit3DPointCloud {
     this.phaseUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_phase"),
       "orbit3d palette-phase uniform",
-    );
-    this.cellCountUniform = requireResource(
-      gl.getUniformLocation(this.pointProgram, "u_cellCount"),
-      "orbit3d cell-count uniform",
-    );
-    this.sampleCountUniform = requireResource(
-      gl.getUniformLocation(this.pointProgram, "u_sampleCount"),
-      "orbit3d sample-count uniform",
     );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
@@ -739,7 +732,9 @@ export class Orbit3DPointCloud {
       : Math.max(1, Math.min(inputHeight, Math.ceil(candidateCells / sampleWidth)));
     const positions = new Float32Array(pointBudget * 3);
     const periods = new Float32Array(pointBudget);
+    const interiors = new Float32Array(pointBudget);
     const orbitSamples = new Float32Array(sampleCount);
+    const measure = { interior: 1 };
     let cell = 0;
     let survivorsSeen = 0;
 
@@ -772,6 +767,7 @@ export class Orbit3DPointCloud {
           sampleCount,
           orbitSamples,
           0,
+          measure,
         );
         if (result !== ESCAPED) {
           const slot = reservoirSlot(survivorsSeen, maxSurvivingCells);
@@ -783,6 +779,7 @@ export class Orbit3DPointCloud {
               positions[offset + 1] = cIm;
               positions[offset + 2] = orbitSamples[sample];
               periods[sample * maxSurvivingCells + slot] = result;
+              interiors[sample * maxSurvivingCells + slot] = measure.interior;
             }
           }
         }
@@ -803,6 +800,11 @@ export class Orbit3DPointCloud {
           sample * maxSurvivingCells,
           sample * maxSurvivingCells + survivingCells,
         );
+        interiors.copyWithin(
+          sample * survivingCells,
+          sample * maxSurvivingCells,
+          sample * maxSurvivingCells + survivingCells,
+        );
       }
       this.fullPointCount = survivingCells * sampleCount;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
@@ -815,6 +817,12 @@ export class Orbit3DPointCloud {
       gl.bufferData(
         gl.ARRAY_BUFFER,
         periods.subarray(0, this.fullPointCount),
+        gl.STATIC_DRAW,
+      );
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        interiors.subarray(0, this.fullPointCount),
         gl.STATIC_DRAW,
       );
       this.refreshPointCount();
@@ -906,11 +914,6 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
-    gl.uniform1i(
-      this.cellCountUniform,
-      Math.max(1, Math.floor(this.fullPointCount / this.sampleCount)),
-    );
-    gl.uniform1i(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
@@ -959,6 +962,7 @@ export class Orbit3DPointCloud {
     gl.deleteVertexArray(this.toneMapVao);
     gl.deleteBuffer(this.pointBuffer);
     gl.deleteBuffer(this.periodBuffer);
+    gl.deleteBuffer(this.interiorBuffer);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);

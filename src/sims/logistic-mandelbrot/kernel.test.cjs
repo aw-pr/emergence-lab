@@ -14,6 +14,7 @@ const zFromX = (r, x) => r / 2 - r * x;
 
 function sampleCell(cRe, cIm) {
   const out = new Float32Array(model.DEFAULT_SAMPLE_COUNT);
+  const measure = { interior: Number.NaN };
   const period = model.sampleAttractorCell(
     cRe,
     cIm,
@@ -21,8 +22,9 @@ function sampleCell(cRe, cIm) {
     model.DEFAULT_SAMPLE_COUNT,
     out,
     0,
+    measure,
   );
-  return { period, out };
+  return { period, out, interior: measure.interior };
 }
 
 function defaultsFromSchema(kernel) {
@@ -178,6 +180,30 @@ test("c = 0.5 escapes and contributes nothing", () => {
   const { period, out } = sampleCell(0.5, 0);
   assert.equal(period, model.ESCAPED);
   assert.ok(out.every((value) => value === 0));
+});
+
+test("interior measure follows the attracting-cycle multiplier", () => {
+  const fixedPointMultiplier = (c) => Math.abs(1 - Math.sqrt(1 - 4 * c));
+
+  const centre = sampleCell(0, 0);
+  assert.equal(centre.period, 1);
+  assert.ok(Math.abs(centre.interior - 0) < 1e-12);
+
+  const negative = sampleCell(-0.5, 0);
+  assert.equal(negative.period, 1);
+  assert.ok(Math.abs(negative.interior - fixedPointMultiplier(-0.5)) < 1e-2);
+  assert.ok(Math.abs(negative.interior - (Math.sqrt(3) - 1)) < 1e-2);
+
+  const boundaryward = sampleCell(0.24, 0);
+  assert.equal(boundaryward.period, 1);
+  assert.ok(Math.abs(boundaryward.interior - fixedPointMultiplier(0.24)) < 1e-2);
+  assert.ok(Math.abs(boundaryward.interior - 0.8) < 1e-2);
+
+  const chaotic = sampleCell(-1.9, 0);
+  assert.equal(chaotic.period, 0);
+  assert.equal(chaotic.interior, 1);
+
+  assert.equal(sampleCell(0.5, 0).period, model.ESCAPED);
 });
 
 test("sampleAttractorGrid returns contract-shaped typed arrays", () => {
