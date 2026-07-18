@@ -73,6 +73,7 @@ test("metadata matches the renderer contract", () => {
       "exposure",
       "pointDensity",
       "colourMode",
+      "cycleSpeed",
     ],
   );
 
@@ -94,7 +95,13 @@ test("metadata matches the renderer contract", () => {
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
   assert.equal(colourMode?.default, "period");
-  assert.deepEqual(colourMode?.options, ["period", "height", "mono"]);
+  assert.deepEqual(colourMode?.options, ["period", "height", "mono", "cycle"]);
+
+  const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
+  assert.equal(cycleSpeed?.default, 0.1);
+  assert.equal(cycleSpeed?.min, 0);
+  assert.equal(cycleSpeed?.max, 5);
+  assert.equal(cycleSpeed?.step, 0.001);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
   assert.equal(warmup?.default, 200);

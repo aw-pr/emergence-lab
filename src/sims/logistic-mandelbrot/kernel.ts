@@ -185,7 +185,16 @@ export class LogisticMandelbrotKernel implements SimKernel {
       label: "Colour mode",
       type: "enum",
       default: "period",
-      options: ["period", "height", "mono"],
+      options: ["period", "height", "mono", "cycle"],
+    },
+    {
+      key: "cycleSpeed",
+      label: "Cycle speed",
+      type: "number",
+      default: 0.1,
+      min: 0,
+      max: 5,
+      step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];
 

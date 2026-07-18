@@ -218,6 +218,7 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "phase", gamma: 1.8, contrast: 1.55 };
     case "mandelbrot":
     case "julia-set":
+    case "logistic-mandelbrot":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };

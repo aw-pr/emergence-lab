@@ -1511,7 +1511,18 @@ export class WebGLRendererBackend implements RendererBackend {
     const stats = this.orbit3d?.stats;
     const exposure = numericParam(frame.params, "exposure", 1.35);
     const colourMode = orbit3dColourMode(frame.params);
-    const ground = this.ensureOrbit3dGround(frame);
+    const cycling =
+      colourMode === "cycle" && numericParam(frame.params, "cycleSpeed", 0) > 0;
+    const phase =
+      colourMode === "cycle"
+        ? palettePhase(
+            frame.params,
+            frame.elapsedTime,
+            frame.colourOptions,
+            frame.speedScale,
+          )
+        : 0;
+    const ground = this.ensureOrbit3dGround(frame, phase, cycling);
     if (
       !stats ||
       !this.orbit3d?.draw(
@@ -1521,6 +1532,8 @@ export class WebGLRendererBackend implements RendererBackend {
         ground,
         colourMode,
         frame.params.realAxisSweep === true,
+        this.fractalPaletteTexture,
+        phase,
       )
     ) {
       return;
@@ -1544,6 +1557,8 @@ export class WebGLRendererBackend implements RendererBackend {
    */
   private ensureOrbit3dGround(
     frame: RendererBackendFrame,
+    phase: number,
+    cycling: boolean,
   ): Orbit3DGroundPlane | null {
     const gl = this.gl;
     this.updateFractalPalette(frame.colourOptions);
@@ -1554,7 +1569,11 @@ export class WebGLRendererBackend implements RendererBackend {
       this.fractalPaletteKey,
       frame.colourOptions.paletteCycleReverse ? 1 : 0,
     ].join(":");
-    if (this.orbit3dGroundTexture && this.orbit3dGroundKey === key) {
+    if (
+      !cycling &&
+      this.orbit3dGroundTexture &&
+      this.orbit3dGroundKey === key
+    ) {
       return {
         texture: this.orbit3dGroundTexture,
         centre: GROUND_DOMAIN.centre,
@@ -1619,7 +1638,7 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.uniform1i(this.fractalUniforms.maxIterations, ORBIT3D_GROUND_ITERATIONS);
     gl.uniform2f(this.fractalUniforms.juliaC, 0, 0);
     gl.uniform1f(this.fractalUniforms.modelPhase, 0);
-    gl.uniform1f(this.fractalUniforms.palettePhase, 0);
+    gl.uniform1f(this.fractalUniforms.palettePhase, phase);
     gl.uniform1i(
       this.fractalUniforms.paletteReverse,
       frame.colourOptions.paletteCycleReverse ? 1 : 0,
@@ -1632,7 +1651,7 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.orbit3dGroundKey = key;
+    this.orbit3dGroundKey = cycling ? "" : key;
     return {
       texture: this.orbit3dGroundTexture,
       centre: GROUND_DOMAIN.centre,
@@ -2629,7 +2648,9 @@ function orbit3dColourMode(
   params: Record<string, number | boolean | string>,
 ): Orbit3DColourMode {
   const value = params.colourMode;
-  return value === "height" || value === "mono" ? value : "period";
+  return value === "height" || value === "mono" || value === "cycle"
+    ? value
+    : "period";
 }
 
 function fractalKind(kernel: SimKernel): number {
