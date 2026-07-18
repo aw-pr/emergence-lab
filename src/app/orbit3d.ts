@@ -22,6 +22,7 @@ uniform float u_pointSize;
 uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
+uniform float u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
 out vec3 v_colour;
@@ -29,6 +30,7 @@ out float v_fanGlow;
 out float v_sliceGlow;
 out float v_markerGlow;
 out float v_selfGlow;
+out float v_energy;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -67,6 +69,7 @@ void main() {
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
   v_selfGlow = 0.0;
+  v_energy = 1.0;
   if (u_colourMode == 0) {
     int p = int(a_period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
@@ -85,6 +88,14 @@ void main() {
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.16) * 1.1, complexity);
     v_selfGlow = complexity * 1.7;
+    // A period-q cell lands sampleCount/q coincident samples on each sheet
+    // dot, so additive stacking turns even a glow-free grey dot white.
+    // Scaling per-point energy by q/sampleCount keeps each distinct sheet
+    // location at baseline brightness; chaotic cells (no period) have
+    // distinct samples and keep full energy.
+    v_energy = a_period > 0.5
+      ? clamp(a_period / max(u_sampleCount, 1.0), 0.02, 1.0)
+      : 1.0;
   } else {
     float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
@@ -124,6 +135,7 @@ in float v_fanGlow;
 in float v_sliceGlow;
 in float v_markerGlow;
 in float v_selfGlow;
+in float v_energy;
 out vec4 outColor;
 
 void main() {
@@ -151,7 +163,7 @@ void main() {
     + vec3(1.0) * sparkle * 1.8
   );
   outColor = vec4(
-    pointLight + fanLight + sliceLight + markerLight + selfLight,
+    (pointLight + fanLight + sliceLight + markerLight + selfLight) * v_energy,
     max(core, haze * 0.62)
   );
 }
@@ -402,6 +414,7 @@ export class Orbit3DPointCloud {
   private readonly colourModeUniform: WebGLUniformLocation;
   private readonly paletteUniform: WebGLUniformLocation;
   private readonly phaseUniform: WebGLUniformLocation;
+  private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
@@ -511,6 +524,10 @@ export class Orbit3DPointCloud {
     this.phaseUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_phase"),
       "orbit3d palette-phase uniform",
+    );
+    this.sampleCountUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_sampleCount"),
+      "orbit3d sample-count uniform",
     );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
@@ -930,6 +947,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
+    gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
