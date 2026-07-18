@@ -28,6 +28,7 @@ out vec3 v_colour;
 out float v_fanGlow;
 out float v_sliceGlow;
 out float v_markerGlow;
+out float v_selfGlow;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -100,7 +101,12 @@ void main() {
   // Light every Im(c) depth at the active Re(c), forming a full orbit slice.
   v_markerGlow = u_fanActive
     * (1.0 - smoothstep(0.006, 0.025, abs(age)));
-  gl_PointSize = u_pointSize * mix(1.0, 5.5, v_markerGlow);
+  // Cycle mode has no tracer, so every point carries a gentle self-glow in
+  // its own palette colour instead; a fraction of the slice light's strength.
+  v_selfGlow = u_colourMode == 3 ? 1.0 : 0.0;
+  gl_PointSize = u_pointSize
+    * mix(1.0, 5.5, v_markerGlow)
+    * mix(1.0, 1.25, v_selfGlow);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
@@ -113,6 +119,7 @@ in vec3 v_colour;
 in float v_fanGlow;
 in float v_sliceGlow;
 in float v_markerGlow;
+in float v_selfGlow;
 out vec4 outColor;
 
 void main() {
@@ -127,6 +134,11 @@ void main() {
     + vec3(0.72, 0.9, 1.0) * haze * 0.008
     + vec3(1.0) * sparkle * 0.024;
   vec3 fanLight = fanColour * v_fanGlow * (haze * 0.055 + core * 0.052);
+  // Self-glow keeps the tint of the point's own palette colour so the cycling
+  // bands stay legible; weights sit well below the marker light to avoid
+  // blowing out the dense central mass under additive accumulation.
+  vec3 selfLight = v_selfGlow * v_colour
+    * (haze * 0.09 + core * 0.13 + sparkle * 0.09);
   vec3 sliceColour = mix(v_colour, vec3(0.78, 0.94, 1.0), 0.45);
   vec3 sliceLight = sliceColour * v_sliceGlow * (haze * 0.02 + core * 0.025);
   vec3 markerLight = v_markerGlow * (
@@ -135,7 +147,7 @@ void main() {
     + vec3(1.0) * sparkle * 1.8
   );
   outColor = vec4(
-    pointLight + fanLight + sliceLight + markerLight,
+    pointLight + fanLight + sliceLight + markerLight + selfLight,
     max(core, haze * 0.62)
   );
 }
