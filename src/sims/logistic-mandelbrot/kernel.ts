@@ -100,6 +100,28 @@ export class LogisticMandelbrotKernel implements SimKernel {
   ] as const;
   readonly paramSchema = [
     {
+      key: "colourMode",
+      label: "Colour mode",
+      type: "enum",
+      default: "period",
+      options: ["period", "height", "mono", "cycle"],
+    },
+    {
+      key: "cycleSpeed",
+      label: "Cycle speed",
+      type: "number",
+      default: 0.1,
+      min: 0,
+      max: 5,
+      step: 0.001,
+    },
+    {
+      key: "continuousSpin",
+      label: "Continuous spin",
+      type: "boolean",
+      default: true,
+    },
+    {
       key: "warmupIterations",
       label: "Warmup iterations",
       type: "number",
@@ -179,22 +201,6 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.25,
       max: 1,
       step: 0.05,
-    },
-    {
-      key: "colourMode",
-      label: "Colour mode",
-      type: "enum",
-      default: "period",
-      options: ["period", "height", "mono", "cycle"],
-    },
-    {
-      key: "cycleSpeed",
-      label: "Cycle speed",
-      type: "number",
-      default: 0.1,
-      min: 0,
-      max: 5,
-      step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];
 
