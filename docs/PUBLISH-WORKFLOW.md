@@ -4,11 +4,6 @@ How emergence-lab keeps the public mirror clean, and how the site deploy
 relates to the publish action. Read this before pushing anything to the
 public remote.
 
-Placeholders used below: `PRIV` = your private remote (default `origin`),
-`PUB` = your public remote (`public` in this repo), `PUB_MATCH` = a substring
-of the public remote URL (e.g. `myorg/myrepo`), `PUBLISH_BRANCH` = the local
-line that becomes public (this repo uses `publish`).
-
 ## Model
 
 This repo runs the **staged publish model** in `preserve` history
@@ -19,14 +14,14 @@ mode. There are three long-lived branches with different audiences:
   publishes; it is the buffer where work accumulates before it advances
   to `main`. Local and `origin` only. It may contain tracked private-tier
   files such as `HANDOFF.md`.
-- **`main`** — site trunk. Private origin (`PRIV`, org hidden).
+- **`main`** — site trunk. Private origin (`tw-one/emergence-lab`).
   Netlify deploys from this branch on every push. `dev` fast-forwards
   here via `git ff-dev-main`. It is private and may contain private-tier
   files as well as commits not yet visible on the public mirror.
 - **`publish`** — curated public mirror trunk. Publish-safe commits are
   fast-forwarded here from a release branch based on `publish`, excluding
   private-tier files and commits. It is pushed to `public`
-  (`PUB_MATCH`) as `main`, append-only and always publish-clean.
+  (`aw-pr/emergence-lab`) as `main`, append-only and always publish-clean.
 
 The site flow is `feat/* → dev → main`. The public flow is
 `publish → release/* → publish → public`, cherry-picking the publish-safe
@@ -48,15 +43,10 @@ as an incident, not routine.
 authorship (see CLAUDE.md and `~/.claude/rules/mcp-hub-dev-rules.md`) land
 on the public mirror as-is. The public history is the audit trail.
 
-Squashing above `publish` is not part of routine publishing. Commits land on
-the mirror atomically, commit-by-commit, via the release-branch cherry-pick
-flow below — the per-agent commit trail is part of what the mirror
-demonstrates. The only legitimate squash is the one-time seed when first
-publishing a repo that has been private for a while; once seeded, do not
-repeat it. (Historical note: the mirror was last caught up by a squashed
-sync on 2026-08-13, commit `183974e`, under the older wording of this
-section. Published commits are immutable, so it stays; it is not a
-precedent.)
+If a particular run produces commits that are too hairy to publish
+commit-by-commit, squash them on a local branch above `publish` before
+fast-forwarding. Mode is a per-merge choice; the config key just sets the
+default.
 
 ## Day-to-day
 
@@ -102,16 +92,6 @@ The `git publish` alias (push the curated public mirror):
 Do **not** hand-type `git push public main` to publish. Route through
 `git publish` so the backup push and the public push happen together.
 
-The publish boundary is PR-by-default and the pre-push hook enforces it:
-the push to `public/main` is rejected unless `PUBLISH_PR_REVIEWED=1` is
-set, the attestation that a `publish → main` PR was opened and its diff
-reviewed (private-tier paths absent). Sequence: `git push public publish`
-(the hook allows the PR source, private-file-scanned), `gh pr create
---base main --head publish`, review the diff, then
-`PUBLISH_PR_REVIEWED=1 git publish` — the fast-forward push completes the
-PR, which GitHub marks merged once the base holds the head commits.
-Repo-level opt-out: `git config publishguard.boundary direct`.
-
 ## What never goes public
 
 - Tracked private-tier files: `HANDOFF.md`, `RUNBOOK.md`, `runs/`, and
@@ -150,7 +130,7 @@ routine workflows.
 Local git config (not committed), set once at adoption:
 
 ```sh
-git config publishguard.publicmatch    PUB_MATCH
+git config publishguard.publicmatch    aw-pr/emergence-lab
 git config publishguard.publicremote   public
 git config publishguard.publishbranch  publish
 git config publishguard.privateremote  origin
@@ -172,7 +152,7 @@ real values:
 
 ```sh
 GUARD_PATTERNS='<MAC_HOME_PATH>|<LINUX_HOME_PATH>|<OP_REF_SCHEME>|<USERNAME>@|<EMAIL>'
-GUARD_PUBLIC_URL_MATCH='PUB_MATCH'
+GUARD_PUBLIC_URL_MATCH='aw-pr/emergence-lab'
 GUARD_PUBLIC_BRANCH='main'
 ```
 
@@ -181,7 +161,7 @@ and create the local `dev` and `publish` branches (both aliases require
 `dev` to exist):
 
 ```sh
-git remote add public git@github.com:PUB_MATCH.git
+git remote add public git@github.com:aw-pr/emergence-lab.git
 git fetch public
 git branch publish public/main
 git branch dev main            # or: git switch -c dev
