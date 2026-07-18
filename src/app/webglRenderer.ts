@@ -1522,6 +1522,8 @@ export class WebGLRendererBackend implements RendererBackend {
             frame.speedScale,
           )
         : 0;
+    const fanActive =
+      colourMode !== "cycle" && frame.params.realAxisSweep === true;
     const ground = this.ensureOrbit3dGround(frame, phase, cycling);
     if (
       !stats ||
@@ -1531,7 +1533,7 @@ export class WebGLRendererBackend implements RendererBackend {
         exposure,
         ground,
         colourMode,
-        frame.params.realAxisSweep === true,
+        fanActive,
         this.fractalPaletteTexture,
         phase,
       )

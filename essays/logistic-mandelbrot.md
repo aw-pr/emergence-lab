@@ -65,7 +65,8 @@ in every direction, not just along the real line.
   cycles as separate sheets exactly above their bulbs on the ground plane.
 - Switch the colour mode: period tints each bulb by the length of its cycle,
   height grades the sheets by Re(z), mono keeps the plain additive glow, and
-  cycle sends the selected palette through the cloud and ground together.
+  cycle continues the plane's palette bands into the cloud and moves both
+  together.
 
 ## Further reading
 
