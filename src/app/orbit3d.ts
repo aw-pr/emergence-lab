@@ -84,7 +84,7 @@ void main() {
     ).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.16) * 1.1, complexity);
-    v_selfGlow = mix(0.8, 1.7, complexity);
+    v_selfGlow = complexity * 1.7;
   } else {
     float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
