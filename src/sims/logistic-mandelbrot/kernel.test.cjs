@@ -14,7 +14,6 @@ const zFromX = (r, x) => r / 2 - r * x;
 
 function sampleCell(cRe, cIm) {
   const out = new Float32Array(model.DEFAULT_SAMPLE_COUNT);
-  const measure = { interior: Number.NaN };
   const period = model.sampleAttractorCell(
     cRe,
     cIm,
@@ -22,9 +21,8 @@ function sampleCell(cRe, cIm) {
     model.DEFAULT_SAMPLE_COUNT,
     out,
     0,
-    measure,
   );
-  return { period, out, interior: measure.interior };
+  return { period, out };
 }
 
 function defaultsFromSchema(kernel) {
@@ -64,24 +62,18 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
     [
-      "colourMode",
-      "exposure",
-      "edgeGlow",
-      "tailRefinement",
-      "boundaryDetail",
-      "pointDensity",
-      "autoRotate",
-      "continuousSpin",
-      "realAxisSweep",
-      "sweepSpeed",
-      "cycleSpeed",
-      "cascadeReveal",
-      "cascadeDuration",
       "warmupIterations",
       "sampleCount",
       "plottedIterations",
+      "cascadeReveal",
+      "cascadeDuration",
+      "realAxisSweep",
+      "sweepSpeed",
       "realSliceOnly",
-      "modelSource",
+      "exposure",
+      "pointDensity",
+      "colourMode",
+      "cycleSpeed",
     ],
   );
 
@@ -103,31 +95,20 @@ test("metadata matches the renderer contract", () => {
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
   assert.equal(colourMode?.default, "period");
-  assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
+  assert.deepEqual(colourMode?.options, ["period", "height", "mono", "cycle"]);
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
-  assert.equal(cycleSpeed?.default, 0.151);
+  assert.equal(cycleSpeed?.default, 0.1);
   assert.equal(cycleSpeed?.min, 0);
   assert.equal(cycleSpeed?.max, 5);
   assert.equal(cycleSpeed?.step, 0.001);
 
-  const continuousSpin = kernel.paramSchema.find(
-    (d) => d.key === "continuousSpin",
-  );
-  assert.equal(continuousSpin?.type, "boolean");
-  assert.equal(continuousSpin?.default, true);
-
-  const boundaryDetail = kernel.paramSchema.find((d) => d.key === "boundaryDetail");
-  assert.equal(boundaryDetail?.default, 1);
-  assert.equal(boundaryDetail?.min, 0);
-  assert.equal(boundaryDetail?.max, 1);
-
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
-  assert.equal(warmup?.default, 1500);
+  assert.equal(warmup?.default, 200);
   const samples = kernel.paramSchema.find((d) => d.key === "sampleCount");
-  assert.equal(samples?.default, 8);
+  assert.equal(samples?.default, 48);
   const plotted = kernel.paramSchema.find((d) => d.key === "plottedIterations");
-  assert.equal(plotted?.default, 96);
+  assert.equal(plotted?.default, 48);
   assert.equal(plotted?.min, 1);
 });
 
@@ -197,30 +178,6 @@ test("c = 0.5 escapes and contributes nothing", () => {
   const { period, out } = sampleCell(0.5, 0);
   assert.equal(period, model.ESCAPED);
   assert.ok(out.every((value) => value === 0));
-});
-
-test("interior measure follows the attracting-cycle multiplier", () => {
-  const fixedPointMultiplier = (c) => Math.abs(1 - Math.sqrt(1 - 4 * c));
-
-  const centre = sampleCell(0, 0);
-  assert.equal(centre.period, 1);
-  assert.ok(Math.abs(centre.interior - 0) < 1e-12);
-
-  const negative = sampleCell(-0.5, 0);
-  assert.equal(negative.period, 1);
-  assert.ok(Math.abs(negative.interior - fixedPointMultiplier(-0.5)) < 1e-2);
-  assert.ok(Math.abs(negative.interior - (Math.sqrt(3) - 1)) < 1e-2);
-
-  const boundaryward = sampleCell(0.24, 0);
-  assert.equal(boundaryward.period, 1);
-  assert.ok(Math.abs(boundaryward.interior - fixedPointMultiplier(0.24)) < 1e-2);
-  assert.ok(Math.abs(boundaryward.interior - 0.8) < 1e-2);
-
-  const chaotic = sampleCell(-1.9, 0);
-  assert.equal(chaotic.period, 0);
-  assert.equal(chaotic.interior, 1);
-
-  assert.equal(sampleCell(0.5, 0).period, model.ESCAPED);
 });
 
 test("sampleAttractorGrid returns contract-shaped typed arrays", () => {

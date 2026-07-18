@@ -21,8 +21,6 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
-  info?: string;
-  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -40,20 +38,11 @@ interface SimKernel {
 }
 
 const CHANNEL_COUNT = 2;
+const DEFAULT_PLOTTED_ITERATIONS = DEFAULT_SAMPLE_COUNT;
 const MIN_WARMUP_ITERATIONS = 16;
 const MAX_WARMUP_ITERATIONS = 2000;
 const MIN_SAMPLE_COUNT = 8;
 const MAX_SAMPLE_COUNT = 96;
-// Kernel defaults tuned by eye: the long warmup shrinks the unresolved
-// fringe at bulb boundaries, which reads far clearer. Samples stay low
-// because the GPU point budget is fixed — cells × samples = budget, so
-// raising samples thins the cloud's spatial coverage of the c-plane.
-// Plotted iterations defaults to the ceiling, meaning "plot every sample"
-// at any sample count. The model's DEFAULT_* constants stay at the
-// sampler's own reference values.
-const DEFAULT_KERNEL_WARMUP = 1500;
-const DEFAULT_KERNEL_SAMPLES = 8;
-const DEFAULT_PLOTTED_ITERATIONS = MAX_SAMPLE_COUNT;
 
 /**
  * Cycle points closer than this collapse into one attractor level for the
@@ -110,156 +99,23 @@ export class LogisticMandelbrotKernel implements SimKernel {
     [0, MAX_DETECTABLE_PERIOD],
   ] as const;
   readonly paramSchema = [
-    // View: how the object is rendered.
-    {
-      key: "colourMode",
-      label: "Colour mode",
-      type: "enum",
-      default: "period",
-      options: ["period", "inside-out", "mono", "cycle"],
-      info: "Chooses how attractor cells are coloured: by period, inside-out by escape depth, a single tone, or animated cycling. Changes the palette mapping instantly.",
-    },
-    {
-      key: "exposure",
-      label: "Exposure",
-      type: "number",
-      default: 1,
-      min: 0.4,
-      max: 3,
-      step: 0.05,
-      info: "Brightens or dims the whole point cloud. Higher values make faint, high-period cells more visible.",
-    },
-    // Resolved per frame in the point shader — dragging it is live.
-    {
-      key: "edgeGlow",
-      label: "Edge glow",
-      type: "number",
-      default: 0.6,
-      min: 0,
-      max: 2,
-      step: 0.05,
-      info: "Strength of the glow drawn at cell boundaries. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
-    },
-    // Share of the point budget spent re-sampling cascade tails on a finer
-    // sub-grid. Changing it rebuilds the cloud; 0 disables refinement.
-    {
-      key: "tailRefinement",
-      label: "Tail refinement",
-      type: "number",
-      default: 0,
-      min: 0,
-      max: 0.6,
-      step: 0.05,
-      info: "Share of the point budget spent re-sampling cascade tails on a finer sub-grid, sharpening the boundary. Changing it rebuilds the point cloud; 0 disables refinement.",
-    },
-    // GPU-only live-build detail. The CPU fallback ignores this control and
-    // retains the tail-refinement plan above rather than attempting 16M points.
-    {
-      key: "boundaryDetail",
-      label: "Boundary detail (GPU only; CPU uses tail refinement)",
-      type: "number",
-      default: 1,
-      min: 0,
-      max: 1,
-      step: 0.1,
-      info: "GPU-only extra boundary detail added while building the cloud; the CPU fallback ignores it and keeps the tail-refinement plan instead. Changing it rebuilds the cloud, and the extra points only become visible as the camera moves in close.",
-    },
-    // Culled per frame in the vertex shader, so dragging it is instant — no
-    // rebuild. The wider low end is affordable for the same reason.
-    {
-      key: "pointDensity",
-      label: "Point density",
-      type: "number",
-      default: 1,
-      min: 0.05,
-      max: 1,
-      step: 0.05,
-      info: "Fraction of built points actually drawn. Culled per frame in the vertex shader, so dragging it is instant with no rebuild.",
-    },
-    {
-      key: "autoRotate",
-      label: "Auto rotate",
-      type: "boolean",
-      default: true,
-      info: "Lets the camera drift slowly around the cloud when idle.",
-    },
-    {
-      key: "continuousSpin",
-      label: "Continuous camera spin",
-      type: "boolean",
-      default: true,
-      info: "Keeps the camera spinning continuously instead of settling once framing looks good.",
-    },
-    // Light beam: the tracer sweeping the real axis and its wake.
-    {
-      key: "realAxisSweep",
-      label: "Light beam sweep",
-      type: "boolean",
-      default: true,
-      group: "Light beam",
-      info: "Shows a tracer light sweeping along the real axis with a fading wake.",
-    },
-    {
-      key: "sweepSpeed",
-      label: "Sweep speed",
-      type: "number",
-      default: 0.1,
-      min: 0.03,
-      max: 0.6,
-      step: 0.01,
-      group: "Light beam",
-      info: "How fast the real-axis sweep tracer moves.",
-    },
-    // Animation: palette cycling and the period-doubling reveal.
-    {
-      key: "cycleSpeed",
-      label: "Palette cycle speed",
-      type: "number",
-      default: 0.151,
-      min: 0,
-      max: 5,
-      step: 0.001,
-      info: "Speed of the palette's colour cycling animation.",
-    },
-    {
-      key: "cascadeReveal",
-      label: "Cascade reveal",
-      type: "boolean",
-      default: true,
-      info: "Reveals the period-doubling cascade progressively over time instead of showing it fully formed.",
-    },
-    {
-      key: "cascadeDuration",
-      label: "Cascade duration (s)",
-      type: "number",
-      default: 16.5,
-      min: 2,
-      max: 30,
-      step: 0.5,
-      info: "How many seconds the cascade reveal takes to finish.",
-    },
-    // Sampling: how each c-cell's attractor orbit is computed.
     {
       key: "warmupIterations",
       label: "Warmup iterations",
       type: "number",
-      default: DEFAULT_KERNEL_WARMUP,
+      default: DEFAULT_WARMUP_ITERATIONS,
       min: MIN_WARMUP_ITERATIONS,
       max: MAX_WARMUP_ITERATIONS,
       step: 1,
-      group: "Sampling",
-      info: "Iterations discarded before sampling each cell's attractor, letting the orbit settle first. Changing it rebuilds the point cloud.",
     },
     {
       key: "sampleCount",
-      label: "Orbit samples",
+      label: "Samples (K)",
       type: "number",
-      default: DEFAULT_KERNEL_SAMPLES,
+      default: DEFAULT_SAMPLE_COUNT,
       min: MIN_SAMPLE_COUNT,
       max: MAX_SAMPLE_COUNT,
       step: 1,
-      group: "Sampling",
-      info: "Orbit points sampled per cell once warmup settles. Changing it rebuilds the point cloud; the GPU point budget is fixed, so more samples per cell means fewer cells covered.",
     },
     {
       key: "plottedIterations",
@@ -269,27 +125,76 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 1,
       max: MAX_SAMPLE_COUNT,
       step: 1,
-      group: "Sampling",
-      info: "How many of the sampled orbit points are actually plotted per cell. Changing it rebuilds the point cloud.",
+    },
+    {
+      key: "cascadeReveal",
+      label: "Cascade reveal",
+      type: "boolean",
+      default: true,
+    },
+    {
+      key: "cascadeDuration",
+      label: "Cascade duration (s)",
+      type: "number",
+      default: 12,
+      min: 2,
+      max: 30,
+      step: 0.5,
+    },
+    {
+      key: "realAxisSweep",
+      label: "Real-axis sweep",
+      type: "boolean",
+      default: true,
+    },
+    {
+      key: "sweepSpeed",
+      label: "Sweep speed",
+      type: "number",
+      default: 0.15,
+      min: 0.03,
+      max: 0.6,
+      step: 0.01,
     },
     {
       key: "realSliceOnly",
-      label: "Real-axis slice only",
+      label: "Real slice only",
       type: "boolean",
       default: false,
-      info: "Restricts sampling to the real axis only, producing the classic 1D bifurcation diagram instead of the full complex-plane cloud. Changing it rebuilds the point cloud.",
     },
-    // Renderer-side: "live" builds in the browser, any other value names a
-    // machine-local baked cloud (scripts/bake-orbit3d.mjs). simView extends
-    // the options from the baked manifest at mount and drops the control
-    // entirely when no bake is present, so it ships safely.
     {
-      key: "modelSource",
-      label: "Model source",
+      key: "exposure",
+      label: "Exposure",
+      type: "number",
+      default: 1.35,
+      min: 0.4,
+      max: 3,
+      step: 0.05,
+    },
+    {
+      key: "pointDensity",
+      label: "Point density",
+      type: "number",
+      default: 1,
+      min: 0.25,
+      max: 1,
+      step: 0.05,
+    },
+    {
+      key: "colourMode",
+      label: "Colour mode",
       type: "enum",
-      default: "live",
-      options: ["live"],
-      info: "Chooses between building the point cloud live in the browser or loading a machine-local prebaked cloud, when one is available.",
+      default: "period",
+      options: ["period", "height", "mono", "cycle"],
+    },
+    {
+      key: "cycleSpeed",
+      label: "Cycle speed",
+      type: "number",
+      default: 0.1,
+      min: 0,
+      max: 5,
+      step: 0.001,
     },
   ] as const satisfies readonly ParamDescriptor[];
 
@@ -298,8 +203,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
   private state = new Float32Array(0);
   private samples = new Float32Array(0);
   private levels = new Float32Array(DISTINCT_LEVEL_CAP);
-  private warmupIterations = DEFAULT_KERNEL_WARMUP;
-  private sampleCount = DEFAULT_KERNEL_SAMPLES;
+  private warmupIterations = DEFAULT_WARMUP_ITERATIONS;
+  private sampleCount = DEFAULT_SAMPLE_COUNT;
   private plottedIterations = DEFAULT_PLOTTED_ITERATIONS;
   private realSliceOnly = false;
   private cursor = 0;
@@ -310,12 +215,12 @@ export class LogisticMandelbrotKernel implements SimKernel {
     this.height = Math.max(0, Math.floor(height));
 
     this.warmupIterations = boundedInteger(
-      numberParam(params, "warmupIterations", DEFAULT_KERNEL_WARMUP),
+      numberParam(params, "warmupIterations", DEFAULT_WARMUP_ITERATIONS),
       MIN_WARMUP_ITERATIONS,
       MAX_WARMUP_ITERATIONS,
     );
     this.sampleCount = boundedInteger(
-      numberParam(params, "sampleCount", DEFAULT_KERNEL_SAMPLES),
+      numberParam(params, "sampleCount", DEFAULT_SAMPLE_COUNT),
       MIN_SAMPLE_COUNT,
       MAX_SAMPLE_COUNT,
     );

@@ -19,6 +19,10 @@ in float a_period;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
 uniform int u_colourMode;
+uniform sampler2D u_palette;
+uniform float u_phase;
+uniform int u_cellCount;
+uniform int u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
 out vec3 v_colour;
@@ -68,6 +72,14 @@ void main() {
     v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
     v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
+  } else if (u_colourMode == 3) {
+    int n = gl_VertexID / u_cellCount;
+    float palettePosition = float(n) / float(u_sampleCount);
+    vec3 hue = texture(
+      u_palette,
+      vec2(fract(palettePosition + u_phase), 0.5)
+    ).rgb;
+    v_colour = mix(hue, vec3(1.0), 0.16) * 1.1;
   } else {
     float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
@@ -322,12 +334,13 @@ export interface Orbit3DGroundPlane {
 
 export type Orbit3DCameraPose = "default" | "side";
 
-export type Orbit3DColourMode = "period" | "height" | "mono";
+export type Orbit3DColourMode = "period" | "height" | "mono" | "cycle";
 
 const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
   period: 0,
   height: 1,
   mono: 2,
+  cycle: 3,
 };
 
 export interface Orbit3DStats {
@@ -373,6 +386,10 @@ export class Orbit3DPointCloud {
   private readonly viewProjectionUniform: WebGLUniformLocation;
   private readonly pointSizeUniform: WebGLUniformLocation;
   private readonly colourModeUniform: WebGLUniformLocation;
+  private readonly paletteUniform: WebGLUniformLocation;
+  private readonly phaseUniform: WebGLUniformLocation;
+  private readonly cellCountUniform: WebGLUniformLocation;
+  private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
@@ -469,6 +486,22 @@ export class Orbit3DPointCloud {
     this.colourModeUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_colourMode"),
       "orbit3d colour-mode uniform",
+    );
+    this.paletteUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_palette"),
+      "orbit3d palette uniform",
+    );
+    this.phaseUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_phase"),
+      "orbit3d palette-phase uniform",
+    );
+    this.cellCountUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_cellCount"),
+      "orbit3d cell-count uniform",
+    );
+    this.sampleCountUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_sampleCount"),
+      "orbit3d sample-count uniform",
     );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
@@ -834,6 +867,8 @@ export class Orbit3DPointCloud {
     ground: Orbit3DGroundPlane | null = null,
     colourMode: Orbit3DColourMode = "period",
     fanActive = false,
+    palette: WebGLTexture | null = null,
+    phase = 0,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -869,6 +904,15 @@ export class Orbit3DPointCloud {
       Math.min(3, Math.max(1.8, width / 650)),
     );
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
+    gl.uniform1i(this.paletteUniform, 3);
+    gl.uniform1f(this.phaseUniform, phase);
+    gl.uniform1i(
+      this.cellCountUniform,
+      Math.max(1, Math.floor(this.fullPointCount / this.sampleCount)),
+    );
+    gl.uniform1i(this.sampleCountUniform, Math.max(1, this.sampleCount));
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
     gl.bindVertexArray(this.pointVao);
