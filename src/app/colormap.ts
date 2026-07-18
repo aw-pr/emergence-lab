@@ -23,7 +23,6 @@ export type ColourPreset =
   | "brian"
   | "binary"
   | "chemical"
-  | "lyapunov"
   | "rgb";
 
 export interface ColourMapOptions {
@@ -65,7 +64,6 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "brian", label: "Brian's Brain" },
   { value: "binary", label: "Binary" },
   { value: "chemical", label: "Chemical blend" },
-  { value: "lyapunov", label: "Lyapunov stability" },
   { value: "rgb", label: "Direct RGB" },
 ];
 
@@ -99,10 +97,7 @@ export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
 
 type ColourStop = readonly [number, Rgb];
 
-const RAMPS: Record<
-  Exclude<ColourPreset, "chemical" | "lyapunov" | "rgb" | "sand">,
-  readonly ColourStop[]
-> = {
+const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb" | "sand">, readonly ColourStop[]> = {
   viridis: [
     [0, [68, 1, 84]],
     [0.28, [59, 82, 139]],
@@ -209,10 +204,6 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "plasma", contrast: 1.25, steps: 2 };
     case "kuramoto-oscillators":
       return { ...base, preset: "phase", contrast: 1.12 };
-    case "swarmalators":
-      // Judged by eye: darker mid-density wakes and firmer contrast separate
-      // the blue/rose phase bands without blowing out the pale wrap point.
-      return { ...base, preset: "phase", gamma: 0.78, contrast: 1.5 };
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":
@@ -225,21 +216,13 @@ export function defaultColourOptionsFor(
       // Cyclic: the hue channel wraps, so the palette has to join at its ends
       // or every lap of the colour cycle would snap through a hard seam.
       return { ...base, preset: "phase", gamma: 1.8, contrast: 1.55 };
-    case "clifford-dejong":
-      // Same cyclic density+hue pairing as the strange attractors, but a
-      // gentler gamma: the point-map histogram carries its structure in faint
-      // single-visit cells that a 1.8 lift would crush to black.
-      return { ...base, preset: "phase", gamma: 1.35, contrast: 1.4 };
     case "mandelbrot":
     case "julia-set":
-    case "logistic-mandelbrot":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
       // Chosen by eye against the cycle colour mode: viridis with a strong
       // lift keeps the plane's bands cool while the cycling dots stay legible.
       return { ...base, preset: "viridis", gamma: 1.65, contrast: 2.4 };
-    case "markus-lyapunov":
-      return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
     case "cyclic-ca":
@@ -250,7 +233,7 @@ export function defaultColourOptionsFor(
     case "particle-life":
       // One species-colour per particle per cell; a slight gamma lift keeps
       // single, un-stacked particles legible while direct RGB preserves hue.
-      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2, steps: 12 };
+      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2 };
     default:
       break;
   }
@@ -290,7 +273,7 @@ function adjust(value: number, options: ColourMapOptions): number {
 }
 
 function rampColour(
-  preset: Exclude<ColourPreset, "chemical" | "lyapunov" | "rgb" | "sand">,
+  preset: Exclude<ColourPreset, "chemical" | "rgb" | "sand">,
   t: number,
 ): Rgb {
   const stops = RAMPS[preset];
@@ -335,14 +318,6 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
     const stable = mix([8, 4, 2], base, density);
     const heat = mix([255, 92, 12], [255, 246, 184], clamp01(c1));
     return mix(stable, heat, smoothstep01(c1 / 0.85) * 0.55);
-  }
-  if (options.preset === "lyapunov") {
-    if (c0 > 0) return rampColour("amber", adjust(c0, options));
-    if (c1 > 0) return rampColour("ice", adjust(c1, options));
-    // Both-zero means the pixel lies outside the map's [0,4]² parameter
-    // domain: render as empty space (the ice ramp's floor) so wide viewports
-    // frame the fractal instead of showing a saturated band.
-    return [2, 6, 23];
   }
   if (options.preset !== "chemical") {
     const composite = clamp01(c1 * 0.72 + (1 - c0) * 0.28);
@@ -390,10 +365,7 @@ function quantise(t: number, steps: number): number {
 function singleChannelColour(t: number, options: ColourMapOptions): Rgb {
   const value = adjust(quantise(t, options.steps), options);
   const preset =
-    options.preset === "chemical" ||
-    options.preset === "lyapunov" ||
-    options.preset === "rgb" ||
-    options.preset === "sand"
+    options.preset === "chemical" || options.preset === "rgb" || options.preset === "sand"
       ? "viridis"
       : options.preset;
   return rampColour(preset, value);

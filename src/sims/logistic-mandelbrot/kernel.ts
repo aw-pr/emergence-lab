@@ -38,6 +38,10 @@ interface SimKernel {
 }
 
 const CHANNEL_COUNT = 2;
+// Kernel defaults tuned by eye for the released cycle-mode view; the model's
+// DEFAULT_* constants stay at the sampler's own reference values.
+const DEFAULT_KERNEL_WARMUP = 72;
+const DEFAULT_KERNEL_SAMPLES = 8;
 const DEFAULT_PLOTTED_ITERATIONS = DEFAULT_SAMPLE_COUNT;
 const MIN_WARMUP_ITERATIONS = 16;
 const MAX_WARMUP_ITERATIONS = 2000;
@@ -103,14 +107,14 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "colourMode",
       label: "Colour mode",
       type: "enum",
-      default: "period",
+      default: "cycle",
       options: ["period", "height", "mono", "cycle"],
     },
     {
       key: "cycleSpeed",
       label: "Cycle speed",
       type: "number",
-      default: 0.1,
+      default: 0.151,
       min: 0,
       max: 5,
       step: 0.001,
@@ -125,7 +129,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "warmupIterations",
       label: "Warmup iterations",
       type: "number",
-      default: DEFAULT_WARMUP_ITERATIONS,
+      default: DEFAULT_KERNEL_WARMUP,
       min: MIN_WARMUP_ITERATIONS,
       max: MAX_WARMUP_ITERATIONS,
       step: 1,
@@ -134,7 +138,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "sampleCount",
       label: "Samples (K)",
       type: "number",
-      default: DEFAULT_SAMPLE_COUNT,
+      default: DEFAULT_KERNEL_SAMPLES,
       min: MIN_SAMPLE_COUNT,
       max: MAX_SAMPLE_COUNT,
       step: 1,
@@ -158,7 +162,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "cascadeDuration",
       label: "Cascade duration (s)",
       type: "number",
-      default: 12,
+      default: 16.5,
       min: 2,
       max: 30,
       step: 0.5,
@@ -209,8 +213,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
   private state = new Float32Array(0);
   private samples = new Float32Array(0);
   private levels = new Float32Array(DISTINCT_LEVEL_CAP);
-  private warmupIterations = DEFAULT_WARMUP_ITERATIONS;
-  private sampleCount = DEFAULT_SAMPLE_COUNT;
+  private warmupIterations = DEFAULT_KERNEL_WARMUP;
+  private sampleCount = DEFAULT_KERNEL_SAMPLES;
   private plottedIterations = DEFAULT_PLOTTED_ITERATIONS;
   private realSliceOnly = false;
   private cursor = 0;
@@ -221,12 +225,12 @@ export class LogisticMandelbrotKernel implements SimKernel {
     this.height = Math.max(0, Math.floor(height));
 
     this.warmupIterations = boundedInteger(
-      numberParam(params, "warmupIterations", DEFAULT_WARMUP_ITERATIONS),
+      numberParam(params, "warmupIterations", DEFAULT_KERNEL_WARMUP),
       MIN_WARMUP_ITERATIONS,
       MAX_WARMUP_ITERATIONS,
     );
     this.sampleCount = boundedInteger(
-      numberParam(params, "sampleCount", DEFAULT_SAMPLE_COUNT),
+      numberParam(params, "sampleCount", DEFAULT_KERNEL_SAMPLES),
       MIN_SAMPLE_COUNT,
       MAX_SAMPLE_COUNT,
     );
