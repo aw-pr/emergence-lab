@@ -232,6 +232,7 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "phase", gamma: 1.35, contrast: 1.4 };
     case "mandelbrot":
     case "julia-set":
+    case "logistic-mandelbrot":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
       // Chosen by eye against the cycle colour mode: viridis with a strong
