@@ -66,6 +66,7 @@ const PHONE_FORCED_PERFORMANCE = new Set([
 ]);
 
 const ULTRA_DEFAULTS = new Set([
+  "logistic-mandelbrot",
   "lorenz-attractor",
   // Point-map histograms sharpen with every extra cell; the per-frame cost is
   // the fade sweep, which stays cheap even at the ultra grid.
