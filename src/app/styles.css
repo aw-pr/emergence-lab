@@ -1,15 +1,8 @@
-/* KaTeX styles are NOT imported here. The standalone build imports them in
- * main.ts; the web component links them into its shadow root (classes) and the
- * host document (font faces), because @font-face never registers from inside a
- * shadow root. Re-adding the import here would inline KaTeX's full font set
- * into the component bundle. */
+@import "katex/dist/katex.min.css";
 
 /* Blue-slate ladder matched to the promo-flow site (slate-950 base, blue-grey
- * signal text) so the app reads as the same surface when framed at /labs/run.
- * :host carries the same tokens when this sheet lives inside the web
- * component's shadow root, where :root cannot match. */
-:root,
-:host {
+ * signal text) so the app reads as the same surface when framed at /labs/run. */
+:root {
   --bg: #020617;
   --bg-elev: #101a33;
   --bg-elev-2: #18233a;
@@ -26,13 +19,9 @@
   box-sizing: border-box;
 }
 
-/* .lab-root is the web component's internal container, sized by its host
- * element the way #app is sized by the standalone page. */
 html,
 body,
-#app,
-:host,
-.lab-root {
+#app {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -42,10 +31,6 @@ body,
     -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.45;
-}
-
-:host {
-  display: block;
 }
 
 a {
@@ -216,11 +201,7 @@ code {
 .sim-view {
   display: flex;
   flex-direction: column;
-  /* Container-relative, never 100vh: standalone the #app/body chain makes 100%
-   * the viewport anyway, but embedded (the site's web component) the container
-   * is the viewport minus the host page's nav and bar — viewport units here
-   * push the sidebar past the bottom edge. */
-  height: 100%;
+  height: 100vh;
   min-height: 0;
 }
 
@@ -354,10 +335,12 @@ code {
   }
 }
 
-/* Desktop and tablet always show the narrative; the phone disclosure button
- * only exists below the stacked-layout breakpoint (see the 720px block). */
-.sim-view__about-toggle {
-  display: none;
+/* Phone-width: one column, and the stage needs the room more than the prose
+ * does. Bounded and scrollable rather than dominant. */
+@media (max-width: 640px) {
+  .sim-view__about {
+    max-height: 108px;
+  }
 }
 
 /* Sits inside the narrative's maths column now, so it can be no wider than one
@@ -542,199 +525,15 @@ code {
   overflow-y: auto;
 }
 
-/* Immersive-only edge handle for opening the drawer on touch; irrelevant
- * (and hidden) in normal layout where the sidebar is already visible. */
-.sim-view__drawer-handle {
-  display: none;
-}
-
-/* Immersive-only exit control — an on-screen way back that doesn't depend on
- * Esc (touch has none) or on remembering the Maximise button toggles too.
- * Irrelevant (and hidden) in normal layout where the header's own nav is
- * visible. */
-.sim-view__immersive-exit {
-  display: none;
-}
-
-/* Phone-only bottom-drawer toggle (see the 720px block); irrelevant outside
- * it, and superseded by the drawer handle above once immersive mode takes
- * over the sidebar's reveal mechanism. */
-.sim-view__params-toggle {
-  display: none;
-}
-
-/* Immersive layout: set by JS for the app's own Maximise (native fullscreen
- * on the body) AND for browser/OS-level fullscreen (viewport == screen,
- * standalone only). The explainer header drops away and the stage takes the
- * whole viewport. */
-.sim-view--immersive .sim-view__header {
-  display: none;
-}
-
-/* Top-layer-first, z-index-fallback: JS promotes the body into the UA's top
- * layer via the Popover API (see enterTopLayer/exitTopLayer in simView.ts),
- * which escapes every containing block in the document — including a host
- * page's transformed ancestor, which can trap plain `fixed` positioning when
- * this app is embedded. The fixed+z-index rules below are the fallback for
- * browsers without popover support, and are otherwise redundant once the
- * body is genuinely in the top layer.
- *
- * The z-index must clear the HOST page's chrome, not just the app's own
- * layers: embedded inline in a site (site-embedded chrome), the host's fixed
- * navigation sits in the same root stacking context as this overlay, so a
- * modest z-index leaves the site nav painted on top and the "header" never
- * fully disappears. A takeover-tier value wins over any realistic host chrome;
- * the parked sidebar is a child of this body, so it rides above the host too
- * without needing its own high z-index. */
-.sim-view--immersive .sim-view__body {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483000;
-  width: auto;
-  height: auto;
-  margin: 0;
-  border: none;
-  padding: 0;
-  overflow: hidden;
-  background: #000;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-}
-
-/* Immersive takes the whole viewport regardless of viewport width, so it has
- * to beat the phone drawer's open-state grid outright rather than relying on
- * source order — this selector's extra class guarantees that. */
-.sim-view--immersive.sim-view--params-open .sim-view__body {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-}
-
-.sim-view--immersive .sim-view__body::backdrop {
+.sim-view__stage:fullscreen {
+  width: 100vw;
+  height: 100vh;
   background: #000;
 }
 
-/* The settings panel parks off-screen, leaving a slim accent handle on the
- * right edge; on pointer-fine devices, moving the pointer to it (or tabbing
- * into the panel) slides the drawer in and it stays while hovered or
- * focused. Elsewhere (touch), the drawer-handle button is the only way in —
- * see .sim-view__sidebar--open below, which works for every pointer type. */
-.sim-view--immersive .sim-view__sidebar {
-  /* Beats the phone drawer's collapsed `display: none` (see the 720px
-   * block) — immersive always keeps the sidebar in the DOM flow, parked
-   * off-screen via the transform below rather than hidden outright. */
-  display: block;
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(320px, 85vw);
-  transform: translateX(calc(100% - 16px));
-  transition: transform 0.22s ease;
-  border-left: 1px solid rgba(90, 200, 250, 0.4);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.55);
-  z-index: 41;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .sim-view--immersive .sim-view__sidebar:hover,
-  .sim-view--immersive .sim-view__sidebar:focus-within {
-    transform: translateX(0);
-  }
-
-  /* Invisible hot zone widening the reveal target past the 16px sliver. */
-  .sim-view--immersive .sim-view__sidebar::after {
-    content: "";
-    position: absolute;
-    left: -24px;
-    top: 0;
-    bottom: 0;
-    width: 24px;
-  }
-}
-
-.sim-view--immersive .sim-view__sidebar--open {
-  transform: translateX(0);
-}
-
-/* Beats the phone drawer toggle's `display: flex` (see the 720px block) —
- * immersive mode has its own edge-handle reveal for the sidebar, so the
- * bottom-drawer pill would be a redundant second control. */
-.sim-view--immersive .sim-view__params-toggle {
-  display: none;
-}
-
-/* The accent strip on the sidebar's exposed sliver, and the tap target for
- * touch devices that have no hover to reveal the drawer. Tinted background
- * (rather than a transparent one) is deliberate: against a dark sim the
- * sliver has to read as an obvious pull tab, not just a stray chevron.
- * Chevron flips to point the other way once the drawer is open. */
-.sim-view--immersive .sim-view__drawer-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 16px;
-  border: none;
-  border-right: 1px solid rgba(90, 200, 250, 0.5);
-  padding: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(90, 200, 250, 0.32),
-    rgba(90, 200, 250, 0.12)
-  );
-  color: #eaf9ff;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.sim-view--immersive .sim-view__drawer-handle::before {
-  content: "\276E";
-}
-
-.sim-view--immersive
-  .sim-view__sidebar--open
-  .sim-view__drawer-handle::before {
-  content: "\276F";
-}
-
-/* Top-left, not top-right: the parked drawer handle already occupies a
- * right-edge sliver (see .sim-view__drawer-handle above), so the exit
- * control claims the clear corner instead. Semi-transparent dark pill to
- * match the fractal HUD / legend overlay styling, sized well past the
- * visible glyph for a comfortable touch target. */
-.sim-view--immersive .sim-view__immersive-exit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  z-index: 42;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(90, 200, 250, 0.28);
-  border-radius: 999px;
-  padding: 0;
-  background: rgba(4, 9, 17, 0.76);
-  backdrop-filter: blur(10px);
-  color: rgba(225, 248, 255, 0.86);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sim-view--immersive .sim-view__immersive-exit:hover {
-  background: rgba(90, 200, 250, 0.14);
-  border-color: rgba(90, 200, 250, 0.5);
-  color: #fff;
-}
-
-.sim-view--immersive .sim-view__immersive-exit:focus-visible {
-  outline: 2px solid rgba(90, 200, 250, 0.9);
-  outline-offset: 2px;
+.sim-view__stage:fullscreen .sim-view__canvas {
+  width: 100vw;
+  height: 100vh;
 }
 
 .sim-view--error {
@@ -824,62 +623,12 @@ code {
 .controls__params h3,
 .controls__presets h3,
 .controls__view h3,
-.controls__colour h3,
-.controls__params summary,
-.controls__view summary,
-.controls__colour summary {
+.controls__colour h3 {
   margin: 0 0 12px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-dim);
-}
-
-.controls__params summary,
-.controls__view summary,
-.controls__colour summary {
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  padding: 4px 6px;
-  margin-left: -6px;
-  border-radius: 6px;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.controls__params summary:hover,
-.controls__view summary:hover,
-.controls__colour summary:hover {
-  background: rgba(90, 200, 250, 0.1);
-  color: var(--fg);
-}
-
-.controls__params summary::-webkit-details-marker,
-.controls__view summary::-webkit-details-marker,
-.controls__colour summary::-webkit-details-marker {
-  display: none;
-}
-
-.controls__params summary::before,
-.controls__view summary::before,
-.controls__colour summary::before {
-  content: "\25B8";
-  display: inline-block;
-  margin-right: 6px;
-  color: var(--accent);
-  transition: transform 0.15s ease;
-}
-
-details[open].controls__params summary::before,
-details[open].controls__view summary::before,
-details[open].controls__colour summary::before {
-  transform: rotate(90deg);
-}
-
-details.controls__params:not([open]) summary,
-details.controls__view:not([open]) summary,
-details.controls__colour:not([open]) summary {
-  margin-bottom: 0;
 }
 
 .controls__presets,
@@ -920,9 +669,6 @@ details.controls__colour:not([open]) summary {
 }
 
 .control__label--with-action {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   gap: 8px;
 }
 
@@ -980,39 +726,6 @@ details.controls__colour:not([open]) summary {
   width: 100%;
 }
 
-.control__info-button {
-  border: 1px solid var(--border);
-  background: var(--bg-elev-2);
-  color: var(--fg-dim);
-  border-radius: 4px;
-  font-size: 12px;
-  line-height: 1;
-  padding: 2px 6px;
-  cursor: pointer;
-}
-
-.control__info-button:hover,
-.control__info-button[aria-expanded="true"] {
-  color: var(--fg);
-  border-color: rgba(90, 200, 250, 0.45);
-}
-
-.control__info-popover {
-  grid-column: 1 / -1;
-  margin-top: 4px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-elev-2);
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--fg);
-}
-
-.control__info-popover[hidden] {
-  display: none;
-}
-
 .control__value {
   font-size: 12px;
   color: var(--fg);
@@ -1058,120 +771,19 @@ details.controls__colour:not([open]) summary {
 }
 
 @media (max-width: 720px) {
-  /* Slimmed to a compact bar: back link and title share one row, the
-   * subtitle/family tag drop out entirely (the about disclosure below
-   * already carries that context), and the about toggle keeps its own row
-   * underneath. Embedded (title block hidden by JS), this leaves just the
-   * back link and the toggle — reads as one slim bar either way. */
   .sim-view__header {
-    align-items: center;
-    padding: 10px 16px;
-    gap: 6px 16px;
-  }
-  .sim-view__title-block {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .sim-view__title {
-    overflow: hidden;
-    font-size: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .sim-view__subtitle {
-    display: none;
+    padding: 14px 16px;
   }
   .sim-view__formula {
     max-width: calc(100vw - 88px);
   }
-
-  /* The narrative used to render open here, clipped mid-sentence with an
-   * unsignposted inner scroll and the formula below its fold. Collapsed
-   * behind a disclosure instead, the reclaimed height goes to the stage and
-   * the controls panel; opened deliberately, it gets more room than the old
-   * clip ever gave it. */
-  .sim-view__about-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-basis: 100%;
-    padding: 2px 0;
-    border: 0;
-    background: none;
-    color: var(--fg-dim);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-  .sim-view__about-toggle::before {
-    content: "▸";
-    color: var(--accent);
-    opacity: 0.75;
-  }
-  .sim-view__about-toggle[aria-expanded="true"]::before {
-    content: "▾";
-  }
-  .sim-view__about {
-    display: none;
-  }
-  .sim-view__about--open {
-    display: grid;
-    max-height: 200px;
-  }
-  /* Collapsed by default: the drawer toggle is a content-height row and the
-   * sidebar is hidden outright, so the stage takes the rest. Rows are capped
-   * by grid tracks rather than a max-height on the sidebar throughout this
-   * block — a percentage row resolves against the body's own definite
-   * height, where a vh-based cap (of the whole viewport) overflows the
-   * embedded container, which is only as tall as the host's chrome leaves
-   * it. Content shorter than a cap keeps the row at content height. */
   .sim-view__body {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(360px, 1fr) auto auto;
-  }
-  .sim-view__params-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    width: fit-content;
-    margin: 8px auto;
-    padding: 6px 22px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: rgba(168, 185, 209, 0.08);
-    color: var(--fg-dim);
-    font: inherit;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-  .sim-view__params-toggle::before {
-    content: "▴";
-    color: var(--accent);
-    opacity: 0.75;
-  }
-  .sim-view--params-open .sim-view__params-toggle::before {
-    content: "▾";
+    grid-template-rows: minmax(360px, 1fr) auto;
   }
   .sim-view__sidebar {
-    display: none;
     border-left: none;
     border-top: 1px solid var(--border);
-    min-height: 0;
-  }
-  /* Opened via the drawer toggle: the sidebar reclaims a row (with its own
-   * internal scroll) and the stage gives up the room it doesn't need while
-   * params are visible. */
-  .sim-view--params-open .sim-view__body {
-    grid-template-rows: minmax(0, 1fr) auto minmax(0, 56%);
-  }
-  .sim-view--params-open .sim-view__sidebar {
-    display: block;
+    max-height: 44vh;
   }
 }
