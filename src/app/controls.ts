@@ -89,6 +89,12 @@ export interface ControlsOptions {
   callbacks: ControlsCallbacks;
   /** Mandelbrot / Julia / Burning Ship: palette cycle direction + key hint (does not duplicate cycle speed slider). */
   fractalPaletteCycleUi?: boolean;
+  /**
+   * Kernel param keys hoisted into the top "View" group alongside grid
+   * quality, kernel preset, and palette. Remaining schema params stay in the
+   * Parameters section.
+   */
+  viewParamKeys?: readonly string[];
 }
 
 /**
@@ -272,15 +278,39 @@ export class ControlsPanel {
     }
 
     this.container.appendChild(transport);
+
+    const viewParamKeys = new Set(options.viewParamKeys ?? []);
+    const viewSection = document.createElement("section");
+    viewSection.className = "controls__view";
+    const viewHeading = document.createElement("h3");
+    viewHeading.textContent = "View";
+    viewSection.appendChild(viewHeading);
     if (this.showResolutionControl) {
-      this.container.appendChild(this.buildResolutionSection());
+      for (const element of this.buildQualityControls()) {
+        viewSection.appendChild(element);
+      }
     }
-    this.container.appendChild(this.buildPresetSection(options));
+    viewSection.appendChild(this.buildKernelPresetRow(options));
+    viewSection.appendChild(
+      this.buildPresetControl(this.colourOptions.preset, (preset) => {
+        this.setColourOptions({ ...this.colourOptions, preset });
+      }),
+    );
+    for (const descriptor of options.paramSchema) {
+      if (!viewParamKeys.has(descriptor.key)) continue;
+      const current = this.params[descriptor.key] ?? descriptor.default;
+      viewSection.appendChild(this.buildParamControl(descriptor, current));
+    }
+    this.container.appendChild(viewSection);
+
     this.container.appendChild(
       this.buildColourDashboard(options.fractalPaletteCycleUi ?? false),
     );
 
-    if (options.paramSchema.length > 0) {
+    const remainingSchema = options.paramSchema.filter(
+      (descriptor) => !viewParamKeys.has(descriptor.key),
+    );
+    if (remainingSchema.length > 0) {
       const paramSection = document.createElement("section");
       paramSection.className = "controls__params";
 
@@ -288,7 +318,7 @@ export class ControlsPanel {
       paramHeading.textContent = "Parameters";
       paramSection.appendChild(paramHeading);
 
-      for (const descriptor of options.paramSchema) {
+      for (const descriptor of remainingSchema) {
         const current = this.params[descriptor.key] ?? descriptor.default;
         paramSection.appendChild(this.buildParamControl(descriptor, current));
       }
@@ -502,14 +532,8 @@ export class ControlsPanel {
     return wrap;
   }
 
-  private buildResolutionSection(): HTMLElement {
-    const section = document.createElement("section");
-    section.className = "controls__resolution";
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Simulation resolution";
-    section.appendChild(heading);
-
+  /** Grid-quality row plus its restart hint, for the View group. */
+  private buildQualityControls(): HTMLElement[] {
     const wrap = document.createElement("label");
     wrap.className = "control control--enum";
 
@@ -534,26 +558,18 @@ export class ControlsPanel {
     });
     this.resolutionSelect = select;
     wrap.appendChild(select);
-    section.appendChild(wrap);
 
     const hint = document.createElement("p");
     hint.className = "controls__hint";
     hint.textContent =
       "Detail ceiling. The sim fits your window up to this cap — higher is " +
       "sharper on big screens but steps slower. Changing it restarts the sim.";
-    section.appendChild(hint);
 
-    return section;
+    return [wrap, hint];
   }
 
-  private buildPresetSection(options: ControlsOptions): HTMLElement {
-    const section = document.createElement("section");
-    section.className = "controls__presets";
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Model presets";
-    section.appendChild(heading);
-
+  /** Kernel-preset row, for the View group. */
+  private buildKernelPresetRow(options: ControlsOptions): HTMLElement {
     const wrap = document.createElement("label");
     wrap.className = "control control--enum";
 
@@ -585,9 +601,8 @@ export class ControlsPanel {
     });
 
     wrap.appendChild(select);
-    section.appendChild(wrap);
 
-    return section;
+    return wrap;
   }
 
   private buildColourDashboard(fractalPaletteCycleUi: boolean): HTMLElement {
@@ -602,11 +617,6 @@ export class ControlsPanel {
       section.appendChild(this.buildFractalPaletteCycleExtras());
     }
 
-    section.appendChild(
-      this.buildPresetControl(this.colourOptions.preset, (preset) => {
-        this.setColourOptions({ ...this.colourOptions, preset });
-      }),
-    );
     section.appendChild(
       this.buildColourRangeControl("Gamma", this.colourOptions.gamma, 0.2, 2.5, 0.05, (gamma) => {
         this.setColourOptions({ ...this.colourOptions, gamma });

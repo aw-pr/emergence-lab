@@ -622,6 +622,7 @@ code {
 
 .controls__params h3,
 .controls__presets h3,
+.controls__view h3,
 .controls__colour h3 {
   margin: 0 0 12px;
   font-size: 12px;
@@ -631,6 +632,7 @@ code {
 }
 
 .controls__presets,
+.controls__view,
 .controls__colour {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
