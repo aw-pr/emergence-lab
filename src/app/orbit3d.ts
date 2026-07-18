@@ -66,6 +66,7 @@ void main() {
   gl_Position = u_viewProjection * vec4(world, 1.0);
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
+  v_selfGlow = 0.0;
   if (u_colourMode == 0) {
     int p = int(a_period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
@@ -73,11 +74,17 @@ void main() {
   } else if (u_colourMode == 1) {
     v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
+    // Deep bulb interiors are points of order: steady grey, no cycling.
+    // Complexity rises toward the set boundary and the chaotic band, where
+    // the palette takes over and the self-glow strengthens.
+    float complexity = smoothstep(0.45, 0.85, a_interior);
     vec3 hue = texture(
       u_palette,
       vec2(fract(a_interior + u_phase), 0.5)
     ).rgb;
-    v_colour = mix(hue, vec3(1.0), 0.16) * 1.1;
+    vec3 steady = vec3(0.44, 0.47, 0.53);
+    v_colour = mix(steady, mix(hue, vec3(1.0), 0.16) * 1.1, complexity);
+    v_selfGlow = mix(0.8, 1.7, complexity);
   } else {
     float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
@@ -101,12 +108,9 @@ void main() {
   // Light every Im(c) depth at the active Re(c), forming a full orbit slice.
   v_markerGlow = u_fanActive
     * (1.0 - smoothstep(0.006, 0.025, abs(age)));
-  // Cycle mode has no tracer, so every point carries a gentle self-glow in
-  // its own palette colour instead; a fraction of the slice light's strength.
-  v_selfGlow = u_colourMode == 3 ? 1.0 : 0.0;
   gl_PointSize = u_pointSize
     * mix(1.0, 5.5, v_markerGlow)
-    * mix(1.0, 1.25, v_selfGlow);
+    * mix(1.0, 1.25, min(v_selfGlow, 1.0));
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
@@ -933,21 +937,25 @@ export class Orbit3DPointCloud {
     gl.bindVertexArray(this.pointVao);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
 
-    gl.useProgram(this.markerProgram);
-    gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
-    gl.bindVertexArray(this.markerVao);
-    gl.uniform1f(
-      this.markerPointSizeUniform,
-      Math.min(30, Math.max(20, width / 62)),
-    );
-    gl.uniform3f(this.markerColourUniform, 0.3, 0.12, 0.015);
-    gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
-    gl.uniform1f(
-      this.markerPointSizeUniform,
-      Math.min(20, Math.max(13, width / 82)),
-    );
-    gl.uniform3f(this.markerColourUniform, 1, 0.72, 0.12);
-    gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
+    // Cycle mode reads as a self-lit field; the roaming marker dot would be
+    // the one element still tracking the sweep, so it stays hidden here.
+    if (colourMode !== "cycle") {
+      gl.useProgram(this.markerProgram);
+      gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
+      gl.bindVertexArray(this.markerVao);
+      gl.uniform1f(
+        this.markerPointSizeUniform,
+        Math.min(30, Math.max(20, width / 62)),
+      );
+      gl.uniform3f(this.markerColourUniform, 0.3, 0.12, 0.015);
+      gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
+      gl.uniform1f(
+        this.markerPointSizeUniform,
+        Math.min(20, Math.max(13, width / 82)),
+      );
+      gl.uniform3f(this.markerColourUniform, 1, 0.72, 0.12);
+      gl.drawArrays(gl.POINTS, this.markerOrbitPointCount, 1);
+    }
     gl.disable(gl.BLEND);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
