@@ -15,8 +15,7 @@ cross-checking (stage cards under `docs/stages/`, see
 
 The logistic-Mandelbrot bifurcation reveal, including the final active-slice
 lighting adjustment, is landed and validated. No required implementation work
-remains; ship only with explicit instruction. Gray-Scott stays the priority
-kernel for future refinement.
+remains. Gray-Scott stays the priority kernel for future refinement.
 
 ## Interface contract
 
