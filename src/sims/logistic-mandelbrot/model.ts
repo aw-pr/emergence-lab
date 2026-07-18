@@ -62,6 +62,11 @@ export interface AttractorField {
   period: Uint16Array;
 }
 
+export interface AttractorCellMeasure {
+  /** Attracting-cycle multiplier magnitude; 1 when no period is detected. */
+  interior: number;
+}
+
 /** Centre of grid cell `index` along an axis spanning [min, max]. */
 export function cellCoordinate(
   min: number,
@@ -120,6 +125,7 @@ export function sampleAttractorCell(
   sampleCount: number,
   samplesOut: Float32Array,
   offset: number,
+  measureOut?: AttractorCellMeasure,
 ): number {
   const escapeSquared = ESCAPE_RADIUS * ESCAPE_RADIUS;
   let zr = 0;
@@ -150,7 +156,20 @@ export function sampleAttractorCell(
       zr > SAMPLE_CLIP ? SAMPLE_CLIP : zr < -SAMPLE_CLIP ? -SAMPLE_CLIP : zr;
   }
 
-  return estimatePeriod(samplesOut, offset, sampleCount);
+  const period = estimatePeriod(samplesOut, offset, sampleCount);
+  if (measureOut) {
+    let multiplier = 1;
+    if (period > 0) {
+      for (let step = 0; step < period; step += 1) {
+        const nextR = zr * zr - zi * zi + cRe;
+        zi = 2 * zr * zi + cIm;
+        zr = nextR;
+        multiplier *= 2 * Math.hypot(zr, zi);
+      }
+    }
+    measureOut.interior = Math.max(0, Math.min(1, multiplier));
+  }
+  return period;
 }
 
 /** Sample every cell of a c-grid in one pass. */
