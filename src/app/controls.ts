@@ -10,38 +10,15 @@ import {
   clearResolution,
   clearValues,
   loadBounds,
-  loadSectionCollapsed,
   loadValues,
   saveBounds,
   saveRenderOptions,
   saveResolution,
-  saveSectionCollapsed,
   saveValues,
   type SliderBounds,
 } from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
 import type { DisplayOptions, ResolutionPreset } from "./renderer.ts";
-
-/**
- * A collapsible, headed control section. Open by default; a user's toggle is
- * remembered per sim and section label.
- */
-export function collapsibleSection(
-  slug: string,
-  label: string,
-  className: string,
-): HTMLDetailsElement {
-  const section = document.createElement("details");
-  section.className = className;
-  section.open = loadSectionCollapsed(slug, label) !== true;
-  const summary = document.createElement("summary");
-  summary.textContent = label;
-  section.appendChild(summary);
-  section.addEventListener("toggle", () => {
-    saveSectionCollapsed(slug, label, !section.open);
-  });
-  return section;
-}
 
 export interface ControlsCallbacks {
   onPlayPause: () => void;
@@ -62,15 +39,8 @@ const RESOLUTION_OPTIONS: ReadonlyArray<{
   { value: "performance", label: "Performance (fastest)" },
   { value: "balanced", label: "Balanced" },
   { value: "high", label: "High" },
-  { value: "ultra", label: "Ultra" },
+  { value: "ultra", label: "Ultra (slowest)" },
 ];
-
-// Opt-in tier: only worth its cost on sims whose builder consumes the extra
-// cells (orbit3d point clouds); hidden from the dropdown everywhere else.
-const EXTREME_RESOLUTION_OPTION = {
-  value: "extreme",
-  label: "Extreme (slowest, huge point cloud)",
-} as const satisfies { value: ResolutionPreset; label: string };
 
 export interface StepsControlOptions {
   label: string;
@@ -101,8 +71,6 @@ export interface ControlsOptions {
   defaultResolution: ResolutionPreset;
   /** Show the simulation-resolution preset selector (omit for fractals). */
   showResolutionControl?: boolean;
-  /** Offer the "Extreme" grid-quality tier (orbit3d point-cloud sims only). */
-  showExtremeResolution?: boolean;
   /** Show the particle-trail fade slider (particle-mode sims only). */
   showTrailControl?: boolean;
   /**
@@ -127,13 +95,6 @@ export interface ControlsOptions {
    * Parameters section.
    */
   viewParamKeys?: readonly string[];
-  /**
-   * Named clusters rendered as their own headed sections between the View
-   * group and the trailing "Parameters" section, in the order given. Keys
-   * already hoisted into View are skipped; schema params in no cluster land
-   * in "Parameters" as before.
-   */
-  paramGroups?: readonly { label: string; keys: readonly string[] }[];
 }
 
 /**
@@ -155,7 +116,6 @@ export class ControlsPanel {
   private readonly defaultParams: SimParams;
   private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
-  private readonly showExtremeResolution: boolean;
   private readonly showTrailControl: boolean;
   private readonly showDotSizeControl: boolean;
   private readonly showAutoCycleControl: boolean;
@@ -198,9 +158,6 @@ export class ControlsPanel {
       step: number;
     }
   >();
-  private activeInfoButton: HTMLButtonElement | null = null;
-  private activeInfoPopover: HTMLElement | null = null;
-  private readonly infoDismissAbort = new AbortController();
 
   constructor(options: ControlsOptions) {
     this.slug = options.slug;
@@ -214,7 +171,6 @@ export class ControlsPanel {
     this.defaultParams = { ...options.defaultParams };
     this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
-    this.showExtremeResolution = options.showExtremeResolution ?? false;
     this.showTrailControl = options.showTrailControl ?? false;
     this.showDotSizeControl = options.showDotSizeControl ?? true;
     this.showAutoCycleControl = options.showAutoCycleControl ?? false;
@@ -229,46 +185,6 @@ export class ControlsPanel {
     this.displayOptions = { ...options.initialDisplayOptions };
     this.resolution = options.initialResolution;
     this.render(options);
-
-    document.addEventListener(
-      "pointerdown",
-      (event) => {
-        if (!this.activeInfoButton || !this.activeInfoPopover) return;
-        const target = event.target as Node | null;
-        if (
-          target &&
-          (this.activeInfoButton.contains(target) ||
-            this.activeInfoPopover.contains(target))
-        ) {
-          return;
-        }
-        // Switching straight from one info button to another is handled by
-        // that button's own click handler (openInfoPopover closes the prior
-        // popover before opening its own). Closing here instead, on
-        // pointerdown, would reflow the layout mid-gesture and shift the
-        // target button out from under the pointer before the click lands.
-        if (
-          target instanceof Element &&
-          target.closest(".control__info-button")
-        ) {
-          return;
-        }
-        this.closeInfoPopover();
-      },
-      { signal: this.infoDismissAbort.signal, capture: true },
-    );
-    document.addEventListener(
-      "keydown",
-      (event) => {
-        if (event.key === "Escape") this.closeInfoPopover();
-      },
-      { signal: this.infoDismissAbort.signal },
-    );
-  }
-
-  /** Detaches document-level listeners backing the info popovers. */
-  dispose(): void {
-    this.infoDismissAbort.abort();
   }
 
   setPlayState(isRunning: boolean): void {
@@ -364,7 +280,11 @@ export class ControlsPanel {
     this.container.appendChild(transport);
 
     const viewParamKeys = new Set(options.viewParamKeys ?? []);
-    const viewSection = collapsibleSection(this.slug, "View", "controls__view");
+    const viewSection = document.createElement("section");
+    viewSection.className = "controls__view";
+    const viewHeading = document.createElement("h3");
+    viewHeading.textContent = "View";
+    viewSection.appendChild(viewHeading);
     if (this.showResolutionControl) {
       for (const element of this.buildQualityControls()) {
         viewSection.appendChild(element);
@@ -387,64 +307,16 @@ export class ControlsPanel {
       this.buildColourDashboard(options.fractalPaletteCycleUi ?? false),
     );
 
-    const grouped = new Set(viewParamKeys);
-    for (const group of options.paramGroups ?? []) {
-      const members = options.paramSchema.filter(
-        (descriptor) =>
-          group.keys.includes(descriptor.key) && !grouped.has(descriptor.key),
-      );
-      if (members.length === 0) continue;
-      const groupSection = collapsibleSection(
-        this.slug,
-        group.label,
-        "controls__params",
-      );
-      for (const descriptor of members) {
-        const current = this.params[descriptor.key] ?? descriptor.default;
-        groupSection.appendChild(this.buildParamControl(descriptor, current));
-        grouped.add(descriptor.key);
-      }
-      this.container.appendChild(groupSection);
-    }
-
-    // Schema-native grouping (ParamDescriptor.group, docs/INTERFACE.md v1.3.0):
-    // params sharing a group render together, sections in first-appearance
-    // schema order, reusing the same collapsible-section mechanism as above.
-    const schemaGroupOrder: string[] = [];
-    for (const descriptor of options.paramSchema) {
-      if (grouped.has(descriptor.key) || !descriptor.group) continue;
-      if (!schemaGroupOrder.includes(descriptor.group)) {
-        schemaGroupOrder.push(descriptor.group);
-      }
-    }
-    for (const groupLabel of schemaGroupOrder) {
-      const members = options.paramSchema.filter(
-        (descriptor) =>
-          descriptor.group === groupLabel && !grouped.has(descriptor.key),
-      );
-      if (members.length === 0) continue;
-      const groupSection = collapsibleSection(
-        this.slug,
-        groupLabel,
-        "controls__params",
-      );
-      for (const descriptor of members) {
-        const current = this.params[descriptor.key] ?? descriptor.default;
-        groupSection.appendChild(this.buildParamControl(descriptor, current));
-        grouped.add(descriptor.key);
-      }
-      this.container.appendChild(groupSection);
-    }
-
     const remainingSchema = options.paramSchema.filter(
-      (descriptor) => !grouped.has(descriptor.key),
+      (descriptor) => !viewParamKeys.has(descriptor.key),
     );
     if (remainingSchema.length > 0) {
-      const paramSection = collapsibleSection(
-        this.slug,
-        "Parameters",
-        "controls__params",
-      );
+      const paramSection = document.createElement("section");
+      paramSection.className = "controls__params";
+
+      const paramHeading = document.createElement("h3");
+      paramHeading.textContent = "Parameters";
+      paramSection.appendChild(paramHeading);
 
       for (const descriptor of remainingSchema) {
         const current = this.params[descriptor.key] ?? descriptor.default;
@@ -491,61 +363,6 @@ export class ControlsPanel {
     this.stepsValueLabel = value;
 
     return wrap;
-  }
-
-  /**
-   * ⓘ affordance for a descriptor's `info` text (docs/INTERFACE.md v1.3.0).
-   * Returns null when the descriptor carries no info: callers must skip
-   * appending anything so info-less controls render exactly as before.
-   */
-  private buildInfoParts(
-    descriptor: ParamDescriptor,
-  ): { button: HTMLButtonElement; popover: HTMLDivElement } | null {
-    if (!descriptor.info) return null;
-
-    const popoverId = `control-info-${this.slug}-${descriptor.key}`;
-
-    const infoButton = document.createElement("button");
-    infoButton.type = "button";
-    infoButton.className = "control__info-button";
-    infoButton.textContent = "ⓘ";
-    infoButton.setAttribute("aria-label", `${descriptor.label} info`);
-    infoButton.setAttribute("aria-expanded", "false");
-    infoButton.setAttribute("aria-describedby", popoverId);
-
-    const popover = document.createElement("div");
-    popover.className = "control__info-popover";
-    popover.id = popoverId;
-    popover.setAttribute("role", "note");
-    popover.textContent = descriptor.info;
-    popover.hidden = true;
-
-    infoButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (popover.hidden) {
-        this.openInfoPopover(infoButton, popover);
-      } else {
-        this.closeInfoPopover();
-      }
-    });
-
-    return { button: infoButton, popover };
-  }
-
-  private openInfoPopover(button: HTMLButtonElement, popover: HTMLElement): void {
-    this.closeInfoPopover();
-    popover.hidden = false;
-    button.setAttribute("aria-expanded", "true");
-    this.activeInfoButton = button;
-    this.activeInfoPopover = popover;
-  }
-
-  private closeInfoPopover(): void {
-    if (!this.activeInfoButton || !this.activeInfoPopover) return;
-    this.activeInfoPopover.hidden = true;
-    this.activeInfoButton.setAttribute("aria-expanded", "false");
-    this.activeInfoButton = null;
-    this.activeInfoPopover = null;
   }
 
   private buildParamControl(
@@ -609,8 +426,6 @@ export class ControlsPanel {
     tuneButton.addEventListener("click", () => {
       popover.hidden = !popover.hidden;
     });
-    const info = this.buildInfoParts(descriptor);
-    if (info) label.appendChild(info.button);
     label.appendChild(tuneButton);
     wrap.appendChild(label);
 
@@ -630,7 +445,6 @@ export class ControlsPanel {
     this.paramValueLabels.set(descriptor.key, value);
     wrap.appendChild(value);
     wrap.appendChild(popover);
-    if (info) wrap.appendChild(info.popover);
     this.numberBoundEditors.set(descriptor.key, {
       descriptor,
       input,
@@ -678,13 +492,7 @@ export class ControlsPanel {
     const label = document.createElement("span");
     label.className = "control__label";
     label.textContent = descriptor.label;
-    const info = this.buildInfoParts(descriptor);
-    if (info) {
-      label.classList.add("control__label--with-action");
-      label.appendChild(info.button);
-    }
     wrap.appendChild(label);
-    if (info) wrap.appendChild(info.popover);
 
     input.addEventListener("change", () => {
       this.updateParams({ ...this.params, [descriptor.key]: input.checked });
@@ -703,11 +511,6 @@ export class ControlsPanel {
     const label = document.createElement("span");
     label.className = "control__label";
     label.textContent = descriptor.label;
-    const info = this.buildInfoParts(descriptor);
-    if (info) {
-      label.classList.add("control__label--with-action");
-      label.appendChild(info.button);
-    }
     wrap.appendChild(label);
 
     const select = document.createElement("select");
@@ -721,7 +524,6 @@ export class ControlsPanel {
     }
     this.paramInputs.set(descriptor.key, select);
     wrap.appendChild(select);
-    if (info) wrap.appendChild(info.popover);
 
     select.addEventListener("change", () => {
       this.updateParams({ ...this.params, [descriptor.key]: select.value });
@@ -741,10 +543,7 @@ export class ControlsPanel {
     wrap.appendChild(label);
 
     const select = document.createElement("select");
-    const options = this.showExtremeResolution
-      ? [...RESOLUTION_OPTIONS, EXTREME_RESOLUTION_OPTION]
-      : RESOLUTION_OPTIONS;
-    for (const option of options) {
+    for (const option of RESOLUTION_OPTIONS) {
       const optEl = document.createElement("option");
       optEl.value = option.value;
       optEl.textContent = option.label;
@@ -807,7 +606,12 @@ export class ControlsPanel {
   }
 
   private buildColourDashboard(fractalPaletteCycleUi: boolean): HTMLElement {
-    const section = collapsibleSection(this.slug, "Colour", "controls__colour");
+    const section = document.createElement("section");
+    section.className = "controls__colour";
+
+    const heading = document.createElement("h3");
+    heading.textContent = "Colour";
+    section.appendChild(heading);
 
     if (fractalPaletteCycleUi) {
       section.appendChild(this.buildFractalPaletteCycleExtras());
