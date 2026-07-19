@@ -1537,6 +1537,7 @@ export class WebGLRendererBackend implements RendererBackend {
         this.fractalPaletteTexture,
         phase,
         frame.colourOptions.paletteCycleReverse === true,
+        numericParam(frame.params, "pointDensity", 1),
       )
     ) {
       return;
@@ -2634,7 +2635,6 @@ function orbit3dBuildKey(
     numericParam(params, "warmupIterations", 0),
     numericParam(params, "sampleCount", 0),
     params.realSliceOnly === true ? 1 : 0,
-    numericParam(params, "pointDensity", 1),
   ].join(":");
 }
 
