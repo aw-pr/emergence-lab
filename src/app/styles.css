@@ -542,15 +542,69 @@ code {
   overflow-y: auto;
 }
 
-.sim-view__stage:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  background: #000;
+/* Immersive layout: set by JS for the app's own Maximise (native fullscreen
+ * on the body) AND for browser/OS-level fullscreen (viewport == screen,
+ * standalone only). The explainer header drops away and the stage takes the
+ * whole viewport. */
+.sim-view--immersive .sim-view__header {
+  display: none;
 }
 
-.sim-view__stage:fullscreen .sim-view__canvas {
-  width: 100vw;
-  height: 100vh;
+/* Fixed overlay so immersive works even when native fullscreen is refused
+ * (no activation, embedded contexts, iOS): the body covers the viewport and
+ * the header simply sits behind it. Under native fullscreen the same rules
+ * hold — the body IS the fullscreen element. */
+.sim-view--immersive .sim-view__body {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* The settings panel parks off-screen, leaving a slim accent handle on the
+ * right edge; moving the pointer to it (or tabbing into the panel) slides
+ * the drawer in, and it stays while hovered or focused. */
+.sim-view--immersive .sim-view__sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 85vw);
+  transform: translateX(calc(100% - 16px));
+  transition: transform 0.22s ease;
+  border-left: 1px solid rgba(90, 200, 250, 0.4);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.55);
+  z-index: 41;
+}
+
+.sim-view--immersive .sim-view__sidebar:hover,
+.sim-view--immersive .sim-view__sidebar:focus-within {
+  transform: translateX(0);
+}
+
+/* Chevron centred on the exposed sliver so it reads as a pull handle. */
+.sim-view--immersive .sim-view__sidebar::before {
+  content: "\276E";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* Invisible hot zone widening the reveal target past the 16px sliver. */
+.sim-view--immersive .sim-view__sidebar::after {
+  content: "";
+  position: absolute;
+  left: -24px;
+  top: 0;
+  bottom: 0;
+  width: 24px;
 }
 
 .sim-view--error {
