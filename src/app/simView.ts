@@ -247,6 +247,68 @@ export async function renderSimView(
     layout.canvas.classList.add("sim-view__canvas--smooth");
   }
 
+  // Immersive mode (header gone, settings as an auto-hiding edge drawer) is a
+  // CSS overlay first and native fullscreen second: requestFullscreen is
+  // denied in some contexts (no transient activation, embedded pages, iOS has
+  // no API at all), so the Maximise button never depends on it. The class
+  // also engages for browser/OS-level fullscreen, detected by the viewport
+  // matching the screen — standalone only, so an embedded lab can't hijack a
+  // full-screened host page.
+  let immersiveForced = false;
+  const immersiveAbort = new AbortController();
+  const updateImmersive = () => {
+    const native = document.fullscreenElement === layout.body;
+    const windowFullscreen =
+      !siteOwnsChrome() &&
+      window.innerWidth === window.screen.width &&
+      window.innerHeight === window.screen.height;
+    layout.page.classList.toggle(
+      "sim-view--immersive",
+      immersiveForced || native || windowFullscreen,
+    );
+  };
+  const toggleImmersive = () => {
+    if (immersiveForced || document.fullscreenElement) {
+      immersiveForced = false;
+      if (document.fullscreenElement) void document.exitFullscreen();
+      updateImmersive();
+      return;
+    }
+    immersiveForced = true;
+    updateImmersive();
+    // Opportunistic: hides the browser chrome too when the browser allows it.
+    layout.body.requestFullscreen?.().catch(() => {});
+    // The click leaves focus on a button inside the sidebar, whose
+    // :focus-within would pin the drawer open; drop it so the panel parks.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
+  document.addEventListener(
+    "fullscreenchange",
+    () => {
+      // Leaving native fullscreen (Esc) exits immersive entirely.
+      if (!document.fullscreenElement) immersiveForced = false;
+      updateImmersive();
+    },
+    { signal: immersiveAbort.signal },
+  );
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      // Esc parity for the overlay-only path, where no fullscreenchange fires.
+      if (event.key === "Escape" && immersiveForced && !document.fullscreenElement) {
+        immersiveForced = false;
+        updateImmersive();
+      }
+    },
+    { signal: immersiveAbort.signal },
+  );
+  window.addEventListener("resize", updateImmersive, {
+    signal: immersiveAbort.signal,
+  });
+  updateImmersive();
+
   let kernel: SimKernel;
   try {
     kernel = await loadKernel(slug);
@@ -352,9 +414,7 @@ export async function renderSimView(
         if (slug === "logistic-mandelbrot") renderer.resetOrbit3dCamera();
         renderer.reset(controls.getParams());
       },
-      onToggleFullscreen: () => {
-        toggleFullscreen(layout.stage);
-      },
+      onToggleFullscreen: toggleImmersive,
       onStepsPerFrameChange: (value) => {
         stepsPerFrame = value;
         renderer.setStepsPerFrame(value);
@@ -538,6 +598,7 @@ export async function renderSimView(
 
   return {
     dispose() {
+      immersiveAbort.abort();
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
       detachFractalViewKeys?.();
@@ -549,6 +610,7 @@ export async function renderSimView(
 }
 
 interface SimLayout {
+  page: HTMLElement;
   body: HTMLElement;
   stage: HTMLElement;
   canvas: HTMLCanvasElement;
@@ -730,7 +792,7 @@ function buildLayout(
   page.appendChild(body);
   container.appendChild(page);
 
-  return { body, stage, canvas, sidebar, legend, about, fractalHud };
+  return { page, body, stage, canvas, sidebar, legend, about, fractalHud };
 }
 
 function buildFractalHud(): FractalHud {
@@ -1039,14 +1101,6 @@ function paramSchemaForControls(
     }
     return descriptor;
   });
-}
-
-function toggleFullscreen(element: HTMLElement): void {
-  if (document.fullscreenElement) {
-    void document.exitFullscreen();
-    return;
-  }
-  void element.requestFullscreen();
 }
 
 function renderLegend(
