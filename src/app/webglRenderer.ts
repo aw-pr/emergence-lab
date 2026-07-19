@@ -1536,6 +1536,7 @@ export class WebGLRendererBackend implements RendererBackend {
         fanActive,
         this.fractalPaletteTexture,
         phase,
+        frame.colourOptions.paletteCycleReverse === true,
       )
     ) {
       return;
@@ -2650,7 +2651,7 @@ function orbit3dColourMode(
   params: Record<string, number | boolean | string>,
 ): Orbit3DColourMode {
   const value = params.colourMode;
-  return value === "height" || value === "mono" || value === "cycle"
+  return value === "inside-out" || value === "mono" || value === "cycle"
     ? value
     : "period";
 }
