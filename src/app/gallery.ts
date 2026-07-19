@@ -1,4 +1,4 @@
-import { isTopLevelWindow } from "./embed.ts";
+import { getChrome, showBackToSiteLink } from "./chrome.ts";
 import { REGISTRY, type SimEntry } from "./registry.ts";
 
 const UNGROUPED_FAMILY = "Other";
@@ -29,12 +29,10 @@ export function renderGallery(container: HTMLElement): void {
   const header = document.createElement("header");
   header.className = "gallery__header";
 
-  // Only when embedded in the site (base is /labs/app/), not the standalone
-  // Netlify deploy (base /), offer a way back to the site. Skip it when the
-  // site itself has framed this app in an iframe shell (/labs/run) - that
-  // shell already provides the site's own navigation, so the link would be
-  // redundant and visually noisy.
-  if (import.meta.env.BASE_URL !== "/" && isTopLevelWindow()) {
+  // Only the standalone site build opened top-level offers a way back to the
+  // site. Framed and embedded mounts already sit inside the site's own
+  // navigation, where the link would be redundant and visually noisy.
+  if (showBackToSiteLink()) {
     const back = document.createElement("a");
     back.className = "gallery__back-to-site";
     back.href = "/labs";
@@ -124,7 +122,7 @@ function renderCard(card: CardModel): HTMLLIElement {
 
   const img = document.createElement("img");
   img.className = "gallery__thumb-img";
-  img.src = `${import.meta.env.BASE_URL}thumbnails/${card.thumbKey}.png`;
+  img.src = `${getChrome().assetBase}thumbnails/${card.thumbKey}.png`;
   img.alt = "";
   img.loading = "lazy";
   img.decoding = "async";

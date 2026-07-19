@@ -10,6 +10,8 @@
  * URL. Set it before any await, so a slow kernel load cannot let a stale name
  * land after a newer one.
  */
+import { getChrome } from "./chrome.ts";
+
 const SUFFIX = "Emergence Lab";
 
 export function setSimDocumentTitle(name: string | null): void {
@@ -19,4 +21,7 @@ export function setSimDocumentTitle(name: string | null): void {
   } else {
     delete document.documentElement.dataset.simTitle;
   }
+  // Embedded hosts render the name in their own chrome, so they hear about it
+  // directly rather than observing the document like the iframe shell had to.
+  getChrome().onTitleChange?.(name);
 }

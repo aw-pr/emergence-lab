@@ -1,8 +1,15 @@
-@import "katex/dist/katex.min.css";
+/* KaTeX styles are NOT imported here. The standalone build imports them in
+ * main.ts; the web component links them into its shadow root (classes) and the
+ * host document (font faces), because @font-face never registers from inside a
+ * shadow root. Re-adding the import here would inline KaTeX's full font set
+ * into the component bundle. */
 
 /* Blue-slate ladder matched to the promo-flow site (slate-950 base, blue-grey
- * signal text) so the app reads as the same surface when framed at /labs/run. */
-:root {
+ * signal text) so the app reads as the same surface when framed at /labs/run.
+ * :host carries the same tokens when this sheet lives inside the web
+ * component's shadow root, where :root cannot match. */
+:root,
+:host {
   --bg: #020617;
   --bg-elev: #101a33;
   --bg-elev-2: #18233a;
@@ -19,9 +26,13 @@
   box-sizing: border-box;
 }
 
+/* .lab-root is the web component's internal container, sized by its host
+ * element the way #app is sized by the standalone page. */
 html,
 body,
-#app {
+#app,
+:host,
+.lab-root {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -31,6 +42,10 @@ body,
     -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.45;
+}
+
+:host {
+  display: block;
 }
 
 a {

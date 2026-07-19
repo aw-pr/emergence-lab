@@ -1,3 +1,4 @@
+import { isEditableKeyboardEvent } from "./keyboardTarget.ts";
 import type { ParamDescriptor, SimParams } from "./types.ts";
 import {
   isFractalViewSlug,
@@ -25,14 +26,6 @@ export interface FractalPaletteCycleKeyboardOptions {
   getParams: () => SimParams;
   /** Push updated params through the renderer and refresh control widgets (no callback loops). */
   setParams: (next: SimParams) => void;
-}
-
-function isEditableKeyboardTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  if (tag === "BUTTON") return true;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 /**
@@ -64,7 +57,7 @@ export function attachFractalPaletteCycleKeyboard(
   const onKeyDown = (ev: KeyboardEvent): void => {
     if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
     if (ev.repeat) return;
-    if (isEditableKeyboardTarget(ev.target)) return;
+    if (isEditableKeyboardEvent(ev)) return;
 
     ev.preventDefault();
 
