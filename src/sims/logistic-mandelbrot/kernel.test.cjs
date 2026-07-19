@@ -65,18 +65,18 @@ test("metadata matches the renderer contract", () => {
     kernel.paramSchema.map((descriptor) => descriptor.key),
     [
       "colourMode",
-      "cycleSpeed",
+      "exposure",
+      "pointDensity",
       "continuousSpin",
+      "realAxisSweep",
+      "sweepSpeed",
+      "cycleSpeed",
+      "cascadeReveal",
+      "cascadeDuration",
       "warmupIterations",
       "sampleCount",
       "plottedIterations",
-      "cascadeReveal",
-      "cascadeDuration",
-      "realAxisSweep",
-      "sweepSpeed",
       "realSliceOnly",
-      "exposure",
-      "pointDensity",
     ],
   );
 
@@ -97,7 +97,7 @@ test("metadata matches the renderer contract", () => {
   }
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
-  assert.equal(colourMode?.default, "cycle");
+  assert.equal(colourMode?.default, "period");
   assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
@@ -113,11 +113,11 @@ test("metadata matches the renderer contract", () => {
   assert.equal(continuousSpin?.default, true);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
-  assert.equal(warmup?.default, 72);
+  assert.equal(warmup?.default, 1500);
   const samples = kernel.paramSchema.find((d) => d.key === "sampleCount");
   assert.equal(samples?.default, 8);
   const plotted = kernel.paramSchema.find((d) => d.key === "plottedIterations");
-  assert.equal(plotted?.default, 48);
+  assert.equal(plotted?.default, 96);
   assert.equal(plotted?.min, 1);
 });
 
