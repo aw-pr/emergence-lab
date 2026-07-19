@@ -108,7 +108,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       label: "Colour mode",
       type: "enum",
       default: "cycle",
-      options: ["period", "height", "mono", "cycle"],
+      options: ["period", "inside-out", "mono", "cycle"],
     },
     {
       key: "cycleSpeed",

@@ -98,7 +98,7 @@ test("metadata matches the renderer contract", () => {
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
   assert.equal(colourMode?.default, "cycle");
-  assert.deepEqual(colourMode?.options, ["period", "height", "mono", "cycle"]);
+  assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
   assert.equal(cycleSpeed?.default, 0.151);
