@@ -640,12 +640,62 @@ code {
 .controls__params h3,
 .controls__presets h3,
 .controls__view h3,
-.controls__colour h3 {
+.controls__colour h3,
+.controls__params summary,
+.controls__view summary,
+.controls__colour summary {
   margin: 0 0 12px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-dim);
+}
+
+.controls__params summary,
+.controls__view summary,
+.controls__colour summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.controls__params summary:hover,
+.controls__view summary:hover,
+.controls__colour summary:hover {
+  background: rgba(90, 200, 250, 0.1);
+  color: var(--fg);
+}
+
+.controls__params summary::-webkit-details-marker,
+.controls__view summary::-webkit-details-marker,
+.controls__colour summary::-webkit-details-marker {
+  display: none;
+}
+
+.controls__params summary::before,
+.controls__view summary::before,
+.controls__colour summary::before {
+  content: "\25B8";
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--accent);
+  transition: transform 0.15s ease;
+}
+
+details[open].controls__params summary::before,
+details[open].controls__view summary::before,
+details[open].controls__colour summary::before {
+  transform: rotate(90deg);
+}
+
+details.controls__params:not([open]) summary,
+details.controls__view:not([open]) summary,
+details.controls__colour:not([open]) summary {
+  margin-bottom: 0;
 }
 
 .controls__presets,
