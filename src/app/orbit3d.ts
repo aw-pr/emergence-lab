@@ -27,6 +27,8 @@ uniform float u_paletteReverse;
 uniform float u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
+uniform float u_drawDensity;
+uniform float u_cellCount;
 out vec3 v_colour;
 out float v_fanGlow;
 out float v_sliceGlow;
@@ -55,11 +57,29 @@ void main() {
     a_position.z * 0.56,
     a_position.y * 0.85
   );
+  // Density culls whole cells (every sample of a c-value together), matching
+  // the old build-time semantics — fewer c-plane sites, full orbit columns —
+  // but resolved here per frame so the slider needs no rebuild. The layout is
+  // sample-major, so the cell index is the vertex id modulo the cell count;
+  // hashing it gives a spatially fair, frame-stable keep set.
+  float cellId = mod(float(gl_VertexID), max(u_cellCount, 1.0));
+  if (fract(sin(cellId * 12.9898) * 43758.5453) > u_drawDensity) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
   gl_Position = u_viewProjection * vec4(world, 1.0);
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
   v_selfGlow = 0.0;
-  v_energy = 1.0;
+  // A period-q cell lands sampleCount/q coincident samples on each sheet
+  // dot, so additive stacking would brighten with the sample-count setting.
+  // Scaling per-point energy by q/sampleCount keeps each distinct sheet
+  // location at baseline brightness in every colour mode; chaotic cells
+  // (no period) have distinct samples and keep full energy.
+  v_energy = a_period > 0.5
+    ? clamp(a_period / max(u_sampleCount, 1.0), 0.02, 1.0)
+    : 1.0;
   if (u_colourMode == 0) {
     int p = int(a_period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
@@ -92,14 +112,6 @@ void main() {
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
     v_selfGlow = complexity * 1.25;
-    // A period-q cell lands sampleCount/q coincident samples on each sheet
-    // dot, so additive stacking turns even a glow-free grey dot white.
-    // Scaling per-point energy by q/sampleCount keeps each distinct sheet
-    // location at baseline brightness; chaotic cells (no period) have
-    // distinct samples and keep full energy.
-    v_energy = a_period > 0.5
-      ? clamp(a_period / max(u_sampleCount, 1.0), 0.02, 1.0)
-      : 1.0;
   } else {
     float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
@@ -238,7 +250,6 @@ uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
 uniform float u_markerRe;
 uniform float u_fanActive;
-uniform float u_axisVisible;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -250,20 +261,13 @@ void main() {
     clamp(mix(vec3(luma), colour, 0.45), vec3(0.0), vec3(1.0)),
     vec3(1.45)
   ) * 0.04;
-  float axis = 1.0 - smoothstep(0.003, 0.014, abs(v_complex.y));
   float age = v_complex.x - u_markerRe;
-  float behindFront = smoothstep(-0.025, 0.035, age);
-  float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
-  float inside = 1.0 - smoothstep(max(0.0, reach - 0.1), reach, abs(v_complex.y));
-  float rim = 1.0 - smoothstep(0.005, 0.022, abs(abs(v_complex.y) - reach));
-  float wake = (1.0 - smoothstep(0.8, 2.1, age))
-    * behindFront * max(inside * 0.025, rim * 0.5);
-  float front = (1.0 - smoothstep(0.004, 0.018, abs(age)))
-    * (1.0 - smoothstep(0.012, 0.045, abs(v_complex.y)));
-  float fan = u_fanActive * max(front, wake);
-  vec3 axisLine = vec3(0.01, 0.018, 0.03) * axis * u_axisVisible;
+  // The beam through the cloud lights every Im(c) at the active Re(c); its
+  // footprint here is just the matching full-width line, no trailing wake.
+  float front = 1.0 - smoothstep(0.004, 0.018, abs(age));
+  float fan = u_fanActive * front;
   vec3 fanLine = vec3(0.012, 0.052, 0.066) * fan;
-  outColor = vec4(planeInk + axisLine + fanLine, 1.0);
+  outColor = vec4(planeInk + fanLine, 1.0);
 }
 `;
 
@@ -299,19 +303,21 @@ void main() {
 const PERFORMANCE_CELL_CEILING = Math.ceil(384 * 384 * 1.01);
 const BALANCED_CELL_CEILING = Math.ceil(640 * 640 * 1.01);
 const HIGH_CELL_CEILING = Math.ceil(960 * 960 * 1.01);
+const ULTRA_CELL_CEILING = Math.ceil(1280 * 1280 * 1.01);
 const POINT_BUDGETS = {
   performance: 1_000_000,
   balanced: 2_400_000,
   high: 3_400_000,
   ultra: 4_800_000,
+  extreme: 9_600_000,
 } as const;
 
 const SURVIVING_CELL_ESTIMATE = 0.22;
 const BUILD_SLICE_MS = 8;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
-const CAMERA_NEAR_PLANE = 0.1;
+const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
-const CAMERA_MIN_DISTANCE = 2.1;
+const CAMERA_MIN_DISTANCE = 1.1;
 const CAMERA_MAX_DISTANCE = 12;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
@@ -425,6 +431,8 @@ export class Orbit3DPointCloud {
   private readonly phaseUniform: WebGLUniformLocation;
   private readonly paletteReverseUniform: WebGLUniformLocation;
   private readonly sampleCountUniform: WebGLUniformLocation;
+  private readonly drawDensityUniform: WebGLUniformLocation;
+  private readonly cellCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
@@ -435,7 +443,6 @@ export class Orbit3DPointCloud {
   private readonly groundTexSpanUniform: WebGLUniformLocation;
   private readonly groundMarkerReUniform: WebGLUniformLocation;
   private readonly groundFanActiveUniform: WebGLUniformLocation;
-  private readonly groundAxisVisibleUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -546,6 +553,14 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_sampleCount"),
       "orbit3d sample-count uniform",
     );
+    this.drawDensityUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_drawDensity"),
+      "orbit3d draw-density uniform",
+    );
+    this.cellCountUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_cellCount"),
+      "orbit3d cell-count uniform",
+    );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
       "orbit3d marker-re uniform",
@@ -585,10 +600,6 @@ export class Orbit3DPointCloud {
     this.groundFanActiveUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_fanActive"),
       "orbit3d ground fan-active uniform",
-    );
-    this.groundAxisVisibleUniform = requireResource(
-      gl.getUniformLocation(this.groundProgram, "u_axisVisible"),
-      "orbit3d ground axis-visible uniform",
     );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
@@ -767,10 +778,11 @@ export class Orbit3DPointCloud {
       DEFAULT_WARMUP_ITERATIONS,
     );
     const realSliceOnly = params.realSliceOnly === true;
-    const density = boundedNumber(params.pointDensity, 0.25, 1, 1);
+    // Density no longer scales the build: the full budget is always built and
+    // the slider culls cells in the vertex shader, so moving it is instant.
     const pointBudget = Math.max(
       sampleCount,
-      Math.floor(pointBudgetFor(inputWidth * inputHeight) * density),
+      pointBudgetFor(inputWidth * inputHeight),
     );
     const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
     const desiredCells = Math.ceil(
@@ -957,6 +969,7 @@ export class Orbit3DPointCloud {
     palette: WebGLTexture | null = null,
     phase = 0,
     paletteReverse = false,
+    drawDensity = 1,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -973,7 +986,6 @@ export class Orbit3DPointCloud {
       gl.uniform2f(this.groundTexSpanUniform, ground.span[0], ground.span[1]);
       gl.uniform1f(this.groundMarkerReUniform, this.marker.re);
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
-      gl.uniform1f(this.groundAxisVisibleUniform, colourMode === "cycle" ? 0 : 1);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
       gl.bindVertexArray(this.groundVao);
@@ -997,6 +1009,14 @@ export class Orbit3DPointCloud {
     gl.uniform1f(this.phaseUniform, phase);
     gl.uniform1f(this.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
+    gl.uniform1f(
+      this.drawDensityUniform,
+      Math.min(1, Math.max(0.05, drawDensity)),
+    );
+    gl.uniform1f(
+      this.cellCountUniform,
+      Math.max(1, Math.floor(this.fullPointCount / Math.max(1, this.sampleCount))),
+    );
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
@@ -1159,7 +1179,8 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= PERFORMANCE_CELL_CEILING) return POINT_BUDGETS.performance;
   if (cellCount <= BALANCED_CELL_CEILING) return POINT_BUDGETS.balanced;
   if (cellCount <= HIGH_CELL_CEILING) return POINT_BUDGETS.high;
-  return POINT_BUDGETS.ultra;
+  if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
+  return POINT_BUDGETS.extreme;
 }
 
 function boundedInteger(
@@ -1170,17 +1191,6 @@ function boundedInteger(
 ): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(min, Math.min(max, Math.round(value)))
-    : fallback;
-}
-
-function boundedNumber(
-  value: number | boolean | string | undefined,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(min, Math.min(max, value))
     : fallback;
 }
 
@@ -1248,8 +1258,13 @@ function assertOrbit3DGeometry(): void {
   if (guard.planeDomain.some((value, index) => value !== guard.samplerDomain[index])) {
     throw new Error("orbit3d ground plane must match the sampler c-domain");
   }
+  // The pipeline draws without a depth buffer, so the camera is allowed
+  // inside the object's bounding sphere at close zoom (geometry nearer than
+  // the near plane just clips). The near plane must stay short of the
+  // closest dolly distance, and the far plane must contain the whole object
+  // at the farthest.
   if (
-    CAMERA_MIN_DISTANCE - guard.boundingRadius <= CAMERA_NEAR_PLANE ||
+    CAMERA_MIN_DISTANCE <= CAMERA_NEAR_PLANE ||
     CAMERA_MAX_DISTANCE + guard.boundingRadius >= CAMERA_FAR_PLANE
   ) {
     throw new Error("orbit3d camera limits must fit inside the depth clip planes");

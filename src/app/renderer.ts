@@ -17,13 +17,22 @@ import type { QualityProfile } from "./qualityProfiles.ts";
  * per-frame cost is the same on any screen. The actual grid dimensions are
  * derived from the target and the viewport aspect ratio.
  */
-export type ResolutionPreset = "performance" | "balanced" | "high" | "ultra";
+export type ResolutionPreset =
+  | "performance"
+  | "balanced"
+  | "high"
+  | "ultra"
+  | "extreme";
 
 export const RESOLUTION_TARGETS: Readonly<Record<ResolutionPreset, number>> = {
   performance: 384 * 384,
   balanced: 640 * 640,
   high: 960 * 960,
   ultra: 1280 * 1280,
+  // Only surfaced for sims that opt in (see showExtremeResolution); a grid
+  // this dense is wasted on texture-upload pipelines but feeds the orbit3d
+  // point-cloud builder a larger candidate pool.
+  extreme: 1920 * 1920,
 };
 
 export const DEFAULT_RESOLUTION: ResolutionPreset = "balanced";
@@ -52,7 +61,10 @@ export interface RendererOptions {
 /** Seconds a completed run stays on screen before auto-cycling to a new one. */
 const CYCLE_HOLD_SECONDS = 1.5;
 // Re(c)=+1 is minimum X under the reversed-X view and the XY plane's edge.
-const ORBIT_SWEEP_START = 1;
+// Start the sweep just ahead of the cardioid cusp at Re = 0.25 rather than
+// the domain edge, so the line has a short approach before it hits the set
+// instead of a long march across empty plane.
+const ORBIT_SWEEP_START = 0.5;
 const ORBIT_SWEEP_END = -2;
 const ORBIT_SWEEP_HOLD_SECONDS = 0.9;
 const ORBIT_AUTO_ROTATE_RADIANS_PER_SECOND = 0.05;
@@ -610,7 +622,7 @@ export class Renderer {
       } else {
         const speed = Math.max(
           0.001,
-          numericParam(this.params, "sweepSpeed", 0.15),
+          numericParam(this.params, "sweepSpeed", 0.1),
         );
         this.sweepRe = Math.max(ORBIT_SWEEP_END, this.sweepRe - dt * speed);
         this.setOrbit3dMarker(this.sweepRe, 0);
@@ -632,16 +644,17 @@ export class Renderer {
     }
     if (!this.orbitAutoRotateEnabled) return;
 
-    // Cycle mode's continuous-spin toggle overrides the sweep-synced pan:
-    // the camera circles steadily instead of tracking and resetting with
-    // the sweep. Other colour modes keep the sweep choreography.
+    // Continuous spin circles the camera steadily instead of tracking and
+    // resetting with the sweep. With it off, the camera follows the sweep
+    // choreography only when the beam is actually visible (non-cycle modes);
+    // cycle mode hides the beam and always keeps the steady spin.
     const continuousSpin =
-      this.params.colourMode === "cycle" &&
-      booleanParam(this.params, "continuousSpin", true);
+      this.params.colourMode === "cycle" ||
+      booleanParam(this.params, "continuousSpin", false);
     if (!continuousSpin && booleanParam(this.params, "realAxisSweep", false)) {
       const sweepSpeed = Math.max(
         0.001,
-        numericParam(this.params, "sweepSpeed", 0.15),
+        numericParam(this.params, "sweepSpeed", 0.1),
       );
       const progress = Math.min(
         1,
@@ -834,6 +847,12 @@ export class Renderer {
 
     const overCap = Math.sqrt(cap / (w * h));
     if (overCap < 1) {
+      w *= overCap;
+      h *= overCap;
+    } else if (this.resolution === "extreme" && overCap > 1) {
+      // Extreme is a floor as well as a ceiling: its whole point is a maximal
+      // candidate pool for the point-cloud builder, so a small window must not
+      // quietly shrink it back to the ultra tier.
       w *= overCap;
       h *= overCap;
     }
