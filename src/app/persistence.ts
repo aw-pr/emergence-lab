@@ -3,6 +3,7 @@ export type SliderBounds = { min: number; max: number };
 const BOUNDS_PREFIX = "el:bounds";
 const VALUES_PREFIX = "el:values";
 const RESOLUTION_PREFIX = "el:resolution";
+const SECTIONS_PREFIX = "el:sections";
 
 function readStorage(key: string): string | null {
   try {
@@ -194,4 +195,25 @@ export function saveResolution(slug: string, preset: string): void {
 
 export function clearResolution(slug: string): void {
   removeStorage(resolutionKey(slug));
+}
+
+function sectionKey(slug: string, label: string): string {
+  return `${SECTIONS_PREFIX}:${slug}:${label}`;
+}
+
+/** Stored collapsed flag for a controls section, or null when never toggled. */
+export function loadSectionCollapsed(
+  slug: string,
+  label: string,
+): boolean | null {
+  const raw = readStorage(sectionKey(slug, label));
+  return raw === null ? null : raw === "1";
+}
+
+export function saveSectionCollapsed(
+  slug: string,
+  label: string,
+  collapsed: boolean,
+): void {
+  writeStorage(sectionKey(slug, label), collapsed ? "1" : "0");
 }
