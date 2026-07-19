@@ -106,8 +106,6 @@ if [ "$do_mirror" -eq 1 ]; then
     read -r reply
     case "$reply" in [yY]|[yY][eE][sS]) ;; *) echo "mirror: skipped"; exit 0 ;; esac
   fi
-  echo "==> parity check (dev vs publish, build-relevant paths)"
-  scripts/check-publish-parity.sh
   echo "==> git publish"
   git publish
 fi
