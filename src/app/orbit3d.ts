@@ -91,7 +91,7 @@ void main() {
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
-    v_selfGlow = complexity * 1.7;
+    v_selfGlow = complexity * 1.25;
     // A period-q cell lands sampleCount/q coincident samples on each sheet
     // dot, so additive stacking turns even a glow-free grey dot white.
     // Scaling per-point energy by q/sampleCount keeps each distinct sheet
