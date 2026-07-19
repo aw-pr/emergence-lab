@@ -38,15 +38,20 @@ interface SimKernel {
 }
 
 const CHANNEL_COUNT = 2;
-// Kernel defaults tuned by eye for the released cycle-mode view; the model's
-// DEFAULT_* constants stay at the sampler's own reference values.
-const DEFAULT_KERNEL_WARMUP = 72;
-const DEFAULT_KERNEL_SAMPLES = 8;
-const DEFAULT_PLOTTED_ITERATIONS = DEFAULT_SAMPLE_COUNT;
 const MIN_WARMUP_ITERATIONS = 16;
 const MAX_WARMUP_ITERATIONS = 2000;
 const MIN_SAMPLE_COUNT = 8;
 const MAX_SAMPLE_COUNT = 96;
+// Kernel defaults tuned by eye: the long warmup shrinks the unresolved
+// fringe at bulb boundaries, which reads far clearer. Samples stay low
+// because the GPU point budget is fixed — cells × samples = budget, so
+// raising samples thins the cloud's spatial coverage of the c-plane.
+// Plotted iterations defaults to the ceiling, meaning "plot every sample"
+// at any sample count. The model's DEFAULT_* constants stay at the
+// sampler's own reference values.
+const DEFAULT_KERNEL_WARMUP = 1500;
+const DEFAULT_KERNEL_SAMPLES = 8;
+const DEFAULT_PLOTTED_ITERATIONS = MAX_SAMPLE_COUNT;
 
 /**
  * Cycle points closer than this collapse into one attractor level for the
@@ -103,54 +108,65 @@ export class LogisticMandelbrotKernel implements SimKernel {
     [0, MAX_DETECTABLE_PERIOD],
   ] as const;
   readonly paramSchema = [
+    // View: how the object is rendered.
     {
       key: "colourMode",
       label: "Colour mode",
       type: "enum",
-      default: "cycle",
+      default: "period",
       options: ["period", "inside-out", "mono", "cycle"],
     },
     {
+      key: "exposure",
+      label: "Exposure",
+      type: "number",
+      default: 1.35,
+      min: 0.4,
+      max: 3,
+      step: 0.05,
+    },
+    // Culled per frame in the vertex shader, so dragging it is instant — no
+    // rebuild. The wider low end is affordable for the same reason.
+    {
+      key: "pointDensity",
+      label: "Point density",
+      type: "number",
+      default: 1,
+      min: 0.05,
+      max: 1,
+      step: 0.05,
+    },
+    {
+      key: "continuousSpin",
+      label: "Continuous camera spin",
+      type: "boolean",
+      default: true,
+    },
+    // Light beam: the tracer sweeping the real axis and its wake.
+    {
+      key: "realAxisSweep",
+      label: "Light beam sweep",
+      type: "boolean",
+      default: true,
+    },
+    {
+      key: "sweepSpeed",
+      label: "Sweep speed",
+      type: "number",
+      default: 0.1,
+      min: 0.03,
+      max: 0.6,
+      step: 0.01,
+    },
+    // Animation: palette cycling and the period-doubling reveal.
+    {
       key: "cycleSpeed",
-      label: "Cycle speed",
+      label: "Palette cycle speed",
       type: "number",
       default: 0.151,
       min: 0,
       max: 5,
       step: 0.001,
-    },
-    {
-      key: "continuousSpin",
-      label: "Continuous spin",
-      type: "boolean",
-      default: true,
-    },
-    {
-      key: "warmupIterations",
-      label: "Warmup iterations",
-      type: "number",
-      default: DEFAULT_KERNEL_WARMUP,
-      min: MIN_WARMUP_ITERATIONS,
-      max: MAX_WARMUP_ITERATIONS,
-      step: 1,
-    },
-    {
-      key: "sampleCount",
-      label: "Samples (K)",
-      type: "number",
-      default: DEFAULT_KERNEL_SAMPLES,
-      min: MIN_SAMPLE_COUNT,
-      max: MAX_SAMPLE_COUNT,
-      step: 1,
-    },
-    {
-      key: "plottedIterations",
-      label: "Plotted iterations",
-      type: "number",
-      default: DEFAULT_PLOTTED_ITERATIONS,
-      min: 1,
-      max: MAX_SAMPLE_COUNT,
-      step: 1,
     },
     {
       key: "cascadeReveal",
@@ -167,44 +183,39 @@ export class LogisticMandelbrotKernel implements SimKernel {
       max: 30,
       step: 0.5,
     },
+    // Sampling: how each c-cell's attractor orbit is computed.
     {
-      key: "realAxisSweep",
-      label: "Real-axis sweep",
-      type: "boolean",
-      default: true,
+      key: "warmupIterations",
+      label: "Warmup iterations",
+      type: "number",
+      default: DEFAULT_KERNEL_WARMUP,
+      min: MIN_WARMUP_ITERATIONS,
+      max: MAX_WARMUP_ITERATIONS,
+      step: 1,
     },
     {
-      key: "sweepSpeed",
-      label: "Sweep speed",
+      key: "sampleCount",
+      label: "Orbit samples",
       type: "number",
-      default: 0.15,
-      min: 0.03,
-      max: 0.6,
-      step: 0.01,
+      default: DEFAULT_KERNEL_SAMPLES,
+      min: MIN_SAMPLE_COUNT,
+      max: MAX_SAMPLE_COUNT,
+      step: 1,
+    },
+    {
+      key: "plottedIterations",
+      label: "Plotted iterations",
+      type: "number",
+      default: DEFAULT_PLOTTED_ITERATIONS,
+      min: 1,
+      max: MAX_SAMPLE_COUNT,
+      step: 1,
     },
     {
       key: "realSliceOnly",
-      label: "Real slice only",
+      label: "Real-axis slice only",
       type: "boolean",
       default: false,
-    },
-    {
-      key: "exposure",
-      label: "Exposure",
-      type: "number",
-      default: 1.35,
-      min: 0.4,
-      max: 3,
-      step: 0.05,
-    },
-    {
-      key: "pointDensity",
-      label: "Point density",
-      type: "number",
-      default: 1,
-      min: 0.25,
-      max: 1,
-      step: 0.05,
     },
   ] as const satisfies readonly ParamDescriptor[];
 

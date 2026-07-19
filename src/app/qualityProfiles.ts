@@ -12,7 +12,6 @@ export interface QualityProfile {
 }
 
 const ULTRA_DEFAULTS = new Set([
-  "logistic-mandelbrot",
   "lorenz-attractor",
   "elementary-cellular-automata",
   "game-of-life",
@@ -31,6 +30,10 @@ const ULTRA_DEFAULTS = new Set([
 export function qualityProfileFor(slug: string, mode: RenderMode): QualityProfile {
   let defaultPreset: ResolutionPreset = "balanced";
   if (ULTRA_DEFAULTS.has(slug)) defaultPreset = "ultra";
+  // The point-cloud builder consumes every extra candidate cell, and the
+  // draw-side density slider keeps the frame cost adjustable without a
+  // rebuild, so the densest tier is the right default here.
+  if (slug === "logistic-mandelbrot") defaultPreset = "extreme";
   if (slug === "gray-scott" || slug === "belousov-zhabotinsky" || slug === "physarum") {
     defaultPreset = "high";
   }

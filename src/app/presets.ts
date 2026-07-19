@@ -544,7 +544,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "full-object",
       label: "The full object",
       params: {
-        warmupIterations: 200,
+        warmupIterations: 1500,
         sampleCount: 48,
         plottedIterations: 48,
         cascadeReveal: false,
@@ -559,7 +559,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "bifurcation-curtain",
       label: "Bifurcation curtain",
       params: {
-        warmupIterations: 400,
+        warmupIterations: 1500,
         sampleCount: 64,
         plottedIterations: 64,
         cascadeReveal: false,
@@ -574,7 +574,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "cascade",
       label: "Cascade",
       params: {
-        warmupIterations: 200,
+        warmupIterations: 1500,
         sampleCount: 48,
         plottedIterations: 1,
         cascadeReveal: true,
