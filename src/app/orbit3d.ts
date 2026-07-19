@@ -17,11 +17,13 @@ precision highp float;
 in vec3 a_position;
 in float a_period;
 in float a_interior;
+in float a_boundary;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
 uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
+uniform float u_paletteReverse;
 uniform float u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
@@ -47,18 +49,6 @@ vec3 periodHue(int p) {
   return vec3(0.549, 0.314, 0.745);
 }
 
-// Ice-family ramp over normalised Re(z), lifted at the dark end so low sheets
-// stay visible against the near-black background.
-vec3 heightRamp(float t) {
-  vec3 deep = vec3(0.06, 0.16, 0.40);
-  vec3 mid = vec3(0.10, 0.45, 0.72);
-  vec3 glow = vec3(0.35, 0.85, 0.86);
-  vec3 pale = vec3(0.93, 0.98, 1.00);
-  if (t < 0.4) return mix(deep, mid, t / 0.4);
-  if (t < 0.75) return mix(mid, glow, (t - 0.4) / 0.35);
-  return mix(glow, pale, (t - 0.75) / 0.25);
-}
-
 void main() {
   vec3 world = vec3(
     (a_position.x + 0.5) * 0.78,
@@ -75,7 +65,14 @@ void main() {
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
     v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
-    v_colour = mix(heightRamp(height), vec3(1.0), 0.12) * 1.1;
+    // Inside-out fill: the attracting-cycle multiplier runs from 0 at each
+    // bulb's superattracting centre to 1 at its boundary, so sampling the
+    // shared fractal palette with it continues the 2D escape-time bands
+    // inward from the set's edge instead of ramping on sheet height.
+    float t = clamp(a_interior, 0.0, 1.0);
+    if (u_paletteReverse > 0.5) t = 1.0 - t;
+    vec3 hue = texture(u_palette, vec2(t, 0.5)).rgb;
+    v_colour = mix(hue, vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
     // Cells with a detected period sit inside a black bulb of the 2D view:
     // steady grey, no cycling, no glow. Only the complexity cells (chaotic
@@ -84,12 +81,14 @@ void main() {
     float complexity = a_period > 0.5 ? 0.0 : 1.0;
     // Faithful to the picker palette: the dots march through the same ramp
     // the plane's bands do, including its dark end, so they wink out and
-    // return as the dark band passes. Height drifts the sample slightly so
-    // that passage sweeps up the curtain instead of blinking all at once.
-    vec3 hue = texture(
-      u_palette,
-      vec2(fract(a_interior + u_phase + height * 0.15), 0.5)
-    ).rgb;
+    // return as the dark band passes. Keyed on c-plane distance inside the
+    // escape boundary, a dot at the seam sits at fract(u_phase) — the same
+    // coordinate the plane's bands reach at the set's edge — so each colour
+    // locus rises from deep in the set, crosses the boundary, and flows on
+    // outward across the plane (inward when the palette cycle is reversed).
+    float band = a_boundary * 3.0;
+    if (u_paletteReverse > 0.5) band = -band;
+    vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
     v_selfGlow = complexity * 1.7;
@@ -365,11 +364,11 @@ export interface Orbit3DGroundPlane {
 
 export type Orbit3DCameraPose = "default" | "side";
 
-export type Orbit3DColourMode = "period" | "height" | "mono" | "cycle";
+export type Orbit3DColourMode = "period" | "inside-out" | "mono" | "cycle";
 
 const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
   period: 0,
-  height: 1,
+  "inside-out": 1,
   mono: 2,
   cycle: 3,
 };
@@ -413,6 +412,7 @@ export class Orbit3DPointCloud {
   private readonly pointBuffer: WebGLBuffer;
   private readonly periodBuffer: WebGLBuffer;
   private readonly interiorBuffer: WebGLBuffer;
+  private readonly boundaryBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
@@ -423,6 +423,7 @@ export class Orbit3DPointCloud {
   // ignored by uniform1i, which is exactly the behaviour wanted here.
   private readonly paletteUniform: WebGLUniformLocation | null;
   private readonly phaseUniform: WebGLUniformLocation;
+  private readonly paletteReverseUniform: WebGLUniformLocation;
   private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
@@ -470,6 +471,7 @@ export class Orbit3DPointCloud {
     this.pointBuffer = requireResource(gl.createBuffer(), "orbit3d point buffer");
     this.periodBuffer = requireResource(gl.createBuffer(), "orbit3d period buffer");
     this.interiorBuffer = requireResource(gl.createBuffer(), "orbit3d interior buffer");
+    this.boundaryBuffer = requireResource(gl.createBuffer(), "orbit3d boundary buffer");
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
@@ -490,6 +492,10 @@ export class Orbit3DPointCloud {
     const interiorLocation = gl.getAttribLocation(this.pointProgram, "a_interior");
     gl.enableVertexAttribArray(interiorLocation);
     gl.vertexAttribPointer(interiorLocation, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
+    const boundaryLocation = gl.getAttribLocation(this.pointProgram, "a_boundary");
+    gl.enableVertexAttribArray(boundaryLocation);
+    gl.vertexAttribPointer(boundaryLocation, 1, gl.FLOAT, false, 0, 0);
 
     gl.bindVertexArray(this.markerVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
@@ -531,6 +537,10 @@ export class Orbit3DPointCloud {
     this.phaseUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_phase"),
       "orbit3d palette-phase uniform",
+    );
+    this.paletteReverseUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_paletteReverse"),
+      "orbit3d palette-reverse uniform",
     );
     this.sampleCountUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_sampleCount"),
@@ -777,7 +787,10 @@ export class Orbit3DPointCloud {
     const positions = new Float32Array(pointBudget * 3);
     const periods = new Float32Array(pointBudget);
     const interiors = new Float32Array(pointBudget);
+    const boundaries = new Float32Array(pointBudget);
     const orbitSamples = new Float32Array(sampleCount);
+    const escapeMask = new Uint8Array(sampleWidth * sampleHeight);
+    const slotCell = new Int32Array(maxSurvivingCells);
     const measure = { interior: 1 };
     let cell = 0;
     let survivorsSeen = 0;
@@ -813,10 +826,13 @@ export class Orbit3DPointCloud {
           0,
           measure,
         );
-        if (result !== ESCAPED) {
+        if (result === ESCAPED) {
+          escapeMask[cell] = 1;
+        } else {
           const slot = reservoirSlot(survivorsSeen, maxSurvivingCells);
           survivorsSeen += 1;
           if (slot >= 0) {
+            slotCell[slot] = cell;
             for (let sample = 0; sample < sampleCount; sample += 1) {
               const offset = (sample * maxSurvivingCells + slot) * 3;
               positions[offset] = cRe;
@@ -850,6 +866,19 @@ export class Orbit3DPointCloud {
           sample * maxSurvivingCells + survivingCells,
         );
       }
+      // Distance to the escape boundary is only knowable once the whole grid
+      // has been swept, so the per-point attribute is written directly into
+      // the compacted layout here rather than during the sweep.
+      const cellScale = realSliceOnly
+        ? (RE_MAX - RE_MIN) / sampleWidth
+        : ((RE_MAX - RE_MIN) / sampleWidth + (IM_MAX - IM_MIN) / sampleHeight) / 2;
+      const distances = boundaryDistanceField(escapeMask, sampleWidth, sampleHeight);
+      for (let slot = 0; slot < survivingCells; slot += 1) {
+        const distance = Math.min(1, distances[slotCell[slot]] * cellScale);
+        for (let sample = 0; sample < sampleCount; sample += 1) {
+          boundaries[sample * survivingCells + slot] = distance;
+        }
+      }
       this.fullPointCount = survivingCells * sampleCount;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
       gl.bufferData(
@@ -867,6 +896,12 @@ export class Orbit3DPointCloud {
       gl.bufferData(
         gl.ARRAY_BUFFER,
         interiors.subarray(0, this.fullPointCount),
+        gl.STATIC_DRAW,
+      );
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        boundaries.subarray(0, this.fullPointCount),
         gl.STATIC_DRAW,
       );
       this.refreshPointCount();
@@ -921,6 +956,7 @@ export class Orbit3DPointCloud {
     fanActive = false,
     palette: WebGLTexture | null = null,
     phase = 0,
+    paletteReverse = false,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -959,6 +995,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
+    gl.uniform1f(this.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
@@ -1013,6 +1050,7 @@ export class Orbit3DPointCloud {
     gl.deleteBuffer(this.pointBuffer);
     gl.deleteBuffer(this.periodBuffer);
     gl.deleteBuffer(this.interiorBuffer);
+    gl.deleteBuffer(this.boundaryBuffer);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);
@@ -1144,6 +1182,54 @@ function boundedNumber(
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(min, Math.min(max, value))
     : fallback;
+}
+
+/**
+ * Two-pass chamfer transform: distance in grid units from each cell to the
+ * nearest escaped cell, i.e. to the sampled field's escape boundary.
+ */
+function boundaryDistanceField(
+  escapeMask: Uint8Array,
+  width: number,
+  height: number,
+): Float32Array {
+  const distances = new Float32Array(escapeMask.length);
+  const FAR = 1e9;
+  const DIAGONAL = Math.SQRT2;
+  for (let index = 0; index < escapeMask.length; index += 1) {
+    distances[index] = escapeMask[index] === 1 ? 0 : FAR;
+  }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      let best = distances[index];
+      if (x > 0) best = Math.min(best, distances[index - 1] + 1);
+      if (y > 0) {
+        best = Math.min(best, distances[index - width] + 1);
+        if (x > 0) best = Math.min(best, distances[index - width - 1] + DIAGONAL);
+        if (x < width - 1) {
+          best = Math.min(best, distances[index - width + 1] + DIAGONAL);
+        }
+      }
+      distances[index] = best;
+    }
+  }
+  for (let y = height - 1; y >= 0; y -= 1) {
+    for (let x = width - 1; x >= 0; x -= 1) {
+      const index = y * width + x;
+      let best = distances[index];
+      if (x < width - 1) best = Math.min(best, distances[index + 1] + 1);
+      if (y < height - 1) {
+        best = Math.min(best, distances[index + width] + 1);
+        if (x < width - 1) {
+          best = Math.min(best, distances[index + width + 1] + DIAGONAL);
+        }
+        if (x > 0) best = Math.min(best, distances[index + width - 1] + DIAGONAL);
+      }
+      distances[index] = best;
+    }
+  }
+  return distances;
 }
 
 /** Deterministic reservoir sampling keeps a full-domain point budget. */
