@@ -7,7 +7,6 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "build:site": "tsc -p tsconfig.json --noEmit && vite build --base=/labs/app/",
     "publish:site": "npm run build:site && npm run build:lib && scripts/publish-site.sh",
-    "deploy": "scripts/deploy.sh",
     "preview": "vite preview",
     "build:test": "tsc -p tsconfig.test.json",
     "test": "npm run build:test && node scripts/run-kernel-tests.cjs",
