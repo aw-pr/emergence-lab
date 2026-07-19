@@ -1,6 +1,8 @@
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
 import { setSimDocumentTitle } from "./docTitle.ts";
+import { getChrome, siteOwnsChrome } from "./chrome.ts";
+import { isEditableKeyboardEvent } from "./keyboardTarget.ts";
 import { isFramedBySite } from "./embed.ts";
 import { loadKernel } from "./loader.ts";
 import { findEntry } from "./registry.ts";
@@ -383,7 +385,7 @@ export async function renderSimView(
       window.addEventListener(
         "keydown",
         (event) => {
-          if (isEditableTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+          if (isEditableKeyboardEvent(event) || event.metaKey || event.ctrlKey || event.altKey) return;
           if (event.key === "+" || event.key === "=") {
             event.preventDefault();
             zoomBy(2);
@@ -511,12 +513,6 @@ function formatZoom(zoom: number): string {
   return `×${value.toFixed(digits)}${suffixes[suffix]}`;
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName);
-}
-
 interface SimHeader {
   name: string;
   family?: string;
@@ -537,25 +533,26 @@ function buildLayout(
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
-  // Framed by the site's /labs/run shell, the app's internal gallery is a
-  // redundant copy of the site's /labs page, so send the parent window there
+  // Hosted by the site (framed or embedded inline), the app's internal gallery
+  // is a redundant copy of the site's /labs page, so send visitors there
   // instead. Standalone (and direct /labs/app/ visits) keep the in-app gallery.
-  if (isFramedBySite()) {
-    back.href = "/labs";
-    back.target = "_top";
+  if (siteOwnsChrome()) {
+    back.href = getChrome().siteGalleryHref;
+    // Only the iframe shell needs to break out of its frame.
+    if (isFramedBySite()) back.target = "_top";
   } else {
     back.href = "#/";
   }
   back.textContent = "← Gallery";
   top.appendChild(back);
 
-  // Framed by the site, the /labs/run bar directly above already names the sim,
-  // so a title block here is a second copy of it sitting in a column of its own
+  // Hosted by the site, the bar directly above already names the sim, so a
+  // title block here is a second copy of it sitting in a column of its own
   // with the narrative's full height beside it. Drop it and let the narrative
   // have the width. Standalone there is no bar, so the title stays.
   const titleBlock = document.createElement("div");
   titleBlock.className = "sim-view__title-block";
-  titleBlock.hidden = isFramedBySite();
+  titleBlock.hidden = siteOwnsChrome();
 
   const title = document.createElement("h1");
   title.className = "sim-view__title";
