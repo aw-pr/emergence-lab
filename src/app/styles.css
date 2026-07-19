@@ -216,7 +216,11 @@ code {
 .sim-view {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* Container-relative, never 100vh: standalone the #app/body chain makes 100%
+   * the viewport anyway, but embedded (the site's web component) the container
+   * is the viewport minus the host page's nav and bar — viewport units here
+   * push the sidebar past the bottom edge. */
+  height: 100%;
   min-height: 0;
 }
 
@@ -794,11 +798,15 @@ code {
   }
   .sim-view__body {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(360px, 1fr) auto;
+    /* The controls row is capped by the grid track, not a max-height on the
+     * sidebar: a percentage resolves against the body's definite height,
+     * where 44vh (of the whole viewport) overflows the embedded container.
+     * Content shorter than the cap keeps the row at content height. */
+    grid-template-rows: minmax(360px, 1fr) minmax(0, 44%);
   }
   .sim-view__sidebar {
     border-left: none;
     border-top: 1px solid var(--border);
-    max-height: 44vh;
+    min-height: 0;
   }
 }
