@@ -10,15 +10,38 @@ import {
   clearResolution,
   clearValues,
   loadBounds,
+  loadSectionCollapsed,
   loadValues,
   saveBounds,
   saveRenderOptions,
   saveResolution,
+  saveSectionCollapsed,
   saveValues,
   type SliderBounds,
 } from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
 import type { DisplayOptions, ResolutionPreset } from "./renderer.ts";
+
+/**
+ * A collapsible, headed control section. Open by default; a user's toggle is
+ * remembered per sim and section label.
+ */
+export function collapsibleSection(
+  slug: string,
+  label: string,
+  className: string,
+): HTMLDetailsElement {
+  const section = document.createElement("details");
+  section.className = className;
+  section.open = loadSectionCollapsed(slug, label) !== true;
+  const summary = document.createElement("summary");
+  summary.textContent = label;
+  section.appendChild(summary);
+  section.addEventListener("toggle", () => {
+    saveSectionCollapsed(slug, label, !section.open);
+  });
+  return section;
+}
 
 export interface ControlsCallbacks {
   onPlayPause: () => void;
@@ -41,6 +64,13 @@ const RESOLUTION_OPTIONS: ReadonlyArray<{
   { value: "high", label: "High" },
   { value: "ultra", label: "Ultra (slowest)" },
 ];
+
+// Opt-in tier: only worth its cost on sims whose builder consumes the extra
+// cells (orbit3d point clouds); hidden from the dropdown everywhere else.
+const EXTREME_RESOLUTION_OPTION = {
+  value: "extreme",
+  label: "Extreme (huge point cloud)",
+} as const satisfies { value: ResolutionPreset; label: string };
 
 export interface StepsControlOptions {
   label: string;
@@ -71,6 +101,8 @@ export interface ControlsOptions {
   defaultResolution: ResolutionPreset;
   /** Show the simulation-resolution preset selector (omit for fractals). */
   showResolutionControl?: boolean;
+  /** Offer the "Extreme" grid-quality tier (orbit3d point-cloud sims only). */
+  showExtremeResolution?: boolean;
   /** Show the particle-trail fade slider (particle-mode sims only). */
   showTrailControl?: boolean;
   /**
@@ -95,6 +127,13 @@ export interface ControlsOptions {
    * Parameters section.
    */
   viewParamKeys?: readonly string[];
+  /**
+   * Named clusters rendered as their own headed sections between the View
+   * group and the trailing "Parameters" section, in the order given. Keys
+   * already hoisted into View are skipped; schema params in no cluster land
+   * in "Parameters" as before.
+   */
+  paramGroups?: readonly { label: string; keys: readonly string[] }[];
 }
 
 /**
@@ -116,6 +155,7 @@ export class ControlsPanel {
   private readonly defaultParams: SimParams;
   private readonly defaultResolution: ResolutionPreset;
   private readonly showResolutionControl: boolean;
+  private readonly showExtremeResolution: boolean;
   private readonly showTrailControl: boolean;
   private readonly showDotSizeControl: boolean;
   private readonly showAutoCycleControl: boolean;
@@ -171,6 +211,7 @@ export class ControlsPanel {
     this.defaultParams = { ...options.defaultParams };
     this.defaultResolution = options.defaultResolution;
     this.showResolutionControl = options.showResolutionControl ?? true;
+    this.showExtremeResolution = options.showExtremeResolution ?? false;
     this.showTrailControl = options.showTrailControl ?? false;
     this.showDotSizeControl = options.showDotSizeControl ?? true;
     this.showAutoCycleControl = options.showAutoCycleControl ?? false;
@@ -280,11 +321,7 @@ export class ControlsPanel {
     this.container.appendChild(transport);
 
     const viewParamKeys = new Set(options.viewParamKeys ?? []);
-    const viewSection = document.createElement("section");
-    viewSection.className = "controls__view";
-    const viewHeading = document.createElement("h3");
-    viewHeading.textContent = "View";
-    viewSection.appendChild(viewHeading);
+    const viewSection = collapsibleSection(this.slug, "View", "controls__view");
     if (this.showResolutionControl) {
       for (const element of this.buildQualityControls()) {
         viewSection.appendChild(element);
@@ -307,16 +344,35 @@ export class ControlsPanel {
       this.buildColourDashboard(options.fractalPaletteCycleUi ?? false),
     );
 
+    const grouped = new Set(viewParamKeys);
+    for (const group of options.paramGroups ?? []) {
+      const members = options.paramSchema.filter(
+        (descriptor) =>
+          group.keys.includes(descriptor.key) && !grouped.has(descriptor.key),
+      );
+      if (members.length === 0) continue;
+      const groupSection = collapsibleSection(
+        this.slug,
+        group.label,
+        "controls__params",
+      );
+      for (const descriptor of members) {
+        const current = this.params[descriptor.key] ?? descriptor.default;
+        groupSection.appendChild(this.buildParamControl(descriptor, current));
+        grouped.add(descriptor.key);
+      }
+      this.container.appendChild(groupSection);
+    }
+
     const remainingSchema = options.paramSchema.filter(
-      (descriptor) => !viewParamKeys.has(descriptor.key),
+      (descriptor) => !grouped.has(descriptor.key),
     );
     if (remainingSchema.length > 0) {
-      const paramSection = document.createElement("section");
-      paramSection.className = "controls__params";
-
-      const paramHeading = document.createElement("h3");
-      paramHeading.textContent = "Parameters";
-      paramSection.appendChild(paramHeading);
+      const paramSection = collapsibleSection(
+        this.slug,
+        "Parameters",
+        "controls__params",
+      );
 
       for (const descriptor of remainingSchema) {
         const current = this.params[descriptor.key] ?? descriptor.default;
@@ -543,7 +599,10 @@ export class ControlsPanel {
     wrap.appendChild(label);
 
     const select = document.createElement("select");
-    for (const option of RESOLUTION_OPTIONS) {
+    const options = this.showExtremeResolution
+      ? [...RESOLUTION_OPTIONS, EXTREME_RESOLUTION_OPTION]
+      : RESOLUTION_OPTIONS;
+    for (const option of options) {
       const optEl = document.createElement("option");
       optEl.value = option.value;
       optEl.textContent = option.label;
@@ -606,12 +665,7 @@ export class ControlsPanel {
   }
 
   private buildColourDashboard(fractalPaletteCycleUi: boolean): HTMLElement {
-    const section = document.createElement("section");
-    section.className = "controls__colour";
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Colour";
-    section.appendChild(heading);
+    const section = collapsibleSection(this.slug, "Colour", "controls__colour");
 
     if (fractalPaletteCycleUi) {
       section.appendChild(this.buildFractalPaletteCycleExtras());

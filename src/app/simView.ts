@@ -13,12 +13,121 @@ import {
   type ResolutionPreset,
 } from "./renderer.ts";
 import {
+  collapsibleSection,
   ControlsPanel,
   defaultParamsFromSchema,
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
 import { loadRenderOptions, loadResolution } from "./persistence.ts";
+
+/**
+ * Kernel params hoisted into the View section, per sim: everything about how
+ * the object is drawn rather than what is simulated. Sims not listed keep
+ * their whole schema below the View section.
+ */
+const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "logistic-mandelbrot": [
+    "colourMode",
+    "exposure",
+    "pointDensity",
+    "continuousSpin",
+    "cycleSpeed",
+    "cascadeReveal",
+    "cascadeDuration",
+    "realSliceOnly",
+  ],
+  boids: ["pointSize"],
+  "particle-life": ["pointSize"],
+  "diffusion-limited-aggregation": ["colourByAge"],
+  "game-of-life": ["ageShading"],
+  "lorenz-attractor": ["fade", "ribbonWidth", "colourByHeight", "cycleSpeed"],
+  mandelbrot: ["palettePhase", "cycleSpeed"],
+  "julia-set": ["palettePhase", "cycleSpeed"],
+  "burning-ship": ["palettePhase", "cycleSpeed"],
+};
+
+/**
+ * Named, collapsible sections for the remaining kernel params, per sim. Keys
+ * left out of every group land in the trailing "Parameters" section; sims
+ * with a handful of params skip grouping entirely rather than dressing three
+ * sliders in three headings.
+ */
+const PARAM_GROUPS: Readonly<
+  Record<string, readonly { label: string; keys: readonly string[] }[]>
+> = {
+  "logistic-mandelbrot": [
+    { label: "Light beam", keys: ["realAxisSweep", "sweepSpeed"] },
+    {
+      label: "Sampling",
+      keys: ["warmupIterations", "sampleCount", "plottedIterations"],
+    },
+  ],
+  boids: [
+    { label: "Flock", keys: ["boidCount", "maxSpeed"] },
+    { label: "Perception", keys: ["visualRadius", "separationRadius"] },
+    { label: "Steering", keys: ["alignment", "cohesion", "separation"] },
+  ],
+  "particle-life": [
+    { label: "Population", keys: ["particleCount", "species"] },
+    {
+      label: "Forces",
+      keys: ["rmax", "rmin", "forceScale", "matrixBias", "friction"],
+    },
+  ],
+  physarum: [
+    { label: "Agents", keys: ["agentCount", "moveSpeed", "turnSpeed"] },
+    { label: "Sensing", keys: ["sensorAngle", "sensorDistance"] },
+    { label: "Trail", keys: ["depositAmount", "evaporation"] },
+  ],
+  "gray-scott": [
+    { label: "Diffusion", keys: ["Du", "Dv"] },
+    { label: "Reaction", keys: ["F", "k"] },
+  ],
+  "belousov-zhabotinsky": [
+    { label: "Diffusion", keys: ["diffusionA", "diffusionB", "diffusionC"] },
+    { label: "Reaction", keys: ["feed", "kill"] },
+  ],
+  "game-of-life": [
+    {
+      label: "Rules",
+      keys: ["birthMin", "birthMax", "surviveMin", "surviveMax"],
+    },
+    { label: "Seeding", keys: ["seedDensity", "sparkRate"] },
+  ],
+  "diffusion-limited-aggregation": [
+    { label: "Growth", keys: ["walkersPerStep", "maxWalkSteps", "stickiness"] },
+    { label: "Seeding", keys: ["spawnRadius", "seedCount"] },
+  ],
+  "kuramoto-oscillators": [
+    { label: "Coupling", keys: ["coupling", "couplingMode"] },
+    { label: "Oscillators", keys: ["frequencySpread", "noise"] },
+    { label: "Simulation", keys: ["timestep", "initialPattern"] },
+  ],
+  lenia: [
+    { label: "Growth", keys: ["mu", "sigma", "muDrift"] },
+    { label: "Kernel & timing", keys: ["radius", "dt", "stepsPerFrame"] },
+  ],
+  "lorenz-attractor": [
+    { label: "Attractor", keys: ["attractor", "sigma", "rho", "beta"] },
+  ],
+  "ising-model": [
+    { label: "Physics", keys: ["temperature", "coupling", "externalField"] },
+  ],
+  mandelbrot: [
+    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
+    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
+  ],
+  "julia-set": [
+    { label: "Seed", keys: ["cRe", "cIm"] },
+    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
+    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
+  ],
+  "burning-ship": [
+    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
+    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
+  ],
+};
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
@@ -221,14 +330,15 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
+    showExtremeResolution: slug === "logistic-mandelbrot",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
     fractalPaletteCycleUi: fractal,
-    viewParamKeys:
-      slug === "logistic-mandelbrot" ? ["colourMode", "continuousSpin"] : [],
+    viewParamKeys: VIEW_PARAM_KEYS[slug] ?? [],
+    paramGroups: PARAM_GROUPS[slug] ?? [],
     callbacks: {
       onPlayPause: () => {
         if (renderer.isRunning()) {
@@ -272,7 +382,7 @@ export async function renderSimView(
 
   const orbitMarkerReadout =
     slug === "logistic-mandelbrot"
-      ? buildOrbitMarkerReadout(layout.sidebar)
+      ? buildOrbitMarkerReadout(slug, layout.sidebar)
       : undefined;
 
   renderer.setParamsListener((next) => {
@@ -461,13 +571,11 @@ interface OrbitMarkerReadout {
   set(marker: Orbit3DMarkerClientSnapshot): void;
 }
 
-function buildOrbitMarkerReadout(container: HTMLElement): OrbitMarkerReadout {
-  const section = document.createElement("section");
-  section.className = "controls__params";
-
-  const heading = document.createElement("h3");
-  heading.textContent = "Orbit marker";
-  section.appendChild(heading);
+function buildOrbitMarkerReadout(
+  slug: string,
+  container: HTMLElement,
+): OrbitMarkerReadout {
+  const section = collapsibleSection(slug, "Orbit marker", "controls__params");
 
   const cRow = document.createElement("div");
   cRow.className = "control control--enum";
