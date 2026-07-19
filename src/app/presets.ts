@@ -567,7 +567,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         realSliceOnly: true,
         exposure: 1.6,
         pointDensity: 1,
-        colourMode: "height",
+        colourMode: "inside-out",
       },
     },
     {
