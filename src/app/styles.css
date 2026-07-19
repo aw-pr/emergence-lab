@@ -354,12 +354,10 @@ code {
   }
 }
 
-/* Phone-width: one column, and the stage needs the room more than the prose
- * does. Bounded and scrollable rather than dominant. */
-@media (max-width: 640px) {
-  .sim-view__about {
-    max-height: 108px;
-  }
+/* Desktop and tablet always show the narrative; the phone disclosure button
+ * only exists below the stacked-layout breakpoint (see the 720px block). */
+.sim-view__about-toggle {
+  display: none;
 }
 
 /* Sits inside the narrative's maths column now, so it can be no wider than one
@@ -792,9 +790,47 @@ code {
 @media (max-width: 720px) {
   .sim-view__header {
     padding: 14px 16px;
+    gap: 8px 56px;
   }
   .sim-view__formula {
     max-width: calc(100vw - 88px);
+  }
+
+  /* The narrative used to render open here, clipped mid-sentence with an
+   * unsignposted inner scroll and the formula below its fold. Collapsed
+   * behind a disclosure instead, the reclaimed height goes to the stage and
+   * the controls panel; opened deliberately, it gets more room than the old
+   * clip ever gave it. */
+  .sim-view__about-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-basis: 100%;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--fg-dim);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .sim-view__about-toggle::before {
+    content: "▸";
+    color: var(--accent);
+    opacity: 0.75;
+  }
+  .sim-view__about-toggle[aria-expanded="true"]::before {
+    content: "▾";
+  }
+  .sim-view__about {
+    display: none;
+  }
+  .sim-view__about--open {
+    display: grid;
+    max-height: 200px;
   }
   .sim-view__body {
     grid-template-columns: 1fr;
