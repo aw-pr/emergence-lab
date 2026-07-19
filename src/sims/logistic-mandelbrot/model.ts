@@ -38,6 +38,15 @@ export const MAX_DETECTABLE_PERIOD = 32;
  */
 export const PERIOD_TOLERANCE = 1e-4;
 
+/**
+ * Squared distance below which the warmup orbit is treated as having landed
+ * on its attracting cycle (Brent-style revisit check). Far stricter than
+ * PERIOD_TOLERANCE so an early exit never changes what the sample window
+ * sees; a chaotic orbit revisiting a point this closely is vanishingly rare.
+ */
+const CONVERGENCE_TOLERANCE_SQ = 1e-18;
+const CONVERGENCE_WINDOW_CAP = 256;
+
 export interface CGridSpec {
   width: number;
   height: number;
@@ -131,6 +140,16 @@ export function sampleAttractorCell(
   let zr = 0;
   let zi = 0;
 
+  // Brent-style early exit: once the orbit revisits a checkpoint to within
+  // CONVERGENCE_TOLERANCE_SQ it is on its attracting cycle and the remaining
+  // warmup is pure cost. The doubling window detects any period up to the
+  // cap; cells that never converge (chaotic, slow near-boundary) simply run
+  // the full warmup as before.
+  let checkpointR = 0;
+  let checkpointI = 0;
+  let revisitWindow = 8;
+  let sinceCheckpoint = 0;
+
   for (let iteration = 0; iteration < warmupIterations; iteration += 1) {
     const nextR = zr * zr - zi * zi + cRe;
     zi = 2 * zr * zi + cIm;
@@ -139,6 +158,21 @@ export function sampleAttractorCell(
     if (zr * zr + zi * zi > escapeSquared) {
       samplesOut.fill(0, offset, offset + sampleCount);
       return ESCAPED;
+    }
+
+    const deltaR = zr - checkpointR;
+    const deltaI = zi - checkpointI;
+    if (deltaR * deltaR + deltaI * deltaI < CONVERGENCE_TOLERANCE_SQ) {
+      break;
+    }
+    sinceCheckpoint += 1;
+    if (sinceCheckpoint === revisitWindow) {
+      checkpointR = zr;
+      checkpointI = zi;
+      sinceCheckpoint = 0;
+      if (revisitWindow < CONVERGENCE_WINDOW_CAP) {
+        revisitWindow *= 2;
+      }
     }
   }
 
