@@ -65,10 +65,22 @@ by the steps below. To vendor a build into the promo-flow site instead, at
 npm run publish:site
 ```
 
-This builds with Vite base `/labs/app/` (`build:site`) and rsyncs `dist/` into
-`../promo-flow/public/labs/app/` with `-a --delete`, so stale files from a
-previous build are removed. The promo-flow path defaults to a sibling
-checkout; override it with `PROMO_FLOW_DIR` if promo-flow lives elsewhere:
+This publishes four artifacts (`scripts/publish-site.sh`), each rsynced with
+`-a --delete` so stale files from a previous build are removed:
+
+- `dist/` → `public/labs/app/` — the static app (Vite base `/labs/app/`),
+  standalone and fullscreen target
+- `dist-lib/` → `public/labs/lib/` — the library build (`vite.lib.config.ts`,
+  entry `src/app/lib.ts`): the `<emergence-lab-sim>` web component plus
+  `mountLab`, which the site's /labs/run shell imports by URL and mounts inline
+- KaTeX css + fonts → `public/labs/app/katex/` — stable unhashed path the web
+  component links into its shadow root (class rules) and the host document
+  (font faces)
+- registry manifest → `src/vendor/emergence-lab/registry.json` — lets the
+  site's build fail on slug drift instead of shipping dead deep links
+
+The promo-flow path defaults to a sibling checkout; override it with
+`PROMO_FLOW_DIR` if promo-flow lives elsewhere:
 
 ```bash
 PROMO_FLOW_DIR=/path/to/promo-flow npm run publish:site
