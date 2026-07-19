@@ -577,7 +577,22 @@ function buildLayout(
   top.appendChild(titleBlock);
 
   const about = header.about ? buildAbout(header.about, slug) : undefined;
-  if (about) top.appendChild(about);
+  if (about) {
+    // Phone widths collapse the narrative behind this disclosure (the stage
+    // and controls need the room more than the prose); the button itself only
+    // exists visually below the stacked-layout breakpoint.
+    const aboutToggle = document.createElement("button");
+    aboutToggle.type = "button";
+    aboutToggle.className = "sim-view__about-toggle";
+    aboutToggle.setAttribute("aria-expanded", "false");
+    aboutToggle.textContent = "About this simulation";
+    aboutToggle.addEventListener("click", () => {
+      const open = about.classList.toggle("sim-view__about--open");
+      aboutToggle.setAttribute("aria-expanded", String(open));
+    });
+    top.appendChild(aboutToggle);
+    top.appendChild(about);
+  }
 
   page.appendChild(top);
 
