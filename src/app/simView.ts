@@ -206,6 +206,12 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
  */
 export interface SimViewHandle {
   dispose(): void;
+  /**
+   * Toggle immersive mode (the top-layer overlay that hides the description
+   * header and parameter sidebar). Optional because the early-error paths
+   * (unknown sim, kernel load failure) return before the toggle exists.
+   */
+  toggleImmersive?(): void;
 }
 
 export async function renderSimView(
@@ -694,6 +700,7 @@ export async function renderSimView(
       detachPointerImpulse?.();
       renderer.destroy();
     },
+    toggleImmersive,
   };
 }
 
