@@ -288,10 +288,18 @@ export async function renderSimView(
       !siteOwnsChrome() &&
       window.innerWidth === window.screen.width &&
       window.innerHeight === window.screen.height;
-    layout.page.classList.toggle(
-      "sim-view--immersive",
-      immersiveForced || native || windowFullscreen,
-    );
+    const immersive = immersiveForced || native || windowFullscreen;
+    layout.page.classList.toggle("sim-view--immersive", immersive);
+    if (!immersive) {
+      // Reset the drawer so re-entering immersive always starts parked,
+      // rather than reopening however it was left last time.
+      layout.sidebar.classList.remove("sim-view__sidebar--open");
+      const handle = layout.sidebar.querySelector<HTMLButtonElement>(
+        ".sim-view__drawer-handle",
+      );
+      handle?.setAttribute("aria-expanded", "false");
+      handle?.setAttribute("aria-label", "Show settings");
+    }
   };
   const toggleImmersive = () => {
     if (immersiveForced || document.fullscreenElement) {
@@ -849,6 +857,25 @@ function buildLayout(
 
   const sidebar = document.createElement("aside");
   sidebar.className = "sim-view__sidebar";
+
+  // Immersive-only edge handle: the hover/focus-within reveal below has no
+  // touch equivalent, so this button is the tap target that opens the drawer
+  // on touch devices (hidden outside immersive mode, see styles.css).
+  const drawerHandle = document.createElement("button");
+  drawerHandle.type = "button";
+  drawerHandle.className = "sim-view__drawer-handle";
+  drawerHandle.setAttribute("aria-expanded", "false");
+  drawerHandle.setAttribute("aria-label", "Show settings");
+  drawerHandle.addEventListener("click", () => {
+    const open = sidebar.classList.toggle("sim-view__sidebar--open");
+    drawerHandle.setAttribute("aria-expanded", String(open));
+    drawerHandle.setAttribute(
+      "aria-label",
+      open ? "Hide settings" : "Show settings",
+    );
+  });
+  sidebar.appendChild(drawerHandle);
+
   body.appendChild(sidebar);
 
   page.appendChild(body);
