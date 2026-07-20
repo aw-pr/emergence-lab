@@ -17,6 +17,7 @@ export interface MountLabOptions extends Partial<Omit<LabChrome, "onTitleChange"
 
 export interface LabMountHandle {
   dispose(): void;
+  toggleImmersive(): void;
 }
 
 /**
@@ -90,6 +91,11 @@ export function mountLab(
       currentHandle = null;
       root.innerHTML = "";
       resetActiveChrome();
+    },
+    toggleImmersive() {
+      // Mounting is async (renderSimView awaits the kernel load), so
+      // currentHandle may still be null if this fires early — a no-op.
+      currentHandle?.toggleImmersive?.();
     },
   };
 }

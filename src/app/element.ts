@@ -32,6 +32,9 @@ function ensureDocumentKatexFonts(assetBase: string): void {
  * default site-embedded), asset-base, site-gallery-href.
  * Events: "sim-title" (CustomEvent<{ title: string | null }>, bubbles,
  * composed) whenever the visible simulation changes.
+ * Methods: toggleImmersive() — toggles the top-layer overlay that hides the
+ * description header and parameter sidebar, letting a host page drive the
+ * same immersive mode as the in-app Maximise button.
  *
  * The class is created inside this function, not at module scope, so merely
  * importing the library never touches HTMLElement — imports stay safe in
@@ -72,6 +75,10 @@ export function defineLabElement(): string {
     disconnectedCallback(): void {
       this.#handle?.dispose();
       this.#handle = null;
+    }
+
+    toggleImmersive(): void {
+      this.#handle?.toggleImmersive();
     }
 
     attributeChangedCallback(): void {
