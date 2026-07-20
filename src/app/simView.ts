@@ -329,6 +329,9 @@ export async function renderSimView(
     const focused = root.activeElement;
     if (focused instanceof HTMLElement) focused.blur();
   };
+  layout.immersiveExit.addEventListener("click", toggleImmersive, {
+    signal: immersiveAbort.signal,
+  });
   document.addEventListener(
     "fullscreenchange",
     () => {
@@ -713,6 +716,10 @@ interface SimLayout {
   /** Attached to the sidebar after ControlsPanel renders — its render wipes
    *  the sidebar's children, so mounting earlier would lose the handle. */
   drawerHandle: HTMLElement;
+  /** Immersive-only exit control (an on-screen way back besides Esc/Maximise
+   *  again — the only option on touch, which has no Esc). Click listener is
+   *  attached in renderSimView, where toggleImmersive is in scope. */
+  immersiveExit: HTMLButtonElement;
   legend: HTMLElement;
   /** The narrative panel, so the pointer wiring can add its own note to it. */
   about?: HTMLElement;
@@ -867,6 +874,16 @@ function buildLayout(
   const body = document.createElement("div");
   body.className = "sim-view__body";
 
+  // Immersive-only exit control: a visible way back that doesn't depend on
+  // Esc (touch has none) or remembering the Maximise button toggles too.
+  // Hidden outside immersive mode; click listener attached in renderSimView.
+  const immersiveExit = document.createElement("button");
+  immersiveExit.type = "button";
+  immersiveExit.className = "sim-view__immersive-exit";
+  immersiveExit.setAttribute("aria-label", "Exit fullscreen");
+  immersiveExit.textContent = "✕";
+  body.appendChild(immersiveExit);
+
   const stage = document.createElement("div");
   stage.className = "sim-view__stage";
 
@@ -930,6 +947,7 @@ function buildLayout(
     canvas,
     sidebar,
     drawerHandle,
+    immersiveExit,
     legend,
     about,
     fractalHud,
