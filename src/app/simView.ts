@@ -278,17 +278,28 @@ export async function renderSimView(
     updateImmersive();
     // Opportunistic: hides the browser chrome too when the browser allows it.
     layout.body.requestFullscreen?.().catch(() => {});
-    // The click leaves focus on a button inside the sidebar, whose
+    // The click leaves focus on the Maximise button inside the sidebar, whose
     // :focus-within would pin the drawer open; drop it so the panel parks.
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
+    // Embedded inline, the app lives in a shadow root, so the focused button is
+    // the SHADOW root's activeElement — document.activeElement is only the host
+    // element. Blur the deepest active node so both mounts park the drawer.
+    const root = layout.body.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement;
+    if (focused instanceof HTMLElement) focused.blur();
   };
   document.addEventListener(
     "fullscreenchange",
     () => {
-      // Leaving native fullscreen (Esc) exits immersive entirely.
-      if (!document.fullscreenElement) immersiveForced = false;
+      // The overlay is the source of truth; native fullscreen is only an
+      // opportunistic bonus. Do NOT clear immersiveForced when fullscreen
+      // exits: some browsers (seen on macOS Chrome) enter fullscreen on the
+      // Maximise click and then bounce straight back out, firing an exit event
+      // milliseconds later. Tearing down immersive on that spurious exit made
+      // the header snap back the instant the user pressed Maximise. Leaving
+      // immersiveForced set keeps the in-window overlay whether or not native
+      // fullscreen ever sticks — exactly what "the button never depends on it"
+      // was meant to guarantee. Explicit exits (Maximise again, Esc) still
+      // clear it below.
       updateImmersive();
     },
     { signal: immersiveAbort.signal },
@@ -296,8 +307,15 @@ export async function renderSimView(
   window.addEventListener(
     "keydown",
     (event) => {
-      // Esc parity for the overlay-only path, where no fullscreenchange fires.
-      if (event.key === "Escape" && immersiveForced && !document.fullscreenElement) {
+      // Esc exits immersive. When native fullscreen is active the browser
+      // swallows the first Esc to leave fullscreen (immersiveForced stays set,
+      // so the overlay persists); this handler then catches the next Esc, once
+      // no fullscreen element remains, and drops the overlay too.
+      if (
+        event.key === "Escape" &&
+        immersiveForced &&
+        !document.fullscreenElement
+      ) {
         immersiveForced = false;
         updateImmersive();
       }

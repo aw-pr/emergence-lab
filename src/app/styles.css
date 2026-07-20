@@ -553,11 +553,19 @@ code {
 /* Fixed overlay so immersive works even when native fullscreen is refused
  * (no activation, embedded contexts, iOS): the body covers the viewport and
  * the header simply sits behind it. Under native fullscreen the same rules
- * hold — the body IS the fullscreen element. */
+ * hold — the body IS the fullscreen element.
+ *
+ * The z-index must clear the HOST page's chrome, not just the app's own
+ * layers: embedded inline in a site (site-embedded chrome), the host's fixed
+ * navigation sits in the same root stacking context as this overlay, so a
+ * modest z-index leaves the site nav painted on top and the "header" never
+ * fully disappears. A takeover-tier value wins over any realistic host chrome;
+ * the parked sidebar is a child of this body, so it rides above the host too
+ * without needing its own high z-index. */
 .sim-view--immersive .sim-view__body {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 2147483000;
   background: #000;
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
