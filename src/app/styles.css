@@ -548,6 +548,13 @@ code {
   display: none;
 }
 
+/* Phone-only bottom-drawer toggle (see the 720px block); irrelevant outside
+ * it, and superseded by the drawer handle above once immersive mode takes
+ * over the sidebar's reveal mechanism. */
+.sim-view__params-toggle {
+  display: none;
+}
+
 /* Immersive layout: set by JS for the app's own Maximise (native fullscreen
  * on the body) AND for browser/OS-level fullscreen (viewport == screen,
  * standalone only). The explainer header drops away and the stage takes the
@@ -586,6 +593,14 @@ code {
   grid-template-rows: 1fr;
 }
 
+/* Immersive takes the whole viewport regardless of viewport width, so it has
+ * to beat the phone drawer's open-state grid outright rather than relying on
+ * source order — this selector's extra class guarantees that. */
+.sim-view--immersive.sim-view--params-open .sim-view__body {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
 .sim-view--immersive .sim-view__body::backdrop {
   background: #000;
 }
@@ -596,6 +611,10 @@ code {
  * focused. Elsewhere (touch), the drawer-handle button is the only way in —
  * see .sim-view__sidebar--open below, which works for every pointer type. */
 .sim-view--immersive .sim-view__sidebar {
+  /* Beats the phone drawer's collapsed `display: none` (see the 720px
+   * block) — immersive always keeps the sidebar in the DOM flow, parked
+   * off-screen via the transform below rather than hidden outright. */
+  display: block;
   position: fixed;
   top: 0;
   right: 0;
@@ -627,6 +646,13 @@ code {
 
 .sim-view--immersive .sim-view__sidebar--open {
   transform: translateX(0);
+}
+
+/* Beats the phone drawer toggle's `display: flex` (see the 720px block) —
+ * immersive mode has its own edge-handle reveal for the sidebar, so the
+ * bottom-drawer pill would be a redundant second control. */
+.sim-view--immersive .sim-view__params-toggle {
+  display: none;
 }
 
 /* The accent strip on the sidebar's exposed sliver, and the tap target for
@@ -944,9 +970,28 @@ details.controls__colour:not([open]) summary {
 }
 
 @media (max-width: 720px) {
+  /* Slimmed to a compact bar: back link and title share one row, the
+   * subtitle/family tag drop out entirely (the about disclosure below
+   * already carries that context), and the about toggle keeps its own row
+   * underneath. Embedded (title block hidden by JS), this leaves just the
+   * back link and the toggle — reads as one slim bar either way. */
   .sim-view__header {
-    padding: 14px 16px;
-    gap: 8px 56px;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 6px 16px;
+  }
+  .sim-view__title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .sim-view__title {
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sim-view__subtitle {
+    display: none;
   }
   .sim-view__formula {
     max-width: calc(100vw - 88px);
@@ -988,17 +1033,57 @@ details.controls__colour:not([open]) summary {
     display: grid;
     max-height: 200px;
   }
+  /* Collapsed by default: the drawer toggle is a content-height row and the
+   * sidebar is hidden outright, so the stage takes the rest. Rows are capped
+   * by grid tracks rather than a max-height on the sidebar throughout this
+   * block — a percentage row resolves against the body's own definite
+   * height, where a vh-based cap (of the whole viewport) overflows the
+   * embedded container, which is only as tall as the host's chrome leaves
+   * it. Content shorter than a cap keeps the row at content height. */
   .sim-view__body {
     grid-template-columns: 1fr;
-    /* The controls row is capped by the grid track, not a max-height on the
-     * sidebar: a percentage resolves against the body's definite height,
-     * where 44vh (of the whole viewport) overflows the embedded container.
-     * Content shorter than the cap keeps the row at content height. */
-    grid-template-rows: minmax(360px, 1fr) minmax(0, 44%);
+    grid-template-rows: minmax(360px, 1fr) auto auto;
+  }
+  .sim-view__params-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: fit-content;
+    margin: 8px auto;
+    padding: 6px 22px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(168, 185, 209, 0.08);
+    color: var(--fg-dim);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .sim-view__params-toggle::before {
+    content: "▴";
+    color: var(--accent);
+    opacity: 0.75;
+  }
+  .sim-view--params-open .sim-view__params-toggle::before {
+    content: "▾";
   }
   .sim-view__sidebar {
+    display: none;
     border-left: none;
     border-top: 1px solid var(--border);
     min-height: 0;
+  }
+  /* Opened via the drawer toggle: the sidebar reclaims a row (with its own
+   * internal scroll) and the stage gives up the room it doesn't need while
+   * params are visible. */
+  .sim-view--params-open .sim-view__body {
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 56%);
+  }
+  .sim-view--params-open .sim-view__sidebar {
+    display: block;
   }
 }
