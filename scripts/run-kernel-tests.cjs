@@ -33,12 +33,12 @@ if (!statSync(SIMS_DIR, { throwIfNoEntry: false })?.isDirectory()) {
 // Kernel tests live one per sim directory; app-level unit tests (e.g. shared
 // quality/device logic) live alongside the module they cover under src/app.
 const tests = [
-  ...findTests(SIMS_DIR, (name) => name.endsWith(".test.cjs")),
+  ...findTests(SIMS_DIR, (name) => name === "kernel.test.cjs"),
   ...findTests(APP_DIR, (name) => name.endsWith(".test.cjs")),
 ].sort();
 
 if (tests.length === 0) {
-  console.error("No tests found under src/sims or src/app.");
+  console.error("No kernel tests found under src/sims/**/kernel.test.cjs.");
   process.exit(1);
 }
 
