@@ -6,7 +6,7 @@
 > behaviour*, seen in everything from ecosystems to economies. 
 >
 > A test project for multi-agent orchestration across
-> Claude and Codex using the Autometta repo. The higher tier models plan and orcestrate while lower tiers code and verify with clear boundries. Cross family orchestration, improves outcomes and catches failure modes that are missed with a single model, at more than twice the cost...
+> Claude and Codex using the Autometta repo. The higher tier models plan and orchestrate while lower tiers code and verify with clear boundaries. Cross-family orchestration improves outcomes and catches failure modes that a single model misses, at more than twice the cost...
 
 [Run the app in a browser](https://amazing-empanada-7d6e5f.netlify.app/)
 
@@ -14,9 +14,9 @@
 
 ![Julia set, escape-time render from the lab](docs/images/julia-hero.png)
 
-## The eighteen
+## The nineteen
 
-Eighteen deterministic kernels behind one renderer. Each is a different
+Nineteen deterministic kernels behind one renderer. Each is a different
 discipline's way of pointing at the same thing: local rules, global form.
 
 - **Gray-Scott** reaction diffusion. Chemistry's version of the question.
@@ -35,6 +35,7 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Cyclic cellular automata.** Rock-paper-scissors that spirals into itself.
 - **Lenia.** Continuous cellular automata, and life gets smooth gliders.
 - **Mandelbrot, Julia, Burning Ship.** Iterated maps as the geometry of feedback.
+- **Logistic Mandelbrot.** The bifurcation cascade hung off the Mandelbrot set as a curtain.
 
 Gray-Scott is the priority kernel. The others are calibrated and held.
 
@@ -122,3 +123,10 @@ emergence-lab/
     PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
   state/handoffs/         # autometta worker completion envelopes
 ```
+
+## Version history
+
+| Version | Date | Summary |
+|---|---|---|
+| v0.2.0 | 2026-07-20 | Immersive fullscreen, web-component build + site publish pipeline |
+| v0.1.0 | 2026-07-20 | Initial public mirror: 19 kernels behind one renderer |
