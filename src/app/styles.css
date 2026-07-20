@@ -656,8 +656,10 @@ code {
 }
 
 /* The accent strip on the sidebar's exposed sliver, and the tap target for
- * touch devices that have no hover to reveal the drawer. Chevron flips to
- * point the other way once the drawer is open. */
+ * touch devices that have no hover to reveal the drawer. Tinted background
+ * (rather than a transparent one) is deliberate: against a dark sim the
+ * sliver has to read as an obvious pull tab, not just a stray chevron.
+ * Chevron flips to point the other way once the drawer is open. */
 .sim-view--immersive .sim-view__drawer-handle {
   display: flex;
   align-items: center;
@@ -668,9 +670,14 @@ code {
   bottom: 0;
   width: 16px;
   border: none;
+  border-right: 1px solid rgba(90, 200, 250, 0.5);
   padding: 0;
-  background: transparent;
-  color: var(--accent);
+  background: linear-gradient(
+    90deg,
+    rgba(90, 200, 250, 0.32),
+    rgba(90, 200, 250, 0.12)
+  );
+  color: #eaf9ff;
   font-size: 11px;
   cursor: pointer;
 }
