@@ -855,6 +855,21 @@ function buildLayout(
 
   body.appendChild(stage);
 
+  // Phone-only bottom-drawer toggle: the sidebar starts collapsed below the
+  // 720px breakpoint (see styles.css) so the stage gets the room, and this
+  // pill opens it on demand. Hidden outside that breakpoint and in immersive
+  // mode, where the sidebar already has its own edge-handle reveal.
+  const paramsToggle = document.createElement("button");
+  paramsToggle.type = "button";
+  paramsToggle.className = "sim-view__params-toggle";
+  paramsToggle.setAttribute("aria-expanded", "false");
+  paramsToggle.textContent = "Parameters";
+  paramsToggle.addEventListener("click", () => {
+    const open = page.classList.toggle("sim-view--params-open");
+    paramsToggle.setAttribute("aria-expanded", String(open));
+  });
+  body.appendChild(paramsToggle);
+
   const sidebar = document.createElement("aside");
   sidebar.className = "sim-view__sidebar";
 
