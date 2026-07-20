@@ -128,30 +128,6 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
     maths:
       "Each equation damps its own variable, then subtracts four times the next and the square of the one after. The three-fold symmetry of the rule shows directly in the three-armed bloom, and each arm is the same dynamics viewed from a rotated frame.",
   },
-  "clifford-dejong": {
-    history:
-      "These maps come from the 1980s–90s culture of home-computer chaos: pick four coefficients, iterate a pair of trig formulas millions of times, and plot every point. Clifford Pickover popularised his version in books like 'Computers, Pattern, Chaos and Beauty'; Peter de Jong's map spread through Usenet and early fractal galleries. They remain the classic demonstration that two lines of arithmetic can paint like smoke.",
-    maths:
-      "Each iterate is one plotted point, and unlike a flow there is no continuity between consecutive points — the orbit teleports across the plane. Structure appears only in aggregate: the visit histogram converges to the map's invariant measure, whose filaments and voids are the attractor. Because every term is a bounded sine or cosine, the orbit can never escape, no matter the coefficients.",
-  },
-  "clifford-dejong/clifford": {
-    history:
-      "Clifford Pickover, a prolific IBM researcher and popular-science author, framed his attractor as an exercise in computational aesthetics: search coefficient space, keep what looks alive. The map's mix of weighted and unweighted trig terms gives it its signature layered curls.",
-    maths:
-      "x' = sin(a·y) + c·cos(a·x), y' = sin(b·x) + d·cos(b·y). The c and d weights also set the figure's extent — |x| ≤ 1+|c|, |y| ≤ 1+|d| — so the frame is known analytically for any coefficients.",
-  },
-  "clifford-dejong/dejong": {
-    history:
-      "Peter de Jong's map circulated in the late 1980s and became a staple of early screensavers and fractal art tools. With all four terms pure trig, its orbit lives in a fixed 4×4 box that it fills with dense, knotted whorls — the most 'hand-drawn' looking of the family.",
-    maths:
-      "x' = sin(a·y) − cos(b·x), y' = sin(c·x) − cos(d·y). Each coordinate is a difference of two unit-amplitude waves, so the orbit is confined to [−2, 2]² for every coefficient choice; only the density inside the box changes.",
-  },
-  "clifford-dejong/svensson": {
-    history:
-      "Johnny Svensson's variant swaps in scaling coefficients that multiply whole trig terms rather than just arguments, and its classic parameter sets carry a large |d|. The result stretches wide, drape-like figures with a strong left-right symmetry the other two maps lack.",
-    maths:
-      "x' = d·sin(a·x) − sin(b·y), y' = c·cos(a·x) + cos(b·y). Both terms of x' depend on x and y separately — there is no cross-coupling inside a single term — which is what produces the map's characteristic mirror-fold structure.",
-  },
   "diffusion-limited-aggregation": {
     history:
       "Thomas Witten and Leonard Sander introduced it in 1981, and it turned out to describe an unreasonable number of real things: electrodeposition, mineral dendrites in rock, lightning, coral, bacterial colonies. Its fractal dimension of about 1.71 in the plane is measured in the laboratory as well as on screen.",
@@ -194,7 +170,7 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
     maths:
       "For each c, iterate z → z² + c past its transient and plot the next K values of Re(z) as height over the plane. The substitution z = r/2 − rx carries the logistic map onto this iteration with c = (r/2)(1 − r/2), so the sheet hanging over the real axis is exactly the bifurcation diagram, and every hyperbolic bulb of the Mandelbrot ground plane holds its attracting period-q cycle up as a stack of q sheets.",
     interaction:
-      "The view orbits in step with the moving glow. Click and drag anywhere in the scene to take over and pivot around the object, then scroll or pinch to zoom through its three-dimensional sheets. Drag the glowing tracer itself to inspect another point on the Mandelbrot plane; double-click or double-tap to return to the opening view. Grid quality defaults to extreme on desktop, for the densest point cloud; lower it on slower devices.",
+      "The view orbits in step with the moving glow. Click and drag anywhere in the scene to take over and pivot around the object, then scroll or pinch to zoom through its three-dimensional sheets. Drag the glowing tracer itself to inspect another point on the Mandelbrot plane; double-click or double-tap to return to the opening view. Grid quality defaults to extreme; on slower devices or mobile, lower it for smoother interactivity.",
   },
   "cyclic-ca": {
     history:
