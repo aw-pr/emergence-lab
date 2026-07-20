@@ -548,6 +548,14 @@ code {
   display: none;
 }
 
+/* Immersive-only exit control — an on-screen way back that doesn't depend on
+ * Esc (touch has none) or on remembering the Maximise button toggles too.
+ * Irrelevant (and hidden) in normal layout where the header's own nav is
+ * visible. */
+.sim-view__immersive-exit {
+  display: none;
+}
+
 /* Phone-only bottom-drawer toggle (see the 720px block); irrelevant outside
  * it, and superseded by the drawer handle above once immersive mode takes
  * over the sidebar's reveal mechanism. */
@@ -690,6 +698,43 @@ code {
   .sim-view__sidebar--open
   .sim-view__drawer-handle::before {
   content: "\276F";
+}
+
+/* Top-left, not top-right: the parked drawer handle already occupies a
+ * right-edge sliver (see .sim-view__drawer-handle above), so the exit
+ * control claims the clear corner instead. Semi-transparent dark pill to
+ * match the fractal HUD / legend overlay styling, sized well past the
+ * visible glyph for a comfortable touch target. */
+.sim-view--immersive .sim-view__immersive-exit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 42;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(90, 200, 250, 0.28);
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(4, 9, 17, 0.76);
+  backdrop-filter: blur(10px);
+  color: rgba(225, 248, 255, 0.86);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sim-view--immersive .sim-view__immersive-exit:hover {
+  background: rgba(90, 200, 250, 0.14);
+  border-color: rgba(90, 200, 250, 0.5);
+  color: #fff;
+}
+
+.sim-view--immersive .sim-view__immersive-exit:focus-visible {
+  outline: 2px solid rgba(90, 200, 250, 0.9);
+  outline-offset: 2px;
 }
 
 .sim-view--error {
