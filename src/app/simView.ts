@@ -254,6 +254,32 @@ export async function renderSimView(
   // also engages for browser/OS-level fullscreen, detected by the viewport
   // matching the screen — standalone only, so an embedded lab can't hijack a
   // full-screened host page.
+  // Promotes the immersive body into the UA's top layer, escaping every
+  // containing block/z-index in the document — including a host page's own
+  // transformed ancestor, which can trap a plain fixed+z-index overlay when
+  // this app is embedded (see the fixed/z-index fallback in styles.css for
+  // non-popover browsers). The `popover` attribute must only exist while
+  // immersive is forced: the UA rule `[popover]:not(:popover-open){display:
+  // none}` would otherwise hide the sim in normal layout.
+  const enterTopLayer = (body: HTMLElement) => {
+    if (!("showPopover" in body)) return;
+    body.setAttribute("popover", "manual");
+    try {
+      body.showPopover();
+    } catch {
+      // Already open, or the UA refuses mid-transition — the fixed/z-index
+      // fallback below still covers the viewport either way.
+    }
+  };
+  const exitTopLayer = (body: HTMLElement) => {
+    if (!("showPopover" in body)) return;
+    try {
+      body.hidePopover();
+    } catch {
+      // Already closed.
+    }
+    body.removeAttribute("popover");
+  };
   let immersiveForced = false;
   const immersiveAbort = new AbortController();
   const updateImmersive = () => {
@@ -270,12 +296,14 @@ export async function renderSimView(
   const toggleImmersive = () => {
     if (immersiveForced || document.fullscreenElement) {
       immersiveForced = false;
+      exitTopLayer(layout.body);
       if (document.fullscreenElement) void document.exitFullscreen();
       updateImmersive();
       return;
     }
     immersiveForced = true;
     updateImmersive();
+    enterTopLayer(layout.body);
     // Opportunistic: hides the browser chrome too when the browser allows it.
     layout.body.requestFullscreen?.().catch(() => {});
     // The click leaves focus on the Maximise button inside the sidebar, whose
@@ -317,6 +345,7 @@ export async function renderSimView(
         !document.fullscreenElement
       ) {
         immersiveForced = false;
+        exitTopLayer(layout.body);
         updateImmersive();
       }
     },
@@ -325,6 +354,20 @@ export async function renderSimView(
   window.addEventListener("resize", updateImmersive, {
     signal: immersiveAbort.signal,
   });
+  layout.body.addEventListener(
+    "toggle",
+    (event) => {
+      // A popover `toggle` event with newState "closed" while immersiveForced
+      // is still true means the UA closed it out from under us. Re-sync so
+      // the overlay class can't strand itself with a dead popover.
+      if (immersiveForced && (event as ToggleEvent).newState === "closed") {
+        immersiveForced = false;
+        layout.body.removeAttribute("popover");
+        updateImmersive();
+      }
+    },
+    { signal: immersiveAbort.signal },
+  );
   updateImmersive();
 
   let kernel: SimKernel;
@@ -617,6 +660,7 @@ export async function renderSimView(
   return {
     dispose() {
       immersiveAbort.abort();
+      exitTopLayer(layout.body);
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
       detachFractalViewKeys?.();
