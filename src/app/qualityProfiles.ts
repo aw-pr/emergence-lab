@@ -99,13 +99,12 @@ export function qualityProfileFor(
 
   // Device tier adjusts the per-sim default above, never the other way
   // round, so a slug's baseline choice of preset stays the single source of
-  // truth and the tier logic only ever pulls it down (or, on desktop,
-  // trims logistic-mandelbrot's outlier "extreme" default to "ultra").
-  if (tier === "desktop") {
-    if (slug === "logistic-mandelbrot") defaultPreset = "ultra";
-  } else if (tier === "tablet") {
+  // truth and the tier logic only ever pulls it down. Desktop keeps each
+  // slug's baseline as-is (logistic-mandelbrot's "extreme" point cloud
+  // included); only tablet and phone trim it down.
+  if (tier === "tablet") {
     defaultPreset = capPreset(defaultPreset, "balanced");
-  } else {
+  } else if (tier === "phone") {
     defaultPreset = capPreset(defaultPreset, "balanced");
     if (PHONE_FORCED_PERFORMANCE.has(slug)) defaultPreset = "performance";
   }
