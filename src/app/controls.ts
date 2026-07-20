@@ -62,14 +62,14 @@ const RESOLUTION_OPTIONS: ReadonlyArray<{
   { value: "performance", label: "Performance (fastest)" },
   { value: "balanced", label: "Balanced" },
   { value: "high", label: "High" },
-  { value: "ultra", label: "Ultra (slowest)" },
+  { value: "ultra", label: "Ultra" },
 ];
 
 // Opt-in tier: only worth its cost on sims whose builder consumes the extra
 // cells (orbit3d point clouds); hidden from the dropdown everywhere else.
 const EXTREME_RESOLUTION_OPTION = {
   value: "extreme",
-  label: "Extreme (huge point cloud)",
+  label: "Extreme (slowest, huge point cloud)",
 } as const satisfies { value: ResolutionPreset; label: string };
 
 export interface StepsControlOptions {
