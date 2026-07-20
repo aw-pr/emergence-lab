@@ -170,7 +170,7 @@ const ABOUT: Readonly<Record<string, SimAbout>> = {
     maths:
       "For each c, iterate z → z² + c past its transient and plot the next K values of Re(z) as height over the plane. The substitution z = r/2 − rx carries the logistic map onto this iteration with c = (r/2)(1 − r/2), so the sheet hanging over the real axis is exactly the bifurcation diagram, and every hyperbolic bulb of the Mandelbrot ground plane holds its attracting period-q cycle up as a stack of q sheets.",
     interaction:
-      "The view orbits in step with the moving glow. Click and drag anywhere in the scene to take over and pivot around the object, then scroll or pinch to zoom through its three-dimensional sheets. Drag the glowing tracer itself to inspect another point on the Mandelbrot plane; double-click or double-tap to return to the opening view. Grid quality defaults to ultra; raise it to extreme for the densest point cloud, or lower it on slower devices.",
+      "The view orbits in step with the moving glow. Click and drag anywhere in the scene to take over and pivot around the object, then scroll or pinch to zoom through its three-dimensional sheets. Drag the glowing tracer itself to inspect another point on the Mandelbrot plane; double-click or double-tap to return to the opening view. Grid quality defaults to extreme on desktop, for the densest point cloud; lower it on slower devices.",
   },
   "cyclic-ca": {
     history:
