@@ -3,7 +3,7 @@
 ## Phase: hone
 
 emergence-lab is in the **hone phase** — refinement, parameter tuning,
-performance, and UX polish on a working set of 18 simulations. See `MODELS.md`.
+performance, and UX polish on a working set of 19 simulations. See `MODELS.md`.
 
 There is **no per-model ownership** of areas of this repo. Whichever agent is
 working a task may edit any part of it — code (`src/**`), docs, architecture.
