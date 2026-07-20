@@ -17,9 +17,9 @@ test("classifyDeviceTier: coarse pointer below 768 is phone, at or above is tabl
   assert.equal(classifyDeviceTier(true, 1024), "tablet");
 });
 
-test("qualityProfileFor: logistic-mandelbrot defaults to extreme on desktop", () => {
+test("qualityProfileFor: logistic-mandelbrot trims to ultra on desktop", () => {
   const profile = qualityProfileFor("logistic-mandelbrot", "fractal", "desktop");
-  assert.equal(profile.defaultPreset, "extreme");
+  assert.equal(profile.defaultPreset, "ultra");
 });
 
 test("qualityProfileFor: logistic-mandelbrot caps to balanced on tablet", () => {
