@@ -542,6 +542,12 @@ code {
   overflow-y: auto;
 }
 
+/* Immersive-only edge handle for opening the drawer on touch; irrelevant
+ * (and hidden) in normal layout where the sidebar is already visible. */
+.sim-view__drawer-handle {
+  display: none;
+}
+
 /* Immersive layout: set by JS for the app's own Maximise (native fullscreen
  * on the body) AND for browser/OS-level fullscreen (viewport == screen,
  * standalone only). The explainer header drops away and the stage takes the
@@ -585,8 +591,10 @@ code {
 }
 
 /* The settings panel parks off-screen, leaving a slim accent handle on the
- * right edge; moving the pointer to it (or tabbing into the panel) slides
- * the drawer in, and it stays while hovered or focused. */
+ * right edge; on pointer-fine devices, moving the pointer to it (or tabbing
+ * into the panel) slides the drawer in and it stays while hovered or
+ * focused. Elsewhere (touch), the drawer-handle button is the only way in —
+ * see .sim-view__sidebar--open below, which works for every pointer type. */
 .sim-view--immersive .sim-view__sidebar {
   position: fixed;
   top: 0;
@@ -600,32 +608,55 @@ code {
   z-index: 41;
 }
 
-.sim-view--immersive .sim-view__sidebar:hover,
-.sim-view--immersive .sim-view__sidebar:focus-within {
+@media (hover: hover) and (pointer: fine) {
+  .sim-view--immersive .sim-view__sidebar:hover,
+  .sim-view--immersive .sim-view__sidebar:focus-within {
+    transform: translateX(0);
+  }
+
+  /* Invisible hot zone widening the reveal target past the 16px sliver. */
+  .sim-view--immersive .sim-view__sidebar::after {
+    content: "";
+    position: absolute;
+    left: -24px;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+  }
+}
+
+.sim-view--immersive .sim-view__sidebar--open {
   transform: translateX(0);
 }
 
-/* Chevron centred on the exposed sliver so it reads as a pull handle. */
-.sim-view--immersive .sim-view__sidebar::before {
-  content: "\276E";
+/* The accent strip on the sidebar's exposed sliver, and the tap target for
+ * touch devices that have no hover to reveal the drawer. Chevron flips to
+ * point the other way once the drawer is open. */
+.sim-view--immersive .sim-view__drawer-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: absolute;
   left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--accent);
-}
-
-/* Invisible hot zone widening the reveal target past the 16px sliver. */
-.sim-view--immersive .sim-view__sidebar::after {
-  content: "";
-  position: absolute;
-  left: -24px;
   top: 0;
   bottom: 0;
-  width: 24px;
+  width: 16px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sim-view--immersive .sim-view__drawer-handle::before {
+  content: "\276E";
+}
+
+.sim-view--immersive
+  .sim-view__sidebar--open
+  .sim-view__drawer-handle::before {
+  content: "\276F";
 }
 
 .sim-view--error {
