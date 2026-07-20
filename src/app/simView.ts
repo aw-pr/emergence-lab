@@ -336,6 +336,13 @@ export async function renderSimView(
       // fullscreen ever sticks — exactly what "the button never depends on it"
       // was meant to guarantee. Explicit exits (Maximise again, Esc) still
       // clear it below.
+      // Entering native fullscreen runs the UA's "hide all popovers" step, so
+      // the top-layer popover is gone by the time fullscreen exits — re-promote
+      // it here or the overlay would be left on the fixed/z-index fallback,
+      // which a host page's transformed ancestor can trap.
+      if (immersiveForced && !document.fullscreenElement) {
+        enterTopLayer(layout.body);
+      }
       updateImmersive();
     },
     { signal: immersiveAbort.signal },
@@ -366,12 +373,21 @@ export async function renderSimView(
     "toggle",
     (event) => {
       // A popover `toggle` event with newState "closed" while immersiveForced
-      // is still true means the UA closed it out from under us. Re-sync so
-      // the overlay class can't strand itself with a dead popover.
-      if (immersiveForced && (event as ToggleEvent).newState === "closed") {
-        immersiveForced = false;
-        layout.body.removeAttribute("popover");
-        updateImmersive();
+      // is still true means the UA closed it out from under us — in practice
+      // native fullscreen entry, which runs "hide all popovers" (and a macOS
+      // Chrome fullscreen bounce can enter AND exit again before this async
+      // event even fires, so the fullscreen element may already be gone).
+      // Explicit exits clear immersiveForced before hiding, so any close seen
+      // here is UA-initiated: re-promote rather than tear down, or the overlay
+      // would be left on the fixed/z-index fallback a host page can trap.
+      // While a fullscreen element still exists, defer to the fullscreenchange
+      // handler, which re-promotes on exit.
+      if (
+        immersiveForced &&
+        (event as ToggleEvent).newState === "closed" &&
+        !document.fullscreenElement
+      ) {
+        enterTopLayer(layout.body);
       }
     },
     { signal: immersiveAbort.signal },
@@ -508,6 +524,8 @@ export async function renderSimView(
       },
     },
   });
+
+  layout.sidebar.prepend(layout.drawerHandle);
 
   const orbitMarkerReadout =
     slug === "logistic-mandelbrot"
@@ -685,6 +703,9 @@ interface SimLayout {
   stage: HTMLElement;
   canvas: HTMLCanvasElement;
   sidebar: HTMLElement;
+  /** Attached to the sidebar after ControlsPanel renders — its render wipes
+   *  the sidebar's children, so mounting earlier would lose the handle. */
+  drawerHandle: HTMLElement;
   legend: HTMLElement;
   /** The narrative panel, so the pointer wiring can add its own note to it. */
   about?: HTMLElement;
@@ -889,14 +910,23 @@ function buildLayout(
       open ? "Hide settings" : "Show settings",
     );
   });
-  sidebar.appendChild(drawerHandle);
 
   body.appendChild(sidebar);
 
   page.appendChild(body);
   container.appendChild(page);
 
-  return { page, body, stage, canvas, sidebar, legend, about, fractalHud };
+  return {
+    page,
+    body,
+    stage,
+    canvas,
+    sidebar,
+    drawerHandle,
+    legend,
+    about,
+    fractalHud,
+  };
 }
 
 function buildFractalHud(): FractalHud {
