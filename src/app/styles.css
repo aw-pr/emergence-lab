@@ -550,10 +550,13 @@ code {
   display: none;
 }
 
-/* Fixed overlay so immersive works even when native fullscreen is refused
- * (no activation, embedded contexts, iOS): the body covers the viewport and
- * the header simply sits behind it. Under native fullscreen the same rules
- * hold — the body IS the fullscreen element.
+/* Top-layer-first, z-index-fallback: JS promotes the body into the UA's top
+ * layer via the Popover API (see enterTopLayer/exitTopLayer in simView.ts),
+ * which escapes every containing block in the document — including a host
+ * page's transformed ancestor, which can trap plain `fixed` positioning when
+ * this app is embedded. The fixed+z-index rules below are the fallback for
+ * browsers without popover support, and are otherwise redundant once the
+ * body is genuinely in the top layer.
  *
  * The z-index must clear the HOST page's chrome, not just the app's own
  * layers: embedded inline in a site (site-embedded chrome), the host's fixed
@@ -566,9 +569,19 @@ code {
   position: fixed;
   inset: 0;
   z-index: 2147483000;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: none;
+  padding: 0;
+  overflow: hidden;
   background: #000;
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
+}
+
+.sim-view--immersive .sim-view__body::backdrop {
+  background: #000;
 }
 
 /* The settings panel parks off-screen, leaving a slim accent handle on the
