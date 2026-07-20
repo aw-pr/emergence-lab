@@ -1,5 +1,5 @@
 import type { RenderMode } from "./rendererBackend.ts";
-import type { ResolutionPreset } from "./renderer.ts";
+import type { ResolutionPreset } from "./resolutionPreset.ts";
 
 export interface QualityProfile {
   defaultPreset: ResolutionPreset;
@@ -10,6 +10,60 @@ export interface QualityProfile {
   maxDisplayDimension: number;
   maxDisplayPixels: number;
 }
+
+export type DeviceTier = "phone" | "tablet" | "desktop";
+
+/**
+ * Pure classifier so device-tier logic is unit-testable without a DOM. A
+ * coarse pointer (touch) below a phone-sized viewport is a phone; a coarse
+ * pointer above that is a tablet; anything with a fine pointer is desktop
+ * regardless of window size (a small laptop window is not a mobile device).
+ */
+export function classifyDeviceTier(
+  coarsePointer: boolean,
+  minViewportDim: number,
+): DeviceTier {
+  if (!coarsePointer) return "desktop";
+  return minViewportDim < 768 ? "phone" : "tablet";
+}
+
+export function detectDeviceTier(): DeviceTier {
+  if (typeof window === "undefined") return "desktop";
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const minViewportDim = Math.min(window.innerWidth, window.innerHeight);
+  return classifyDeviceTier(coarsePointer, minViewportDim);
+}
+
+// Ordered so a tier cap can find "is this preset above the ceiling" with a
+// plain index comparison instead of a bespoke rank table per call site.
+const PRESET_ORDER: readonly ResolutionPreset[] = [
+  "performance",
+  "balanced",
+  "high",
+  "ultra",
+  "extreme",
+];
+
+function capPreset(
+  preset: ResolutionPreset,
+  cap: ResolutionPreset,
+): ResolutionPreset {
+  return PRESET_ORDER.indexOf(preset) > PRESET_ORDER.indexOf(cap)
+    ? cap
+    : preset;
+}
+
+// Grid compute cost, point-cloud density, and texture-upload/draw cost all
+// scale with the compute grid, so these are the sims that hurt most on
+// underpowered hardware — the ones worth force-capping on phones rather
+// than just letting the general balanced cap apply.
+const PHONE_FORCED_PERFORMANCE = new Set([
+  "gray-scott",
+  "belousov-zhabotinsky",
+  "physarum",
+  "logistic-mandelbrot",
+  "lenia",
+]);
 
 const ULTRA_DEFAULTS = new Set([
   "lorenz-attractor",
@@ -27,7 +81,11 @@ const ULTRA_DEFAULTS = new Set([
   "abelian-sandpile",
 ]);
 
-export function qualityProfileFor(slug: string, mode: RenderMode): QualityProfile {
+export function qualityProfileFor(
+  slug: string,
+  mode: RenderMode,
+  tier: DeviceTier = detectDeviceTier(),
+): QualityProfile {
   let defaultPreset: ResolutionPreset = "balanced";
   if (ULTRA_DEFAULTS.has(slug)) defaultPreset = "ultra";
   // The point-cloud builder consumes every extra candidate cell, and the
@@ -38,6 +96,19 @@ export function qualityProfileFor(slug: string, mode: RenderMode): QualityProfil
     defaultPreset = "high";
   }
   if (slug === "lenia") defaultPreset = "performance";
+
+  // Device tier adjusts the per-sim default above, never the other way
+  // round, so a slug's baseline choice of preset stays the single source of
+  // truth and the tier logic only ever pulls it down (or, on desktop,
+  // trims logistic-mandelbrot's outlier "extreme" default to "ultra").
+  if (tier === "desktop") {
+    if (slug === "logistic-mandelbrot") defaultPreset = "ultra";
+  } else if (tier === "tablet") {
+    defaultPreset = capPreset(defaultPreset, "balanced");
+  } else {
+    defaultPreset = capPreset(defaultPreset, "balanced");
+    if (PHONE_FORCED_PERFORMANCE.has(slug)) defaultPreset = "performance";
+  }
 
   let computeScale = mode === "field" || mode === "smooth" ? 1.2 : 1;
   // orbit3d derives its quality tier from this capped compute grid, then
