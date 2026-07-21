@@ -39,3 +39,4 @@ playwright-report/
 e2e/artifacts/
 .cache/ms-playwright/
 dist-lib/
+public/baked/
