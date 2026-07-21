@@ -30,6 +30,7 @@ uniform float u_markerRe;
 uniform float u_fanActive;
 uniform float u_drawDensity;
 uniform float u_cellCount;
+uniform float u_edgeGlow;
 out vec3 v_colour;
 out float v_fanGlow;
 out float v_sliceGlow;
@@ -122,6 +123,13 @@ void main() {
     vec3 high = vec3(1.0, 0.35, 0.12);
     v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
   }
+
+  // Nascent glow for the outermost structure: a_boundary runs 0 at the
+  // escape boundary to 1 deep inside the set, so the cube pulls the halo in
+  // tight around the filaments and cascade tails while interior sheets stay
+  // matte. Scaled by the user's edge-glow setting, resolved per frame.
+  float edge = 1.0 - clamp(a_boundary, 0.0, 1.0);
+  v_selfGlow += u_edgeGlow * edge * edge * edge;
 
   v_sliceGlow = 1.0 - smoothstep(0.0, 0.025, abs(a_position.y));
 
@@ -526,6 +534,7 @@ export class Orbit3DPointCloud {
   private readonly paletteReverseUniform: WebGLUniformLocation;
   private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly drawDensityUniform: WebGLUniformLocation;
+  private readonly edgeGlowUniform: WebGLUniformLocation;
   private readonly cellCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
@@ -664,6 +673,10 @@ export class Orbit3DPointCloud {
     this.cellCountUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_cellCount"),
       "orbit3d cell-count uniform",
+    );
+    this.edgeGlowUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_edgeGlow"),
+      "orbit3d edge-glow uniform",
     );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
@@ -1223,6 +1236,7 @@ export class Orbit3DPointCloud {
     phase = 0,
     paletteReverse = false,
     drawDensity = 1,
+    edgeGlow = 0.6,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -1270,6 +1284,7 @@ export class Orbit3DPointCloud {
       this.cellCountUniform,
       Math.max(1, Math.floor(this.fullPointCount / Math.max(1, this.sampleCount))),
     );
+    gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
