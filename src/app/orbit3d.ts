@@ -356,7 +356,8 @@ const BUILD_SLICE_MS = 8;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
-const CAMERA_MIN_DISTANCE = 1.1;
+const CAMERA_MIN_DISTANCE = 0.35;
+const CAMERA_PAN_LIMIT = 1.6;
 const CAMERA_MAX_DISTANCE = 12;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
@@ -762,8 +763,38 @@ export class Orbit3DPointCloud {
     this.camera.azimuth += deltaAzimuth;
     this.camera.elevation = Math.min(
       Math.PI / 2 - 0.08,
-      Math.max(0.08, this.camera.elevation + deltaElevation),
+      Math.max(-(Math.PI / 2 - 0.08), this.camera.elevation + deltaElevation),
     );
+  }
+
+  /**
+   * Slide the orbit target across the camera plane. Deltas are fractions of
+   * the viewport height, so a full-height drag moves the target by one view
+   * height regardless of zoom level.
+   */
+  pan(deltaRight: number, deltaUp: number): void {
+    if (!Number.isFinite(deltaRight) || !Number.isFinite(deltaUp)) return;
+    const eye = cameraEye(this.camera);
+    const forward = normalise3([
+      this.camera.target[0] - eye[0],
+      this.camera.target[1] - eye[1],
+      this.camera.target[2] - eye[2],
+    ]);
+    const right = normalise3(cross3(forward, [0, 1, 0]));
+    const up = normalise3(cross3(right, forward));
+    const viewHeight =
+      2 * this.camera.distance * Math.tan(CAMERA_FIELD_OF_VIEW / 2);
+    const dx = -deltaRight * viewHeight;
+    const dy = deltaUp * viewHeight;
+    for (let axis = 0; axis < 3; axis += 1) {
+      this.camera.target[axis] = Math.min(
+        CAMERA_PAN_LIMIT,
+        Math.max(
+          -CAMERA_PAN_LIMIT,
+          this.camera.target[axis] + right[axis] * dx + up[axis] * dy,
+        ),
+      );
+    }
   }
 
   syncCameraToSweep(progress: number, maxDelta: number): void {
@@ -1581,7 +1612,10 @@ function assertOrbit3DGeometry(): void {
   // at the farthest.
   if (
     CAMERA_MIN_DISTANCE <= CAMERA_NEAR_PLANE ||
-    CAMERA_MAX_DISTANCE + guard.boundingRadius >= CAMERA_FAR_PLANE
+    CAMERA_MAX_DISTANCE +
+        CAMERA_PAN_LIMIT * Math.sqrt(3) +
+        guard.boundingRadius >=
+      CAMERA_FAR_PLANE
   ) {
     throw new Error("orbit3d camera limits must fit inside the depth clip planes");
   }

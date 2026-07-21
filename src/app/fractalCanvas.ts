@@ -101,6 +101,7 @@ export interface LogisticMandelbrotCanvasInteractionOptions {
     clientY: number,
   ) => Orbit3DMarkerClientSnapshot | null;
   orbit: (deltaCssX: number, deltaCssY: number) => void;
+  pan: (deltaCssX: number, deltaCssY: number) => void;
   dolly: (factor: number) => void;
   resetCamera: () => void;
   onMarkerChange: (marker: Orbit3DMarkerClientSnapshot) => void;
@@ -111,6 +112,7 @@ interface ActiveOrbitPointer {
   clientY: number;
   pointerType: string;
   moved: boolean;
+  pan: boolean;
 }
 
 /** Logistic-Mandelbrot only: orbit camera, dolly, reset, and c-marker drag. */
@@ -150,17 +152,18 @@ export function attachLogisticMandelbrotCanvasInteractions(
   canvas.addEventListener(
     "pointerdown",
     (ev) => {
-      if (ev.button !== 0) return;
+      if (ev.button !== 0 && ev.button !== 2) return;
       ev.preventDefault();
       pointers.set(ev.pointerId, {
         clientX: ev.clientX,
         clientY: ev.clientY,
         pointerType: ev.pointerType,
         moved: false,
+        pan: ev.button === 2 || ev.shiftKey,
       });
       canvas.setPointerCapture(ev.pointerId);
 
-      if (pointers.size === 1 && markerHit(ev)) {
+      if (pointers.size === 1 && !ev.shiftKey && ev.button === 0 && markerHit(ev)) {
         markerPointerId = ev.pointerId;
       } else if (pointers.size > 1) {
         markerPointerId = null;
@@ -200,12 +203,22 @@ export function attachLogisticMandelbrotCanvasInteractions(
         if (beforeDistance > 0 && afterDistance > 0) {
           options.dolly(Math.min(1.25, Math.max(0.8, beforeDistance / afterDistance)));
         }
+        const centroidDx =
+          (after[0].clientX + after[1].clientX - before[0].clientX - before[1].clientX) / 2;
+        const centroidDy =
+          (after[0].clientY + after[1].clientY - before[0].clientY - before[1].clientY) / 2;
+        if (centroidDx !== 0 || centroidDy !== 0) options.pan(centroidDx, centroidDy);
         return;
       }
 
       if (markerPointerId === ev.pointerId) {
         const marker = options.moveMarker(ev.clientX, ev.clientY);
         if (marker) options.onMarkerChange(marker);
+        return;
+      }
+      const active = pointers.get(ev.pointerId);
+      if (active?.pan) {
+        options.pan(dx, dy);
         return;
       }
       options.orbit(dx, dy);
@@ -265,6 +278,12 @@ export function attachLogisticMandelbrotCanvasInteractions(
       ev.preventDefault();
       options.resetCamera();
     },
+    { signal },
+  );
+
+  canvas.addEventListener(
+    "contextmenu",
+    (ev) => ev.preventDefault(),
     { signal },
   );
 

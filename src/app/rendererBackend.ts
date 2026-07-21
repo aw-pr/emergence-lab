@@ -71,6 +71,9 @@ export interface RendererBackend {
   orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
   orbit3dSyncCameraToSweep?(progress: number, maxDelta: number): void;
   orbit3dDolly?(factor: number): void;
+  /** Slide the orbit target across the camera plane; deltas are fractions of
+   * the viewport height. */
+  orbit3dPan?(deltaRight: number, deltaUp: number): void;
   resetOrbit3dCamera?(): void;
   /** Snap the orbit3d camera to a named pose ("default" or "side"). */
   setOrbit3dCameraPose?(pose: string): void;

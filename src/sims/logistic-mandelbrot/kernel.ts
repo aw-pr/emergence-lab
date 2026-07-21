@@ -158,6 +158,12 @@ export class LogisticMandelbrotKernel implements SimKernel {
       step: 0.05,
     },
     {
+      key: "autoRotate",
+      label: "Auto rotate",
+      type: "boolean",
+      default: true,
+    },
+    {
       key: "continuousSpin",
       label: "Continuous camera spin",
       type: "boolean",

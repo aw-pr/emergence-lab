@@ -33,6 +33,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "edgeGlow",
     "tailRefinement",
     "pointDensity",
+    "autoRotate",
     "continuousSpin",
     "cycleSpeed",
     "cascadeReveal",
@@ -690,6 +691,7 @@ export async function renderSimView(
       orbit: (deltaCssX, deltaCssY) =>
         renderer.orbitOrbit3d(deltaCssX, deltaCssY),
       dolly: (factor) => renderer.dollyOrbit3d(factor),
+      pan: (deltaCssX, deltaCssY) => renderer.panOrbit3d(deltaCssX, deltaCssY),
       resetCamera: () => renderer.resetOrbit3dCamera(),
       onMarkerChange: (marker) => orbitMarkerReadout?.set(marker),
     });
