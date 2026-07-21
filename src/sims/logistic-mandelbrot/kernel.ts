@@ -125,6 +125,16 @@ export class LogisticMandelbrotKernel implements SimKernel {
       max: 3,
       step: 0.05,
     },
+    // Resolved per frame in the point shader — dragging it is live.
+    {
+      key: "edgeGlow",
+      label: "Edge glow",
+      type: "number",
+      default: 0.6,
+      min: 0,
+      max: 2,
+      step: 0.05,
+    },
     // Share of the point budget spent re-sampling cascade tails on a finer
     // sub-grid. Changing it rebuilds the cloud; 0 disables refinement.
     {

@@ -66,6 +66,7 @@ test("metadata matches the renderer contract", () => {
     [
       "colourMode",
       "exposure",
+      "edgeGlow",
       "tailRefinement",
       "pointDensity",
       "continuousSpin",
