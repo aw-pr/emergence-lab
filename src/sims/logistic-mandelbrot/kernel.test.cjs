@@ -69,6 +69,7 @@ test("metadata matches the renderer contract", () => {
       "edgeGlow",
       "tailRefinement",
       "pointDensity",
+      "autoRotate",
       "continuousSpin",
       "realAxisSweep",
       "sweepSpeed",
