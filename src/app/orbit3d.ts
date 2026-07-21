@@ -814,11 +814,16 @@ export class Orbit3DPointCloud {
       pointBudgetFor(inputWidth * inputHeight),
     );
     const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
+    const refineFraction =
+      typeof params.tailRefinement === "number" &&
+      Number.isFinite(params.tailRefinement)
+        ? Math.max(0, Math.min(0.6, params.tailRefinement))
+        : REFINE_BUDGET_FRACTION;
     // The real-axis slice already resolves the cascade at full budget width,
     // so refinement applies only to the 2D cloud.
-    const refineActive = !realSliceOnly;
+    const refineActive = !realSliceOnly && refineFraction > 0;
     const baseSlotCap = refineActive
-      ? Math.max(1, Math.floor(maxSurvivingCells * (1 - REFINE_BUDGET_FRACTION)))
+      ? Math.max(1, Math.floor(maxSurvivingCells * (1 - refineFraction)))
       : maxSurvivingCells;
     const desiredCells = Math.ceil(baseSlotCap / SURVIVING_CELL_ESTIMATE);
     const candidateCells = Math.min(inputWidth * inputHeight, desiredCells);

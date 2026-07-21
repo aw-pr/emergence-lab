@@ -125,6 +125,17 @@ export class LogisticMandelbrotKernel implements SimKernel {
       max: 3,
       step: 0.05,
     },
+    // Share of the point budget spent re-sampling cascade tails on a finer
+    // sub-grid. Changing it rebuilds the cloud; 0 disables refinement.
+    {
+      key: "tailRefinement",
+      label: "Tail refinement",
+      type: "number",
+      default: 0.3,
+      min: 0,
+      max: 0.6,
+      step: 0.05,
+    },
     // Culled per frame in the vertex shader, so dragging it is instant — no
     // rebuild. The wider low end is affordable for the same reason.
     {
