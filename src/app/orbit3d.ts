@@ -933,7 +933,7 @@ export class Orbit3DPointCloud {
     // build still starts (and paints first if the file is large or absent),
     // then the baked buffers swap in when the fetch resolves. Sampling params
     // are baked into the file, so they only apply when no bake is present.
-    if (!realSliceOnly) {
+    if (!realSliceOnly && params.prebakedModel !== false) {
       void fetchPrebaked().then((cloud) => {
         if (cloud && generation === this.buildGeneration) {
           this.applyPrebaked(cloud, sampleCount);
