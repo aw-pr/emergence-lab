@@ -30,6 +30,8 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
   "logistic-mandelbrot": [
     "colourMode",
     "exposure",
+    "edgeGlow",
+    "tailRefinement",
     "pointDensity",
     "continuousSpin",
     "cycleSpeed",
