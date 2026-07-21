@@ -11,7 +11,9 @@ cd "$(dirname "$0")/.."
 
 PROMO="${PROMO_FLOW_DIR:-../promo-flow}"
 
-rsync -a --delete dist/ "$PROMO/public/labs/app/"
+# Baked point-cloud binaries are machine-local (large, git-ignored) and must
+# never reach the host site; the app 404s gracefully without them.
+rsync -a --delete --exclude baked/ dist/ "$PROMO/public/labs/app/"
 
 mkdir -p "$PROMO/public/labs/app/katex"
 rsync -a --delete node_modules/katex/dist/katex.min.css \
