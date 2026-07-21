@@ -18,6 +18,7 @@ in vec3 a_position;
 in float a_period;
 in float a_interior;
 in float a_boundary;
+in float a_weight;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
 uniform int u_colourMode;
@@ -80,6 +81,9 @@ void main() {
   v_energy = a_period > 0.5
     ? clamp(a_period / max(u_sampleCount, 1.0), 0.02, 1.0)
     : 1.0;
+  // Refined sub-cell points carry a fractional weight so the refinement pass
+  // raises local resolution without raising local brightness.
+  v_energy *= a_weight;
   if (u_colourMode == 0) {
     int p = int(a_period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
@@ -313,6 +317,25 @@ const POINT_BUDGETS = {
 } as const;
 
 const SURVIVING_CELL_ESTIMATE = 0.22;
+
+// Every bulb's period-doubling cascade continues without bound toward its
+// accumulation point, so the tails carry real structure at every scale that a
+// uniform c-grid starves of samples. A slice of the point budget is therefore
+// reserved for a refinement pass: cells whose sample window shows a deep
+// period (or none at all — chaotic within the window) are re-sampled on a
+// finer sub-grid with a longer warmup, since convergence near the
+// accumulation points is critically slow and under-warmed orbits smear
+// between the true cascade branches.
+const REFINE_BUDGET_FRACTION = 0.3;
+const REFINE_PERIOD_THRESHOLD = 8;
+const REFINE_SUBDIVISION = 3;
+const REFINE_WARMUP_MULTIPLIER = 4;
+// Slightly above 1/subdivision² energy parity so the resolved tails read a
+// touch brighter than the fuzz they replace without blowing out under
+// additive accumulation.
+const REFINE_POINT_WEIGHT = 0.15;
+const MAX_WARMUP = 2000;
+
 const BUILD_SLICE_MS = 8;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
@@ -419,6 +442,7 @@ export class Orbit3DPointCloud {
   private readonly periodBuffer: WebGLBuffer;
   private readonly interiorBuffer: WebGLBuffer;
   private readonly boundaryBuffer: WebGLBuffer;
+  private readonly weightBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
@@ -479,6 +503,7 @@ export class Orbit3DPointCloud {
     this.periodBuffer = requireResource(gl.createBuffer(), "orbit3d period buffer");
     this.interiorBuffer = requireResource(gl.createBuffer(), "orbit3d interior buffer");
     this.boundaryBuffer = requireResource(gl.createBuffer(), "orbit3d boundary buffer");
+    this.weightBuffer = requireResource(gl.createBuffer(), "orbit3d weight buffer");
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
@@ -503,6 +528,10 @@ export class Orbit3DPointCloud {
     const boundaryLocation = gl.getAttribLocation(this.pointProgram, "a_boundary");
     gl.enableVertexAttribArray(boundaryLocation);
     gl.vertexAttribPointer(boundaryLocation, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
+    const weightLocation = gl.getAttribLocation(this.pointProgram, "a_weight");
+    gl.enableVertexAttribArray(weightLocation);
+    gl.vertexAttribPointer(weightLocation, 1, gl.FLOAT, false, 0, 0);
 
     gl.bindVertexArray(this.markerVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
@@ -785,9 +814,13 @@ export class Orbit3DPointCloud {
       pointBudgetFor(inputWidth * inputHeight),
     );
     const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
-    const desiredCells = Math.ceil(
-      pointBudget / (sampleCount * SURVIVING_CELL_ESTIMATE),
-    );
+    // The real-axis slice already resolves the cascade at full budget width,
+    // so refinement applies only to the 2D cloud.
+    const refineActive = !realSliceOnly;
+    const baseSlotCap = refineActive
+      ? Math.max(1, Math.floor(maxSurvivingCells * (1 - REFINE_BUDGET_FRACTION)))
+      : maxSurvivingCells;
+    const desiredCells = Math.ceil(baseSlotCap / SURVIVING_CELL_ESTIMATE);
     const candidateCells = Math.min(inputWidth * inputHeight, desiredCells);
     const aspect = inputWidth / inputHeight;
     const sampleWidth = realSliceOnly
@@ -800,12 +833,31 @@ export class Orbit3DPointCloud {
     const periods = new Float32Array(pointBudget);
     const interiors = new Float32Array(pointBudget);
     const boundaries = new Float32Array(pointBudget);
+    const weights = new Float32Array(pointBudget).fill(1);
     const orbitSamples = new Float32Array(sampleCount);
     const escapeMask = new Uint8Array(sampleWidth * sampleHeight);
     const slotCell = new Int32Array(maxSurvivingCells);
     const measure = { interior: 1 };
+    const refineSubCells = REFINE_SUBDIVISION * REFINE_SUBDIVISION;
+    // Sized so the reserved slots fill even if roughly half the sub-cells
+    // escape; a reservoir keeps the pick spatially uniform beyond the cap.
+    const refineCandidateCap = refineActive
+      ? Math.max(
+          64,
+          Math.ceil(((maxSurvivingCells - baseSlotCap) * 2) / refineSubCells),
+        )
+      : 0;
+    const refineCandidates = new Int32Array(refineCandidateCap);
+    const refineWarmup = Math.min(
+      MAX_WARMUP,
+      warmupIterations * REFINE_WARMUP_MULTIPLIER,
+    );
     let cell = 0;
     let survivorsSeen = 0;
+    let interestingSeen = 0;
+    let refineCursor = 0;
+    let refineSeen = 0;
+    let refineStart = -1;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -841,7 +893,7 @@ export class Orbit3DPointCloud {
         if (result === ESCAPED) {
           escapeMask[cell] = 1;
         } else {
-          const slot = reservoirSlot(survivorsSeen, maxSurvivingCells);
+          const slot = reservoirSlot(survivorsSeen, baseSlotCap);
           survivorsSeen += 1;
           if (slot >= 0) {
             slotCell[slot] = cell;
@@ -854,6 +906,17 @@ export class Orbit3DPointCloud {
               interiors[sample * maxSurvivingCells + slot] = measure.interior;
             }
           }
+          if (
+            refineActive &&
+            (result === 0 || result >= REFINE_PERIOD_THRESHOLD)
+          ) {
+            const candidateSlot = reservoirSlot(
+              interestingSeen,
+              refineCandidateCap,
+            );
+            interestingSeen += 1;
+            if (candidateSlot >= 0) refineCandidates[candidateSlot] = cell;
+          }
         }
         cell += 1;
       }
@@ -862,7 +925,61 @@ export class Orbit3DPointCloud {
         this.buildTimer = window.setTimeout(() => buildSlice(BUILD_SLICE_MS), 0);
         return;
       }
-      const survivingCells = Math.min(survivorsSeen, maxSurvivingCells);
+
+      if (refineStart < 0) refineStart = Math.min(survivorsSeen, baseSlotCap);
+      const refineCapacity = maxSurvivingCells - refineStart;
+      const candidateCount = Math.min(interestingSeen, refineCandidateCap);
+      const refineJobs = refineActive ? candidateCount * refineSubCells : 0;
+      const cellW = (RE_MAX - RE_MIN) / sampleWidth;
+      const cellH = (IM_MAX - IM_MIN) / sampleHeight;
+      while (refineCursor < refineJobs && performance.now() < stopAt) {
+        const parent = refineCandidates[(refineCursor / refineSubCells) | 0];
+        const sub = refineCursor % refineSubCells;
+        refineCursor += 1;
+        const px = parent % sampleWidth;
+        const py = (parent - px) / sampleWidth;
+        const centreRe = cellCoordinate(RE_MIN, RE_MAX, px, sampleWidth);
+        const centreIm =
+          py === Math.floor(sampleHeight / 2)
+            ? 0
+            : cellCoordinate(IM_MIN, IM_MAX, py, sampleHeight);
+        const sx = sub % REFINE_SUBDIVISION;
+        const sy = (sub - sx) / REFINE_SUBDIVISION;
+        const subRe =
+          centreRe + ((sx + 0.5) / REFINE_SUBDIVISION - 0.5) * cellW;
+        const subIm =
+          centreIm + ((sy + 0.5) / REFINE_SUBDIVISION - 0.5) * cellH;
+        const result = sampleAttractorCell(
+          subRe,
+          subIm,
+          refineWarmup,
+          sampleCount,
+          orbitSamples,
+          0,
+          measure,
+        );
+        if (result === ESCAPED) continue;
+        const slot = reservoirSlot(refineSeen, refineCapacity);
+        refineSeen += 1;
+        if (slot < 0) continue;
+        const target = refineStart + slot;
+        slotCell[target] = parent;
+        for (let sample = 0; sample < sampleCount; sample += 1) {
+          const offset = (sample * maxSurvivingCells + target) * 3;
+          positions[offset] = subRe;
+          positions[offset + 1] = subIm;
+          positions[offset + 2] = orbitSamples[sample];
+          periods[sample * maxSurvivingCells + target] = result;
+          interiors[sample * maxSurvivingCells + target] = measure.interior;
+          weights[sample * maxSurvivingCells + target] = REFINE_POINT_WEIGHT;
+        }
+      }
+
+      if (refineCursor < refineJobs) {
+        this.buildTimer = window.setTimeout(() => buildSlice(BUILD_SLICE_MS), 0);
+        return;
+      }
+      const survivingCells = refineStart + Math.min(refineSeen, refineCapacity);
       for (let sample = 1; sample < sampleCount; sample += 1) {
         const source = sample * maxSurvivingCells * 3;
         const target = sample * survivingCells * 3;
@@ -873,6 +990,11 @@ export class Orbit3DPointCloud {
           sample * maxSurvivingCells + survivingCells,
         );
         interiors.copyWithin(
+          sample * survivingCells,
+          sample * maxSurvivingCells,
+          sample * maxSurvivingCells + survivingCells,
+        );
+        weights.copyWithin(
           sample * survivingCells,
           sample * maxSurvivingCells,
           sample * maxSurvivingCells + survivingCells,
@@ -914,6 +1036,12 @@ export class Orbit3DPointCloud {
       gl.bufferData(
         gl.ARRAY_BUFFER,
         boundaries.subarray(0, this.fullPointCount),
+        gl.STATIC_DRAW,
+      );
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        weights.subarray(0, this.fullPointCount),
         gl.STATIC_DRAW,
       );
       this.refreshPointCount();
@@ -1071,6 +1199,7 @@ export class Orbit3DPointCloud {
     gl.deleteBuffer(this.periodBuffer);
     gl.deleteBuffer(this.interiorBuffer);
     gl.deleteBuffer(this.boundaryBuffer);
+    gl.deleteBuffer(this.weightBuffer);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);
