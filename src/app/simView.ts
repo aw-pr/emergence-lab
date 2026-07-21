@@ -38,6 +38,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "cascadeReveal",
     "cascadeDuration",
     "realSliceOnly",
+    "prebakedModel",
   ],
   boids: ["pointSize"],
   "particle-life": ["pointSize"],

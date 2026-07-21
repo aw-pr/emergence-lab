@@ -238,6 +238,14 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "boolean",
       default: false,
     },
+    // Uses a machine-local baked cloud (scripts/bake-orbit3d.mjs) when the
+    // file exists; a no-op otherwise, so it ships safely.
+    {
+      key: "prebakedModel",
+      label: "Prebaked model (if available)",
+      type: "boolean",
+      default: true,
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
