@@ -352,6 +352,76 @@ const WORLD_IM_SCALE = 0.85;
 
 type OrbitParams = Record<string, number | boolean | string>;
 
+/**
+ * Prebaked point cloud (ELPC v1) written by scripts/bake-orbit3d.mjs.
+ * Sample-major like the live build; positions quantized to u16 over the
+ * sampler domain, scalar attributes to u8.
+ */
+interface PrebakedCloud {
+  cellCount: number;
+  sampleCount: number;
+  positions: Float32Array;
+  periods: Float32Array;
+  interiors: Float32Array;
+  boundaries: Float32Array;
+  weights: Float32Array;
+}
+
+const PREBAKED_FILE = "baked/logistic-mandelbrot.elpc";
+
+function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
+  if (buffer.byteLength < 16) return null;
+  const view = new DataView(buffer);
+  if (
+    view.getUint8(0) !== 0x45 ||
+    view.getUint8(1) !== 0x4c ||
+    view.getUint8(2) !== 0x50 ||
+    view.getUint8(3) !== 0x43 ||
+    view.getUint32(4, true) !== 1
+  ) {
+    return null;
+  }
+  const cellCount = view.getUint32(8, true);
+  const sampleCount = view.getUint32(12, true);
+  const count = cellCount * sampleCount;
+  if (count === 0 || buffer.byteLength !== 16 + count * 10) return null;
+
+  const quantized = new Uint16Array(buffer, 16, count * 3);
+  const bytes = new Uint8Array(buffer, 16 + count * 6);
+  const positions = new Float32Array(count * 3);
+  for (let index = 0; index < count; index += 1) {
+    positions[index * 3] =
+      RE_MIN + (quantized[index * 3] / 65535) * (RE_MAX - RE_MIN);
+    positions[index * 3 + 1] =
+      IM_MIN + (quantized[index * 3 + 1] / 65535) * (IM_MAX - IM_MIN);
+    positions[index * 3 + 2] = -2 + (quantized[index * 3 + 2] / 65535) * 4;
+  }
+  const periods = new Float32Array(count);
+  const interiors = new Float32Array(count);
+  const boundaries = new Float32Array(count);
+  const weights = new Float32Array(count);
+  for (let index = 0; index < count; index += 1) {
+    periods[index] = bytes[index];
+    interiors[index] = bytes[count + index] / 255;
+    boundaries[index] = bytes[count * 2 + index] / 255;
+    weights[index] = bytes[count * 3 + index] / 255;
+  }
+  return { cellCount, sampleCount, positions, periods, interiors, boundaries, weights };
+}
+
+let prebakedPromise: Promise<PrebakedCloud | null> | null = null;
+
+/** Resolve the baked cloud once per session; null when absent or malformed. */
+function fetchPrebaked(): Promise<PrebakedCloud | null> {
+  if (!prebakedPromise) {
+    prebakedPromise = fetch(`${import.meta.env.BASE_URL}${PREBAKED_FILE}`)
+      .then((response) => (response.ok ? response.arrayBuffer() : null))
+      .then((buffer) => (buffer ? parsePrebaked(buffer) : null))
+      .catch(() => null);
+  }
+  return prebakedPromise;
+}
+
 /** The c-plane rectangle covered by the point cloud and the ground plane. */
 export const GROUND_DOMAIN = {
   centre: [(RE_MIN + RE_MAX) / 2, (IM_MIN + IM_MAX) / 2] as const,
@@ -477,6 +547,11 @@ export class Orbit3DPointCloud {
   private pointBudget = 0;
   private sampleCount = DEFAULT_SAMPLE_COUNT;
   private visibleIterations = DEFAULT_SAMPLE_COUNT;
+  // A prebaked cloud may carry a different orbit window than the live params,
+  // so plotted-iteration requests (and the cascade reveal driving them) are
+  // rescaled onto the baked window.
+  private plottedScale = 1;
+  private lastPlottedRequest = DEFAULT_SAMPLE_COUNT;
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
@@ -781,7 +856,39 @@ export class Orbit3DPointCloud {
   }
 
   setPlottedIterations(value: number): void {
-    this.visibleIterations = boundedInteger(value, 1, this.sampleCount, 1);
+    this.lastPlottedRequest = value;
+    this.visibleIterations = boundedInteger(
+      Math.round(value * this.plottedScale),
+      1,
+      this.sampleCount,
+      1,
+    );
+    this.refreshPointCount();
+  }
+
+  /** Swap in a prebaked cloud, replacing whatever the live build produced. */
+  private applyPrebaked(cloud: PrebakedCloud, paramSampleCount: number): void {
+    this.cancelBuild();
+    const gl = this.gl;
+    const upload = (buffer: WebGLBuffer, data: Float32Array): void => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    };
+    upload(this.pointBuffer, cloud.positions);
+    upload(this.periodBuffer, cloud.periods);
+    upload(this.interiorBuffer, cloud.interiors);
+    upload(this.boundaryBuffer, cloud.boundaries);
+    upload(this.weightBuffer, cloud.weights);
+    this.sampleCount = cloud.sampleCount;
+    this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
+    this.fullPointCount = cloud.cellCount * cloud.sampleCount;
+    this.pointBudget = this.fullPointCount;
+    this.visibleIterations = boundedInteger(
+      Math.round(this.lastPlottedRequest * this.plottedScale),
+      1,
+      this.sampleCount,
+      1,
+    );
     this.refreshPointCount();
   }
 
@@ -807,6 +914,19 @@ export class Orbit3DPointCloud {
       DEFAULT_WARMUP_ITERATIONS,
     );
     const realSliceOnly = params.realSliceOnly === true;
+    this.plottedScale = 1;
+    this.lastPlottedRequest = plottedIterations;
+    // A baked cloud supersedes the live build for the full 2D view: the live
+    // build still starts (and paints first if the file is large or absent),
+    // then the baked buffers swap in when the fetch resolves. Sampling params
+    // are baked into the file, so they only apply when no bake is present.
+    if (!realSliceOnly) {
+      void fetchPrebaked().then((cloud) => {
+        if (cloud && generation === this.buildGeneration) {
+          this.applyPrebaked(cloud, sampleCount);
+        }
+      });
+    }
     // Density no longer scales the build: the full budget is always built and
     // the slider culls cells in the vertex shader, so moving it is instant.
     const pointBudget = Math.max(
