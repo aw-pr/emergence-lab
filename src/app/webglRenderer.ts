@@ -2634,6 +2634,7 @@ function orbit3dBuildKey(
     height,
     numericParam(params, "warmupIterations", 0),
     numericParam(params, "sampleCount", 0),
+    numericParam(params, "tailRefinement", -1),
     params.realSliceOnly === true ? 1 : 0,
   ].join(":");
 }
