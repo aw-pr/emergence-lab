@@ -1538,6 +1538,7 @@ export class WebGLRendererBackend implements RendererBackend {
         phase,
         frame.colourOptions.paletteCycleReverse === true,
         numericParam(frame.params, "pointDensity", 1),
+        numericParam(frame.params, "edgeGlow", 0.6),
       )
     ) {
       return;
