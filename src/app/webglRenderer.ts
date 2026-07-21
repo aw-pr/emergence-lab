@@ -1452,6 +1452,10 @@ export class WebGLRendererBackend implements RendererBackend {
     this.orbit3d?.dolly(factor);
   }
 
+  orbit3dPan(deltaRight: number, deltaUp: number): void {
+    this.orbit3d?.pan(deltaRight, deltaUp);
+  }
+
   resetOrbit3dCamera(): void {
     this.orbit3d?.resetCamera();
   }

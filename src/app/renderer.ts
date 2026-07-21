@@ -387,6 +387,17 @@ export class Renderer {
     this.draw();
   }
 
+  panOrbit3d(deltaCssX: number, deltaCssY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    this.pauseOrbit3dAutoRotate();
+    this.backend.orbit3dPan?.(
+      deltaCssX / rect.height,
+      deltaCssY / rect.height,
+    );
+    this.draw();
+  }
+
   resetOrbit3dCamera(): void {
     this.pauseOrbit3dAutoRotate();
     this.backend.resetOrbit3dCamera?.();
@@ -622,6 +633,7 @@ export class Renderer {
       return;
     }
     if (!this.orbitAutoRotateEnabled) return;
+    if (!booleanParam(this.params, "autoRotate", true)) return;
 
     // Continuous spin circles the camera steadily instead of tracking and
     // resetting with the sweep. With it off, the camera follows the sweep
