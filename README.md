@@ -8,7 +8,7 @@
 > A test project for multi-agent orchestration across
 > Claude and Codex using the Autometta repo. The higher tier models plan and orchestrate while lower tiers code and verify with clear boundaries. Cross-family orchestration improves outcomes and catches failure modes that a single model misses, at more than twice the cost...
 
-[Run the app in a browser](https://amazing-empanada-7d6e5f.netlify.app/)
+[Run the app in a browser](https://anthonywest.co.uk/labs)
 
 [View the research: Emergent behaviour from nature to management theory.](https://anthonywest.co.uk/research/emergent-behaviour-cross-domain)  
 
