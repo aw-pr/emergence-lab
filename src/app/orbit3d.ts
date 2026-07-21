@@ -31,6 +31,12 @@ uniform float u_fanActive;
 uniform float u_drawDensity;
 uniform float u_cellCount;
 uniform float u_edgeGlow;
+// Prebaked clouds upload quantized attributes (u16 positions over the
+// sampler domain, u8 periods) as normalized ints; these remap them back.
+// Live builds upload raw floats and set offset 0 / scale 1.
+uniform vec3 u_posOffset;
+uniform vec3 u_posScale;
+uniform float u_periodScale;
 out vec3 v_colour;
 out float v_fanGlow;
 out float v_sliceGlow;
@@ -54,10 +60,12 @@ vec3 periodHue(int p) {
 }
 
 void main() {
+  vec3 position = u_posOffset + a_position * u_posScale;
+  float period = a_period * u_periodScale;
   vec3 world = vec3(
-    (a_position.x + 0.5) * 0.78,
-    a_position.z * 0.56,
-    a_position.y * 0.85
+    (position.x + 0.5) * 0.78,
+    position.z * 0.56,
+    position.y * 0.85
   );
   // Density culls whole cells (every sample of a c-value together), matching
   // the old build-time semantics — fewer c-plane sites, full orbit columns —
@@ -72,21 +80,21 @@ void main() {
   }
   gl_Position = u_viewProjection * vec4(world, 1.0);
 
-  float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
+  float height = clamp((position.z + 2.0) * 0.25, 0.0, 1.0);
   v_selfGlow = 0.0;
   // A period-q cell lands sampleCount/q coincident samples on each sheet
   // dot, so additive stacking would brighten with the sample-count setting.
   // Scaling per-point energy by q/sampleCount keeps each distinct sheet
   // location at baseline brightness in every colour mode; chaotic cells
   // (no period) have distinct samples and keep full energy.
-  v_energy = a_period > 0.5
-    ? clamp(a_period / max(u_sampleCount, 1.0), 0.02, 1.0)
+  v_energy = period > 0.5
+    ? clamp(period / max(u_sampleCount, 1.0), 0.02, 1.0)
     : 1.0;
   // Refined sub-cell points carry a fractional weight so the refinement pass
   // raises local resolution without raising local brightness.
   v_energy *= a_weight;
   if (u_colourMode == 0) {
-    int p = int(a_period + 0.5);
+    int p = int(period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
     v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
@@ -103,7 +111,7 @@ void main() {
     // steady grey, no cycling, no glow. Only the complexity cells (chaotic
     // band and the unresolved fringe at bulb boundaries) take the cycling
     // palette and the self-glow.
-    float complexity = a_period > 0.5 ? 0.0 : 1.0;
+    float complexity = period > 0.5 ? 0.0 : 1.0;
     // Faithful to the picker palette: the dots march through the same ramp
     // the plane's bands do, including its dark end, so they wink out and
     // return as the dark band passes. Keyed on c-plane distance inside the
@@ -118,7 +126,7 @@ void main() {
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
     v_selfGlow = complexity * 1.25;
   } else {
-    float offAxis = clamp(abs(a_position.y), 0.0, 1.0);
+    float offAxis = clamp(abs(position.y), 0.0, 1.0);
     vec3 low = vec3(0.08, 0.38, 0.92);
     vec3 high = vec3(1.0, 0.35, 0.12);
     v_colour = mix(low, high, height) * mix(1.35, 0.82, offAxis);
@@ -131,19 +139,19 @@ void main() {
   float edge = 1.0 - clamp(a_boundary, 0.0, 1.0);
   v_selfGlow += u_edgeGlow * edge * edge * edge;
 
-  v_sliceGlow = 1.0 - smoothstep(0.0, 0.025, abs(a_position.y));
+  v_sliceGlow = 1.0 - smoothstep(0.0, 0.025, abs(position.y));
 
   // The real-axis tracer leaves a tapered wake through the complex c-plane.
   // Points farther behind the moving front spread farther from Im(c)=0,
   // revealing the off-axis continuation without generating new geometry.
-  float age = a_position.x - u_markerRe;
+  float age = position.x - u_markerRe;
   float behindFront = smoothstep(-0.02, 0.04, age);
   float wake = 1.0 - smoothstep(0.55, 1.8, age);
   float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
-  float lateral = 1.0 - smoothstep(max(0.0, reach - 0.16), reach, abs(a_position.y));
-  float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(a_position.y) - reach));
+  float lateral = 1.0 - smoothstep(max(0.0, reach - 0.16), reach, abs(position.y));
+  float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(position.y) - reach));
   float front = (1.0 - smoothstep(0.015, 0.06, abs(age)))
-    * (1.0 - smoothstep(0.03, 0.14, abs(a_position.y)));
+    * (1.0 - smoothstep(0.03, 0.14, abs(position.y)));
   // Light every Im(c) depth at the active Re(c), forming a full orbit slice.
   v_markerGlow = u_fanActive
     * (1.0 - smoothstep(0.006, 0.025, abs(age)));
@@ -368,11 +376,12 @@ type OrbitParams = Record<string, number | boolean | string>;
 interface PrebakedCloud {
   cellCount: number;
   sampleCount: number;
-  positions: Float32Array;
-  periods: Float32Array;
-  interiors: Float32Array;
-  boundaries: Float32Array;
-  weights: Float32Array;
+  /** Quantized u16 over the sampler domain; uploaded as normalized ints. */
+  positions: Uint16Array;
+  periods: Uint8Array;
+  interiors: Uint8Array;
+  boundaries: Uint8Array;
+  weights: Uint8Array;
 }
 
 const PREBAKED_FILE = "baked/logistic-mandelbrot.elpc";
@@ -394,27 +403,18 @@ function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
   const count = cellCount * sampleCount;
   if (count === 0 || buffer.byteLength !== 16 + count * 10) return null;
 
-  const quantized = new Uint16Array(buffer, 16, count * 3);
-  const bytes = new Uint8Array(buffer, 16 + count * 6);
-  const positions = new Float32Array(count * 3);
-  for (let index = 0; index < count; index += 1) {
-    positions[index * 3] =
-      RE_MIN + (quantized[index * 3] / 65535) * (RE_MAX - RE_MIN);
-    positions[index * 3 + 1] =
-      IM_MIN + (quantized[index * 3 + 1] / 65535) * (IM_MAX - IM_MIN);
-    positions[index * 3 + 2] = -2 + (quantized[index * 3 + 2] / 65535) * 4;
-  }
-  const periods = new Float32Array(count);
-  const interiors = new Float32Array(count);
-  const boundaries = new Float32Array(count);
-  const weights = new Float32Array(count);
-  for (let index = 0; index < count; index += 1) {
-    periods[index] = bytes[index];
-    interiors[index] = bytes[count + index] / 255;
-    boundaries[index] = bytes[count * 2 + index] / 255;
-    weights[index] = bytes[count * 3 + index] / 255;
-  }
-  return { cellCount, sampleCount, positions, periods, interiors, boundaries, weights };
+  // Views into the fetched buffer, uploaded as-is: the shader dequantizes
+  // via u_posOffset/u_posScale/u_periodScale, so a 32M-point cloud costs
+  // ~10 bytes per point on the GPU instead of ~28.
+  return {
+    cellCount,
+    sampleCount,
+    positions: new Uint16Array(buffer, 16, count * 3),
+    periods: new Uint8Array(buffer, 16 + count * 6, count),
+    interiors: new Uint8Array(buffer, 16 + count * 7, count),
+    boundaries: new Uint8Array(buffer, 16 + count * 8, count),
+    weights: new Uint8Array(buffer, 16 + count * 9, count),
+  };
 }
 
 let prebakedPromise: Promise<PrebakedCloud | null> | null = null;
@@ -535,6 +535,9 @@ export class Orbit3DPointCloud {
   private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly drawDensityUniform: WebGLUniformLocation;
   private readonly edgeGlowUniform: WebGLUniformLocation;
+  private readonly posOffsetUniform: WebGLUniformLocation;
+  private readonly posScaleUniform: WebGLUniformLocation;
+  private readonly periodScaleUniform: WebGLUniformLocation;
   private readonly cellCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
@@ -561,6 +564,7 @@ export class Orbit3DPointCloud {
   // rescaled onto the baked window.
   private plottedScale = 1;
   private lastPlottedRequest = DEFAULT_SAMPLE_COUNT;
+  private quantizedAttributes = false;
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
@@ -595,27 +599,7 @@ export class Orbit3DPointCloud {
     this.groundVao = requireResource(gl.createVertexArray(), "orbit3d ground VAO");
     this.toneMapVao = requireResource(gl.createVertexArray(), "orbit3d tone-map VAO");
 
-    gl.bindVertexArray(this.pointVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
-    const pointLocation = gl.getAttribLocation(this.pointProgram, "a_position");
-    gl.enableVertexAttribArray(pointLocation);
-    gl.vertexAttribPointer(pointLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
-    const periodLocation = gl.getAttribLocation(this.pointProgram, "a_period");
-    gl.enableVertexAttribArray(periodLocation);
-    gl.vertexAttribPointer(periodLocation, 1, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
-    const interiorLocation = gl.getAttribLocation(this.pointProgram, "a_interior");
-    gl.enableVertexAttribArray(interiorLocation);
-    gl.vertexAttribPointer(interiorLocation, 1, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
-    const boundaryLocation = gl.getAttribLocation(this.pointProgram, "a_boundary");
-    gl.enableVertexAttribArray(boundaryLocation);
-    gl.vertexAttribPointer(boundaryLocation, 1, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
-    const weightLocation = gl.getAttribLocation(this.pointProgram, "a_weight");
-    gl.enableVertexAttribArray(weightLocation);
-    gl.vertexAttribPointer(weightLocation, 1, gl.FLOAT, false, 0, 0);
+    this.configurePointAttributes(false);
 
     gl.bindVertexArray(this.markerVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.markerBuffer);
@@ -677,6 +661,18 @@ export class Orbit3DPointCloud {
     this.edgeGlowUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_edgeGlow"),
       "orbit3d edge-glow uniform",
+    );
+    this.posOffsetUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_posOffset"),
+      "orbit3d position-offset uniform",
+    );
+    this.posScaleUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_posScale"),
+      "orbit3d position-scale uniform",
+    );
+    this.periodScaleUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_periodScale"),
+      "orbit3d period-scale uniform",
     );
     this.markerReUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_markerRe"),
@@ -879,11 +875,46 @@ export class Orbit3DPointCloud {
     this.refreshPointCount();
   }
 
+  /**
+   * Point the VAO's attributes at either the live float layout or the
+   * prebaked normalized-integer layout. The shader's u_posOffset/u_posScale/
+   * u_periodScale uniforms complete the dequantization in the second case.
+   */
+  private configurePointAttributes(quantized: boolean): void {
+    const gl = this.gl;
+    gl.bindVertexArray(this.pointVao);
+    const attribute = (
+      buffer: WebGLBuffer,
+      name: string,
+      size: number,
+      type: number,
+      normalized: boolean,
+    ): void => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const location = gl.getAttribLocation(this.pointProgram, name);
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, size, type, normalized, 0, 0);
+    };
+    const scalarType = quantized ? gl.UNSIGNED_BYTE : gl.FLOAT;
+    attribute(
+      this.pointBuffer,
+      "a_position",
+      3,
+      quantized ? gl.UNSIGNED_SHORT : gl.FLOAT,
+      quantized,
+    );
+    attribute(this.periodBuffer, "a_period", 1, scalarType, quantized);
+    attribute(this.interiorBuffer, "a_interior", 1, scalarType, quantized);
+    attribute(this.boundaryBuffer, "a_boundary", 1, scalarType, quantized);
+    attribute(this.weightBuffer, "a_weight", 1, scalarType, quantized);
+    this.quantizedAttributes = quantized;
+  }
+
   /** Swap in a prebaked cloud, replacing whatever the live build produced. */
   private applyPrebaked(cloud: PrebakedCloud, paramSampleCount: number): void {
     this.cancelBuild();
     const gl = this.gl;
-    const upload = (buffer: WebGLBuffer, data: Float32Array): void => {
+    const upload = (buffer: WebGLBuffer, data: Uint16Array | Uint8Array): void => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     };
@@ -892,6 +923,7 @@ export class Orbit3DPointCloud {
     upload(this.interiorBuffer, cloud.interiors);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
+    this.configurePointAttributes(true);
     this.sampleCount = cloud.sampleCount;
     this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
     this.fullPointCount = cloud.cellCount * cloud.sampleCount;
@@ -1004,6 +1036,7 @@ export class Orbit3DPointCloud {
     this.visibleIterations = plottedIterations;
     this.building = true;
     const gl = this.gl;
+    if (this.quantizedAttributes) this.configurePointAttributes(false);
 
     const buildSlice = (budgetMs: number): void => {
       if (generation !== this.buildGeneration) return;
@@ -1285,6 +1318,20 @@ export class Orbit3DPointCloud {
       Math.max(1, Math.floor(this.fullPointCount / Math.max(1, this.sampleCount))),
     );
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
+    if (this.quantizedAttributes) {
+      gl.uniform3f(this.posOffsetUniform, RE_MIN, IM_MIN, -SAMPLE_CLIP);
+      gl.uniform3f(
+        this.posScaleUniform,
+        RE_MAX - RE_MIN,
+        IM_MAX - IM_MIN,
+        SAMPLE_CLIP * 2,
+      );
+      gl.uniform1f(this.periodScaleUniform, 255);
+    } else {
+      gl.uniform3f(this.posOffsetUniform, 0, 0, 0);
+      gl.uniform3f(this.posScaleUniform, 1, 1, 1);
+      gl.uniform1f(this.periodScaleUniform, 1);
+    }
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
