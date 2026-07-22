@@ -10,6 +10,7 @@ import {
   cellCoordinate,
   sampleAttractorCell,
 } from "../sims/logistic-mandelbrot/model.ts";
+import { bakedFileFor } from "./bakedManifest.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -385,8 +386,6 @@ interface PrebakedCloud {
   weights: Uint8Array;
 }
 
-const PREBAKED_FILE = "baked/logistic-mandelbrot.elpc";
-
 function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
   if (buffer.byteLength < 16) return null;
   const view = new DataView(buffer);
@@ -418,17 +417,23 @@ function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
   };
 }
 
-let prebakedPromise: Promise<PrebakedCloud | null> | null = null;
+const prebakedPromises = new Map<string, Promise<PrebakedCloud | null>>();
 
-/** Resolve the baked cloud once per session; null when absent or malformed. */
-function fetchPrebaked(): Promise<PrebakedCloud | null> {
-  if (!prebakedPromise) {
-    prebakedPromise = fetch(`${import.meta.env.BASE_URL}${PREBAKED_FILE}`)
+/**
+ * Resolve one baked cloud, once per session per file, so switching back to a
+ * bake already loaded this session costs nothing. Null when the file is
+ * missing (a stale manifest entry) or malformed.
+ */
+function fetchPrebaked(file: string): Promise<PrebakedCloud | null> {
+  let pending = prebakedPromises.get(file);
+  if (!pending) {
+    pending = fetch(`${import.meta.env.BASE_URL}baked/${file}`)
       .then((response) => (response.ok ? response.arrayBuffer() : null))
       .then((buffer) => (buffer ? parsePrebaked(buffer) : null))
       .catch(() => null);
+    prebakedPromises.set(file, pending);
   }
-  return prebakedPromise;
+  return pending;
 }
 
 /** The c-plane rectangle covered by the point cloud and the ground plane. */
@@ -993,11 +998,14 @@ export class Orbit3DPointCloud {
     this.plottedScale = 1;
     this.lastPlottedRequest = plottedIterations;
     // A baked cloud supersedes the live build for the full 2D view: the live
-    // build still starts (and paints first if the file is large or absent),
-    // then the baked buffers swap in when the fetch resolves. Sampling params
-    // are baked into the file, so they only apply when no bake is present.
-    if (!realSliceOnly && params.prebakedModel !== false) {
-      void fetchPrebaked().then((cloud) => {
+    // build still starts (and paints first, since the file is large), then the
+    // baked buffers swap in when the fetch resolves. Sampling params are baked
+    // into the file, so they only apply to a live build.
+    const bakedFile = !realSliceOnly && typeof params.modelSource === "string"
+      ? bakedFileFor(params.modelSource)
+      : null;
+    if (bakedFile) {
+      void fetchPrebaked(bakedFile).then((cloud) => {
         if (cloud && generation === this.buildGeneration) {
           this.applyPrebaked(cloud, sampleCount);
         }

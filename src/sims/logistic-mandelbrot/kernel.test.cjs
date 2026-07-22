@@ -80,7 +80,7 @@ test("metadata matches the renderer contract", () => {
       "sampleCount",
       "plottedIterations",
       "realSliceOnly",
-      "prebakedModel",
+      "modelSource",
     ],
   );
 

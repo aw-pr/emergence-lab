@@ -2641,7 +2641,7 @@ function orbit3dBuildKey(
     numericParam(params, "sampleCount", 0),
     numericParam(params, "tailRefinement", -1),
     params.realSliceOnly === true ? 1 : 0,
-    params.prebakedModel === false ? 0 : 1,
+    typeof params.modelSource === "string" ? params.modelSource : "live",
   ].join(":");
 }
 
