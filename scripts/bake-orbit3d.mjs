@@ -13,6 +13,12 @@
  *   positions u16 x 3N (re over [-2,1], im over [-1,1], z over [-2,2])
  *   periods u8 x N | interiors u8 x N | boundaries u8 x N | weights u8 x N
  *
+ * Alongside the binary the baker maintains `index.json` in the output
+ * directory, listing every bake that lives there. The app fetches that
+ * manifest to populate the "Model source" dropdown; with no manifest (the
+ * published site, where the whole directory is excluded) the control is not
+ * shown at all.
+ *
  * Usage:
  *   npm run build:test
  *   node scripts/bake-orbit3d.mjs --points 6e6 --out public/baked/logistic-mandelbrot.elpc
@@ -24,8 +30,8 @@
 import { createRequire } from "node:module";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import os from "node:os";
 
 const require = createRequire(import.meta.url);
@@ -369,10 +375,44 @@ writeFileSync(
   ]),
 );
 const bytes = 16 + totalPoints * (6 + 4);
+const manifestPath = writeManifestEntry({
+  id: `${(totalPoints / 1e6).toFixed(1)}M pts · ${sampleCount} samples`,
+  sim: "logistic-mandelbrot",
+  file: basename(outPath),
+  cellCount,
+  sampleCount,
+  points: totalPoints,
+  bytes,
+});
 console.log(
   `wrote ${outPath}\n` +
+    `  manifest ${manifestPath}\n` +
     `  ${cellCount.toLocaleString()} cells x ${sampleCount} samples = ` +
     `${(totalPoints / 1e6).toFixed(1)}M points, ` +
     `${(bytes / 1e6).toFixed(0)}MB, ` +
     `${((performance.now() - started) / 1000).toFixed(1)}s total`,
 );
+
+/**
+ * Merge one bake into `index.json` beside the output binary. Entries are keyed
+ * by file, so re-baking the same path replaces its entry rather than stacking
+ * a second one; other files in the directory are left alone. A corrupt or
+ * absent manifest is rewritten from scratch.
+ */
+function writeManifestEntry(entry) {
+  const path = join(dirname(outPath), "index.json");
+  let bakes = [];
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    if (Array.isArray(parsed?.bakes)) {
+      bakes = parsed.bakes.filter(
+        (existing) => existing?.file && existing.file !== entry.file,
+      );
+    }
+  } catch {
+    bakes = [];
+  }
+  bakes.push(entry);
+  writeFileSync(path, `${JSON.stringify({ version: 1, bakes }, null, 2)}\n`);
+  return path;
+}
