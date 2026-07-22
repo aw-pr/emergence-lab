@@ -58,8 +58,8 @@ npm run build
 
 ## Publish into the site
 
-The lab's own Netlify deploy serves from the root path (`/`) and is unaffected
-by the steps below. To vendor a build into the promo-flow site instead, at
+The lab's own standalone deploy serves from the root path (`/`) and is
+unaffected by the steps below. To vendor a build into a host site instead, at
 `/labs/app/`:
 
 ```bash
