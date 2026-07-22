@@ -13,8 +13,9 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
-The logistic-Mandelbrot bifurcation reveal, including the final active-slice
-lighting adjustment, is landed and validated. No required implementation work
+The logistic-Mandelbrot bifurcation reveal is landed and validated, including
+free camera navigation and the machine-local prebaked point cloud (see
+"Baking a local point cloud" in `README.md`). No required implementation work
 remains. Gray-Scott stays the priority kernel for future refinement.
 
 ## Interface contract
