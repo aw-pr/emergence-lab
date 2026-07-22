@@ -141,7 +141,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "tailRefinement",
       label: "Tail refinement",
       type: "number",
-      default: 0.3,
+      default: 0.2,
       min: 0,
       max: 0.6,
       step: 0.05,
