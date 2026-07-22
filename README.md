@@ -58,8 +58,8 @@ npm run build
 
 ## Publish into the site
 
-The lab's own standalone deploy serves from the root path (`/`) and is
-unaffected by the steps below. To vendor a build into a host site instead, at
+The lab's own Netlify deploy serves from the root path (`/`) and is unaffected
+by the steps below. To vendor a build into the promo-flow site instead, at
 `/labs/app/`:
 
 ```bash
@@ -98,25 +98,6 @@ That ceiling is the honest one for the web: the deployed app cannot assume a
 desktop GPU, and a cloud dense enough to resolve the cascade tail runs to
 hundreds of megabytes — the current machine-local bakes are 10 MB to 650 MB.
 Nobody should be asked to download that over a network, so it never ships.
-
-The active route is exposed on the simulation canvas as
-`data-orbit3d-sampler` (the DOM form of `canvas.dataset.orbit3dSampler`):
-
-| Path | When selected | `data-orbit3d-sampler` | `data-orbit3d-boundary-detail` |
-| --- | --- | --- | --- |
-| GPU sampled | WebGL2 float targets and the orbit sampler both complete | `gpu-sampled` | `active` when Boundary detail is raised; otherwise `off` |
-| CPU sampled | GPU sampling is unavailable or fails; the time-sliced sweep completes | `cpu-sampled-gpu-failed` | `degraded` when requested; the normal Tail refinement plan is used |
-| Prebaked ELPC | A valid requested local bake finishes loading and supersedes the live build | `prebaked` | `off`; Boundary detail applies only to live builds |
-| 2D field | orbit3d setup or both live cloud builders fail | `orbit3d-fallback-field` | `degraded` when requested; otherwise `off` |
-
-For a 3D cloud, `data-orbit3d-build="complete"` and a positive
-`data-orbit3d-points` confirm that the selected path produced a whole cloud.
-The 2D fallback intentionally has neither attribute.
-Boundary detail is an opt-in GPU-only live-build control: at maximum it raises
-the point budget from the unchanged 9.6M extreme ceiling to 16M and spends the
-additional capacity on a 5x5 boundary sub-grid warmed for 20,000 iterations.
-That depth is deliberate: stage 35 measured boundary-band period mismatch
-falling from 1.71% at 1,500 warmup iterations to 0.25% at 20,000.
 
 Instead the cloud can be baked offline, on the machine that will view it, with
 no time-slicing, a much higher warmup, and a second refinement level the
