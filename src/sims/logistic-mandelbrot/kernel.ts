@@ -244,13 +244,16 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "boolean",
       default: false,
     },
-    // Uses a machine-local baked cloud (scripts/bake-orbit3d.mjs) when the
-    // file exists; a no-op otherwise, so it ships safely.
+    // Renderer-side: "live" builds in the browser, any other value names a
+    // machine-local baked cloud (scripts/bake-orbit3d.mjs). simView extends
+    // the options from the baked manifest at mount and drops the control
+    // entirely when no bake is present, so it ships safely.
     {
-      key: "prebakedModel",
-      label: "Prebaked model (if available)",
-      type: "boolean",
-      default: true,
+      key: "modelSource",
+      label: "Model source",
+      type: "enum",
+      default: "live",
+      options: ["live"],
     },
   ] as const satisfies readonly ParamDescriptor[];
 

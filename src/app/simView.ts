@@ -1,5 +1,6 @@
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
+import { bakesFor, type BakedEntry } from "./bakedManifest.ts";
 import { setSimDocumentTitle } from "./docTitle.ts";
 import { getChrome, siteOwnsChrome } from "./chrome.ts";
 import { isEditableKeyboardEvent } from "./keyboardTarget.ts";
@@ -21,6 +22,9 @@ import {
 } from "./controls.ts";
 import { loadRenderOptions, loadResolution } from "./persistence.ts";
 
+/** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
+const LIVE_MODEL_SOURCE = "live";
+
 /**
  * Kernel params hoisted into the View section, per sim: everything about how
  * the object is drawn rather than what is simulated. Sims not listed keep
@@ -39,7 +43,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "cascadeReveal",
     "cascadeDuration",
     "realSliceOnly",
-    "prebakedModel",
+    "modelSource",
   ],
   boids: ["pointSize"],
   "particle-life": ["pointSize"],
@@ -431,6 +435,21 @@ export async function renderSimView(
   const params: SimParams = variantDef
     ? { ...restored, ...variantDef.params }
     : restored;
+  // Prebaked clouds are machine-local, so the option list is only known once
+  // the manifest resolves; a persisted selection naming a bake this machine
+  // does not have falls back to the live build.
+  const controlsSchema = paramSchemaForControls(
+    slug,
+    kernel.paramSchema,
+    await bakesFor(slug),
+  );
+  const modelSource = controlsSchema.find((p) => p.key === "modelSource");
+  if (
+    typeof params.modelSource === "string" &&
+    !(modelSource?.options ?? [LIVE_MODEL_SOURCE]).includes(params.modelSource)
+  ) {
+    params.modelSource = LIVE_MODEL_SOURCE;
+  }
   const factoryColourOptions: ColourMapOptions = defaultColourOptionsFor(
     slug,
     kernel.channelCount,
@@ -477,7 +496,7 @@ export async function renderSimView(
     slug,
     container: layout.sidebar,
     simName: kernel.name,
-    paramSchema: paramSchemaForControls(slug, kernel.paramSchema),
+    paramSchema: controlsSchema,
     paramPresets: presetsFor(slug),
     initialParams: params,
     defaultParams: factoryParams,
@@ -1240,11 +1259,26 @@ function resolveAutoCycle(slug: string, fallback: boolean): boolean {
 function paramSchemaForControls(
   slug: string,
   schema: readonly ParamDescriptor[],
+  bakes: readonly BakedEntry[],
 ): readonly ParamDescriptor[] {
-  const fractal = isFractalSlug(slug);
-  if (slug !== "lorenz-attractor" && !fractal) return schema;
+  // No bake on this machine means no choice to offer: drop the control rather
+  // than show one whose only option is the live build.
+  const withBakes =
+    bakes.length === 0
+      ? schema.filter((descriptor) => descriptor.key !== "modelSource")
+      : schema.map((descriptor) =>
+          descriptor.key === "modelSource"
+            ? {
+                ...descriptor,
+                options: [LIVE_MODEL_SOURCE, ...bakes.map((bake) => bake.id)],
+              }
+            : descriptor,
+        );
 
-  return schema.map((descriptor) => {
+  const fractal = isFractalSlug(slug);
+  if (slug !== "lorenz-attractor" && !fractal) return withBakes;
+
+  return withBakes.map((descriptor) => {
     if (descriptor.key === "fade" && descriptor.type === "number") {
       return {
         ...descriptor,
