@@ -9,7 +9,7 @@ src="$root/scripts/git-hooks"
 dst="$root/.git/hooks"
 [ -d "$dst" ] || { echo "install-guards: not a git work tree at $root" >&2; exit 1; }
 
-for hook in pre-commit pre-push; do
+for hook in pre-commit pre-merge-commit pre-push; do
   install -m 0755 "$src/$hook" "$dst/$hook"
   echo "installed $dst/$hook"
 done
