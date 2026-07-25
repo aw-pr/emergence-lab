@@ -1,86 +1,34 @@
 #!/usr/bin/env bash
-# Idempotent installer for the publish guards. Re-runnable; only fills gaps.
-# Arms .git/hooks/* from every hook present in scripts/git-hooks/ (the
-# canonical set is defined by mcp-hub/templates/git-hooks/, not repeated
-# here — glob so a new hook, e.g. commit-msg, is picked up without editing
-# this script) and seeds a gitignored .publish-guard.local from the
-# committed .example.
-#
-# Canonical copy: mcp-hub/templates/git-hooks/install-guards.sh, distributed
-# by scripts/sync-guard-hooks.sh into each participating repo's scripts/.
-# Do not hand-edit the per-repo copy — it drifts; edit the canonical copy.
+# Idempotent installer for the publish-guard hooks.
+# Copies scripts/git-hooks/{pre-commit,pre-push} into .git/hooks/ and seeds
+# a local .publish-guard.local from the committed example if missing.
+# Safe to re-run.
 set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+src="$root/scripts/git-hooks"
+dst="$root/.git/hooks"
+[ -d "$dst" ] || { echo "install-guards: not a git work tree at $root" >&2; exit 1; }
 
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
-hooks_src="scripts/git-hooks"
-hooks_dst="$(git rev-parse --git-path hooks)"
-mkdir -p "$hooks_dst"
-
-for hook_path in "$hooks_src"/*; do
-  hook="$(basename "$hook_path")"
-  case "$hook" in *.md|*.bak) continue ;; esac
-  if [ -f "$hooks_dst/$hook" ] && ! cmp -s "$hooks_src/$hook" "$hooks_dst/$hook"; then
-    echo "install-guards: existing $hook differs — backing up to $hook.bak"
-    cp "$hooks_dst/$hook" "$hooks_dst/$hook.bak"
-  fi
-  install -m 0755 "$hooks_src/$hook" "$hooks_dst/$hook"
-  echo "install-guards: armed $hook"
+for hook in pre-commit pre-merge-commit pre-push; do
+  install -m 0755 "$src/$hook" "$dst/$hook"
+  echo "installed $dst/$hook"
 done
 
-if [ ! -f .publish-guard.local ]; then
-  if [ -f .publish-guard.local.example ]; then
-    cp .publish-guard.local.example .publish-guard.local
-    echo "install-guards: seeded .publish-guard.local — edit it with your real patterns"
+cfg="$root/.publish-guard.local"
+ex="$root/.publish-guard.local.example"
+if [ ! -f "$cfg" ]; then
+  if [ -f "$ex" ]; then
+    cp "$ex" "$cfg"
+    echo "seeded $cfg from .publish-guard.local.example — edit it with your real values"
   else
     echo "install-guards: WARN no .publish-guard.local.example to seed from" >&2
   fi
 else
-  echo "install-guards: .publish-guard.local already present — left untouched"
+  echo "$cfg already exists (leaving it alone)"
 fi
 
-# Publish gate config (git config, local, not committed). Idempotent: only
-# fills gaps. sentinel has a stable default; publicmatch/publicremote are
-# repo-specific and must be set once (we never guess org/repo names).
-git config --get publishguard.sentinel >/dev/null 2>&1 \
-  || git config publishguard.sentinel PUBLISH_GUARD_OK
-
-# History mode: `preserve` (default — filter-repo seed, --no-ff merges,
-# per-commit cleanliness required) or `squash` (orphan-squash seed, --squash
-# merges). The family default flipped to preserve on 2026-06-09 so a repo
-# adopting the guards publishes atomic public history with no per-repo config;
-# templates/git-hooks/pre-push documents the same default. Do not reintroduce
-# squash here — the older per-repo installers still carrying it are the drift
-# this canonical copy exists to end.
-git config --get publishguard.historymode >/dev/null 2>&1 \
-  || git config publishguard.historymode preserve
-
-pub_match="$(git config --get publishguard.publicmatch || true)"
-pub_remote="$(git config --get publishguard.publicremote || true)"
-priv_remote="$(git config --default origin --get publishguard.privateremote)"
-# The local branch that fast-forwards onto the public default branch.
-# Deterministic + portable across machines (don't infer from HEAD).
-pub_branch="$(git config --get publishguard.publishbranch || true)"
-[ -z "$pub_branch" ] && pub_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo publish)"
-
-if [ -z "$pub_match" ] || [ -z "$pub_remote" ]; then
-  echo "install-guards: publish gate INERT — set the public remote once:"
-  echo "  git config publishguard.publicmatch  'YOUR_ORG/YOUR_REPO'"
-  echo "  git config publishguard.publicremote 'YOUR_PUBLIC_REMOTE_NAME'"
-  echo "  git config publishguard.publishbranch 'publish'   # local line that ff's to main"
-  echo "  git config publishguard.privateremote 'origin'    # optional, default origin"
-else
-  sentinel="$(git config --get publishguard.sentinel)"
-  want_alias="!git push ${priv_remote} ${pub_branch} && ${sentinel}=1 git push ${pub_remote} ${pub_branch}:main"
-  if [ "$(git config --get alias.publish || true)" != "$want_alias" ]; then
-    git config alias.publish "$want_alias"
-    echo "install-guards: set 'git publish' alias (${priv_remote} ${pub_branch} → ${pub_remote} main)"
-  else
-    echo "install-guards: 'git publish' alias already current — left untouched"
-  fi
-fi
-
-history_mode="$(git config --get publishguard.historymode)"
-echo "install-guards: history mode = ${history_mode} (flip with: git config publishguard.historymode <squash|preserve>)"
-
-echo "install-guards: done."
+echo
+echo "Done. Next:"
+echo "  1. Edit .publish-guard.local with your real GUARD_PATTERNS and GUARD_PUBLIC_URL_MATCH."
+echo "  2. Prove the gate: a commit that adds a personal path should be rejected."
+echo "  3. See docs/PUBLISH-WORKFLOW.md for the publish flow."
