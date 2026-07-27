@@ -30,7 +30,14 @@
 import { createRequire } from "node:module";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
 import os from "node:os";
 
@@ -206,16 +213,64 @@ function subdivisionJobs(parents, cellW, cellH) {
   return jobs;
 }
 
-function interestingCoords(meta, threshold) {
-  const count = meta.length / 4;
-  const coords = [];
-  for (let i = 0; i < count; i += 1) {
-    const period = meta[i * 4 + 2];
-    if (period === 0 || period >= threshold) {
-      coords.push(meta[i * 4], meta[i * 4 + 1]);
+/**
+ * Coordinates of cells worth subdividing, gathered straight out of the workers'
+ * Float32Array meta chunks. Counted first and filled second so nothing passes
+ * through a JS array: at nine-figure point targets the meta stream runs to tens
+ * of millions of entries, and boxing it is what puts the run into the V8 heap
+ * limit rather than the machine's actual memory.
+ */
+function interestingCoords(metaChunks, threshold) {
+  let interesting = 0;
+  for (const meta of metaChunks) {
+    for (let i = 0; i < meta.length / 4; i += 1) {
+      const period = meta[i * 4 + 2];
+      if (period === 0 || period >= threshold) interesting += 1;
     }
   }
-  return Float64Array.from(coords);
+  const coords = new Float64Array(interesting * 2);
+  let cursor = 0;
+  for (const meta of metaChunks) {
+    for (let i = 0; i < meta.length / 4; i += 1) {
+      const period = meta[i * 4 + 2];
+      if (period === 0 || period >= threshold) {
+        coords[cursor] = meta[i * 4];
+        coords[cursor + 1] = meta[i * 4 + 1];
+        cursor += 2;
+      }
+    }
+  }
+  return coords;
+}
+
+/** fs caps a single write at 2 GiB; multi-gigabyte bakes need chunking. */
+const IO_CHUNK_BYTES = 1 << 30;
+
+function writeChunked(fd, buffer) {
+  for (let offset = 0; offset < buffer.length; offset += IO_CHUNK_BYTES) {
+    const length = Math.min(IO_CHUNK_BYTES, buffer.length - offset);
+    writeSync(fd, buffer, offset, length);
+  }
+}
+
+/**
+ * Streams the header and each channel straight to disk. Concatenating them into
+ * one Buffer first would double peak memory and, past ~214M points, exceed the
+ * single-write limit outright.
+ */
+function writeElpc(path, header, channels) {
+  const fd = openSync(path, "w");
+  try {
+    writeChunked(fd, Buffer.from(header));
+    for (const channel of channels) {
+      writeChunked(
+        fd,
+        Buffer.from(channel.buffer, channel.byteOffset, channel.byteLength),
+      );
+    }
+  } finally {
+    closeSync(fd);
+  }
 }
 
 const started = performance.now();
@@ -235,6 +290,23 @@ console.log(
     `${sampleCount} samples/cell, warmup ${warmup}, ` +
     `grid ${gridWidth}x${gridHeight}, ${workerCount} workers`,
 );
+
+// Peak is the quantized output (10 B/point) plus the survivor sample stream the
+// main thread holds until assembly (4 B/point) plus the workers' preallocated
+// sample buffers, which cover every grid cell rather than just survivors.
+const estimatedPeakBytes =
+  targetPoints * 14 + gridWidth * gridHeight * sampleCount * 4;
+const totalMemory = os.totalmem();
+console.log(
+  `  peak memory ~${(estimatedPeakBytes / 1e9).toFixed(1)}GB ` +
+    `of ${(totalMemory / 1e9).toFixed(1)}GB installed`,
+);
+if (estimatedPeakBytes > totalMemory * 0.8) {
+  console.warn(
+    `  WARNING: this target is near or beyond installed memory. Expect heavy ` +
+      `swapping, and consider splitting it across several smaller bakes.`,
+  );
+}
 
 const baseJobs = new Float64Array(gridWidth * gridHeight * 2);
 const midRow = Math.floor(gridHeight / 2);
@@ -266,10 +338,7 @@ console.log(
 
 // Level-1 refinement: subdivide interesting base cells.
 const l1CandidateCap = Math.ceil(l1Points / sampleCount / (SUB_CELLS * SUB_SURVIVAL_ESTIMATE));
-const l1Interesting = interestingCoords(
-  Float32Array.from(baseMeta.flatMap((m) => Array.from(m))),
-  REFINE_PERIOD_THRESHOLD,
-);
+const l1Interesting = interestingCoords(baseMeta, REFINE_PERIOD_THRESHOLD);
 const l1Parents = stridePick(l1Interesting, 2, l1CandidateCap);
 const l1Results = await runWorkers(subdivisionJobs(l1Parents, cellW, cellH));
 const l1Survivors = l1Results.reduce((sum, r) => sum + r.meta.length / 4, 0);
@@ -282,7 +351,7 @@ console.log(
 // Level-2 refinement: subdivide still-interesting level-1 sub-cells.
 const l2CandidateCap = Math.ceil(l2Points / sampleCount / (SUB_CELLS * SUB_SURVIVAL_ESTIMATE));
 const l2Interesting = interestingCoords(
-  Float32Array.from(l1Results.flatMap((r) => Array.from(r.meta))),
+  l1Results.map((r) => r.meta),
   REFINE_L2_PERIOD_THRESHOLD,
 );
 const l2Parents = stridePick(l2Interesting, 2, l2CandidateCap);
@@ -363,17 +432,7 @@ view.setUint32(8, cellCount, true);
 view.setUint32(12, sampleCount, true);
 
 mkdirSync(dirname(outPath), { recursive: true });
-writeFileSync(
-  outPath,
-  Buffer.concat([
-    Buffer.from(header),
-    Buffer.from(positions.buffer),
-    Buffer.from(periods.buffer),
-    Buffer.from(interiors.buffer),
-    Buffer.from(boundaries.buffer),
-    Buffer.from(weights.buffer),
-  ]),
-);
+writeElpc(outPath, header, [positions, periods, interiors, boundaries, weights]);
 const bytes = 16 + totalPoints * (6 + 4);
 const manifestPath = writeManifestEntry({
   id: `${(totalPoints / 1e6).toFixed(1)}M pts · ${sampleCount} samples`,
