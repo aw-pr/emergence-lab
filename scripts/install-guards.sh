@@ -9,7 +9,11 @@ src="$root/scripts/git-hooks"
 dst="$root/.git/hooks"
 [ -d "$dst" ] || { echo "install-guards: not a git work tree at $root" >&2; exit 1; }
 
-for hook in pre-commit pre-merge-commit pre-push; do
+# Arm every hook present in src — the canonical set is defined by
+# mcp-hub/templates/git-hooks/, not repeated here.
+for hook_path in "${src}"/*; do
+  hook="$(basename "$hook_path")"
+  case "$hook" in *.md|*.bak) continue ;; esac
   install -m 0755 "$src/$hook" "$dst/$hook"
   echo "installed $dst/$hook"
 done
