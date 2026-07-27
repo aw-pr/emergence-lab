@@ -233,7 +233,7 @@ export function defaultColourOptionsFor(
     case "particle-life":
       // One species-colour per particle per cell; a slight gamma lift keeps
       // single, un-stacked particles legible while direct RGB preserves hue.
-      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2 };
+      return { ...base, preset: "rgb", gamma: 1.25, contrast: 1.2, steps: 12 };
     default:
       break;
   }

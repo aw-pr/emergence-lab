@@ -1202,7 +1202,7 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     // Bloom carries the species colour a little past each sphere's rim, so
     // clusters read as one glowing membrane while the bodies stay distinct.
     // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0, bloom: 0.35 };
+    return { dotSize: 2, trailFade: 0.66, bloom: 0.35 };
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };

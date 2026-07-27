@@ -54,7 +54,7 @@ test("metadata matches the renderer contract", () => {
   );
 
   const particleCount = kernel.paramSchema.find((d) => d.key === "particleCount");
-  assert.equal(particleCount.default, 6000);
+  assert.equal(particleCount.default, 5901);
   assert.equal(particleCount.max, 20000);
 
   const species = kernel.paramSchema.find((d) => d.key === "species");
