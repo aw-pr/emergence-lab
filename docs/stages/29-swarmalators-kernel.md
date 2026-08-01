@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-08-01
 - **Orchestrator:** Claude Sonnet 5 <claude-sonnet-5@local>
-- **Worker:** Codex GPT-5.3 <codex-gpt-5-3@local>
+- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Verifier:** Claude Fable 5 <claude-fable-5@local>
 - **Verifier panel:** false
 - **Pairing rationale:** The kernel is well-specified numerical ODE integration
