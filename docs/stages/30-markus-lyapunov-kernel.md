@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-08-01
 - **Orchestrator:** Claude Sonnet 5 <claude-sonnet-5@local>
-- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker:** Codex GPT-5.3 <codex-gpt-5-3@local>
 - **Verifier:** Claude Fable 5 <claude-fable-5@local>
 - **Verifier panel:** false
 - **Pairing rationale:** The kernel is well-specified numerical work (a known
@@ -225,28 +225,3 @@ model output.
   worker files, report only. Criterion 4 requires visually confirming a
   colour-sign split, not just that `channelRanges` are non-degenerate —
   inspect actual rendered pixels at known stable and chaotic points.
-
-## Verifier findings (2026-08-02, Claude Fable 5 — round 1, CLOSED)
-
-Worker delivered the full sim with an honest `fail` envelope: the card's
-own constraints were contradictory — deliverable 3 requires a new
-`ColourPreset` member, but `src/app/webglRenderer.ts` holds an exhaustive
-preset switch (`presetIndex`) the card forbade touching, so `npm run
-verify` could not pass within scope (TS2366). Scope amended by the
-orchestrator: the minimal `case "lyapunov": return 14` plus a matching
-GLSL `twoChannelColour` branch (amber stable / ice chaotic / parchment
-λ=0) are in scope; committed together with the worker's diff as one
-buildable commit.
-
-Verification: `npm run verify` green (274 tests, closed-form λ assertions
-at ln 0.5 and ln 2 genuine); browser smoke — Zircon Zity renders the
-classic swallow-curve stability filaments in amber over dark blue chaos at
-45–47 fps; "Woven boundary" (AABAB, zoom 4.5) renders a distinct filigree;
-sequence AB→AABB at the same Zircon view visibly reorganises the topology
-(criterion 5, sequence alone changed). Note, not a defect: on wide
-viewports the horizontal axis extends past a=4 (span is locked to the
-short axis), where orbits diverge and both channels clamp to zero — that
-region renders as a hard parchment band. A follow-up stage could clamp
-the default view or tint the divergent region; out of scope here.
-
-All six acceptance criteria PASS. Stage complete.
