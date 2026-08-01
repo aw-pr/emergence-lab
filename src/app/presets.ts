@@ -263,11 +263,6 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Active phase wave",
       params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, timestep: 0.05 },
     },
-    {
-      id: "restless-mix",
-      label: "Restless mix",
-      params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.6, frequencySpread: 0.6, noise: 0.35, timestep: 0.05 },
-    },
   ],
   physarum: [
     {
@@ -365,12 +360,6 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Wide wings",
       params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 },
     },
-    // Sweep 2026-08-13: 0.731 vs Wide wings 0.677 (+7.9% composite).
-    {
-      id: "dense-wings",
-      label: "Dense wings",
-      params: { beta: 2.6667, stepsPerFrame: 6, fade: 0.997, rho: 41.6, sigma: 14 },
-    },
     {
       id: "fast-trace",
       label: "Fast trace",
@@ -395,91 +384,6 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "halvorsen-bloom",
       label: "Halvorsen bloom",
       params: { attractor: "halvorsen", stepsPerFrame: 12, fade: 0.99 },
-    },
-  ],
-  "clifford-dejong": [
-    {
-      id: "clifford-classic",
-      label: "Clifford classic",
-      params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7 },
-    },
-    {
-      // Promoted by the 2026-08-16 interestingness sweep (0.481 → 0.740):
-      // the old set (-1.7, 1.3, -0.1, -1.2) drew a few thin ribbons.
-      id: "clifford-veils",
-      label: "Clifford veils",
-      params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0 },
-    },
-    {
-      id: "clifford-bloom",
-      label: "Clifford bloom",
-      params: { map: "clifford", a: -1.8, b: -2.0, c: -0.5, d: -0.9 },
-    },
-    {
-      id: "dejong-classic",
-      label: "De Jong classic",
-      params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1 },
-    },
-    {
-      // Promoted by the 2026-08-16 interestingness sweep (replaced "web",
-      // 0.435 → 0.762, which rendered as a small off-centre line figure).
-      id: "dejong-swan",
-      label: "De Jong swan",
-      params: { map: "dejong", a: 1.4, b: -2.8, c: 2.8, d: -1.87 },
-    },
-    {
-      // Promoted by the same sweep (replaced "scroll", 0.262 → 0.768 — the
-      // top-scoring point-map set of the whole run).
-      id: "dejong-heart",
-      label: "De Jong heart",
-      params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1 },
-    },
-    {
-      id: "svensson-drape",
-      label: "Svensson drape",
-      params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56 },
-    },
-    {
-      id: "svensson-moth",
-      label: "Svensson moth",
-      params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9 },
-    },
-    {
-      // Live coefficient drift around the "veils" sweep winner. Fade drops so
-      // the outgoing figure dissolves as fast as the morph moves; exposure
-      // rises to hold mid-tone brightness at the shorter accumulation window.
-      id: "clifford-morph",
-      label: "Clifford morph",
-      params: {
-        map: "clifford",
-        a: -1.8,
-        b: -2.4,
-        c: -1.0,
-        d: 1.0,
-        driftAmount: 0.35,
-        driftSpeed: 0.5,
-        fade: 0.985,
-        exposure: 0.09,
-        pointsPerFrame: 40000,
-      },
-    },
-    {
-      // Same treatment around the "heart" winner, the top scorer of the
-      // 2026-08-16 sweep.
-      id: "dejong-morph",
-      label: "De Jong morph",
-      params: {
-        map: "dejong",
-        a: 1.4,
-        b: -2.8,
-        c: 2.4,
-        d: -2.1,
-        driftAmount: 0.3,
-        driftSpeed: 0.5,
-        fade: 0.985,
-        exposure: 0.09,
-        pointsPerFrame: 40000,
-      },
     },
   ],
   "diffusion-limited-aggregation": [
@@ -708,32 +612,6 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         exposure: 1.35,
         pointDensity: 1,
         colourMode: "mono",
-      },
-    },
-  ],
-  "markus-lyapunov": [
-    {
-      id: "zircon-zity",
-      label: "Zircon Zity",
-      params: {
-        centerX: 3,
-        centerY: 3,
-        zoom: 1,
-        warmupIterations: 200,
-        sampleIterations: 500,
-        sequence: "AB",
-      },
-    },
-    {
-      id: "woven-boundary",
-      label: "Woven boundary",
-      params: {
-        centerX: 3.48,
-        centerY: 3.64,
-        zoom: 4.5,
-        warmupIterations: 300,
-        sampleIterations: 700,
-        sequence: "AABAB",
       },
     },
   ],
