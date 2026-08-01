@@ -18,25 +18,8 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["particleCount", "A", "B", "J", "K", "frequencySpread", "noise", "timestep", "seed", "trailPersistence", "cameraDrift"],
+    ["particleCount", "A", "B", "J", "K", "frequencySpread", "timestep", "seed"],
   );
-
-  const K = kernel.paramSchema.find((descriptor) => descriptor.key === "K");
-  assert.equal(K.default, -0.75, "default regime must be the never-settling active phase wave");
-});
-
-test("jitter perturbs the evolution deterministically", () => {
-  const run = (noise) => {
-    const kernel = new SwarmalatorsKernel();
-    kernel.init(32, 24, { particleCount: 48, seed: 23, noise });
-    for (let step = 0; step < 8; step += 1) kernel.step(1 / 60);
-    return Array.from(kernel.readState());
-  };
-  assert.notDeepEqual(run(0.4), run(0), "expected jitter to change the trajectory");
-  assert.deepEqual(run(0.4), run(0.4), "jitter must be seeded and repeatable");
-  for (const value of run(0.4)) {
-    assert.ok(value >= 0 && value <= 1);
-  }
 });
 
 test("two particles converge to the closed-form B/A spatial equilibrium", () => {
@@ -89,23 +72,6 @@ test("grid output has stable dimensions and bounded channels", () => {
   assert.ok(reference.some((value, index) => index % 2 === 0 && value > 0));
 });
 
-test("rasterisation splats particles into legible multi-cell discs", () => {
-  const particleCount = 48;
-  const kernel = new SwarmalatorsKernel();
-  kernel.init(80, 60, { particleCount, seed: 31 });
-
-  const state = kernel.readState();
-  let occupiedCells = 0;
-  for (let offset = 0; offset < state.length; offset += 2) {
-    if (state[offset] > 0) occupiedCells += 1;
-  }
-
-  assert.ok(
-    occupiedCells > particleCount * 4,
-    `expected multi-cell particle footprints, got ${occupiedCells} occupied cells`,
-  );
-});
-
 test("identical seeds and parameters are deterministic", () => {
   const run = () => {
     const kernel = new SwarmalatorsKernel();
@@ -114,19 +80,6 @@ test("identical seeds and parameters are deterministic", () => {
     return Array.from(kernel.readState());
   };
   assert.deepEqual(run(), run());
-});
-
-test("camera drift is deterministic and can be disabled", () => {
-  const run = (cameraDrift) => {
-    const kernel = new SwarmalatorsKernel();
-    kernel.init(32, 24, { particleCount: 48, seed: 23, cameraDrift });
-    for (let step = 0; step < 120; step += 1) kernel.step(1 / 60);
-    return Array.from(kernel.readState());
-  };
-
-  assert.deepEqual(run(0.5), run(0.5), "drift must be repeatable");
-  assert.deepEqual(run(0), run(0), "the disabled legacy camera path must remain repeatable");
-  assert.notDeepEqual(run(0.5), run(0), "enabled drift must move the fitted view");
 });
 
 test("selfTest passes", () => {

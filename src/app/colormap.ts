@@ -204,6 +204,8 @@ export function defaultColourOptionsFor(
       return { ...base, preset: "plasma", contrast: 1.25, steps: 2 };
     case "kuramoto-oscillators":
       return { ...base, preset: "phase", contrast: 1.12 };
+    case "swarmalators":
+      return { ...base, preset: "phase", gamma: 0.9, contrast: 1.2 };
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":
