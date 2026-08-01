@@ -204,3 +204,31 @@ check against the model output.
   worker files, report only. Criterion 4 requires visually distinguishing five
   qualitatively different regimes — take screenshots or describe frame-by-frame
   observation per preset rather than asserting from code alone.
+
+---
+
+## Verifier findings (2026-08-01, Claude Fable 5 — round 1)
+
+Worker round 1 is committed on dev as `2cf7a04` (iteration base). Kernel maths
+CONFIRMED: closed-form contract tests pass, live run shows correct regime
+behaviour per preset, webgl2 clean at ~90fps, no console errors. All five
+presets registered and selectable.
+
+**Criteria 3–4 FAIL — the rendering, not the model:**
+
+- Each particle deposits into a single grid cell of the two-channel field, so
+  at default resolution the sim reads as 1px specks on a uniform mid-blue
+  zero-density background — not the card's "legible discs and rings".
+  Confirmed the display Point-size control has no effect on this path.
+- Required fix: make particles read as discs — either splat a small radius
+  (2–4 cell gaussian/disc) into the density/phase channels, or reduce the
+  effective deposit-grid resolution so particles occupy visibly more than one
+  cell. Whichever fits the existing renderer contract with the least new
+  machinery.
+- Also set default display options so the sim is legible out of the box
+  (cf. particle-life's factory-defaults precedent: trailFade/pointSize tuned
+  in `defaultDisplayOptionsFor`), and check the zero-density background maps
+  to a dark tone under "Phase silk (cyclic)" rather than pale blue.
+- Do NOT change the model equations, the (J,K) preset values, or anything in
+  the frozen contract-test block. Iterate from `2cf7a04`; keep
+  `npm run verify` green.
