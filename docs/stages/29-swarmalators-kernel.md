@@ -232,3 +232,22 @@ presets registered and selectable.
 - Do NOT change the model equations, the (J,K) preset values, or anything in
   the frozen contract-test block. Iterate from `2cf7a04`; keep
   `npm run verify` green.
+
+## Verifier findings (2026-08-02, Claude Fable 5 — round 2)
+
+Round 2 committed as the new base. Splats CONFIRMED in the render (soft
+multi-pixel dots, regression-tested) — good. Stage still FAILS visual
+acceptance for one reason, previously flagged and unaddressed:
+
+- **The zero-density background renders mid-blue, not dark.** The whole
+  canvas sits at a pale periwinkle, so the phase-coloured particles have
+  almost no contrast against it. Every other sim in the gallery reads
+  against a dark field. THIS IS THE ONLY REMAINING DEFECT — fix the
+  colormap/channel mapping for swarmalators so zero density maps to the
+  dark end of the ramp (study how boids/particle-life wire their
+  background in src/app/colormap.ts + the renderer), and if needed scale
+  splat weight so a single particle's peak sits near the top of the
+  density range rather than the bottom.
+- Everything else is accepted: equations, presets, tests, splats. Do not
+  touch them. Keep npm run verify green. This is round 3 of 3 — smallest
+  possible diff.
