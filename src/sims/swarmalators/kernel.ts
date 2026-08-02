@@ -40,6 +40,8 @@ const DEFAULT_FREQUENCY_SPREAD = 0;
 const DEFAULT_TIMESTEP = 0.05;
 const DEFAULT_SEED = 1;
 const CHANNEL_COUNT = 2;
+const SPLAT_RADIUS = 2.4;
+const SPLAT_RADIUS_SQUARED = SPLAT_RADIUS * SPLAT_RADIUS;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -130,23 +132,38 @@ export class SwarmalatorsKernel implements SimKernel {
     this.phaseSin.fill(0);
 
     for (let i = 0; i < this.particles.x.length; i += 1) {
-      const x = Math.floor(this.particles.x[i]);
-      const y = Math.floor(this.particles.y[i]);
-      if (x < 0 || x >= this.width || y < 0 || y >= this.height) continue;
+      const particleX = this.particles.x[i];
+      const particleY = this.particles.y[i];
+      const minX = Math.max(0, Math.floor(particleX - SPLAT_RADIUS));
+      const maxX = Math.min(this.width - 1, Math.floor(particleX + SPLAT_RADIUS));
+      const minY = Math.max(0, Math.floor(particleY - SPLAT_RADIUS));
+      const maxY = Math.min(this.height - 1, Math.floor(particleY + SPLAT_RADIUS));
+      const phaseCos = Math.cos(this.particles.theta[i]);
+      const phaseSin = Math.sin(this.particles.theta[i]);
 
-      const cell = y * this.width + x;
-      const offset = cell * CHANNEL_COUNT;
-      this.state[offset] += 1;
-      this.phaseCos[cell] += Math.cos(this.particles.theta[i]);
-      this.phaseSin[cell] += Math.sin(this.particles.theta[i]);
+      for (let y = minY; y <= maxY; y += 1) {
+        const dy = y + 0.5 - particleY;
+        for (let x = minX; x <= maxX; x += 1) {
+          const dx = x + 0.5 - particleX;
+          const distanceSquared = dx * dx + dy * dy;
+          if (distanceSquared >= SPLAT_RADIUS_SQUARED) continue;
+
+          const weight = 1 - distanceSquared / SPLAT_RADIUS_SQUARED;
+          const cell = y * this.width + x;
+          const offset = cell * CHANNEL_COUNT;
+          this.state[offset] += weight;
+          this.phaseCos[cell] += phaseCos * weight;
+          this.phaseSin[cell] += phaseSin * weight;
+        }
+      }
     }
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
       const offset = cell * CHANNEL_COUNT;
-      const count = this.state[offset];
-      if (count === 0) continue;
-      this.state[offset] = clamp(count, 0, 1);
-      const phase = Math.atan2(this.phaseSin[cell] / count, this.phaseCos[cell] / count);
+      const density = this.state[offset];
+      if (density === 0) continue;
+      this.state[offset] = clamp(density, 0, 1);
+      const phase = Math.atan2(this.phaseSin[cell], this.phaseCos[cell]);
       this.state[offset + 1] = (phase < 0 ? phase + SWARMALATOR_TAU : phase) / SWARMALATOR_TAU;
     }
   }

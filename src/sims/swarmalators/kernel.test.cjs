@@ -72,6 +72,23 @@ test("grid output has stable dimensions and bounded channels", () => {
   assert.ok(reference.some((value, index) => index % 2 === 0 && value > 0));
 });
 
+test("rasterisation splats particles into legible multi-cell discs", () => {
+  const particleCount = 48;
+  const kernel = new SwarmalatorsKernel();
+  kernel.init(80, 60, { particleCount, seed: 31 });
+
+  const state = kernel.readState();
+  let occupiedCells = 0;
+  for (let offset = 0; offset < state.length; offset += 2) {
+    if (state[offset] > 0) occupiedCells += 1;
+  }
+
+  assert.ok(
+    occupiedCells > particleCount * 4,
+    `expected multi-cell particle footprints, got ${occupiedCells} occupied cells`,
+  );
+});
+
 test("identical seeds and parameters are deterministic", () => {
   const run = () => {
     const kernel = new SwarmalatorsKernel();
