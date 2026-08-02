@@ -615,6 +615,32 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  "markus-lyapunov": [
+    {
+      id: "zircon-zity",
+      label: "Zircon Zity",
+      params: {
+        centerX: 3,
+        centerY: 3,
+        zoom: 1,
+        warmupIterations: 200,
+        sampleIterations: 500,
+        sequence: "AB",
+      },
+    },
+    {
+      id: "woven-boundary",
+      label: "Woven boundary",
+      params: {
+        centerX: 3.48,
+        centerY: 3.64,
+        zoom: 4.5,
+        warmupIterations: 300,
+        sampleIterations: 700,
+        sequence: "AABAB",
+      },
+    },
+  ],
   "cyclic-ca": [
     {
       id: "demons",
