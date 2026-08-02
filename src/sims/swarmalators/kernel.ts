@@ -40,8 +40,9 @@ const DEFAULT_FREQUENCY_SPREAD = 0;
 const DEFAULT_TIMESTEP = 0.05;
 const DEFAULT_SEED = 1;
 const CHANNEL_COUNT = 2;
-const SPLAT_RADIUS = 2.4;
+const SPLAT_RADIUS = 4;
 const SPLAT_RADIUS_SQUARED = SPLAT_RADIUS * SPLAT_RADIUS;
+const VIEW_FIT_SMOOTHING = 0.04;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -74,6 +75,9 @@ export class SwarmalatorsKernel implements SimKernel {
   private phaseCos = new Float32Array(0);
   private phaseSin = new Float32Array(0);
   private particles: SwarmalatorState = createSwarmalatorState({ particleCount: 0, frequencySpread: 0, seed: 1 });
+  private viewScale = 0;
+  private viewCentreX = 0;
+  private viewCentreY = 0;
   private A = DEFAULT_A;
   private B = DEFAULT_B;
   private J = DEFAULT_J;
@@ -104,12 +108,19 @@ export class SwarmalatorsKernel implements SimKernel {
         radius: Math.min(this.width, this.height) * 0.32,
       },
     );
+    this.viewScale = 0; // snap the view fit on (re)init rather than lerping
     this.rasterise();
   }
 
   step(_dt: number): void {
     if (this.width === 0 || this.height === 0) return;
-    stepSwarmalators(this.particles, { A: this.A, B: this.B, J: this.J, K: this.K }, this.timestep);
+    // Positions live in grid cells, which stretches the model's natural length
+    // unit to L = B/A cells — and with it the timescale, by the same factor.
+    // Renormalise dt so parameter changes alter the physics, not the tempo:
+    // the canonical regimes (sync, phase wave, splintering) play out in
+    // seconds at 1x regardless of B/A.
+    const timeScale = this.B / this.A;
+    stepSwarmalators(this.particles, { A: this.A, B: this.B, J: this.J, K: this.K }, this.timestep * timeScale);
     this.rasterise();
   }
 
@@ -126,14 +137,54 @@ export class SwarmalatorsKernel implements SimKernel {
     this.particles = createSwarmalatorState({ particleCount: 0, frequencySpread: 0, seed: 1 });
   }
 
+  // The equilibrium swarm is only ~B/A cells across — a speck on a full-size
+  // grid — so the rasteriser tracks the swarm with a smoothed centroid+scale
+  // fit instead of drawing world units 1:1. The slow zoom as the cloud
+  // coalesces is deterministic (pure function of particle history).
+  private updateViewFit(): void {
+    const count = this.particles.x.length;
+    if (count === 0) return;
+
+    let centroidX = 0;
+    let centroidY = 0;
+    for (let i = 0; i < count; i += 1) {
+      centroidX += this.particles.x[i];
+      centroidY += this.particles.y[i];
+    }
+    centroidX /= count;
+    centroidY /= count;
+
+    let maxRadius = 0;
+    for (let i = 0; i < count; i += 1) {
+      const dx = this.particles.x[i] - centroidX;
+      const dy = this.particles.y[i] - centroidY;
+      const radius = dx * dx + dy * dy;
+      if (radius > maxRadius) maxRadius = radius;
+    }
+    const minDim = Math.min(this.width, this.height);
+    const swarmRadius = Math.max(Math.sqrt(maxRadius), minDim * 0.02);
+    const targetScale = (minDim * 0.35) / swarmRadius;
+
+    if (this.viewScale <= 0) {
+      this.viewScale = targetScale;
+      this.viewCentreX = centroidX;
+      this.viewCentreY = centroidY;
+      return;
+    }
+    this.viewScale *= Math.pow(targetScale / this.viewScale, VIEW_FIT_SMOOTHING);
+    this.viewCentreX += (centroidX - this.viewCentreX) * VIEW_FIT_SMOOTHING;
+    this.viewCentreY += (centroidY - this.viewCentreY) * VIEW_FIT_SMOOTHING;
+  }
+
   private rasterise(): void {
     this.state.fill(0);
     this.phaseCos.fill(0);
     this.phaseSin.fill(0);
+    this.updateViewFit();
 
     for (let i = 0; i < this.particles.x.length; i += 1) {
-      const particleX = this.particles.x[i];
-      const particleY = this.particles.y[i];
+      const particleX = this.width / 2 + (this.particles.x[i] - this.viewCentreX) * this.viewScale;
+      const particleY = this.height / 2 + (this.particles.y[i] - this.viewCentreY) * this.viewScale;
       const minX = Math.max(0, Math.floor(particleX - SPLAT_RADIUS));
       const maxX = Math.min(this.width - 1, Math.floor(particleX + SPLAT_RADIUS));
       const minY = Math.max(0, Math.floor(particleY - SPLAT_RADIUS));
