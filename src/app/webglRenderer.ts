@@ -261,6 +261,14 @@ vec3 singleChannelColour(float t) {
 }
 
 vec3 twoChannelColour(float c0, float c1) {
+  // Cyclic presets (twilight 11, phase 12) carry a hue channel: c1 picks the
+  // colour, c0 only says how brightly it burns. Fading towards black keeps an
+  // empty cell black — mirrors the isCyclic branch in colormap.ts, which the
+  // canvas renderer already honours.
+  if (u_preset == 11 || u_preset == 12) {
+    vec3 hue = rampColour(u_preset, fract(c1));
+    return hue * adjust(c0);
+  }
   if (u_preset == 14) {
     if (c0 > 0.0) return rampColour(4, adjust(c0));
     if (c1 > 0.0) return rampColour(3, adjust(c1));
