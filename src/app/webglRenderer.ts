@@ -261,6 +261,11 @@ vec3 singleChannelColour(float t) {
 }
 
 vec3 twoChannelColour(float c0, float c1) {
+  if (u_preset == 14) {
+    if (c0 > 0.0) return rampColour(4, adjust(c0));
+    if (c1 > 0.0) return rampColour(3, adjust(c1));
+    return vec3(238.0, 226.0, 188.0) / 255.0;
+  }
   if (u_preset == 13) {
     vec3 base = rampColour(4, adjust(c0));
     float density = smoothstep(0.0, 0.7, c0);
@@ -2544,6 +2549,8 @@ function presetIndex(preset: ColourPreset): number {
       return 12;
     case "sand":
       return 13;
+    case "lyapunov":
+      return 14;
   }
 }
 

@@ -23,6 +23,7 @@ export type ColourPreset =
   | "brian"
   | "binary"
   | "chemical"
+  | "lyapunov"
   | "rgb";
 
 export interface ColourMapOptions {
@@ -64,6 +65,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "brian", label: "Brian's Brain" },
   { value: "binary", label: "Binary" },
   { value: "chemical", label: "Chemical blend" },
+  { value: "lyapunov", label: "Lyapunov stability" },
   { value: "rgb", label: "Direct RGB" },
 ];
 
@@ -97,7 +99,10 @@ export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
 
 type ColourStop = readonly [number, Rgb];
 
-const RAMPS: Record<Exclude<ColourPreset, "chemical" | "rgb" | "sand">, readonly ColourStop[]> = {
+const RAMPS: Record<
+  Exclude<ColourPreset, "chemical" | "lyapunov" | "rgb" | "sand">,
+  readonly ColourStop[]
+> = {
   viridis: [
     [0, [68, 1, 84]],
     [0.28, [59, 82, 139]],
@@ -225,6 +230,8 @@ export function defaultColourOptionsFor(
       // Chosen by eye against the cycle colour mode: viridis with a strong
       // lift keeps the plane's bands cool while the cycling dots stay legible.
       return { ...base, preset: "viridis", gamma: 1.65, contrast: 2.4 };
+    case "markus-lyapunov":
+      return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
       return { ...base, preset: "ice", gamma: 0.7, contrast: 1.48 };
     case "cyclic-ca":
@@ -275,7 +282,7 @@ function adjust(value: number, options: ColourMapOptions): number {
 }
 
 function rampColour(
-  preset: Exclude<ColourPreset, "chemical" | "rgb" | "sand">,
+  preset: Exclude<ColourPreset, "chemical" | "lyapunov" | "rgb" | "sand">,
   t: number,
 ): Rgb {
   const stops = RAMPS[preset];
@@ -320,6 +327,11 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
     const stable = mix([8, 4, 2], base, density);
     const heat = mix([255, 92, 12], [255, 246, 184], clamp01(c1));
     return mix(stable, heat, smoothstep01(c1 / 0.85) * 0.55);
+  }
+  if (options.preset === "lyapunov") {
+    if (c0 > 0) return rampColour("amber", adjust(c0, options));
+    if (c1 > 0) return rampColour("ice", adjust(c1, options));
+    return [238, 226, 188];
   }
   if (options.preset !== "chemical") {
     const composite = clamp01(c1 * 0.72 + (1 - c0) * 0.28);
@@ -367,7 +379,10 @@ function quantise(t: number, steps: number): number {
 function singleChannelColour(t: number, options: ColourMapOptions): Rgb {
   const value = adjust(quantise(t, options.steps), options);
   const preset =
-    options.preset === "chemical" || options.preset === "rgb" || options.preset === "sand"
+    options.preset === "chemical" ||
+    options.preset === "lyapunov" ||
+    options.preset === "rgb" ||
+    options.preset === "sand"
       ? "viridis"
       : options.preset;
   return rampColour(preset, value);
