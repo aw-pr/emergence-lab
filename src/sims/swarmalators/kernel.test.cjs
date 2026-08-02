@@ -18,7 +18,7 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["particleCount", "A", "B", "J", "K", "frequencySpread", "timestep", "seed"],
+    ["particleCount", "A", "B", "J", "K", "frequencySpread", "timestep", "seed", "trailPersistence"],
   );
 });
 

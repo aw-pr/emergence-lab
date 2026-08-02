@@ -40,9 +40,13 @@ const DEFAULT_FREQUENCY_SPREAD = 0;
 const DEFAULT_TIMESTEP = 0.05;
 const DEFAULT_SEED = 1;
 const CHANNEL_COUNT = 2;
-const SPLAT_RADIUS = 4;
+const SPLAT_RADIUS = 3;
 const SPLAT_RADIUS_SQUARED = SPLAT_RADIUS * SPLAT_RADIUS;
 const VIEW_FIT_SMOOTHING = 0.04;
+const DEFAULT_TRAIL_PERSISTENCE = 0.85;
+// Below this residue a trail cell is snapped to empty: the density would be
+// invisible anyway and the atan2 of two near-zero sums is just noise.
+const TRAIL_FLOOR = 0.004;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -67,13 +71,16 @@ export class SwarmalatorsKernel implements SimKernel {
     { key: "frequencySpread", label: "Frequency spread", type: "number", default: DEFAULT_FREQUENCY_SPREAD, min: 0, max: 2, step: 0.01 },
     { key: "timestep", label: "Time step", type: "number", default: DEFAULT_TIMESTEP, min: 0.002, max: 0.1, step: 0.002 },
     { key: "seed", label: "Seed", type: "number", default: DEFAULT_SEED, min: 1, max: 9999, step: 1 },
+    { key: "trailPersistence", label: "Trail persistence", type: "number", default: DEFAULT_TRAIL_PERSISTENCE, min: 0, max: 0.98, step: 0.01 },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
   private height = 0;
   private state = new Float32Array(0);
+  private densityAcc = new Float32Array(0);
   private phaseCos = new Float32Array(0);
   private phaseSin = new Float32Array(0);
+  private trailPersistence = DEFAULT_TRAIL_PERSISTENCE;
   private particles: SwarmalatorState = createSwarmalatorState({ particleCount: 0, frequencySpread: 0, seed: 1 });
   private viewScale = 0;
   private viewCentreX = 0;
@@ -98,8 +105,14 @@ export class SwarmalatorsKernel implements SimKernel {
     const cells = this.width * this.height;
 
     this.state = new Float32Array(cells * CHANNEL_COUNT);
+    this.densityAcc = new Float32Array(cells);
     this.phaseCos = new Float32Array(cells);
     this.phaseSin = new Float32Array(cells);
+    this.trailPersistence = clamp(
+      numberParam(params, "trailPersistence", DEFAULT_TRAIL_PERSISTENCE),
+      0,
+      0.98,
+    );
     this.particles = createSwarmalatorState(
       { particleCount, frequencySpread, seed },
       {
@@ -132,6 +145,7 @@ export class SwarmalatorsKernel implements SimKernel {
     this.width = 0;
     this.height = 0;
     this.state = new Float32Array(0);
+    this.densityAcc = new Float32Array(0);
     this.phaseCos = new Float32Array(0);
     this.phaseSin = new Float32Array(0);
     this.particles = createSwarmalatorState({ particleCount: 0, frequencySpread: 0, seed: 1 });
@@ -177,9 +191,22 @@ export class SwarmalatorsKernel implements SimKernel {
   }
 
   private rasterise(): void {
-    this.state.fill(0);
-    this.phaseCos.fill(0);
-    this.phaseSin.fill(0);
+    // Instead of clearing, decay the accumulators: departed particles leave a
+    // fading wake whose hue is the phase they carried through. Persistence 0
+    // reduces to a hard clear.
+    const decay = this.trailPersistence;
+    for (let cell = 0; cell < this.densityAcc.length; cell += 1) {
+      const faded = this.densityAcc[cell] * decay;
+      if (faded < TRAIL_FLOOR) {
+        this.densityAcc[cell] = 0;
+        this.phaseCos[cell] = 0;
+        this.phaseSin[cell] = 0;
+      } else {
+        this.densityAcc[cell] = faded;
+        this.phaseCos[cell] *= decay;
+        this.phaseSin[cell] *= decay;
+      }
+    }
     this.updateViewFit();
 
     for (let i = 0; i < this.particles.x.length; i += 1) {
@@ -201,8 +228,7 @@ export class SwarmalatorsKernel implements SimKernel {
 
           const weight = 1 - distanceSquared / SPLAT_RADIUS_SQUARED;
           const cell = y * this.width + x;
-          const offset = cell * CHANNEL_COUNT;
-          this.state[offset] += weight;
+          this.densityAcc[cell] += weight;
           this.phaseCos[cell] += phaseCos * weight;
           this.phaseSin[cell] += phaseSin * weight;
         }
@@ -211,8 +237,12 @@ export class SwarmalatorsKernel implements SimKernel {
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
       const offset = cell * CHANNEL_COUNT;
-      const density = this.state[offset];
-      if (density === 0) continue;
+      const density = this.densityAcc[cell];
+      if (density === 0) {
+        this.state[offset] = 0;
+        this.state[offset + 1] = 0;
+        continue;
+      }
       this.state[offset] = clamp(density, 0, 1);
       const phase = Math.atan2(this.phaseSin[cell], this.phaseCos[cell]);
       this.state[offset + 1] = (phase < 0 ? phase + SWARMALATOR_TAU : phase) / SWARMALATOR_TAU;
