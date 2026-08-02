@@ -35,6 +35,10 @@ export function sampleLyapunovPoint(
   warmupIterations: number,
   sampleIterations: number,
 ): number {
+  // The logistic map only keeps orbits in [0, 1] for r in [0, 4]. Outside that
+  // square the orbit diverges and the exponent is meaningless — NaN lets the
+  // kernel render those pixels as empty space instead of saturated chaos.
+  if (a < 0 || a > 4 || b < 0 || b > 4) return Number.NaN;
   const schedule = normaliseSequence(sequence);
   const warmup = Math.max(0, Math.floor(warmupIterations));
   const samples = Math.max(1, Math.floor(sampleIterations));

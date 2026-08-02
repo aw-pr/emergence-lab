@@ -331,7 +331,10 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
   if (options.preset === "lyapunov") {
     if (c0 > 0) return rampColour("amber", adjust(c0, options));
     if (c1 > 0) return rampColour("ice", adjust(c1, options));
-    return [238, 226, 188];
+    // Both-zero means the pixel lies outside the map's [0,4]² parameter
+    // domain: render as empty space (the ice ramp's floor) so wide viewports
+    // frame the fractal instead of showing a saturated band.
+    return [2, 6, 23];
   }
   if (options.preset !== "chemical") {
     const composite = clamp01(c1 * 0.72 + (1 - c0) * 0.28);
