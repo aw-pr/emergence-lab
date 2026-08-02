@@ -251,3 +251,26 @@ acceptance for one reason, previously flagged and unaddressed:
 - Everything else is accepted: equations, presets, tests, splats. Do not
   touch them. Keep npm run verify green. This is round 3 of 3 — smallest
   possible diff.
+
+## Verifier findings (2026-08-02, Claude Fable 5 — round 3, CLOSED)
+
+Round 3 dispatched no worker diff (worker spawn produced nothing), so per
+the round-2 designation ("round 3 of 3") the verifier fixed the display
+wiring directly and closed the stage.
+
+Root cause of the persistent mid-blue background: **the WebGL shader never
+implemented the cyclic two-channel contract.** `colormap.ts` documents and
+implements it (`isCyclic` branch in `twoChannelColour`: c1 picks the hue,
+c0 gates brightness, fading to black keeps an empty cell black) and the
+canvas renderer honours it — but the GLSL `twoChannelColour` fell through
+to the generic composite `c1*0.72 + (1-c0)*0.28`, which pins zero-density
+cells at ~0.28 of the phase ramp: the observed pale periwinkle. No amount
+of colormap.ts tuning (rounds 2–3's target file) could ever have fixed it.
+
+Fix: a cyclic branch in the GLSL `twoChannelColour` (presets 11/12) that
+mirrors the colormap.ts contract. Verified in-browser: swarmalators now
+renders phase-coloured particles on a true black field; Lorenz (the other
+2-channel cyclic consumer) re-checked, no regression — dark field, legible
+violet ribbons; boids is 4-channel, unaffected. `npm run verify` green.
+
+All six acceptance criteria now PASS. Stage complete.
