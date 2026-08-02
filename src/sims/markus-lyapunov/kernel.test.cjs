@@ -131,3 +131,23 @@ test("destroy releases state and selfTest passes", () => {
   assert.doesNotThrow(() => kernel.step(1 / 60));
   assert.equal(selfTest(), true);
 });
+
+test("points outside the [0,4]² parameter domain sample as NaN", () => {
+  assert.ok(Number.isNaN(model.sampleLyapunovPoint(4.5, 3, "AB", 50, 100)));
+  assert.ok(Number.isNaN(model.sampleLyapunovPoint(-0.5, 3, "AB", 50, 100)));
+  assert.ok(Number.isNaN(model.sampleLyapunovPoint(3, 4.5, "AB", 50, 100)));
+  assert.ok(!Number.isNaN(model.sampleLyapunovPoint(4, 4, "AB", 50, 100)));
+});
+
+test("out-of-domain cells render as empty (both channels zero), not saturated chaos", () => {
+  // A 3:1 viewport at zoom 1 centred on (3,3) pushes the horizontal axis past
+  // a=4 — the defect that showed as a white slab on wide monitors.
+  const state = runKernel({ centerX: 3, centerY: 3, zoom: 1 }, 48, 16).readState();
+  let emptyCells = 0;
+  for (let offset = 0; offset < state.length; offset += 2) {
+    assert.ok(Number.isFinite(state[offset]) && Number.isFinite(state[offset + 1]));
+    if (state[offset] === 0 && state[offset + 1] === 0) emptyCells += 1;
+  }
+  assert.ok(emptyCells > 0, "expected the a>4 strip to map to empty cells");
+  assert.ok(emptyCells < state.length / 2, "in-domain cells must still carry exponents");
+});

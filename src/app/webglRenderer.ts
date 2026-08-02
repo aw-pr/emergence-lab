@@ -272,7 +272,8 @@ vec3 twoChannelColour(float c0, float c1) {
   if (u_preset == 14) {
     if (c0 > 0.0) return rampColour(4, adjust(c0));
     if (c1 > 0.0) return rampColour(3, adjust(c1));
-    return vec3(238.0, 226.0, 188.0) / 255.0;
+    // Both-zero = outside the map's [0,4]^2 domain — mirrors colormap.ts.
+    return vec3(2.0, 6.0, 23.0) / 255.0;
   }
   if (u_preset == 13) {
     vec3 base = rampColour(4, adjust(c0));
