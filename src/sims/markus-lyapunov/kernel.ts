@@ -187,6 +187,7 @@ export class MarkusLyapunovKernel implements SimKernel {
 
     for (let cell = 0; cell < exponents.length; cell += 1) {
       const exponent = exponents[cell];
+      if (!Number.isFinite(exponent)) continue; // outside [0,4]² — stays 0,0
       const offset = cell * this.channelCount;
       this.state[offset] = Math.min(
         LYAPUNOV_MAGNITUDE_CEILING,
