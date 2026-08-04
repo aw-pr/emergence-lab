@@ -1,7 +1,9 @@
 import {
   createSwarmalatorState,
+  mulberry32,
   stepSwarmalators,
   SWARMALATOR_TAU,
+  wrapTau,
   type SwarmalatorState,
 } from "./model.js";
 
@@ -35,8 +37,15 @@ const MAX_PARTICLE_COUNT = 1200;
 const DEFAULT_A = 1;
 const DEFAULT_B = 18;
 const DEFAULT_J = 1;
-const DEFAULT_K = 0;
+// The J=1, K=-0.75 "active phase wave" regime circulates forever; K=0 lands on
+// the static phase wave, which freezes into a ring within seconds of loading.
+const DEFAULT_K = -0.75;
 const DEFAULT_FREQUENCY_SPREAD = 0;
+const DEFAULT_NOISE = 0;
+const MAX_NOISE = 1;
+// Decorrelates the jitter stream from the placement RNG, which consumes the
+// raw seed.
+const NOISE_SEED_OFFSET = 0x9e37;
 const DEFAULT_TIMESTEP = 0.05;
 const DEFAULT_SEED = 1;
 const CHANNEL_COUNT = 2;
@@ -69,6 +78,7 @@ export class SwarmalatorsKernel implements SimKernel {
     { key: "J", label: "Phase attraction", type: "number", default: DEFAULT_J, min: -1, max: 1, step: 0.05 },
     { key: "K", label: "Synchronisation", type: "number", default: DEFAULT_K, min: -2, max: 2, step: 0.05 },
     { key: "frequencySpread", label: "Frequency spread", type: "number", default: DEFAULT_FREQUENCY_SPREAD, min: 0, max: 2, step: 0.01 },
+    { key: "noise", label: "Jitter", type: "number", default: DEFAULT_NOISE, min: 0, max: MAX_NOISE, step: 0.01 },
     { key: "timestep", label: "Time step", type: "number", default: DEFAULT_TIMESTEP, min: 0.002, max: 0.1, step: 0.002 },
     { key: "seed", label: "Seed", type: "number", default: DEFAULT_SEED, min: 1, max: 9999, step: 1 },
     { key: "trailPersistence", label: "Trail persistence", type: "number", default: DEFAULT_TRAIL_PERSISTENCE, min: 0, max: 0.98, step: 0.01 },
@@ -90,6 +100,8 @@ export class SwarmalatorsKernel implements SimKernel {
   private J = DEFAULT_J;
   private K = DEFAULT_K;
   private timestep = DEFAULT_TIMESTEP;
+  private noise = DEFAULT_NOISE;
+  private noiseRandom: () => number = mulberry32(DEFAULT_SEED + NOISE_SEED_OFFSET);
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -101,7 +113,9 @@ export class SwarmalatorsKernel implements SimKernel {
     this.K = clamp(numberParam(params, "K", DEFAULT_K), -2, 2);
     this.timestep = clamp(numberParam(params, "timestep", DEFAULT_TIMESTEP), 0.002, 0.08);
     const frequencySpread = clamp(numberParam(params, "frequencySpread", DEFAULT_FREQUENCY_SPREAD), 0, 2);
+    this.noise = clamp(numberParam(params, "noise", DEFAULT_NOISE), 0, MAX_NOISE);
     const seed = numberParam(params, "seed", DEFAULT_SEED);
+    this.noiseRandom = mulberry32(seed + NOISE_SEED_OFFSET);
     const cells = this.width * this.height;
 
     this.state = new Float32Array(cells * CHANNEL_COUNT);
@@ -133,7 +147,23 @@ export class SwarmalatorsKernel implements SimKernel {
     // the canonical regimes (sync, phase wave, splintering) play out in
     // seconds at 1x regardless of B/A.
     const timeScale = this.B / this.A;
-    stepSwarmalators(this.particles, { A: this.A, B: this.B, J: this.J, K: this.K }, this.timestep * timeScale);
+    const dtEff = this.timestep * timeScale;
+    stepSwarmalators(this.particles, { A: this.A, B: this.B, J: this.J, K: this.K }, dtEff);
+    if (this.noise > 0) {
+      // Seeded Brownian kicks (√dt scaling) so ordered states keep simmering
+      // instead of freezing. Position kicks scale with the model's natural
+      // length L = B/A cells; phase kicks are a fraction of a radian at full
+      // slider.
+      const random = this.noiseRandom;
+      const positionKick = this.noise * timeScale * 0.05 * Math.sqrt(dtEff);
+      const phaseKick = this.noise * 0.6 * Math.sqrt(this.timestep);
+      const { x, y, theta } = this.particles;
+      for (let i = 0; i < x.length; i += 1) {
+        x[i] += (random() * 2 - 1) * positionKick;
+        y[i] += (random() * 2 - 1) * positionKick;
+        theta[i] = wrapTau(theta[i] + (random() * 2 - 1) * phaseKick);
+      }
+    }
     this.rasterise();
   }
 

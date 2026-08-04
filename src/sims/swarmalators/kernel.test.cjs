@@ -18,8 +18,25 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["particleCount", "A", "B", "J", "K", "frequencySpread", "timestep", "seed", "trailPersistence"],
+    ["particleCount", "A", "B", "J", "K", "frequencySpread", "noise", "timestep", "seed", "trailPersistence"],
   );
+
+  const K = kernel.paramSchema.find((descriptor) => descriptor.key === "K");
+  assert.equal(K.default, -0.75, "default regime must be the never-settling active phase wave");
+});
+
+test("jitter perturbs the evolution deterministically", () => {
+  const run = (noise) => {
+    const kernel = new SwarmalatorsKernel();
+    kernel.init(32, 24, { particleCount: 48, seed: 23, noise });
+    for (let step = 0; step < 8; step += 1) kernel.step(1 / 60);
+    return Array.from(kernel.readState());
+  };
+  assert.notDeepEqual(run(0.4), run(0), "expected jitter to change the trajectory");
+  assert.deepEqual(run(0.4), run(0.4), "jitter must be seeded and repeatable");
+  for (const value of run(0.4)) {
+    assert.ok(value >= 0 && value <= 1);
+  }
 });
 
 test("two particles converge to the closed-form B/A spatial equilibrium", () => {
