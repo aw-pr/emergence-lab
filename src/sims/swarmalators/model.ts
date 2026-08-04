@@ -23,7 +23,7 @@ export interface InitialPlacement {
   radius?: number;
 }
 
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let state = (Math.floor(seed) >>> 0) || 1;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
