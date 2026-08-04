@@ -339,7 +339,7 @@ export const REGISTRY: readonly SimEntry[] = [
     family: "Escape-Time Fractals",
     subtitle: "Alternating logistic maps divide stable cycles from chaos.",
     description:
-      "Sweep two growth rates across the plane and follow their repeating schedule: amber islands mark settling orbits while blue-black channels expose chaos between them.",
+      "Sweep two growth rates across the plane and follow their repeating schedule: amber islands mark settling orbits while blue-black channels expose chaos between them, the whole plane turning slowly about its centre.",
     load: async () => {
       const mod = await import("../sims/markus-lyapunov/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);
