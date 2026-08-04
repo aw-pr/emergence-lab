@@ -43,6 +43,7 @@ test("metadata matches the renderer contract", () => {
       "warmupIterations",
       "sampleIterations",
       "sequence",
+      "rotationSpeed",
     ],
   );
 
@@ -130,6 +131,42 @@ test("destroy releases state and selfTest passes", () => {
   assert.equal(kernel.readState().length, 0);
   assert.doesNotThrow(() => kernel.step(1 / 60));
   assert.equal(selfTest(), true);
+});
+
+test("rotation animates the field while honouring the channel contract", () => {
+  const width = 24;
+  const height = 18;
+  const kernel = new MarkusLyapunovKernel();
+  kernel.init(width, height, { rotationSpeed: 30 });
+  const before = Array.from(kernel.readState());
+  for (let i = 0; i < 60; i += 1) kernel.step(1 / 60);
+  const after = kernel.readState();
+
+  assert.notDeepEqual(Array.from(after), before, "expected rotation to move the image");
+  for (let offset = 0; offset < after.length; offset += 2) {
+    const stable = after[offset];
+    const chaotic = after[offset + 1];
+    assert.ok(Number.isFinite(stable) && Number.isFinite(chaotic));
+    assert.ok(stable >= 0 && stable <= LYAPUNOV_MAGNITUDE_CEILING);
+    assert.ok(chaotic >= 0 && chaotic <= LYAPUNOV_MAGNITUDE_CEILING);
+    assert.ok(stable === 0 || chaotic === 0);
+  }
+});
+
+test("rotationSpeed 0 renders the static field and step is a no-op", () => {
+  const kernel = new MarkusLyapunovKernel();
+  kernel.init(24, 18, { rotationSpeed: 0 });
+  const before = Array.from(kernel.readState());
+  kernel.step(1);
+  assert.deepEqual(Array.from(kernel.readState()), before);
+
+  let stableCells = 0;
+  let chaoticCells = 0;
+  for (let offset = 0; offset < before.length; offset += 2) {
+    if (before[offset] > 0) stableCells += 1;
+    if (before[offset + 1] > 0) chaoticCells += 1;
+  }
+  assert.ok(stableCells > 0 && chaoticCells > 0);
 });
 
 test("points outside the [0,4]² parameter domain sample as NaN", () => {
