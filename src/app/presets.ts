@@ -263,6 +263,11 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Active phase wave",
       params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, timestep: 0.05 },
     },
+    {
+      id: "restless-mix",
+      label: "Restless mix",
+      params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.6, frequencySpread: 0.6, noise: 0.35, timestep: 0.05 },
+    },
   ],
   physarum: [
     {
