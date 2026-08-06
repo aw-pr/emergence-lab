@@ -74,7 +74,18 @@ function assertSimKernel(value: unknown): asserts value is SimKernel {
   }
 }
 
-export const REGISTRY: readonly SimEntry[] = [
+/**
+ * Feature flag: sims shelved from the app without removing their code.
+ * A slug listed here disappears from the gallery and its route stops
+ * resolving; kernels, presets, and tests stay intact. Delete the slug
+ * from this set to bring the sim back.
+ */
+const SHELVED_SLUGS: ReadonlySet<string> = new Set([
+  "swarmalators",
+  "markus-lyapunov",
+]);
+
+const CATALOGUE: readonly SimEntry[] = [
   {
     slug: "gray-scott",
     name: "Gray-Scott",
@@ -370,6 +381,10 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
 ];
+
+export const REGISTRY: readonly SimEntry[] = CATALOGUE.filter(
+  (entry) => !SHELVED_SLUGS.has(entry.slug),
+);
 
 export function findEntry(slug: string): SimEntry | undefined {
   return REGISTRY.find((entry) => entry.slug === slug);
