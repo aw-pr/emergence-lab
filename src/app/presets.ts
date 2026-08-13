@@ -237,6 +237,38 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
   ],
+  swarmalators: [
+    {
+      id: "static-sync",
+      label: "Static sync",
+      params: { particleCount: 384, A: 1, B: 18, J: 0.1, K: 1, frequencySpread: 0, timestep: 0.05 },
+    },
+    {
+      id: "static-async",
+      label: "Static async",
+      params: { particleCount: 384, A: 1, B: 18, J: 0.1, K: -1, frequencySpread: 0, timestep: 0.05 },
+    },
+    {
+      id: "static-phase-wave",
+      label: "Static phase wave",
+      params: { particleCount: 384, A: 1, B: 18, J: 1, K: 0, frequencySpread: 0, timestep: 0.05 },
+    },
+    {
+      id: "splintered-phase-wave",
+      label: "Splintered phase wave",
+      params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.1, frequencySpread: 0, timestep: 0.05 },
+    },
+    {
+      id: "active-phase-wave",
+      label: "Active phase wave",
+      params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, timestep: 0.05 },
+    },
+    {
+      id: "restless-mix",
+      label: "Restless mix",
+      params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.6, frequencySpread: 0.6, noise: 0.35, timestep: 0.05 },
+    },
+  ],
   physarum: [
     {
       id: "veins",
@@ -332,6 +364,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "wide-wings",
       label: "Wide wings",
       params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 },
+    },
+    // Sweep 2026-08-13: 0.731 vs Wide wings 0.677 (+7.9% composite).
+    {
+      id: "dense-wings",
+      label: "Dense wings",
+      params: { beta: 2.6667, stepsPerFrame: 6, fade: 0.997, rho: 41.6, sigma: 14 },
     },
     {
       id: "fast-trace",
@@ -585,6 +623,32 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         exposure: 1.35,
         pointDensity: 1,
         colourMode: "mono",
+      },
+    },
+  ],
+  "markus-lyapunov": [
+    {
+      id: "zircon-zity",
+      label: "Zircon Zity",
+      params: {
+        centerX: 3,
+        centerY: 3,
+        zoom: 1,
+        warmupIterations: 200,
+        sampleIterations: 500,
+        sequence: "AB",
+      },
+    },
+    {
+      id: "woven-boundary",
+      label: "Woven boundary",
+      params: {
+        centerX: 3.48,
+        centerY: 3.64,
+        zoom: 4.5,
+        warmupIterations: 300,
+        sampleIterations: 700,
+        sequence: "AABAB",
       },
     },
   ],

@@ -265,7 +265,10 @@ test("every attractor is actually chaotic, not a limit cycle", () => {
     );
   }
 
-  const lorenz = largestLyapunov(SPECS.lorenz, defaults);
+  // The faithfulness anchor uses the classic textbook parameters, which the
+  // schema defaults no longer are (they follow the Dense wings preset).
+  const classic = { ...defaults, sigma: 10, rho: 28, beta: 2.6666667 };
+  const lorenz = largestLyapunov(SPECS.lorenz, classic);
   assert.ok(
     Math.abs(lorenz - 0.906) < 0.15,
     `Lorenz should sit near the textbook 0.906, got ${lorenz.toFixed(4)}`,

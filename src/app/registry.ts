@@ -74,7 +74,18 @@ function assertSimKernel(value: unknown): asserts value is SimKernel {
   }
 }
 
-export const REGISTRY: readonly SimEntry[] = [
+/**
+ * Feature flag: sims shelved from the app without removing their code.
+ * A slug listed here disappears from the gallery and its route stops
+ * resolving; kernels, presets, and tests stay intact. Delete the slug
+ * from this set to bring the sim back.
+ */
+const SHELVED_SLUGS: ReadonlySet<string> = new Set([
+  "swarmalators",
+  "markus-lyapunov",
+]);
+
+const CATALOGUE: readonly SimEntry[] = [
   {
     slug: "gray-scott",
     name: "Gray-Scott",
@@ -180,6 +191,18 @@ export const REGISTRY: readonly SimEntry[] = [
       "Coloured particles pull and push by species. Asymmetric forces—A chases B while B flees A—self-organise into membranes, cells, and roving hunters.",
     load: async () => {
       const mod = await import("../sims/particle-life/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
+    slug: "swarmalators",
+    name: "Swarmalators",
+    family: "Swarm & Flocking",
+    subtitle: "Oscillators couple where they gather to shape living phase waves.",
+    description:
+      "Particles attract and repel while their internal clocks synchronise or split—forming still discs, rainbow rings, rotating shards, and restless waves.",
+    load: async () => {
+      const mod = await import("../sims/swarmalators/kernel.ts");
       return pickKernelExport(mod as Record<string, unknown>);
     },
   },
@@ -322,6 +345,18 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
   {
+    slug: "markus-lyapunov",
+    name: "Markus–Lyapunov Fractal",
+    family: "Escape-Time Fractals",
+    subtitle: "Alternating logistic maps divide stable cycles from chaos.",
+    description:
+      "Sweep two growth rates across the plane and follow their repeating schedule: amber islands mark settling orbits while blue-black channels expose chaos between them, the whole plane turning slowly about its centre.",
+    load: async () => {
+      const mod = await import("../sims/markus-lyapunov/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "cyclic-ca",
     name: "Cyclic Cellular Automaton",
     family: "Cellular Automata",
@@ -346,6 +381,10 @@ export const REGISTRY: readonly SimEntry[] = [
     },
   },
 ];
+
+export const REGISTRY: readonly SimEntry[] = CATALOGUE.filter(
+  (entry) => !SHELVED_SLUGS.has(entry.slug),
+);
 
 export function findEntry(slug: string): SimEntry | undefined {
   return REGISTRY.find((entry) => entry.slug === slug);

@@ -23,10 +23,12 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_SIGMA = 10;
-const DEFAULT_RHO = 28;
+// Defaults follow the "Dense wings" preset (2026-08-13 interestingness sweep:
+// 0.731 composite vs 0.610 for the old classic-butterfly defaults).
+const DEFAULT_SIGMA = 14;
+const DEFAULT_RHO = 41.6;
 const DEFAULT_BETA = 2.6666667;
-const DEFAULT_STEPS_PER_FRAME = 24;
+const DEFAULT_STEPS_PER_FRAME = 6;
 const DEFAULT_FADE = 0.997;
 const DEFAULT_COLOUR_BY_HEIGHT = true;
 /** Density (brightness) and hue (palette position). Hue has to be its own
