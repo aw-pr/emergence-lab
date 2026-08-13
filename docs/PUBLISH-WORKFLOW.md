@@ -97,6 +97,16 @@ The `git publish` alias (push the curated public mirror):
 Do **not** hand-type `git push public main` to publish. Route through
 `git publish` so the backup push and the public push happen together.
 
+The publish boundary is PR-by-default and the pre-push hook enforces it:
+the push to `public/main` is rejected unless `PUBLISH_PR_REVIEWED=1` is
+set, the attestation that a `publish → main` PR was opened and its diff
+reviewed (private-tier paths absent). Sequence: `git push public publish`
+(the hook allows the PR source, private-file-scanned), `gh pr create
+--base main --head publish`, review the diff, then
+`PUBLISH_PR_REVIEWED=1 git publish` — the fast-forward push completes the
+PR, which GitHub marks merged once the base holds the head commits.
+Repo-level opt-out: `git config publishguard.boundary direct`.
+
 ## What never goes public
 
 - Tracked private-tier files: `HANDOFF.md`, `RUNBOOK.md`, `runs/`, and
