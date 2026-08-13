@@ -359,13 +359,20 @@ export class Renderer {
     clientY: number,
   ): Orbit3DMarkerClientSnapshot | null {
     this.pauseOrbit3dAutoRotate();
-    if (booleanParam(this.params, "realAxisSweep", false)) {
-      this.params = { ...this.params, realAxisSweep: false };
-      this.notifyParamsChange();
-    }
     const viewport = this.pointerToViewport(clientX, clientY);
     if (!viewport) return null;
-    const marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
+    let marker = this.backend.moveOrbit3dMarker?.(viewport.x, viewport.y) ?? null;
+    if (marker && booleanParam(this.params, "realAxisSweep", false)) {
+      // Dragging the marker while the beam sweeps scrubs the beam: the sweep
+      // continues from the dragged position rather than being cancelled, and
+      // the marker stays pinned to the real axis the beam illuminates.
+      this.sweepRe = Math.min(
+        ORBIT_SWEEP_START,
+        Math.max(ORBIT_SWEEP_END, marker.re),
+      );
+      this.sweepHold = 0;
+      marker = this.backend.setOrbit3dMarker?.(this.sweepRe, 0) ?? marker;
+    }
     if (marker) this.draw();
     return this.markerSnapshotToClient(marker);
   }
