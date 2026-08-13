@@ -365,6 +365,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Wide wings",
       params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 },
     },
+    // Sweep 2026-08-13: 0.731 vs Wide wings 0.677 (+7.9% composite).
+    {
+      id: "dense-wings",
+      label: "Dense wings",
+      params: { beta: 2.6667, stepsPerFrame: 6, fade: 0.997, rho: 41.6, sigma: 14 },
+    },
     {
       id: "fast-trace",
       label: "Fast trace",
