@@ -37,12 +37,14 @@ Do not read anything else unless you need to; keep your context lean.
 ## Deliverables
 
 1. src/app/presets.ts — for each sim where a swept candidate beats the best
-   existing preset's composite score by more than 10%, add (or replace a
+   existing preset's composite score by more than 5%, add (or replace a
    non-default) preset, named descriptively, with a comment recording the
-   composite score delta and the sweep date 2026-08-13. Cap: 2 new presets
-   per sim. Never remove or rename a sim's default preset. If nothing
-   qualifies for a sim, change nothing for that sim and say so in the
-   completion note.
+   composite score delta and the sweep date 2026-08-13. Under this rule the
+   lorenz-attractor top candidate (rho=41.6 sigma=14 fade=0.997, 0.731 vs
+   Wide wings 0.677, +7.9%) qualifies; Gray-Scott (0% over Waves) and Boids
+   (best swept loses to Tight flock) do not. Cap: 2 new presets per sim.
+   Never remove or rename a sim's default preset. If nothing qualifies for a
+   sim, change nothing for that sim and say so in the completion note.
 
 ## Constraints
 
