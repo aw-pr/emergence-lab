@@ -43,10 +43,15 @@ as an incident, not routine.
 authorship (see CLAUDE.md and `~/.claude/rules/mcp-hub-dev-rules.md`) land
 on the public mirror as-is. The public history is the audit trail.
 
-If a particular run produces commits that are too hairy to publish
-commit-by-commit, squash them on a local branch above `publish` before
-fast-forwarding. Mode is a per-merge choice; the config key just sets the
-default.
+Squashing above `publish` is not part of routine publishing. Commits land on
+the mirror atomically, commit-by-commit, via the release-branch cherry-pick
+flow below — the per-agent commit trail is part of what the mirror
+demonstrates. The only legitimate squash is the one-time seed when first
+publishing a repo that has been private for a while; once seeded, do not
+repeat it. (Historical note: the mirror was last caught up by a squashed
+sync on 2026-08-13, commit `183974e`, under the older wording of this
+section. Published commits are immutable, so it stays; it is not a
+precedent.)
 
 ## Day-to-day
 
