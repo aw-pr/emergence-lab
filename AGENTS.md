@@ -20,6 +20,31 @@ canonical checkout with
 `AUTOMETTA_ROOT=~/repos/autometta scripts/autometta-vendor-check.sh`, and
 refresh by re-running the autometta-setup vendor step.
 
+## Worktrees and branches
+
+**Take new worktrees from `dev`.** `dev` is the live branch in practice; `main`
+advances from it and `publish` is the mirror boundary. A worktree branched from
+anywhere else inherits a history the rest of the fleet is not working against.
+
+Two long-lived branches are not `dev` and should not be treated as a base:
+
+- `feat/logistic-mandelbrot-hybrid-surface` (worktree `../emergence-lab-surface`)
+  is **an experiment whose fate is undecided.** It rewrites `orbit3d.ts`
+  internals and adds `src/app/orbitSurface.ts`; operator visual review rejected
+  its output on 2026-07-20 (sawtooth silhouette, no sheet-to-cloud dissolve) and
+  it has been parked since. Do not branch from it, import from it, reconcile
+  against it, or treat its approach as precedent. Do not delete it or propose
+  deleting it either — the decision is the operator's and has not been made.
+  Follow-up notes live at
+  `docs/plans/2026-07-20-logistic-mandelbrot-edge-transition-next-steps.md`.
+- `feat/logistic-mandelbrot-gpu-sampler` (worktree `../emergence-lab-gpu`) is the
+  active autometta run for stages 34-36, moving orbit sampling to a WebGL2
+  fragment shader. Branched from `dev`.
+
+Both touch the same `orbit3d.ts` internals, and a rebase between them has
+already failed once with eight structural conflicts. They are deliberately
+allowed to diverge.
+
 ## Interface contract
 
 The kernel-to-renderer contract in `docs/INTERFACE.md` is a reviewed boundary,
