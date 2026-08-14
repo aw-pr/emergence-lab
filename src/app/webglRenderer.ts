@@ -1540,8 +1540,7 @@ export class WebGLRendererBackend implements RendererBackend {
             frame.speedScale,
           )
         : 0;
-    const fanActive =
-      colourMode !== "cycle" && frame.params.realAxisSweep === true;
+    const fanActive = frame.params.realAxisSweep === true;
     const ground = this.ensureOrbit3dGround(frame, phase, cycling);
     if (
       !stats ||
