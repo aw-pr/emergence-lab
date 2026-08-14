@@ -1332,7 +1332,7 @@ export class Orbit3DPointCloud {
   draw(
     width: number,
     height: number,
-    exposure = 1.35,
+    exposure = 0.4,
     ground: Orbit3DGroundPlane | null = null,
     colourMode: Orbit3DColourMode = "period",
     fanActive = false,
