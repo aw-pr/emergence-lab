@@ -52,6 +52,10 @@ const CHANNEL_COUNT = 2;
 const SPLAT_RADIUS = 3;
 const SPLAT_RADIUS_SQUARED = SPLAT_RADIUS * SPLAT_RADIUS;
 const VIEW_FIT_SMOOTHING = 0.04;
+const DEFAULT_CAMERA_DRIFT = 0.5;
+const MAX_CAMERA_DRIFT = 1;
+const CAMERA_DRIFT_VIEW_FRACTION = 0.12;
+const CAMERA_DRIFT_ANGULAR_SPEED = 0.006;
 const DEFAULT_TRAIL_PERSISTENCE = 0.85;
 // Below this residue a trail cell is snapped to empty: the density would be
 // invisible anyway and the atan2 of two near-zero sums is just noise.
@@ -82,6 +86,7 @@ export class SwarmalatorsKernel implements SimKernel {
     { key: "timestep", label: "Time step", type: "number", default: DEFAULT_TIMESTEP, min: 0.002, max: 0.1, step: 0.002 },
     { key: "seed", label: "Seed", type: "number", default: DEFAULT_SEED, min: 1, max: 9999, step: 1 },
     { key: "trailPersistence", label: "Trail persistence", type: "number", default: DEFAULT_TRAIL_PERSISTENCE, min: 0, max: 0.98, step: 0.01 },
+    { key: "cameraDrift", label: "Camera drift", type: "number", default: DEFAULT_CAMERA_DRIFT, min: 0, max: MAX_CAMERA_DRIFT, step: 0.05 },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
@@ -95,6 +100,9 @@ export class SwarmalatorsKernel implements SimKernel {
   private viewScale = 0;
   private viewCentreX = 0;
   private viewCentreY = 0;
+  private viewSwarmRadius = 0;
+  private cameraDrift = DEFAULT_CAMERA_DRIFT;
+  private simulationTime = 0;
   private A = DEFAULT_A;
   private B = DEFAULT_B;
   private J = DEFAULT_J;
@@ -127,6 +135,11 @@ export class SwarmalatorsKernel implements SimKernel {
       0,
       0.98,
     );
+    this.cameraDrift = clamp(
+      numberParam(params, "cameraDrift", DEFAULT_CAMERA_DRIFT),
+      0,
+      MAX_CAMERA_DRIFT,
+    );
     this.particles = createSwarmalatorState(
       { particleCount, frequencySpread, seed },
       {
@@ -136,6 +149,7 @@ export class SwarmalatorsKernel implements SimKernel {
       },
     );
     this.viewScale = 0; // snap the view fit on (re)init rather than lerping
+    this.simulationTime = 0;
     this.rasterise();
   }
 
@@ -164,6 +178,7 @@ export class SwarmalatorsKernel implements SimKernel {
         theta[i] = wrapTau(theta[i] + (random() * 2 - 1) * phaseKick);
       }
     }
+    this.simulationTime += dtEff;
     this.rasterise();
   }
 
@@ -178,6 +193,8 @@ export class SwarmalatorsKernel implements SimKernel {
     this.densityAcc = new Float32Array(0);
     this.phaseCos = new Float32Array(0);
     this.phaseSin = new Float32Array(0);
+    this.viewSwarmRadius = 0;
+    this.simulationTime = 0;
     this.particles = createSwarmalatorState({ particleCount: 0, frequencySpread: 0, seed: 1 });
   }
 
@@ -213,11 +230,40 @@ export class SwarmalatorsKernel implements SimKernel {
       this.viewScale = targetScale;
       this.viewCentreX = centroidX;
       this.viewCentreY = centroidY;
+      this.viewSwarmRadius = swarmRadius;
       return;
     }
     this.viewScale *= Math.pow(targetScale / this.viewScale, VIEW_FIT_SMOOTHING);
     this.viewCentreX += (centroidX - this.viewCentreX) * VIEW_FIT_SMOOTHING;
     this.viewCentreY += (centroidY - this.viewCentreY) * VIEW_FIT_SMOOTHING;
+    // Include centre-tracking lag in the enclosing radius used by the drift
+    // safety bound. The triangle inequality makes this conservative.
+    this.viewSwarmRadius = swarmRadius + Math.hypot(
+      centroidX - this.viewCentreX,
+      centroidY - this.viewCentreY,
+    );
+  }
+
+  private cameraOffset(): readonly [number, number] {
+    if (this.cameraDrift === 0 || this.viewScale <= 0) return [0, 0];
+
+    const minDim = Math.min(this.width, this.height);
+    const viewHalfSpan = minDim / (2 * this.viewScale);
+    const splatMargin = SPLAT_RADIUS / this.viewScale;
+    const availableMargin = Math.max(
+      0,
+      viewHalfSpan - this.viewSwarmRadius - splatMargin,
+    );
+    const amplitude = Math.min(
+      viewHalfSpan * CAMERA_DRIFT_VIEW_FRACTION * this.cameraDrift,
+      availableMargin,
+    );
+    const phase = this.simulationTime * CAMERA_DRIFT_ANGULAR_SPEED;
+    const axisAmplitude = amplitude / Math.SQRT2;
+    return [
+      Math.sin(phase) * axisAmplitude,
+      Math.sin(phase * 0.73) * axisAmplitude,
+    ];
   }
 
   private rasterise(): void {
@@ -238,10 +284,11 @@ export class SwarmalatorsKernel implements SimKernel {
       }
     }
     this.updateViewFit();
+    const [cameraOffsetX, cameraOffsetY] = this.cameraOffset();
 
     for (let i = 0; i < this.particles.x.length; i += 1) {
-      const particleX = this.width / 2 + (this.particles.x[i] - this.viewCentreX) * this.viewScale;
-      const particleY = this.height / 2 + (this.particles.y[i] - this.viewCentreY) * this.viewScale;
+      const particleX = this.width / 2 + (this.particles.x[i] - this.viewCentreX - cameraOffsetX) * this.viewScale;
+      const particleY = this.height / 2 + (this.particles.y[i] - this.viewCentreY - cameraOffsetY) * this.viewScale;
       const minX = Math.max(0, Math.floor(particleX - SPLAT_RADIUS));
       const maxX = Math.min(this.width - 1, Math.floor(particleX + SPLAT_RADIUS));
       const minY = Math.max(0, Math.floor(particleY - SPLAT_RADIUS));
