@@ -7,7 +7,9 @@
 - **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Verifier:** Claude Opus 5 <claude-opus-5@local>
 - **Worker effort:** high
-- **Verifier effort:** high
+<!-- Verifier effort intentionally unset: autometta delivers `--effort high`
+     as a single argv element and the Claude CLI rejects it. See autometta card
+     30-effort-flags-ifs-wordsplit. Restore once that lands. -->
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Pairing rationale:** The defect mode here is a cloud that renders and looks
