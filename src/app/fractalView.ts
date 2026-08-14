@@ -94,6 +94,21 @@ export function zoomAroundPoint(
   };
 }
 
+// Bitmap Y grows downward. The three classic fractals were authored so that a
+// downward drag samples an *upward* plane step, so their pan negates the bitmap
+// dy and their param widgets/tests depend on that. markus-lyapunov's
+// complexAtPoint increases plane Y with bitmap Y (mirroring sampleLyapunovGrid
+// in src/sims/markus-lyapunov/model.ts), so negating dy for it double-counts and
+// inverts the vertical drag. Keying this by FractalSlug makes the convention
+// explicit and forces any newly admitted slug to declare its own — the compiler
+// requires an entry here — rather than silently inheriting the negation.
+const PAN_INVERTS_BITMAP_Y: Record<FractalSlug, boolean> = {
+  mandelbrot: true,
+  "julia-set": true,
+  "burning-ship": true,
+  "markus-lyapunov": false,
+};
+
 export function panByBitmapDelta(
   slug: FractalSlug,
   view: FractalView,
@@ -102,8 +117,9 @@ export function panByBitmapDelta(
   dx: number,
   dy: number,
 ): FractalView {
+  const sampleDy = PAN_INVERTS_BITMAP_Y[slug] ? -dy : dy;
   const before = complexAtPoint(slug, view, width, height, { x: 0, y: 0 });
-  const after = complexAtPoint(slug, view, width, height, { x: dx, y: -dy });
+  const after = complexAtPoint(slug, view, width, height, { x: dx, y: sampleDy });
   return {
     centerX: view.centerX - (after.x - before.x),
     centerY: view.centerY - (after.y - before.y),
