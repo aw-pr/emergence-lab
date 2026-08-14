@@ -7,7 +7,9 @@
 - **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
 - **Verifier:** Claude Fable 5 <claude-fable-5@local>
 - **Worker effort:** medium
-- **Verifier effort:** high
+<!-- Verifier effort intentionally unset: autometta delivers `--effort high`
+     as a single argv element and the Claude CLI rejects it. See autometta card
+     30-effort-flags-ifs-wordsplit. Restore once that lands. -->
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Pairing rationale:** By this point the design decisions are already made
