@@ -1,4 +1,10 @@
-export type FractalSlug = "mandelbrot" | "julia-set" | "burning-ship";
+import { BASE_PLANE_SPAN } from "../sims/markus-lyapunov/model.ts";
+
+export type FractalSlug =
+  | "mandelbrot"
+  | "julia-set"
+  | "burning-ship"
+  | "markus-lyapunov";
 
 export interface FractalView {
   centerX: number;
@@ -27,6 +33,17 @@ export function complexAtPoint(
 
   if (slug === "mandelbrot") {
     const scale = 3 / (Math.min(width, height) * view.zoom);
+    return {
+      x: view.centerX + (point.x - (width - 1) / 2) * scale,
+      y: view.centerY + (point.y - (height - 1) / 2) * scale,
+    };
+  }
+
+  if (slug === "markus-lyapunov") {
+    // Mirrors sampleLyapunovGrid in src/sims/markus-lyapunov/model.ts exactly:
+    // scale = BASE_PLANE_SPAN / (min(width, height) * zoom), centred on the
+    // bitmap, so screen point → (a, b) matches the sampled grid pixel-for-pixel.
+    const scale = BASE_PLANE_SPAN / (Math.min(width, height) * view.zoom);
     return {
       x: view.centerX + (point.x - (width - 1) / 2) * scale,
       y: view.centerY + (point.y - (height - 1) / 2) * scale,
@@ -95,5 +112,10 @@ export function panByBitmapDelta(
 }
 
 export function isFractalViewSlug(slug: string): slug is FractalSlug {
-  return slug === "mandelbrot" || slug === "julia-set" || slug === "burning-ship";
+  return (
+    slug === "mandelbrot" ||
+    slug === "julia-set" ||
+    slug === "burning-ship" ||
+    slug === "markus-lyapunov"
+  );
 }

@@ -12,6 +12,7 @@ export const FRACTAL_SLUGS = new Set<string>([
   "mandelbrot",
   "julia-set",
   "burning-ship",
+  "markus-lyapunov",
 ]);
 
 export function isFractalSlug(slug: string): boolean {
