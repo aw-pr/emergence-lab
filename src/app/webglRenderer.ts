@@ -1527,7 +1527,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private drawOrbit3d(frame: RendererBackendFrame): void {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const stats = this.orbit3d?.stats;
-    const exposure = numericParam(frame.params, "exposure", 1.35);
+    const exposure = numericParam(frame.params, "exposure", 0.4);
     const colourMode = orbit3dColourMode(frame.params);
     const cycling =
       colourMode === "cycle" && numericParam(frame.params, "cycleSpeed", 0) > 0;
