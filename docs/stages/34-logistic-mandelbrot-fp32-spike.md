@@ -7,7 +7,9 @@
 - **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Verifier:** Claude Opus 5 <claude-opus-5@local>
 - **Worker effort:** high
-- **Verifier effort:** high
+<!-- Verifier effort intentionally unset: autometta delivers `--effort high`
+     as a single argv element and the Claude CLI rejects it. See autometta card
+     30-effort-flags-ifs-wordsplit. Restore once that lands. -->
 - **Verifier panel:** false
 - **Pairing rationale:** This is a measurement stage whose output is a number
   that two later stages hard-code as their acceptance tolerance. A wrong number
