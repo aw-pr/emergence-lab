@@ -18,7 +18,7 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(kernel.channelRanges, [[0, 1], [0, 1]]);
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["particleCount", "A", "B", "J", "K", "frequencySpread", "noise", "timestep", "seed", "trailPersistence"],
+    ["particleCount", "A", "B", "J", "K", "frequencySpread", "noise", "timestep", "seed", "trailPersistence", "cameraDrift"],
   );
 
   const K = kernel.paramSchema.find((descriptor) => descriptor.key === "K");
@@ -114,6 +114,19 @@ test("identical seeds and parameters are deterministic", () => {
     return Array.from(kernel.readState());
   };
   assert.deepEqual(run(), run());
+});
+
+test("camera drift is deterministic and can be disabled", () => {
+  const run = (cameraDrift) => {
+    const kernel = new SwarmalatorsKernel();
+    kernel.init(32, 24, { particleCount: 48, seed: 23, cameraDrift });
+    for (let step = 0; step < 120; step += 1) kernel.step(1 / 60);
+    return Array.from(kernel.readState());
+  };
+
+  assert.deepEqual(run(0.5), run(0.5), "drift must be repeatable");
+  assert.deepEqual(run(0), run(0), "the disabled legacy camera path must remain repeatable");
+  assert.notDeepEqual(run(0.5), run(0), "enabled drift must move the fitted view");
 });
 
 test("selfTest passes", () => {

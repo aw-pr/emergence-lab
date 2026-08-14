@@ -4,14 +4,20 @@
 
 - **Authored:** 2026-08-14
 - **Orchestrator:** Claude Opus 5 <claude-opus-5@local>
-- **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
-- **Verifier:** Claude Fable 5 <claude-fable-5@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker effort:** high
+- **Verifier effort:** high
 - **Verifier panel:** false
-- **Pairing rationale:** Precise, well-specified TS surgery across three known
-  files — a Codex worker fit, on Codex quota. The failure mode is subtle
-  (wiring the wrong one of three similarly-named slug sets, or a coordinate
-  formula that pans at the wrong rate), so verification needs an independent
-  frontier tier driving the actual interaction rather than reading the diff.
+- **Pairing rationale:** The failure mode here is subtle rather than laborious
+  — wiring the wrong one of three similarly-named slug sets, or a coordinate
+  branch that pans at a plausible but wrong rate. Both roles therefore run at
+  high effort, and the two families are split across worker and verifier so
+  the check is genuinely independent of the build: a cross-family verifier
+  re-deriving the coordinate mapping is the point, since a same-family
+  verifier tends to repeat the worker's reasoning error.
+- **Verifier transport:** cli. The `Verifier effort` field is inert on the sdk
+  transport, which takes no effort argument.
 
 ## Objective
 

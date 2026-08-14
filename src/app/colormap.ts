@@ -210,7 +210,9 @@ export function defaultColourOptionsFor(
     case "kuramoto-oscillators":
       return { ...base, preset: "phase", contrast: 1.12 };
     case "swarmalators":
-      return { ...base, preset: "phase", gamma: 0.9, contrast: 1.2 };
+      // Judged by eye: darker mid-density wakes and firmer contrast separate
+      // the blue/rose phase bands without blowing out the pale wrap point.
+      return { ...base, preset: "phase", gamma: 0.78, contrast: 1.5 };
     case "diffusion-limited-aggregation":
       return { ...base, preset: "ice", gamma: 0.85, contrast: 1.35 };
     case "physarum":
