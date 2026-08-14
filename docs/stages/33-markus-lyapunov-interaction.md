@@ -19,6 +19,28 @@
 - **Verifier transport:** cli. The `Verifier effort` field is inert on the sdk
   transport, which takes no effort argument.
 
+## Re-brief 2026-08-14 round 2: fix the inverted vertical drag
+
+Round 1 landed as `e14b28c` and was verified 7/8. Do not rebuild it — the slug
+sets, the coordinate branch, the `BASE_PLANE_SPAN` import and the clamp are all
+correct and `renderModes.ts` was correctly left alone. One criterion failed.
+
+**The defect (criterion 4).** Vertical drag pans the wrong way.
+`panByBitmapDelta` samples `{ y: -dy }` (`src/app/fractalView.ts:97-110`),
+because the three original fractal mappings invert Y. The Markus mapping does
+not: it increases plane Y with bitmap Y (`src/app/fractalView.ts:42-50`),
+matching `sampleLyapunovGrid`. So the negation double-counts for this sim.
+
+Demonstrated: an 800x600 view centred at (3,3), zoom 1, dragging +60px
+downward moved `centerY` to 3.2 and carried the grabbed point from screen
+y=300 to y=240. 1:1 tracking requires y=360.
+
+Fix the sign for the markus-lyapunov branch **without** changing behaviour for
+`mandelbrot`, `julia-set` or `burning-ship`, which depend on the existing
+negation. Prefer making the Y convention explicit per slug over special-casing
+inside the shared helper, so the next sim added here cannot inherit the same
+trap silently.
+
 ## Objective
 
 Markus–Lyapunov is currently explorable only by typing Centre A, Centre B and
@@ -98,15 +120,24 @@ The verifier will check each of these. Failure of any one is a failure of the st
 2. Diff confined to the two files named in Constraints (plus any added test).
    `src/app/renderModes.ts` is unchanged — confirm by diff, explicitly.
 3. `getRenderMode("markus-lyapunov")` still returns `"field"`.
-4. Drag-pan tracks the pointer at 1:1: grabbing a visible feature and dragging
-   keeps that feature under the cursor. Verify by driving the real interaction
-   in a browser, not by reasoning about the formula.
+4. Drag-pan tracks the pointer at 1:1, **in both axes**: grabbing a feature and
+   dragging keeps it under the cursor. Verify by executing the real pan path
+   with concrete numbers — feed a known view and a known bitmap delta through
+   `panByBitmapDelta` and check where the grabbed point lands — and state the
+   figures. Do not reason about the formula in the abstract; that is how the
+   round-1 sign error survived the worker's own review. A browser is not
+   required and not available: codex roles are sandboxed and every Playwright
+   browser aborts before it loads a page unless the card declares
+   `Requires GUI`. Cover a downward drag explicitly, since that is the case
+   that failed.
 5. Scroll-zoom is anchored: the plane point under the cursor stays under the
    cursor across a zoom in and back out.
 6. The pan/zoom clamp holds — attempting to pan or zoom out far past the
    `[0, 4]²` square does not produce an all-empty (all-`NaN`) frame.
-7. The three existing fractals and `logistic-mandelbrot` are unchanged: spot
-   check pan, zoom, and (for logistic-mandelbrot) marker drag.
+7. The three existing fractals and `logistic-mandelbrot` are unchanged,
+   **including their vertical drag direction** — they rely on the existing
+   negation, so the round-2 fix must not disturb them. Spot check pan, zoom,
+   and (for logistic-mandelbrot) marker drag.
 8. Typing a Centre A / Centre B / Zoom value still works, and a pointer
    interaction afterwards updates those same widgets.
 
