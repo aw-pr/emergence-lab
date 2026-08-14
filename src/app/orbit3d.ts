@@ -39,6 +39,7 @@ uniform vec3 u_posOffset;
 uniform vec3 u_posScale;
 uniform float u_periodScale;
 out vec3 v_colour;
+out vec3 v_cycleHue;
 out float v_fanGlow;
 out float v_sliceGlow;
 out float v_markerGlow;
@@ -83,6 +84,7 @@ void main() {
 
   float height = clamp((position.z + 2.0) * 0.25, 0.0, 1.0);
   v_selfGlow = 0.0;
+  v_cycleHue = vec3(0.0);
   // A period-q cell lands sampleCount/q coincident samples on each sheet
   // dot, so additive stacking would brighten with the sample-count setting.
   // Scaling per-point energy by q/sampleCount keeps each distinct sheet
@@ -125,6 +127,9 @@ void main() {
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
     v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
+    // The beam borrows the cycling palette colour even over the steady bulb
+    // cells, so a sweep through cycle mode lights everything in cycle colours.
+    v_cycleHue = hue;
     v_selfGlow = complexity * 1.25;
   } else {
     float offAxis = clamp(abs(position.y), 0.0, 1.0);
@@ -168,11 +173,15 @@ const POINT_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 in vec3 v_colour;
+in vec3 v_cycleHue;
 in float v_fanGlow;
 in float v_sliceGlow;
 in float v_markerGlow;
 in float v_selfGlow;
 in float v_energy;
+// 1.0 in cycle colour mode: the beam trades its fixed cyan for the cycling
+// palette hue carried per point in v_cycleHue.
+uniform float u_cycleBeam;
 out vec4 outColor;
 
 void main() {
@@ -181,7 +190,11 @@ void main() {
   float haze = 1.0 - smoothstep(0.08, 0.5, radius);
   float core = 1.0 - smoothstep(0.035, 0.25, radius);
   float sparkle = 1.0 - smoothstep(0.0, 0.09, radius);
-  vec3 fanColour = mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58);
+  vec3 fanColour = mix(
+    mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58),
+    v_cycleHue,
+    u_cycleBeam
+  );
   vec3 pointLight =
     v_colour * (haze * 0.026 + core * 0.046)
     + vec3(0.72, 0.9, 1.0) * haze * 0.008
@@ -195,8 +208,9 @@ void main() {
   vec3 sliceColour = mix(v_colour, vec3(0.78, 0.94, 1.0), 0.45);
   vec3 sliceLight = sliceColour * v_sliceGlow * (haze * 0.02 + core * 0.025);
   vec3 markerLight = v_markerGlow * (
-    vec3(0.18, 0.82, 1.0) * haze * 0.7
-    + vec3(0.72, 0.96, 1.0) * core * 0.85
+    mix(vec3(0.18, 0.82, 1.0), v_cycleHue, u_cycleBeam) * haze * 0.7
+    + mix(vec3(0.72, 0.96, 1.0), mix(v_cycleHue, vec3(1.0), 0.3), u_cycleBeam)
+      * core * 0.85
     + vec3(1.0) * sparkle * 1.8
   );
   outColor = vec4(
@@ -271,6 +285,7 @@ uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
 uniform float u_markerRe;
 uniform float u_fanActive;
+uniform float u_cycleBeam;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -287,7 +302,14 @@ void main() {
   // footprint here is just the matching full-width line, no trailing wake.
   float front = 1.0 - smoothstep(0.004, 0.018, abs(age));
   float fan = u_fanActive * front;
-  vec3 fanLine = vec3(0.012, 0.052, 0.066) * fan;
+  // In cycle mode the plane texture already carries the cycling palette, so
+  // brightening the plane's own colour keeps the footprint in cycle colours.
+  vec3 beamTint = mix(
+    vec3(0.012, 0.052, 0.066),
+    colour * 0.055 + vec3(0.004, 0.005, 0.007),
+    u_cycleBeam
+  );
+  vec3 fanLine = beamTint * fan;
   outColor = vec4(planeInk + fanLine, 1.0);
 }
 `;
@@ -547,6 +569,7 @@ export class Orbit3DPointCloud {
   private readonly cellCountUniform: WebGLUniformLocation;
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
+  private readonly cycleBeamUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
@@ -555,6 +578,7 @@ export class Orbit3DPointCloud {
   private readonly groundTexSpanUniform: WebGLUniformLocation;
   private readonly groundMarkerReUniform: WebGLUniformLocation;
   private readonly groundFanActiveUniform: WebGLUniformLocation;
+  private readonly groundCycleBeamUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
@@ -688,6 +712,10 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_fanActive"),
       "orbit3d fan-active uniform",
     );
+    this.cycleBeamUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_cycleBeam"),
+      "orbit3d cycle-beam uniform",
+    );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
       "orbit3d marker view-projection uniform",
@@ -719,6 +747,10 @@ export class Orbit3DPointCloud {
     this.groundFanActiveUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_fanActive"),
       "orbit3d ground fan-active uniform",
+    );
+    this.groundCycleBeamUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_cycleBeam"),
+      "orbit3d ground cycle-beam uniform",
     );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
@@ -1317,6 +1349,7 @@ export class Orbit3DPointCloud {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
+    const cycleBeam = colourMode === "cycle" ? 1 : 0;
 
     if (ground) {
       gl.useProgram(this.groundProgram);
@@ -1325,6 +1358,7 @@ export class Orbit3DPointCloud {
       gl.uniform2f(this.groundTexSpanUniform, ground.span[0], ground.span[1]);
       gl.uniform1f(this.groundMarkerReUniform, this.marker.re);
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
+      gl.uniform1f(this.groundCycleBeamUniform, cycleBeam);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
       gl.bindVertexArray(this.groundVao);
@@ -1375,12 +1409,14 @@ export class Orbit3DPointCloud {
     gl.bindTexture(gl.TEXTURE_2D, palette);
     gl.uniform1f(this.markerReUniform, this.marker.re);
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
+    gl.uniform1f(this.cycleBeamUniform, cycleBeam);
     gl.bindVertexArray(this.pointVao);
     gl.drawArrays(gl.POINTS, 0, this.pointCount);
 
-    // Cycle mode reads as a self-lit field; the roaming marker dot would be
-    // the one element still tracking the sweep, so it stays hidden here.
-    if (colourMode !== "cycle") {
+    // Cycle mode reads as a self-lit field, so the roaming marker dot stays
+    // hidden there unless the light beam is sweeping — then the dot is the
+    // beam's anchor on the plane and belongs in view.
+    if (colourMode !== "cycle" || fanActive) {
       gl.useProgram(this.markerProgram);
       gl.uniformMatrix4fv(this.markerViewProjectionUniform, false, viewProjection);
       gl.bindVertexArray(this.markerVao);

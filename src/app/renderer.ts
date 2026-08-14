@@ -644,11 +644,9 @@ export class Renderer {
 
     // Continuous spin circles the camera steadily instead of tracking and
     // resetting with the sweep. With it off, the camera follows the sweep
-    // choreography only when the beam is actually visible (non-cycle modes);
-    // cycle mode hides the beam and always keeps the steady spin.
-    const continuousSpin =
-      this.params.colourMode === "cycle" ||
-      booleanParam(this.params, "continuousSpin", false);
+    // choreography whenever the beam is visible — cycle mode included, now
+    // that the beam sweeps there too.
+    const continuousSpin = booleanParam(this.params, "continuousSpin", false);
     if (!continuousSpin && booleanParam(this.params, "realAxisSweep", false)) {
       const sweepSpeed = Math.max(
         0.001,
