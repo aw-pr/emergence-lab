@@ -4,6 +4,11 @@ How emergence-lab keeps the public mirror clean, and how the site deploy
 relates to the publish action. Read this before pushing anything to the
 public remote.
 
+Placeholders used below: `PRIV` = your private remote (default `origin`),
+`PUB` = your public remote (`public` in this repo), `PUB_MATCH` = a substring
+of the public remote URL (e.g. `myorg/myrepo`), `PUBLISH_BRANCH` = the local
+line that becomes public (this repo uses `publish`).
+
 ## Model
 
 This repo runs the **staged publish model** in `preserve` history
@@ -14,14 +19,14 @@ mode. There are three long-lived branches with different audiences:
   publishes; it is the buffer where work accumulates before it advances
   to `main`. Local and `origin` only. It may contain tracked private-tier
   files such as `HANDOFF.md`.
-- **`main`** — site trunk. Private origin (`tw-one/emergence-lab`).
+- **`main`** — site trunk. Private origin (`PRIV`, org hidden).
   Netlify deploys from this branch on every push. `dev` fast-forwards
   here via `git ff-dev-main`. It is private and may contain private-tier
   files as well as commits not yet visible on the public mirror.
 - **`publish`** — curated public mirror trunk. Publish-safe commits are
   fast-forwarded here from a release branch based on `publish`, excluding
   private-tier files and commits. It is pushed to `public`
-  (`aw-pr/emergence-lab`) as `main`, append-only and always publish-clean.
+  (`PUB_MATCH`) as `main`, append-only and always publish-clean.
 
 The site flow is `feat/* → dev → main`. The public flow is
 `publish → release/* → publish → public`, cherry-picking the publish-safe
@@ -145,7 +150,7 @@ routine workflows.
 Local git config (not committed), set once at adoption:
 
 ```sh
-git config publishguard.publicmatch    aw-pr/emergence-lab
+git config publishguard.publicmatch    PUB_MATCH
 git config publishguard.publicremote   public
 git config publishguard.publishbranch  publish
 git config publishguard.privateremote  origin
@@ -167,7 +172,7 @@ real values:
 
 ```sh
 GUARD_PATTERNS='<MAC_HOME_PATH>|<LINUX_HOME_PATH>|<OP_REF_SCHEME>|<USERNAME>@|<EMAIL>'
-GUARD_PUBLIC_URL_MATCH='aw-pr/emergence-lab'
+GUARD_PUBLIC_URL_MATCH='PUB_MATCH'
 GUARD_PUBLIC_BRANCH='main'
 ```
 
@@ -176,7 +181,7 @@ and create the local `dev` and `publish` branches (both aliases require
 `dev` to exist):
 
 ```sh
-git remote add public git@github.com:aw-pr/emergence-lab.git
+git remote add public git@github.com:PUB_MATCH.git
 git fetch public
 git branch publish public/main
 git branch dev main            # or: git switch -c dev
