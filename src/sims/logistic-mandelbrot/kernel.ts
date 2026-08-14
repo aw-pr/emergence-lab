@@ -120,7 +120,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "exposure",
       label: "Exposure",
       type: "number",
-      default: 1.35,
+      default: 0.4,
       min: 0.4,
       max: 3,
       step: 0.05,
