@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -70,6 +72,7 @@ export class ElementaryCellularAutomataKernel implements SimKernel {
       min: 0,
       max: 255,
       step: 1,
+      info: "Wolfram rule number (0-255) that maps each 3-cell neighbourhood to the next state. Different numbers produce entirely different growth patterns, from simple triangles to chaos. Only takes effect on the next reset.",
     },
     {
       key: "seedMode",
@@ -79,6 +82,7 @@ export class ElementaryCellularAutomataKernel implements SimKernel {
       min: 0,
       max: 2,
       step: 1,
+      info: "Starting row for the cascade: 0 is a single centre cell, 1 is random noise, 2 is a repeating stripe pattern. Only takes effect on the next reset.",
     },
     {
       key: "stepsPerFrame",
@@ -88,6 +92,7 @@ export class ElementaryCellularAutomataKernel implements SimKernel {
       min: 1,
       max: 32,
       step: 1,
+      info: "How many new rows are generated before each frame is drawn. Higher values scroll the cascade down faster at the cost of more work per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

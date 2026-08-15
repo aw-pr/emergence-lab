@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -78,6 +80,7 @@ export class AbelianSandpileKernel implements SimKernel {
       min: 0,
       max: MAX_INITIAL_PILE,
       step: 50000,
+      info: "Grains dropped at the centre before the sim starts. A bigger pile settles into a wider terraced disc. Only takes effect on the next reset.",
     },
     {
       key: "toppleThreshold",
@@ -87,6 +90,7 @@ export class AbelianSandpileKernel implements SimKernel {
       min: 2,
       max: 12,
       step: 1,
+      info: "Grain count a cell must reach before it topples into its neighbours. Higher thresholds produce coarser, blockier terraces. Only takes effect on the next reset.",
     },
     {
       key: "grainsPerStep",
@@ -96,6 +100,7 @@ export class AbelianSandpileKernel implements SimKernel {
       min: 0,
       max: 1000,
       step: 1,
+      info: "Extra grains added to the centre every frame, keeping the pile fed after the initial drop. Higher values trigger more frequent avalanches once the disc reaches critical slope.",
     },
     {
       key: "topplesPerStep",
@@ -105,6 +110,7 @@ export class AbelianSandpileKernel implements SimKernel {
       min: 1,
       max: MAX_TOPPLES_PER_STEP,
       step: 1000,
+      info: "Caps how many cell relaxations run per frame. Too low and a large pile visibly lags behind its avalanches; raising it does not speed up settling once the queue is already draining each frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

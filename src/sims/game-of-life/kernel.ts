@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -148,6 +150,8 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 8,
       step: 1,
+      group: "Rule",
+      info: "Lowest live-neighbour count that brings a dead cell to life. Only takes effect on the next reset; raising it above the default B3 rule makes birth rarer.",
     },
     {
       key: "birthMax",
@@ -157,6 +161,8 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 8,
       step: 1,
+      group: "Rule",
+      info: "Highest live-neighbour count that still brings a dead cell to life. Only takes effect on the next reset; widening the birth range above the default 3-3 floods the board faster.",
     },
     {
       key: "surviveMin",
@@ -166,6 +172,8 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 8,
       step: 1,
+      group: "Rule",
+      info: "Lowest live-neighbour count that keeps a living cell alive. Only takes effect on the next reset; below the default 2 makes isolated cells die out faster.",
     },
     {
       key: "surviveMax",
@@ -175,6 +183,8 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 8,
       step: 1,
+      group: "Rule",
+      info: "Highest live-neighbour count that keeps a living cell alive. Only takes effect on the next reset; above the default 3 lets crowded clumps survive instead of dying of overpopulation.",
     },
     {
       key: "seedDensity",
@@ -184,6 +194,7 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.01,
+      info: "Fraction of cells randomly set alive at the start. Higher densities begin with a denser initial soup. Only takes effect on the next reset.",
     },
     {
       key: "sparkRate",
@@ -193,12 +204,14 @@ export class GameOfLifeKernel implements SimKernel {
       min: 0,
       max: 0.2,
       step: 0.005,
+      info: "Rate at which fresh random clusters are dripped into the board each generation, keeping the pattern evolving instead of settling into static ash. Zero gives purist B3/S23 with no drip.",
     },
     {
       key: "ageShading",
       label: "Age shading",
       type: "boolean",
       default: DEFAULT_AGE_SHADING,
+      info: "Colours cells by how long they have been alive, and leaves a fading ghost trail where cells just died, instead of flat on/off. Purely visual; the underlying birth/survival rule is unaffected.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

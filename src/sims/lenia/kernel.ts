@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -102,6 +104,8 @@ export class LeniaKernel implements SimKernel {
       min: 0.05,
       max: 0.35,
       step: 0.005,
+      group: "Growth",
+      info: "The local mass density organisms settle towards. Moving it changes which blob shapes and sizes are stable, so the whole population can drift, split, or die out. Only takes effect on the next reset.",
     },
     {
       key: "sigma",
@@ -111,6 +115,8 @@ export class LeniaKernel implements SimKernel {
       min: 0.005,
       max: 0.06,
       step: 0.001,
+      group: "Growth",
+      info: "How forgiving the growth rule is around the growth centre. Narrower values make organisms fragile and prone to dying out; wider values make the field mushier and more tolerant of noise. Only takes effect on the next reset.",
     },
     {
       key: "muDrift",
@@ -120,6 +126,8 @@ export class LeniaKernel implements SimKernel {
       min: 0,
       max: MAX_MU_DRIFT,
       step: 0.001,
+      group: "Growth",
+      info: "Amplitude of a slow back-and-forth sweep of the growth centre, which keeps spots splitting, merging and travelling instead of settling into a frozen still life. Zero disables the drift. Only takes effect on the next reset.",
     },
     {
       key: "dt",
@@ -129,6 +137,8 @@ export class LeniaKernel implements SimKernel {
       min: 0.02,
       max: 0.3,
       step: 0.01,
+      group: "Growth",
+      info: "How far the field moves towards its growth target each step. Higher values evolve faster but can destabilise organisms into flickering noise. Only takes effect on the next reset.",
     },
     {
       key: "radius",
@@ -138,6 +148,7 @@ export class LeniaKernel implements SimKernel {
       min: MIN_RADIUS,
       max: MAX_RADIUS,
       step: 1,
+      info: "Reach in cells of the ring each cell samples to decide its next state. Larger radii grow bigger organisms and cost more per step. Changing it rebuilds the sim from a fresh seed.",
     },
     {
       key: "stepsPerFrame",
@@ -147,6 +158,7 @@ export class LeniaKernel implements SimKernel {
       min: 1,
       max: 4,
       step: 1,
+      info: "How many simulation steps run before each frame is drawn. Higher values speed up organism motion at the cost of more work per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

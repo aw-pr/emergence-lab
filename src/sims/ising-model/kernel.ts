@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -37,11 +39,11 @@ export class IsingModelKernel {
   readonly channelLabels = ["Spin"] as const;
   readonly channelRanges = [[0, 1]] as const;
   readonly paramSchema = [
-    { key: "temperature", label: "Temperature", type: "number", default: DEFAULT_TEMPERATURE, min: 0.1, max: 5, step: 0.01 },
-    { key: "coupling", label: "Coupling", type: "number", default: DEFAULT_COUPLING, min: 0.1, max: 2, step: 0.01 },
-    { key: "externalField", label: "External field", type: "number", default: DEFAULT_FIELD, min: -2, max: 2, step: 0.01 },
-    { key: "sweepsPerStep", label: "Updates per frame", type: "number", default: DEFAULT_SWEEPS, min: 0.05, max: 4, step: 0.05 },
-    { key: "initialState", label: "Initial state", type: "enum", default: DEFAULT_INITIAL_STATE, options: ["random", "up", "down", "checkerboard"] },
+    { key: "temperature", label: "Temperature", type: "number", default: DEFAULT_TEMPERATURE, min: 0.1, max: 5, step: 0.01, group: "Physics", info: "How much thermal noise fights the spins' tendency to align. Near the default 2.269 (the critical point) domains form and dissolve constantly; low values freeze into solid blocks, high values dissolve into static." },
+    { key: "coupling", label: "Coupling", type: "number", default: DEFAULT_COUPLING, min: 0.1, max: 2, step: 0.01, group: "Physics", info: "Strength of the pull between neighbouring spins to align. Higher values make domains form faster and grow larger before temperature breaks them up." },
+    { key: "externalField", label: "External field", type: "number", default: DEFAULT_FIELD, min: -2, max: 2, step: 0.01, group: "Physics", info: "A uniform bias pulling every spin towards one state. Away from zero it steadily tips the board towards all-up or all-down instead of balanced domains." },
+    { key: "sweepsPerStep", label: "Updates per frame", type: "number", default: DEFAULT_SWEEPS, min: 0.05, max: 4, step: 0.05, info: "How many spin-flip attempts run per cell, per frame. Higher values speed up domain evolution at the cost of more work per frame." },
+    { key: "initialState", label: "Initial state", type: "enum", default: DEFAULT_INITIAL_STATE, options: ["random", "up", "down", "checkerboard"], info: "Starting spin layout: random noise, uniform up, uniform down, or an alternating checkerboard. Only takes effect on the next reset; the sim evolves away from it either way." },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;

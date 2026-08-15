@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -75,6 +77,7 @@ export class BriansBrainKernel implements SimKernel {
       min: 0,
       max: 8,
       step: 1,
+      info: "Exact number of live neighbours an off cell needs to fire. Only takes effect on the next reset; low values flood the grid with new cells, high values starve it.",
     },
     {
       key: "seedDensity",
@@ -84,6 +87,7 @@ export class BriansBrainKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.01,
+      info: "Fraction of cells randomly set alive at the start. Higher densities begin with a denser initial sparkle. Only takes effect on the next reset.",
     },
     {
       key: "dyingValue",
@@ -93,6 +97,7 @@ export class BriansBrainKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.01,
+      info: "Brightness of the fading afterglow a cell shows for one frame after firing, before it goes dark. Only takes effect on the next reset.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

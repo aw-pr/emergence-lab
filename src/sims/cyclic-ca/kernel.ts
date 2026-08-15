@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -103,6 +105,8 @@ export class CyclicCaKernel implements SimKernel {
       min: 3,
       max: 24,
       step: 1,
+      group: "Rule",
+      info: "Number of colours in the cycle each cell chases. More states make the rotating spirals finer and slower to complete a full colour lap. Only takes effect on the next reset.",
     },
     {
       key: "threshold",
@@ -112,6 +116,8 @@ export class CyclicCaKernel implements SimKernel {
       min: 1,
       max: 4,
       step: 1,
+      group: "Rule",
+      info: "How many neighbours already at the next colour a cell needs before it advances. Higher thresholds slow the spirals and can freeze the pattern into static patches. Only takes effect on the next reset.",
     },
     {
       key: "neighbourhood",
@@ -119,6 +125,8 @@ export class CyclicCaKernel implements SimKernel {
       type: "enum",
       default: DEFAULT_NEIGHBOURHOOD,
       options: ["moore", "vonNeumann"],
+      group: "Rule",
+      info: "Which surrounding cells count towards the threshold: all eight (Moore) or the four orthogonal ones (von Neumann). Von Neumann gives blockier, diamond-shaped spirals. Only takes effect on the next reset.",
     },
     {
       key: "stepsPerFrame",
@@ -128,6 +136,7 @@ export class CyclicCaKernel implements SimKernel {
       min: 1,
       max: 8,
       step: 1,
+      info: "How many rule updates run before each frame is drawn. Higher values speed up the spiral rotation at the cost of more work per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
