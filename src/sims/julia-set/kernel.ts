@@ -13,6 +13,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -94,6 +96,7 @@ export class JuliaSetKernel implements SimKernel {
       min: -1.5,
       max: 1.5,
       step: 0.001,
+      info: "Real part of the constant c that shapes this Julia set. Changing it reshapes the whole fractal into a different filigree, from dust to connected blobs; it recomputes the whole image.",
     },
     {
       key: "cIm",
@@ -103,6 +106,7 @@ export class JuliaSetKernel implements SimKernel {
       min: -1.5,
       max: 1.5,
       step: 0.001,
+      info: "Imaginary part of the constant c that shapes this Julia set. Changing it reshapes the whole fractal; it recomputes the whole image.",
     },
     {
       key: "centerX",
@@ -112,6 +116,7 @@ export class JuliaSetKernel implements SimKernel {
       min: -2,
       max: 2,
       step: 0.001,
+      info: "Real-axis coordinate the view is centred on. Panning it slides the fractal sideways; changing it recomputes the whole image.",
     },
     {
       key: "centerY",
@@ -121,6 +126,7 @@ export class JuliaSetKernel implements SimKernel {
       min: -2,
       max: 2,
       step: 0.001,
+      info: "Imaginary-axis coordinate the view is centred on. Panning it slides the fractal up or down; changing it recomputes the whole image.",
     },
     {
       key: "zoom",
@@ -130,6 +136,7 @@ export class JuliaSetKernel implements SimKernel {
       min: 0.25,
       max: MAX_FRACTAL_ZOOM,
       step: 0.01,
+      info: "How far into the fractal the view is magnified. Higher values reveal finer filigree detail; changing it recomputes the whole image.",
     },
     {
       key: "maxIterations",
@@ -139,12 +146,14 @@ export class JuliaSetKernel implements SimKernel {
       min: 16,
       max: MAX_BASE_ITERATIONS,
       step: 1,
+      info: "Escape-time cutoff per pixel. Higher values sharpen fine boundary detail at the cost of more computation per frame; ignored while adaptive detail is on.",
     },
     {
       key: "autoIterations",
       label: "Adaptive detail",
       type: "boolean",
       default: DEFAULT_AUTO_ITERATIONS,
+      info: "Automatically raises the iteration limit as zoom increases, so deep zooms stay sharp without manually raising max iterations.",
     },
     {
       key: "palettePhase",
@@ -154,6 +163,7 @@ export class JuliaSetKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.001,
+      info: "Shifts the colour palette around the escape-time gradient. Wraps continuously, so dragging it cycles through the full palette.",
     },
     {
       key: "cycleSpeed",
@@ -163,6 +173,7 @@ export class JuliaSetKernel implements SimKernel {
       min: 0,
       max: 5,
       step: 0.001,
+      info: "Speed at which the palette phase animates on its own. Zero freezes the colours in place.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

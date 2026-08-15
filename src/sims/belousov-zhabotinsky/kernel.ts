@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -86,6 +88,8 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.35,
       step: 0.001,
+      info: "How far the activator spreads to neighbouring cells each step. Higher values blur the spiral and target-pattern fronts into softer, wider bands.",
+      group: "Diffusion",
     },
     {
       key: "diffusionB",
@@ -95,6 +99,8 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.25,
       step: 0.001,
+      info: "How far the inhibitor spreads to neighbouring cells each step. Higher values thicken the dark bands trailing each front and slow the spiral rotation.",
+      group: "Diffusion",
     },
     {
       key: "diffusionC",
@@ -104,6 +110,8 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.2,
       step: 0.001,
+      info: "How far the catalyst spreads to neighbouring cells each step. Higher values smooth out the fine texture running through the medium.",
+      group: "Diffusion",
     },
     {
       key: "feed",
@@ -113,6 +121,7 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.08,
       step: 0.001,
+      info: "Rate at which fresh activator is replenished. Higher values push the medium towards sustained oscillation; too low and the fronts die out.",
     },
     {
       key: "kill",
@@ -122,6 +131,7 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.12,
       step: 0.001,
+      info: "Rate at which inhibitor and catalyst decay away. Above roughly 0.04 the medium collapses to a flat, unchanging colour within a few hundred steps.",
     },
     {
       key: "stepsPerFrame",
@@ -131,6 +141,7 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 1,
       max: 8,
       step: 1,
+      info: "Simulation steps computed per rendered frame. Higher values speed up the wave motion at the cost of more computation per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

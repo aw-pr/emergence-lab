@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -97,6 +99,8 @@ export class GrayScottKernel implements SimKernel {
       min: 0,
       max: 0.5,
       step: 0.001,
+      info: "How far the U reactant spreads to neighbouring cells each step. Higher values widen the pattern's features and smooth out fine detail.",
+      group: "Reaction-diffusion",
     },
     {
       key: "Dv",
@@ -106,6 +110,8 @@ export class GrayScottKernel implements SimKernel {
       min: 0,
       max: 0.5,
       step: 0.001,
+      info: "How far the V reactant spreads to neighbouring cells each step. Pushing it close to Diffusion U flattens the pattern; keeping it well below U is what lets spots and stripes form.",
+      group: "Reaction-diffusion",
     },
     {
       key: "F",
@@ -115,6 +121,8 @@ export class GrayScottKernel implements SimKernel {
       min: 0.01,
       max: 0.07,
       step: 0.0005,
+      info: "Rate at which U is replenished across the field. Together with kill rate, this is what tips the pattern between spots, stripes, worms and waves.",
+      group: "Reaction-diffusion",
     },
     {
       key: "k",
@@ -124,6 +132,8 @@ export class GrayScottKernel implements SimKernel {
       min: 0.04,
       max: 0.07,
       step: 0.0005,
+      info: "Rate at which V is removed from the field. Small changes here shift the pattern regime dramatically, from splitting spots to fixed stripes.",
+      group: "Reaction-diffusion",
     },
     {
       key: "stepsPerFrame",
@@ -133,6 +143,7 @@ export class GrayScottKernel implements SimKernel {
       min: 1,
       max: 60,
       step: 1,
+      info: "Simulation steps computed per rendered frame. Higher values make the pattern evolve faster at the cost of more computation per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
