@@ -333,3 +333,42 @@ into the main checkout instead of the run worktree it was dispatched into
 (recorded by the round-4 verifier as a dispatch anomaly). Work in the run
 worktree you are dispatched into — the directory named in "This dispatch"
 — and nowhere else.
+
+## Round 6 re-brief (2026-08-15)
+
+Round 5 is committed at **`6651fb1`** and proved the endpoints: with the
+reveal window at fade 1.4 / complete 0.75, detail 1 equals detail 0 to
+0.1 ms at all gated (d >= 1.4) and all fully revealed (d <= 0.75) sweep
+distances. What failed is the transition itself, and the round-5 verifier
+isolated the physics: a *partial* draw of the tier costs more than the
+*complete* draw (13,018,600 vertices at 15.8 ms vs 13,235,784 at 8.3 ms),
+because the count-based prefix reveals as a spatially clustered scan-order
+wipe across the c-plane — concentrated additive-blend overdraw — so across
+d ≈ 0.8-1.1 detail 1 presents at 60 fps against detail 0's 120. The same
+wipe is also a visible artefact: points arrive region by region, not as a
+uniform densification.
+
+**Operator decision: replace the distance-interpolated count reveal with a
+draw threshold plus temporal opacity fade.** Specifically:
+
+- The raised tier is submitted **only** when camera distance is at or
+  inside the round-5 reveal-complete point (0.75, where the full draw
+  measures 8.3 ms). Outside it, the draw is the base range — never a
+  partial count of the tier. The distance smoothstep and partial-count
+  submission go away.
+- On crossing the threshold, the tier's points fade in over roughly 300 ms
+  of wall clock (a uniform driving per-point alpha in the existing point
+  shader — all points at once, no spatial ordering), and symmetrically
+  fade out on crossing back. During fades the camera is inside 0.75, where
+  the full draw is affordable, so fade frames cost what revealed frames
+  cost. A small hysteresis on the threshold (suggested ~0.05) so hovering
+  on it does not flicker.
+- Keep the round-4 prefix pinning and the round-3 base-only draw ranges
+  exactly as committed; change nothing else from `6651fb1`.
+
+Acceptance is criterion 6's round-2 wording with the round-4/5 sweep as
+method, plus two specifics: no distance in the sweep may present detail 1
+below detail 0 (the old transition band d 0.8-1.25 gets extra sample
+density), and the fade must be judged by eye — no visible wipe, no pop, no
+flicker when hovering at the threshold. Spot-check criteria 3 and 1 as
+before. Work in the run worktree you are dispatched into.
