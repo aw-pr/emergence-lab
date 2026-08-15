@@ -265,6 +265,7 @@ export interface GpuOrbitCloudOptions {
   refineSubdivision: number;
   refinePeriodThreshold: number;
   refinePointWeight: number;
+  boundaryDetailActive: boolean;
 }
 
 interface OrbitSampleResult {
@@ -623,6 +624,7 @@ export function buildGpuOrbitCloud(
     refineSubdivision,
     refinePeriodThreshold,
     refinePointWeight,
+    boundaryDetailActive,
   } = options;
   const baseCellCount = sampleWidth * sampleHeight;
   const baseCoordinates = new Float64Array(baseCellCount * 2);
@@ -644,12 +646,20 @@ export function buildGpuOrbitCloud(
   let survivorsSeen = 0;
   let interestingSeen = 0;
   for (let cell = 0; cell < base.cellCount; cell += 1) {
-    if (base.escaped[cell] === 1) continue;
-    const slot = reservoirSlot(survivorsSeen, baseSlotCap);
-    survivorsSeen += 1;
-    if (slot >= 0) baseSlots[slot] = cell;
-    const period = base.periods[cell];
-    if (refineActive && (period === 0 || period >= refinePeriodThreshold)) {
+    const escaped = base.escaped[cell] === 1;
+    const boundaryBand =
+      boundaryDetailActive &&
+      isEscapeEdgeCell(base.escaped, sampleWidth, sampleHeight, cell);
+    if (escaped && !boundaryBand) continue;
+    if (!escaped) {
+      const slot = reservoirSlot(survivorsSeen, baseSlotCap);
+      survivorsSeen += 1;
+      if (slot >= 0) baseSlots[slot] = cell;
+    }
+    const period = escaped ? 0 : base.periods[cell];
+    const tailCandidate = !escaped &&
+      (period === 0 || period >= refinePeriodThreshold);
+    if (refineActive && (tailCandidate || boundaryBand)) {
       const candidateSlot = reservoirSlot(interestingSeen, refineCandidateCap);
       interestingSeen += 1;
       if (candidateSlot >= 0) refineCandidates[candidateSlot] = cell;
@@ -749,6 +759,29 @@ export function buildGpuOrbitCloud(
     }
   }
   return { positions, periods, interiors, boundaries, weights, survivingCells };
+}
+
+/** True on either sampled side of an escaped/non-escaped cell boundary. */
+function isEscapeEdgeCell(
+  escapeMask: Uint8Array,
+  width: number,
+  height: number,
+  index: number,
+): boolean {
+  const x = index % width;
+  const y = (index - x) / width;
+  const escaped = escapeMask[index];
+  for (let dy = -1; dy <= 1; dy += 1) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= height) continue;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      if (nx < 0 || nx >= width) continue;
+      if (escapeMask[ny * width + nx] !== escaped) return true;
+    }
+  }
+  return false;
 }
 
 /** Two-pass chamfer distance from each cell to the sampled escape boundary. */

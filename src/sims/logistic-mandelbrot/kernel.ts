@@ -146,6 +146,17 @@ export class LogisticMandelbrotKernel implements SimKernel {
       max: 0.6,
       step: 0.05,
     },
+    // GPU-only live-build detail. The CPU fallback ignores this control and
+    // retains the tail-refinement plan above rather than attempting 16M points.
+    {
+      key: "boundaryDetail",
+      label: "Boundary detail (GPU only; CPU uses tail refinement)",
+      type: "number",
+      default: 0,
+      min: 0,
+      max: 1,
+      step: 0.1,
+    },
     // Culled per frame in the vertex shader, so dragging it is instant — no
     // rebuild. The wider low end is affordable for the same reason.
     {
