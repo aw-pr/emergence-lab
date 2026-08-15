@@ -34,9 +34,6 @@ const DEFAULT_ALIGNMENT = 0.09;
 const DEFAULT_COHESION = 0.011;
 const DEFAULT_SEPARATION = 0.22;
 const DEFAULT_POINT_SIZE = 4;
-/** Matches the native viewer's spec: six ring-arranged flocks at load, so the
- * first frames read as flocking rather than a uniform speckle. */
-const DEFAULT_INITIAL_FLOCKS = 6;
 const MAX_BOID_COUNT = 40000;
 /** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
  * from freezing into rigid crystalline order, but too much washes the flocking
@@ -148,16 +145,6 @@ export class BoidsKernel implements SimKernel {
       info: "How many boids fly in the flock. More boids make the flow denser and the emergent shapes richer, at the cost of frame rate. Changing it resets the flock.",
     },
     {
-      key: "initialFlocks",
-      label: "Initial flocks",
-      type: "number",
-      default: DEFAULT_INITIAL_FLOCKS,
-      min: 0,
-      max: 12,
-      step: 1,
-      info: "How many coherent flocks the boids start in, arranged on a ring and already heading together, so the opening frames read as flocking rather than static. Zero (or one) scatters every boid uniformly at random and lets flocks assemble on their own. Changing it resets the flock.",
-    },
-    {
       key: "visualRadius",
       label: "Visual radius",
       type: "number",
@@ -245,7 +232,6 @@ export class BoidsKernel implements SimKernel {
   private binNext = new Int32Array(0);
   private stepCounter = 0;
   private seed = 0;
-  private initialFlocks = DEFAULT_INITIAL_FLOCKS;
   private boidCount = DEFAULT_BOID_COUNT;
   private visualRadius = DEFAULT_VISUAL_RADIUS;
   private separationRadius = DEFAULT_SEPARATION_RADIUS;
@@ -294,9 +280,6 @@ export class BoidsKernel implements SimKernel {
       numberParam(params, "separation", DEFAULT_SEPARATION),
       0,
       1,
-    );
-    this.initialFlocks = Math.floor(
-      clamp(numberParam(params, "initialFlocks", DEFAULT_INITIAL_FLOCKS), 0, 12),
     );
     // Optional run-to-run variety: a non-zero seed shifts the initial flock so
     // each load/reset differs. Absent (0), seeding stays a pure function of the
@@ -615,59 +598,12 @@ export class BoidsKernel implements SimKernel {
       0;
     const random = mulberry32(seed);
 
-    if (this.initialFlocks >= 2) {
-      this.seedClusteredBoids(random);
-      return;
-    }
-
     for (let i = 0; i < this.boidCount; i += 1) {
       this.x[i] = random() * this.width;
       this.y[i] = random() * this.height;
 
       const velocityAngle = random() * TWO_PI;
       const speed = this.maxSpeed * (0.45 + random() * 0.55);
-      this.vx[i] = Math.cos(velocityAngle) * speed;
-      this.vy[i] = Math.sin(velocityAngle) * speed;
-    }
-  }
-
-  /** Ported from the native viewer's seedClusteredBoids: flocks start as
-   * tight discs on a ring about the centre, each already heading tangentially,
-   * so heading-hue colour reads as coherent lanes from the first frame. */
-  private seedClusteredBoids(random: () => number): void {
-    const count = this.initialFlocks;
-    const centreX = this.width * 0.5;
-    const centreY = this.height * 0.5;
-    const ringX = this.width * 0.31;
-    const ringY = this.height * 0.29;
-    const spread = Math.min(this.width, this.height) * 0.085;
-    const centresX = new Float64Array(count);
-    const centresY = new Float64Array(count);
-    const headings = new Float64Array(count);
-
-    for (let flock = 0; flock < count; flock += 1) {
-      const ringAngle =
-        (TWO_PI * flock) / count + (random() - 0.5) * 0.16;
-      centresX[flock] = centreX + Math.cos(ringAngle) * ringX;
-      centresY[flock] = centreY + Math.sin(ringAngle) * ringY;
-      headings[flock] = ringAngle + Math.PI / 2 + (random() - 0.5) * 0.35;
-    }
-
-    for (let i = 0; i < this.boidCount; i += 1) {
-      const flock = i % count;
-      const offsetAngle = random() * TWO_PI;
-      const offsetRadius = spread * Math.sqrt(random());
-      this.x[i] = wrap(
-        centresX[flock] + Math.cos(offsetAngle) * offsetRadius,
-        this.width,
-      );
-      this.y[i] = wrap(
-        centresY[flock] + Math.sin(offsetAngle) * offsetRadius,
-        this.height,
-      );
-
-      const velocityAngle = headings[flock] + (random() - 0.5) * 0.55;
-      const speed = this.maxSpeed * (0.55 + random() * 0.35);
       this.vx[i] = Math.cos(velocityAngle) * speed;
       this.vy[i] = Math.sin(velocityAngle) * speed;
     }
