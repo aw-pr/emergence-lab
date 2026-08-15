@@ -157,3 +157,22 @@ final action before ending your turn**. Do not wait for anything
 asynchronously after kicking it off — run commands to completion, then hand
 off. An unwritten envelope stalls the stage regardless of how good the work
 is.
+
+## Round 3 re-brief (2026-08-15)
+
+Rounds 1-2 are committed through **`1a8363f`**; the round-2 verifier passed
+6/7 including every by-hand check of the feature itself. The sole FAIL is
+criterion 5: the e2e case times out on Playwright actionability starvation —
+the orbit3d page renders heavily under test load, so `locator.click()`'s
+visible/stable checks never settle in the "one popup at a time" block
+(smoke.spec.ts:172-178).
+
+Round 3 is a test fix, not a feature change: make the case robust to a busy
+rAF loop. Acceptable shapes — disable the heavy animation before interacting
+(set autoRotate/continuousSpin/realAxisSweep off via the controls or params),
+or use programmatic clicks (`dispatchEvent`/`force: true`) since Playwright
+actionability is not what this test asserts. Do not slacken the assertions
+themselves, and keep the perturb-check (criterion 5's second half). Run the
+case to completion three times; then the full verify; then write the
+envelope as your final action. Headless throughout — nothing here needs
+frame timing.
