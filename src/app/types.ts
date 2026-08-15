@@ -1,5 +1,5 @@
 /**
- * Local mirror of the kernel/renderer contract defined in docs/INTERFACE.md (v1.2.0).
+ * Local mirror of the kernel/renderer contract defined in docs/INTERFACE.md (v1.3.0).
  *
  * The contract itself is owned by Claude; this file only restates the types the
  * renderer needs to consume kernels. Do not edit the shape without first
@@ -15,6 +15,8 @@ export interface ParamDescriptor {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 }
 
 export type SimParams = Record<string, number | boolean | string>;
