@@ -242,6 +242,17 @@ export class ControlsPanel {
         ) {
           return;
         }
+        // Switching straight from one info button to another is handled by
+        // that button's own click handler (openInfoPopover closes the prior
+        // popover before opening its own). Closing here instead, on
+        // pointerdown, would reflow the layout mid-gesture and shift the
+        // target button out from under the pointer before the click lands.
+        if (
+          target instanceof Element &&
+          target.closest(".control__info-button")
+        ) {
+          return;
+        }
         this.closeInfoPopover();
       },
       { signal: this.infoDismissAbort.signal, capture: true },

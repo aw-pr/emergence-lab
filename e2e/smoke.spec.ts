@@ -129,6 +129,11 @@ test("logistic-Mandelbrot reports and completes the GPU cloud path", async ({ pa
 test("controls info popup opens, closes, and is absent without an info descriptor", async ({ page }) => {
   await page.goto("/#/logistic-mandelbrot");
 
+  // logistic-mandelbrot loads straight into immersive mode, which parks the
+  // settings drawer off-screen behind a handle (see .sim-view__drawer-handle
+  // in simView.ts) until it is opened by hover or this click.
+  await page.locator(".sim-view__drawer-handle").click();
+
   const infoButtons = page.locator(".control__info-button");
   await expect(infoButtons.first()).toBeVisible();
 
