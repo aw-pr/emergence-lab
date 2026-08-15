@@ -1,6 +1,6 @@
 # docs/INTERFACE.md — Kernel to Renderer Interface Contract
 
-**Status: reviewed contract — v1.2.0 (2026-07-08)**
+**Status: reviewed contract — v1.3.0 (2026-08-15)**
 
 This file defines the TypeScript interface that all simulation kernels must
 implement and that the renderer consumes. It is the only shared surface
@@ -28,6 +28,12 @@ export interface ParamDescriptor {
   max?: number;           // required when type === "number"
   step?: number;          // slider granularity when type === "number"
   options?: readonly string[]; // required when type === "enum"
+  info?: string;          // one/two plain sentences: what the control does,
+                          // what changes visually, and any rebuild cost.
+                          // Rendered by the controls panel as an info popup.
+  group?: string;         // optional section heading; params sharing a group
+                          // render together, in schema order. Ungrouped params
+                          // render in the sim's default section.
 }
 
 /**
@@ -188,6 +194,19 @@ export interface SimKernel {
    *reports* completion and never mutates or resets anything — the reset is the
    renderer's job. This is a purely additive surface change, so it bumps the
    minor version.
+
+## Resolved design decisions (v1.3.0)
+
+7. **Optional `info` and `group` on `ParamDescriptor`.** `info` carries a
+   short plain-language description of what the control does; the renderer
+   surfaces it as an info affordance (an ⓘ popup) beside the control.
+   `group` names a section heading; the renderer renders params sharing a
+   group together in schema order, using the existing collapsible-section
+   component, with ungrouped params in the sim's default section. Both fields
+   are optional and additive: kernels that omit them render exactly as
+   before, and the renderer still builds the panel from `paramSchema` alone
+   with no per-sim branching. Purely additive surface change; bumps the minor
+   version because the descriptor shape gains members.
 
 ## Resolved design decisions (v1.1.0)
 
