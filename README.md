@@ -99,6 +99,20 @@ desktop GPU, and a cloud dense enough to resolve the cascade tail runs to
 hundreds of megabytes — the current machine-local bakes are 10 MB to 650 MB.
 Nobody should be asked to download that over a network, so it never ships.
 
+The active route is exposed on the simulation canvas as
+`data-orbit3d-sampler` (the DOM form of `canvas.dataset.orbit3dSampler`):
+
+| Path | When selected | `data-orbit3d-sampler` |
+| --- | --- | --- |
+| GPU sampled | WebGL2 float targets and the orbit sampler both complete | `gpu-sampled` |
+| CPU sampled | GPU sampling is unavailable or fails; the time-sliced sweep completes | `cpu-sampled-gpu-failed` |
+| Prebaked ELPC | A valid requested local bake finishes loading and supersedes the live build | `prebaked` |
+| 2D field | orbit3d setup or both live cloud builders fail | `orbit3d-fallback-field` |
+
+For a 3D cloud, `data-orbit3d-build="complete"` and a positive
+`data-orbit3d-points` confirm that the selected path produced a whole cloud.
+The 2D fallback intentionally has neither attribute.
+
 Instead the cloud can be baked offline, on the machine that will view it, with
 no time-slicing, a much higher warmup, and a second refinement level the
 browser can't afford:

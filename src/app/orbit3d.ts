@@ -607,6 +607,7 @@ export class Orbit3DPointCloud {
   private buildGeneration = 0;
   private buildTimer: number | null = null;
   private building = false;
+  private buildFailed = false;
   private pendingSlice: ((budgetMs: number) => void) | null = null;
   private samplingPath: Orbit3DStats["samplingPath"] = "cpu-sampled";
   private camera = defaultCameraState();
@@ -808,6 +809,10 @@ export class Orbit3DPointCloud {
     return !this.building && this.fullPointCount > 0;
   }
 
+  get failed(): boolean {
+    return this.buildFailed;
+  }
+
   orbit(deltaAzimuth: number, deltaElevation: number): void {
     this.camera.azimuth += deltaAzimuth;
     this.camera.elevation = Math.min(
@@ -993,8 +998,8 @@ export class Orbit3DPointCloud {
   /** Swap in a prebaked cloud, replacing whatever the live build produced. */
   private applyPrebaked(cloud: PrebakedCloud, paramSampleCount: number): void {
     this.cancelBuild();
-    this.samplingPath = "prebaked";
     const gl = this.gl;
+    clearGlErrors(gl);
     const upload = (buffer: WebGLBuffer, data: Uint16Array | Uint8Array): void => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
@@ -1004,7 +1009,10 @@ export class Orbit3DPointCloud {
     upload(this.interiorBuffer, cloud.interiors);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
+    requireNoGlError(gl, "prebaked orbit3d upload");
     this.configurePointAttributes(true);
+    this.samplingPath = "prebaked";
+    this.buildFailed = false;
     this.sampleCount = cloud.sampleCount;
     this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
     this.fullPointCount = cloud.cellCount * cloud.sampleCount;
@@ -1020,6 +1028,7 @@ export class Orbit3DPointCloud {
 
   rebuild(width: number, height: number, params: OrbitParams): void {
     this.cancelBuild();
+    this.buildFailed = false;
     const generation = this.buildGeneration;
     const inputWidth = Math.max(1, Math.floor(width));
     const inputHeight = Math.max(1, Math.floor(height));
@@ -1052,7 +1061,15 @@ export class Orbit3DPointCloud {
     if (bakedFile) {
       void fetchPrebaked(bakedFile).then((cloud) => {
         if (cloud && generation === this.buildGeneration) {
-          this.applyPrebaked(cloud, sampleCount);
+          try {
+            this.applyPrebaked(cloud, sampleCount);
+          } catch (error) {
+            console.error(
+              "logistic-mandelbrot: prebaked cloud upload failed; rebuilding live",
+              error,
+            );
+            this.rebuild(width, height, { ...params, modelSource: "live" });
+          }
         }
       });
     }
@@ -1107,26 +1124,33 @@ export class Orbit3DPointCloud {
     if (this.quantizedAttributes) this.configurePointAttributes(false);
 
     if (this.orbitSampler) {
-      const cloud = buildGpuOrbitCloud(this.orbitSampler, {
-        sampleWidth,
-        sampleHeight,
-        sampleCount,
-        warmupIterations,
-        realSliceOnly,
-        maxSurvivingCells,
-        baseSlotCap,
-        refineActive,
-        refineCandidateCap,
-        refineWarmup,
-        refineSubdivision: REFINE_SUBDIVISION,
-        refinePeriodThreshold: REFINE_PERIOD_THRESHOLD,
-        refinePointWeight: REFINE_POINT_WEIGHT,
-      });
-      if (cloud) {
-        this.applyLiveCloud(cloud);
-        this.samplingPath = "gpu-sampled";
-        this.building = false;
-        return;
+      try {
+        const cloud = buildGpuOrbitCloud(this.orbitSampler, {
+          sampleWidth,
+          sampleHeight,
+          sampleCount,
+          warmupIterations,
+          realSliceOnly,
+          maxSurvivingCells,
+          baseSlotCap,
+          refineActive,
+          refineCandidateCap,
+          refineWarmup,
+          refineSubdivision: REFINE_SUBDIVISION,
+          refinePeriodThreshold: REFINE_PERIOD_THRESHOLD,
+          refinePointWeight: REFINE_POINT_WEIGHT,
+        });
+        if (cloud) {
+          this.applyLiveCloud(cloud);
+          this.samplingPath = "gpu-sampled";
+          this.building = false;
+          return;
+        }
+      } catch (error) {
+        console.error(
+          "logistic-mandelbrot: GPU cloud build failed; falling back to CPU sampling",
+          error,
+        );
       }
     }
 
@@ -1148,7 +1172,7 @@ export class Orbit3DPointCloud {
     let refineSeen = 0;
     let refineStart = -1;
 
-    const buildSlice = (budgetMs: number): void => {
+    const runBuildSlice = (budgetMs: number): void => {
       if (generation !== this.buildGeneration) return;
       const stopAt = performance.now() + budgetMs;
       while (
@@ -1294,41 +1318,62 @@ export class Orbit3DPointCloud {
           boundaries[sample * survivingCells + slot] = distance;
         }
       }
-      this.fullPointCount = survivingCells * sampleCount;
+      const completedPointCount = survivingCells * sampleCount;
+      clearGlErrors(gl);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        positions.subarray(0, this.fullPointCount * 3),
+        positions.subarray(0, completedPointCount * 3),
         gl.STATIC_DRAW,
       );
       gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        periods.subarray(0, this.fullPointCount),
+        periods.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
       gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        interiors.subarray(0, this.fullPointCount),
+        interiors.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
       gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        boundaries.subarray(0, this.fullPointCount),
+        boundaries.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
       gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        weights.subarray(0, this.fullPointCount),
+        weights.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
+      requireNoGlError(gl, "CPU orbit3d upload");
+      this.fullPointCount = completedPointCount;
       this.refreshPointCount();
       this.buildTimer = null;
       this.building = false;
       this.pendingSlice = null;
+    };
+
+    const buildSlice = (budgetMs: number): void => {
+      try {
+        runBuildSlice(budgetMs);
+      } catch (error) {
+        if (generation !== this.buildGeneration) return;
+        console.error(
+          "logistic-mandelbrot: CPU cloud build failed; falling back to the 2D field",
+          error,
+        );
+        this.pointCount = 0;
+        this.fullPointCount = 0;
+        this.buildTimer = null;
+        this.building = false;
+        this.buildFailed = true;
+        this.pendingSlice = null;
+      }
     };
 
     this.pendingSlice = buildSlice;
@@ -1337,6 +1382,7 @@ export class Orbit3DPointCloud {
 
   private applyLiveCloud(cloud: OrbitCloudBuffers): void {
     const gl = this.gl;
+    clearGlErrors(gl);
     const upload = (buffer: WebGLBuffer, data: Float32Array): void => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
@@ -1346,6 +1392,7 @@ export class Orbit3DPointCloud {
     upload(this.interiorBuffer, cloud.interiors);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
+    requireNoGlError(gl, "GPU orbit3d upload");
     this.fullPointCount = cloud.survivingCells * this.sampleCount;
     this.refreshPointCount();
     this.buildTimer = null;
@@ -1837,4 +1884,17 @@ function compileShader(
 function requireResource<T>(resource: T | null, label: string): T {
   if (resource === null) throw new Error(`Unable to create ${label}.`);
   return resource;
+}
+
+function clearGlErrors(gl: WebGL2RenderingContext): void {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (gl.getError() === gl.NO_ERROR) return;
+  }
+}
+
+function requireNoGlError(gl: WebGL2RenderingContext, label: string): void {
+  const error = gl.getError();
+  if (error !== gl.NO_ERROR) {
+    throw new Error(`${label} failed (WebGL error ${error})`);
+  }
 }
