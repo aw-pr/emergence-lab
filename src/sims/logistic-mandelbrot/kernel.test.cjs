@@ -68,6 +68,7 @@ test("metadata matches the renderer contract", () => {
       "exposure",
       "edgeGlow",
       "tailRefinement",
+      "boundaryDetail",
       "pointDensity",
       "autoRotate",
       "continuousSpin",
@@ -115,6 +116,11 @@ test("metadata matches the renderer contract", () => {
   );
   assert.equal(continuousSpin?.type, "boolean");
   assert.equal(continuousSpin?.default, true);
+
+  const boundaryDetail = kernel.paramSchema.find((d) => d.key === "boundaryDetail");
+  assert.equal(boundaryDetail?.default, 0);
+  assert.equal(boundaryDetail?.min, 0);
+  assert.equal(boundaryDetail?.max, 1);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
   assert.equal(warmup?.default, 1500);

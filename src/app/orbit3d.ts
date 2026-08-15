@@ -360,6 +360,7 @@ const POINT_BUDGETS = {
   high: 3_400_000,
   ultra: 4_800_000,
   extreme: 9_600_000,
+  boundaryDetail: 16_000_000,
 } as const;
 
 const SURVIVING_CELL_ESTIMATE = 0.22;
@@ -381,6 +382,12 @@ const REFINE_WARMUP_MULTIPLIER = 4;
 // additive accumulation.
 const REFINE_POINT_WEIGHT = 0.15;
 const MAX_WARMUP = 2000;
+const BOUNDARY_DETAIL_SUBDIVISION = 5;
+const BOUNDARY_DETAIL_WARMUP = 20_000;
+// A 5x5 sub-grid contributes 25 samples per parent cell. Slightly above
+// 1/25 energy parity keeps the finer structure legible without brightening
+// smooth bulb interiors.
+const BOUNDARY_DETAIL_POINT_WEIGHT = 0.05;
 
 const BUILD_SLICE_MS = 8;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
@@ -520,6 +527,7 @@ export interface Orbit3DStats {
   pointBudget: number;
   building: boolean;
   samplingPath: "gpu-sampled" | "cpu-sampled" | "cpu-sampled-gpu-failed" | "prebaked";
+  boundaryDetail: "off" | "active" | "degraded";
 }
 
 export interface Orbit3DMarkerReadout {
@@ -610,6 +618,7 @@ export class Orbit3DPointCloud {
   private buildFailed = false;
   private pendingSlice: ((budgetMs: number) => void) | null = null;
   private samplingPath: Orbit3DStats["samplingPath"] = "cpu-sampled";
+  private boundaryDetail: Orbit3DStats["boundaryDetail"] = "off";
   private camera = defaultCameraState();
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
@@ -798,6 +807,7 @@ export class Orbit3DPointCloud {
       pointBudget: this.pointBudget,
       building: this.building,
       samplingPath: this.samplingPath,
+      boundaryDetail: this.boundaryDetail,
     };
   }
 
@@ -1012,6 +1022,7 @@ export class Orbit3DPointCloud {
     requireNoGlError(gl, "prebaked orbit3d upload");
     this.configurePointAttributes(true);
     this.samplingPath = "prebaked";
+    this.boundaryDetail = "off";
     this.buildFailed = false;
     this.sampleCount = cloud.sampleCount;
     this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
@@ -1113,13 +1124,54 @@ export class Orbit3DPointCloud {
       MAX_WARMUP,
       warmupIterations * REFINE_WARMUP_MULTIPLIER,
     );
+    const boundaryDetailLevel =
+      typeof params.boundaryDetail === "number" &&
+      Number.isFinite(params.boundaryDetail)
+        ? Math.max(0, Math.min(1, params.boundaryDetail))
+        : 0;
+    // A requested bake owns the cloud once it arrives, so boundary detail is
+    // limited to explicit live builds rather than inflating the temporary
+    // cloud underneath a prebake.
+    const boundaryDetailRequested =
+      bakedFile === null && !realSliceOnly && boundaryDetailLevel > 0;
+    const boundaryDetailActive =
+      boundaryDetailRequested && this.orbitSampler !== null;
+    const gpuPointBudget = boundaryDetailActive
+      ? Math.floor(
+          pointBudget +
+            (POINT_BUDGETS.boundaryDetail - pointBudget) * boundaryDetailLevel,
+        )
+      : pointBudget;
+    const gpuMaxSurvivingCells = Math.max(
+      1,
+      Math.floor(gpuPointBudget / sampleCount),
+    );
+    const gpuRefineActive = refineActive || boundaryDetailActive;
+    const gpuRefineSubdivision = boundaryDetailActive
+      ? BOUNDARY_DETAIL_SUBDIVISION
+      : REFINE_SUBDIVISION;
+    const gpuRefineSubCells = gpuRefineSubdivision * gpuRefineSubdivision;
+    const gpuRefineCandidateCap = gpuRefineActive
+      ? Math.max(
+          64,
+          Math.ceil(
+            ((gpuMaxSurvivingCells - baseSlotCap) * 2) /
+              gpuRefineSubCells,
+          ),
+        )
+      : 0;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
-    this.pointBudget = pointBudget;
+    this.pointBudget = gpuPointBudget;
     this.sampleCount = sampleCount;
     this.visibleIterations = plottedIterations;
     this.building = true;
+    this.boundaryDetail = boundaryDetailRequested
+      ? boundaryDetailActive
+        ? "active"
+        : "degraded"
+      : "off";
     const gl = this.gl;
     if (this.quantizedAttributes) this.configurePointAttributes(false);
 
@@ -1131,14 +1183,19 @@ export class Orbit3DPointCloud {
           sampleCount,
           warmupIterations,
           realSliceOnly,
-          maxSurvivingCells,
+          maxSurvivingCells: gpuMaxSurvivingCells,
           baseSlotCap,
-          refineActive,
-          refineCandidateCap,
-          refineWarmup,
-          refineSubdivision: REFINE_SUBDIVISION,
+          refineActive: gpuRefineActive,
+          refineCandidateCap: gpuRefineCandidateCap,
+          refineWarmup: boundaryDetailActive
+            ? BOUNDARY_DETAIL_WARMUP
+            : refineWarmup,
+          refineSubdivision: gpuRefineSubdivision,
           refinePeriodThreshold: REFINE_PERIOD_THRESHOLD,
-          refinePointWeight: REFINE_POINT_WEIGHT,
+          refinePointWeight: boundaryDetailActive
+            ? BOUNDARY_DETAIL_POINT_WEIGHT
+            : REFINE_POINT_WEIGHT,
+          boundaryDetailActive,
         });
         if (cloud) {
           this.applyLiveCloud(cloud);
@@ -1155,6 +1212,8 @@ export class Orbit3DPointCloud {
     }
 
     this.samplingPath = "cpu-sampled-gpu-failed";
+    this.pointBudget = pointBudget;
+    if (boundaryDetailRequested) this.boundaryDetail = "degraded";
     const positions = new Float32Array(pointBudget * 3);
     const periods = new Float32Array(pointBudget);
     const interiors = new Float32Array(pointBudget);
