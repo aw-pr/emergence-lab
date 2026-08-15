@@ -192,3 +192,47 @@ Environment, both roles: run any manual dev server with `--strictPort` on
 port 5175 or higher; ports 5173/5174 may carry foreign worktree servers and
 `playwright.config.ts` silently reuses a foreign 5173. The operator may have
 a server on 5178 — never reuse it.
+
+## Round 2 re-brief (2026-08-15)
+
+Round 1 PASSed 9/10 on measured evidence and FAILed only criterion 6. **The
+implementation is not in question and must not be rebuilt.** It is committed
+at **`091ffb2`** on this branch: candidate selection, 5x5 sub-grid, 20,000
+warmup, the additive 16M ceiling, degradation, and observability all verified
+working; detail 0 is byte-identical to the prior behaviour down to screenshot
+bytes, and max-detail build lands at ~0.91 s.
+
+The failure, measured by the round-1 verifier: at the **widest** camera, max
+detail orbits at 23.8 fps and drags at 10.9 fps. Two of its findings frame
+the fix: zoomed into the boundary band — this mode's whole use case — max
+detail runs at the 120 Hz display cap; and the detail-0 baseline itself is
+only 29.8/13.5 fps at the widest camera, so no point-ceiling choice can reach
+30 fps there.
+
+**Operator decision: camera-distance gating of the raised tier.** Round 2
+adds exactly this and nothing else:
+
+- When the camera is far, refinement points beyond today's budget must not
+  cost frame time; as the camera closes on the boundary band, the full
+  detail appears. Prefer the codebase's existing precedent of per-frame
+  vertex-shader culling (`kernel.ts:160` — instant, no rebuild) over
+  rebuild-on-threshold; a smooth distance-driven fade of refinement points
+  is acceptable and avoids a visible pop. State the threshold you chose and
+  why.
+- Do not change candidate selection, warmup, the sub-grid, the ceiling
+  value, or anything else from `091ffb2`.
+- Round-1 verifier numbers to design against: at detail 0.5 the cloud
+  saturates its budget exactly (12,800,000), so the slider's mid-range is
+  budget-bound; at 1.0 it is candidate-bound (13,238,624 of 16M).
+
+**Criterion 6 is re-worded for round 2** (this supersedes the original):
+at every detail level and every camera distance, frame time is no worse than
+detail 0 at the same camera within measurement noise; zoomed into the
+boundary band at max detail, frame rate remains at or near the display cap;
+no watchdog resets, no context loss. Measure all of these; the round-1
+verifier's rAF-probe method and camera positions are the reference.
+
+All other criteria were verified at `091ffb2` and need only spot-check
+re-confirmation that the gating change did not disturb them — detail-0
+byte-identity (criterion 3) and the parity freeze (criterion 1) in
+particular, since a vertex-shader change touches the draw path both share.
