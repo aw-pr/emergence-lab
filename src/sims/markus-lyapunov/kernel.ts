@@ -19,6 +19,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -111,6 +113,8 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: 0,
       max: 4,
       step: 0.001,
+      info: "Growth-rate A coordinate the view is centred on, in the 0-4 plane the logistic map is stable across. Panning it slides the fractal sideways; changing it recomputes the whole image.",
+      group: "Zoom and detail",
     },
     {
       key: "centerY",
@@ -120,6 +124,8 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: 0,
       max: 4,
       step: 0.001,
+      info: "Growth-rate B coordinate the view is centred on. Panning it slides the fractal up or down; changing it recomputes the whole image.",
+      group: "Zoom and detail",
     },
     {
       key: "zoom",
@@ -129,6 +135,8 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: 0.25,
       max: MAX_FRACTAL_ZOOM,
       step: 0.01,
+      info: "How far into the A-B plane the view is magnified. Higher values reveal finer stability boundary structure; changing it recomputes the whole image.",
+      group: "Zoom and detail",
     },
     {
       key: "warmupIterations",
@@ -138,6 +146,8 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: 0,
       max: MAX_BASE_ITERATIONS,
       step: 1,
+      info: "Orbit steps discarded before measuring stability, letting each cell's orbit settle first. Too few leaves transient noise in the boundary; changing it recomputes the whole image.",
+      group: "Zoom and detail",
     },
     {
       key: "sampleIterations",
@@ -147,6 +157,8 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: 16,
       max: MAX_BASE_ITERATIONS,
       step: 1,
+      info: "Orbit steps measured after warmup to decide whether a cell is stable or chaotic. Higher values sharpen the boundary at the cost of more computation per frame.",
+      group: "Zoom and detail",
     },
     {
       key: "sequence",
@@ -154,6 +166,7 @@ export class MarkusLyapunovKernel implements SimKernel {
       type: "enum",
       default: DEFAULT_SEQUENCE,
       options: SEQUENCE_OPTIONS,
+      info: "Pattern of A and B growth rates the orbit alternates through each step, for example AAB applies A, A, B, then repeats. Changing it produces an entirely different fractal.",
     },
     {
       key: "rotationSpeed",
@@ -163,6 +176,7 @@ export class MarkusLyapunovKernel implements SimKernel {
       min: -MAX_ROTATION_SPEED,
       max: MAX_ROTATION_SPEED,
       step: 0.5,
+      info: "How fast the view spins around its centre. Zero holds it still; negative values reverse the direction.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
