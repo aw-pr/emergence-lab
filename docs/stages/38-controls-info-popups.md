@@ -139,3 +139,21 @@ Claude worker: you have GUI access; exercise your own popup before handing
 off, and say what you checked. Environment: run any manual dev server with
 `--strictPort` on port 5175 or higher; 5173/5174 may carry foreign worktree
 servers, and the operator may have one on 5178 — never reuse any of them.
+
+## Round 2 re-brief (2026-08-15)
+
+Round 1's implementation is committed at **`4c4a175`** on this branch and is
+not in question: the info affordance, popup, grouping sections, the
+logistic-mandelbrot schema text, and an e2e case are all present, and
+`npm run verify` was green at commit time. The round-1 worker ended its turn
+while waiting on a Playwright run and never wrote its handoff envelope — the
+work was fine; the handoff discipline was not.
+
+Round 2's job: start from `4c4a175`, actually execute the checks — run the
+e2e case, exercise the popups and grouping in the browser (headless is fine
+for all of it; nothing here needs frame timing), fix anything genuinely
+broken that execution reveals, and **write the handoff envelope as your
+final action before ending your turn**. Do not wait for anything
+asynchronously after kicking it off — run commands to completion, then hand
+off. An unwritten envelope stalls the stage regardless of how good the work
+is.
