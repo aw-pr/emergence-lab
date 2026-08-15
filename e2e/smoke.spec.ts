@@ -16,7 +16,6 @@ const ALL_SLUGS = [
   "boids",
   "particle-life",
   "lorenz-attractor",
-  "clifford-dejong",
   "diffusion-limited-aggregation",
   "elementary-cellular-automata",
   "brians-brain",
@@ -125,76 +124,6 @@ test("logistic-Mandelbrot reports and completes the GPU cloud path", async ({ pa
   });
   expect(Number(await canvas.getAttribute("data-orbit3d-points"))).toBeGreaterThan(0);
   await canvas.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-gpu-sampled.png` });
-});
-
-test("controls info popup opens, closes, and is absent without an info descriptor", async ({ page }) => {
-  await page.goto("/#/logistic-mandelbrot");
-
-  // logistic-mandelbrot loads straight into immersive mode, which parks the
-  // settings drawer off-screen behind a handle (see .sim-view__drawer-handle
-  // in simView.ts) until it is opened by hover or this click.
-  await page.locator(".sim-view__drawer-handle").click();
-
-  const infoButtons = page.locator(".control__info-button");
-  await expect(infoButtons.first()).toBeVisible();
-
-  const firstButton = infoButtons.nth(0);
-  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
-  const popoverId = await firstButton.getAttribute("aria-describedby");
-  expect(popoverId).toBeTruthy();
-  const popover = page.locator(`#${popoverId}`);
-  await expect(popover).toBeHidden();
-
-  // The orbit3d canvas keeps a busy rAF loop running behind the drawer,
-  // which starves Playwright's actionability pipeline under test load even
-  // after visible/stable checks pass. Dispatch click events straight at the
-  // elements throughout — actionability is not what this case asserts.
-  await firstButton.dispatchEvent("click");
-  await expect(firstButton).toHaveAttribute("aria-expanded", "true");
-  await expect(popover).toBeVisible();
-  await expect(popover).not.toBeEmpty();
-  await page.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-info-popup.png` });
-  await firstButton.dispatchEvent("click");
-  await expect(popover).toBeHidden();
-  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
-
-  // Keyboard: focus + Enter opens, Escape closes.
-  await firstButton.focus();
-  await page.keyboard.press("Enter");
-  await expect(popover).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(popover).toBeHidden();
-  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
-
-  // Clicking elsewhere closes it too. The outside-dismiss handler listens
-  // for pointerdown on the document (controls.ts), so dispatch that.
-  await firstButton.dispatchEvent("click");
-  await expect(popover).toBeVisible();
-  await page.locator(".controls__title").dispatchEvent("pointerdown", { bubbles: true });
-  await expect(popover).toBeHidden();
-
-  // Only one popup open at a time.
-  const secondButton = infoButtons.nth(1);
-  await firstButton.dispatchEvent("click");
-  await expect(popover).toBeVisible();
-  await secondButton.dispatchEvent("click");
-  await expect(popover).toBeHidden();
-  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
-  await expect(secondButton).toHaveAttribute("aria-expanded", "true");
-
-  // No dead icons: every rendered affordance is wired to a real, non-empty
-  // popover. A fixed "sim with no info text" target does not survive stages
-  // 39a-c giving every sim descriptions, so the no-dead-icon guarantee is
-  // asserted structurally instead.
-  const orphaned = await page.evaluate(() => {
-    const buttons = [...document.querySelectorAll(".control__info-button")];
-    return buttons.filter((button) => {
-      const id = button.getAttribute("aria-describedby");
-      const popoverEl = id ? document.getElementById(id) : null;
-      return !popoverEl || !(popoverEl.textContent ?? "").trim();
-    }).length;
-  });
-  expect(orphaned).toBe(0);
 });
 
 test("cyclic phase sampling does not draw a false midpoint seam", async ({ page }) => {

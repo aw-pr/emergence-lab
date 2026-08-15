@@ -1274,7 +1274,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.kuramoto = floatTargets
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
-    this.orbit3d = floatTargets ? new Orbit3DPointCloud(gl) : null;
+    this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
@@ -1762,6 +1762,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
     return (
       this.orbit3d?.available === true &&
+      this.orbit3d.failed !== true &&
       mode === "orbit3d" &&
       isLogisticMandelbrotState(kernel)
     );
@@ -2828,6 +2829,20 @@ function createShader(
   }
 
   return shader;
+}
+
+function createOrbit3DPointCloud(
+  gl: WebGL2RenderingContext,
+): Orbit3DPointCloud | null {
+  try {
+    return new Orbit3DPointCloud(gl);
+  } catch (error) {
+    console.error(
+      "logistic-mandelbrot: orbit3d setup failed; falling back to the 2D field",
+      error,
+    );
+    return null;
+  }
 }
 
 function mustCreate<T>(value: T | null, label: string): T {
