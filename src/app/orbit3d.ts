@@ -1581,17 +1581,19 @@ export class Orbit3DPointCloud {
     );
     gl.uniform1f(this.cellCountUniform, fullCellCount);
     const boundaryDetailActive = this.boundaryDetail === "active";
+    const boundaryDetailBaseCellCount = boundaryDetailActive
+      ? Math.min(fullCellCount, this.boundaryDetailBaseCellCount)
+      : fullCellCount;
     gl.uniform1f(
       this.boundaryDetailBaseCellCountUniform,
-      boundaryDetailActive
-        ? Math.min(fullCellCount, this.boundaryDetailBaseCellCount)
-        : fullCellCount,
+      boundaryDetailBaseCellCount,
     );
+    const boundaryDetailReveal = boundaryDetailActive
+      ? boundaryDetailRevealForDistance(this.camera.distance)
+      : 1;
     gl.uniform1f(
       this.boundaryDetailRevealUniform,
-      boundaryDetailActive
-        ? boundaryDetailRevealForDistance(this.camera.distance)
-        : 1,
+      boundaryDetailReveal,
     );
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     if (this.quantizedAttributes) {
@@ -1614,7 +1616,18 @@ export class Orbit3DPointCloud {
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
     gl.uniform1f(this.cycleBeamUniform, cycleBeam);
     gl.bindVertexArray(this.pointVao);
-    gl.drawArrays(gl.POINTS, 0, this.pointCount);
+    if (
+      boundaryDetailReveal === 0 &&
+      boundaryDetailBaseCellCount < fullCellCount
+    ) {
+      // Points are sample-major, so each visible orbit sample owns one
+      // contiguous base prefix followed by the fully culled raised tier.
+      for (let first = 0; first < this.pointCount; first += fullCellCount) {
+        gl.drawArrays(gl.POINTS, first, boundaryDetailBaseCellCount);
+      }
+    } else {
+      gl.drawArrays(gl.POINTS, 0, this.pointCount);
+    }
 
     // Cycle mode reads as a self-lit field, so the roaming marker dot stays
     // hidden there unless the light beam is sweeping — then the dot is the
