@@ -126,6 +126,57 @@ test("logistic-Mandelbrot reports and completes the GPU cloud path", async ({ pa
   await canvas.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-gpu-sampled.png` });
 });
 
+test("controls info popup opens, closes, and is absent without an info descriptor", async ({ page }) => {
+  await page.goto("/#/logistic-mandelbrot");
+
+  const infoButtons = page.locator(".control__info-button");
+  await expect(infoButtons.first()).toBeVisible();
+
+  const firstButton = infoButtons.nth(0);
+  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
+  const popoverId = await firstButton.getAttribute("aria-describedby");
+  expect(popoverId).toBeTruthy();
+  const popover = page.locator(`#${popoverId}`);
+  await expect(popover).toBeHidden();
+
+  // Mouse: click opens, click again closes.
+  await firstButton.click();
+  await expect(firstButton).toHaveAttribute("aria-expanded", "true");
+  await expect(popover).toBeVisible();
+  await expect(popover).not.toBeEmpty();
+  await page.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-info-popup.png` });
+  await firstButton.click();
+  await expect(popover).toBeHidden();
+  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
+
+  // Keyboard: focus + Enter opens, Escape closes.
+  await firstButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(popover).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
+
+  // Clicking elsewhere closes it too.
+  await firstButton.click();
+  await expect(popover).toBeVisible();
+  await page.locator(".controls__title").click();
+  await expect(popover).toBeHidden();
+
+  // Only one popup open at a time.
+  const secondButton = infoButtons.nth(1);
+  await firstButton.click();
+  await expect(popover).toBeVisible();
+  await secondButton.click();
+  await expect(popover).toBeHidden();
+  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
+  await expect(secondButton).toHaveAttribute("aria-expanded", "true");
+
+  // A sim with no info descriptors shows no affordance at all.
+  await page.goto("/#/boids");
+  await expect(page.locator(".control__info-button")).toHaveCount(0);
+});
+
 test("cyclic phase sampling does not draw a false midpoint seam", async ({ page }) => {
   const pixel = await page.evaluate(async () => {
     const { createWebGLRendererBackend } = await import("/src/app/webglRenderer.ts");

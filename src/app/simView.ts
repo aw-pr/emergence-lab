@@ -65,13 +65,9 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
 const PARAM_GROUPS: Readonly<
   Record<string, readonly { label: string; keys: readonly string[] }[]>
 > = {
-  "logistic-mandelbrot": [
-    { label: "Light beam", keys: ["realAxisSweep", "sweepSpeed"] },
-    {
-      label: "Sampling",
-      keys: ["warmupIterations", "sampleCount", "plottedIterations"],
-    },
-  ],
+  // logistic-mandelbrot's "Light beam" and "Sampling" groups come from its
+  // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
+  // this per-sim table — see ControlsPanel's schema-native grouping.
   boids: [
     { label: "Flock", keys: ["boidCount", "maxSpeed"] },
     { label: "Perception", keys: ["visualRadius", "separationRadius"] },
@@ -727,6 +723,7 @@ export async function renderSimView(
       detachOrbit3dInteractions?.();
       detachPointerImpulse?.();
       renderer.destroy();
+      controls.dispose();
     },
     toggleImmersive,
   };
