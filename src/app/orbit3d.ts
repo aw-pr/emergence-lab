@@ -38,6 +38,8 @@ uniform float u_markerRe;
 uniform float u_fanActive;
 uniform float u_drawDensity;
 uniform float u_cellCount;
+uniform float u_boundaryDetailBaseCellCount;
+uniform float u_boundaryDetailReveal;
 uniform float u_edgeGlow;
 // Prebaked clouds upload quantized attributes (u16 positions over the
 // sampler domain, u8 periods) as normalized ints; these remap them back.
@@ -82,7 +84,10 @@ void main() {
   // sample-major, so the cell index is the vertex id modulo the cell count;
   // hashing it gives a spatially fair, frame-stable keep set.
   float cellId = mod(float(gl_VertexID), max(u_cellCount, 1.0));
-  if (fract(sin(cellId * 12.9898) * 43758.5453) > u_drawDensity) {
+  float cellSelector = fract(sin(cellId * 12.9898) * 43758.5453);
+  bool boundaryDetailCulled = cellId >= u_boundaryDetailBaseCellCount
+    && (u_boundaryDetailReveal <= 0.0 || cellSelector > u_boundaryDetailReveal);
+  if (boundaryDetailCulled || cellSelector > u_drawDensity) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     return;
@@ -396,6 +401,12 @@ const CAMERA_FAR_PLANE = 20;
 const CAMERA_MIN_DISTANCE = 0.35;
 const CAMERA_PAN_LIMIT = 1.6;
 const CAMERA_MAX_DISTANCE = 12;
+// Boundary detail is useful only once the camera is close enough to inspect
+// individual bulb edges. Cull the raised tier before projection and shading at
+// overview distances, then ease it in after the cloud has spread far enough
+// on screen that the reference machine has ample fragment-rate headroom.
+const BOUNDARY_DETAIL_FULL_DISTANCE = 1.25;
+const BOUNDARY_DETAIL_CULLED_DISTANCE = 2.25;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
 const DEFAULT_MARKER_RE = -1;
@@ -579,6 +590,8 @@ export class Orbit3DPointCloud {
   private readonly paletteReverseUniform: WebGLUniformLocation;
   private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly drawDensityUniform: WebGLUniformLocation;
+  private readonly boundaryDetailBaseCellCountUniform: WebGLUniformLocation;
+  private readonly boundaryDetailRevealUniform: WebGLUniformLocation;
   private readonly edgeGlowUniform: WebGLUniformLocation;
   private readonly posOffsetUniform: WebGLUniformLocation;
   private readonly posScaleUniform: WebGLUniformLocation;
@@ -619,6 +632,7 @@ export class Orbit3DPointCloud {
   private pendingSlice: ((budgetMs: number) => void) | null = null;
   private samplingPath: Orbit3DStats["samplingPath"] = "cpu-sampled";
   private boundaryDetail: Orbit3DStats["boundaryDetail"] = "off";
+  private boundaryDetailBaseCellCount = 0;
   private camera = defaultCameraState();
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
@@ -708,6 +722,14 @@ export class Orbit3DPointCloud {
     this.cellCountUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_cellCount"),
       "orbit3d cell-count uniform",
+    );
+    this.boundaryDetailBaseCellCountUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_boundaryDetailBaseCellCount"),
+      "orbit3d boundary-detail base-cell-count uniform",
+    );
+    this.boundaryDetailRevealUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_boundaryDetailReveal"),
+      "orbit3d boundary-detail reveal uniform",
     );
     this.edgeGlowUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_edgeGlow"),
@@ -1023,6 +1045,7 @@ export class Orbit3DPointCloud {
     this.configurePointAttributes(true);
     this.samplingPath = "prebaked";
     this.boundaryDetail = "off";
+    this.boundaryDetailBaseCellCount = 0;
     this.buildFailed = false;
     this.sampleCount = cloud.sampleCount;
     this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
@@ -1172,6 +1195,9 @@ export class Orbit3DPointCloud {
         ? "active"
         : "degraded"
       : "off";
+    this.boundaryDetailBaseCellCount = boundaryDetailActive
+      ? maxSurvivingCells
+      : 0;
     const gl = this.gl;
     if (this.quantizedAttributes) this.configurePointAttributes(false);
 
@@ -1214,6 +1240,7 @@ export class Orbit3DPointCloud {
     this.samplingPath = "cpu-sampled-gpu-failed";
     this.pointBudget = pointBudget;
     if (boundaryDetailRequested) this.boundaryDetail = "degraded";
+    this.boundaryDetailBaseCellCount = 0;
     const positions = new Float32Array(pointBudget * 3);
     const periods = new Float32Array(pointBudget);
     const interiors = new Float32Array(pointBudget);
@@ -1548,9 +1575,23 @@ export class Orbit3DPointCloud {
       this.drawDensityUniform,
       Math.min(1, Math.max(0.05, drawDensity)),
     );
+    const fullCellCount = Math.max(
+      1,
+      Math.floor(this.fullPointCount / Math.max(1, this.sampleCount)),
+    );
+    gl.uniform1f(this.cellCountUniform, fullCellCount);
+    const boundaryDetailActive = this.boundaryDetail === "active";
     gl.uniform1f(
-      this.cellCountUniform,
-      Math.max(1, Math.floor(this.fullPointCount / Math.max(1, this.sampleCount))),
+      this.boundaryDetailBaseCellCountUniform,
+      boundaryDetailActive
+        ? Math.min(fullCellCount, this.boundaryDetailBaseCellCount)
+        : fullCellCount,
+    );
+    gl.uniform1f(
+      this.boundaryDetailRevealUniform,
+      boundaryDetailActive
+        ? boundaryDetailRevealForDistance(this.camera.distance)
+        : 1,
     );
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     if (this.quantizedAttributes) {
@@ -1735,6 +1776,18 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= HIGH_CELL_CEILING) return POINT_BUDGETS.high;
   if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
   return POINT_BUDGETS.extreme;
+}
+
+function boundaryDetailRevealForDistance(cameraDistance: number): number {
+  const progress = Math.max(
+    0,
+    Math.min(
+      1,
+      (BOUNDARY_DETAIL_CULLED_DISTANCE - cameraDistance) /
+        (BOUNDARY_DETAIL_CULLED_DISTANCE - BOUNDARY_DETAIL_FULL_DISTANCE),
+    ),
+  );
+  return progress * progress * (3 - 2 * progress);
 }
 
 function boundedInteger(
