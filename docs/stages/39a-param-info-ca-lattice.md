@@ -90,15 +90,3 @@ relevance-audit findings, and which two claims per sim it verified by eye.
 
 Claude worker and verifier: GUI available; use it. Dev servers on 5175+ with
 `--strictPort`; never reuse 5173/5174/5178.
-
-## Round 2 re-brief (2026-08-15)
-
-Round 1's schema work is complete and committed at **`c5c1c94`** — all seven
-sims, verify green, diffs confirmed schema-only. The worker correctly noted
-it had no browser tooling and marked its envelope "partial", which the loop
-reads as failure. Clarification of roles: the worker's obligation on
-criterion 2 is the code-trace cross-check round 1 already performed; the
-browser spot-check belongs to the verifier, who has GUI. Round 2: start from
-`c5c1c94`, re-confirm verify is green, and write a **status "pass"** envelope
-noting the browser check is delegated to the verifier per this re-brief. Do
-not redo the schema work.
