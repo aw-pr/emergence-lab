@@ -11,6 +11,13 @@ import {
   sampleAttractorCell,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { bakedFileFor } from "./bakedManifest.ts";
+import {
+  OrbitSampler,
+  boundaryDistanceField,
+  buildGpuOrbitCloud,
+  reservoirSlot,
+  type OrbitCloudBuffers,
+} from "./orbitSampler.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -512,6 +519,7 @@ export interface Orbit3DStats {
   pointCount: number;
   pointBudget: number;
   building: boolean;
+  samplingPath: "gpu-sampled" | "cpu-sampled" | "cpu-sampled-gpu-failed" | "prebaked";
 }
 
 export interface Orbit3DMarkerReadout {
@@ -536,6 +544,7 @@ export class Orbit3DPointCloud {
   readonly available: boolean;
 
   private readonly gl: WebGL2RenderingContext;
+  private readonly orbitSampler: OrbitSampler | null;
   private readonly pointProgram: WebGLProgram;
   private readonly markerProgram: WebGLProgram;
   private readonly groundProgram: WebGLProgram;
@@ -599,6 +608,7 @@ export class Orbit3DPointCloud {
   private buildTimer: number | null = null;
   private building = false;
   private pendingSlice: ((budgetMs: number) => void) | null = null;
+  private samplingPath: Orbit3DStats["samplingPath"] = "cpu-sampled";
   private camera = defaultCameraState();
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
@@ -609,6 +619,7 @@ export class Orbit3DPointCloud {
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
+    this.orbitSampler = OrbitSampler.create(gl);
     this.pointProgram = createProgram(gl, POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER);
     this.markerProgram = createProgram(gl, MARKER_VERTEX_SHADER, MARKER_FRAGMENT_SHADER);
     this.groundProgram = createProgram(gl, GROUND_VERTEX_SHADER, GROUND_FRAGMENT_SHADER);
@@ -785,6 +796,7 @@ export class Orbit3DPointCloud {
       pointCount: this.pointCount,
       pointBudget: this.pointBudget,
       building: this.building,
+      samplingPath: this.samplingPath,
     };
   }
 
@@ -981,6 +993,7 @@ export class Orbit3DPointCloud {
   /** Swap in a prebaked cloud, replacing whatever the live build produced. */
   private applyPrebaked(cloud: PrebakedCloud, paramSampleCount: number): void {
     this.cancelBuild();
+    this.samplingPath = "prebaked";
     const gl = this.gl;
     const upload = (buffer: WebGLBuffer, data: Uint16Array | Uint8Array): void => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -1070,15 +1083,6 @@ export class Orbit3DPointCloud {
     const sampleHeight = realSliceOnly
       ? 1
       : Math.max(1, Math.min(inputHeight, Math.ceil(candidateCells / sampleWidth)));
-    const positions = new Float32Array(pointBudget * 3);
-    const periods = new Float32Array(pointBudget);
-    const interiors = new Float32Array(pointBudget);
-    const boundaries = new Float32Array(pointBudget);
-    const weights = new Float32Array(pointBudget).fill(1);
-    const orbitSamples = new Float32Array(sampleCount);
-    const escapeMask = new Uint8Array(sampleWidth * sampleHeight);
-    const slotCell = new Int32Array(maxSurvivingCells);
-    const measure = { interior: 1 };
     const refineSubCells = REFINE_SUBDIVISION * REFINE_SUBDIVISION;
     // Sized so the reserved slots fill even if roughly half the sub-cells
     // escape; a reservoir keeps the pick spatially uniform beyond the cap.
@@ -1088,17 +1092,10 @@ export class Orbit3DPointCloud {
           Math.ceil(((maxSurvivingCells - baseSlotCap) * 2) / refineSubCells),
         )
       : 0;
-    const refineCandidates = new Int32Array(refineCandidateCap);
     const refineWarmup = Math.min(
       MAX_WARMUP,
       warmupIterations * REFINE_WARMUP_MULTIPLIER,
     );
-    let cell = 0;
-    let survivorsSeen = 0;
-    let interestingSeen = 0;
-    let refineCursor = 0;
-    let refineSeen = 0;
-    let refineStart = -1;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -1108,6 +1105,48 @@ export class Orbit3DPointCloud {
     this.building = true;
     const gl = this.gl;
     if (this.quantizedAttributes) this.configurePointAttributes(false);
+
+    if (this.orbitSampler) {
+      const cloud = buildGpuOrbitCloud(this.orbitSampler, {
+        sampleWidth,
+        sampleHeight,
+        sampleCount,
+        warmupIterations,
+        realSliceOnly,
+        maxSurvivingCells,
+        baseSlotCap,
+        refineActive,
+        refineCandidateCap,
+        refineWarmup,
+        refineSubdivision: REFINE_SUBDIVISION,
+        refinePeriodThreshold: REFINE_PERIOD_THRESHOLD,
+        refinePointWeight: REFINE_POINT_WEIGHT,
+      });
+      if (cloud) {
+        this.applyLiveCloud(cloud);
+        this.samplingPath = "gpu-sampled";
+        this.building = false;
+        return;
+      }
+    }
+
+    this.samplingPath = "cpu-sampled-gpu-failed";
+    const positions = new Float32Array(pointBudget * 3);
+    const periods = new Float32Array(pointBudget);
+    const interiors = new Float32Array(pointBudget);
+    const boundaries = new Float32Array(pointBudget);
+    const weights = new Float32Array(pointBudget).fill(1);
+    const orbitSamples = new Float32Array(sampleCount);
+    const escapeMask = new Uint8Array(sampleWidth * sampleHeight);
+    const slotCell = new Int32Array(maxSurvivingCells);
+    const measure = { interior: 1 };
+    const refineCandidates = new Int32Array(refineCandidateCap);
+    let cell = 0;
+    let survivorsSeen = 0;
+    let interestingSeen = 0;
+    let refineCursor = 0;
+    let refineSeen = 0;
+    let refineStart = -1;
 
     const buildSlice = (budgetMs: number): void => {
       if (generation !== this.buildGeneration) return;
@@ -1296,6 +1335,23 @@ export class Orbit3DPointCloud {
     buildSlice(BUILD_SLICE_MS);
   }
 
+  private applyLiveCloud(cloud: OrbitCloudBuffers): void {
+    const gl = this.gl;
+    const upload = (buffer: WebGLBuffer, data: Float32Array): void => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    };
+    upload(this.pointBuffer, cloud.positions);
+    upload(this.periodBuffer, cloud.periods);
+    upload(this.interiorBuffer, cloud.interiors);
+    upload(this.boundaryBuffer, cloud.boundaries);
+    upload(this.weightBuffer, cloud.weights);
+    this.fullPointCount = cloud.survivingCells * this.sampleCount;
+    this.refreshPointCount();
+    this.buildTimer = null;
+    this.pendingSlice = null;
+  }
+
   /**
    * Run the remaining build slices to completion on the calling thread. Used
    * by one-shot render paths (thumbnails) that cannot wait for timer slices.
@@ -1451,6 +1507,7 @@ export class Orbit3DPointCloud {
 
   destroy(): void {
     this.cancelBuild();
+    this.orbitSampler?.destroy();
     this.releaseAccumulationTarget();
     const gl = this.gl;
     gl.deleteVertexArray(this.pointVao);
@@ -1583,65 +1640,6 @@ function boundedInteger(
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(min, Math.min(max, Math.round(value)))
     : fallback;
-}
-
-/**
- * Two-pass chamfer transform: distance in grid units from each cell to the
- * nearest escaped cell, i.e. to the sampled field's escape boundary.
- */
-function boundaryDistanceField(
-  escapeMask: Uint8Array,
-  width: number,
-  height: number,
-): Float32Array {
-  const distances = new Float32Array(escapeMask.length);
-  const FAR = 1e9;
-  const DIAGONAL = Math.SQRT2;
-  for (let index = 0; index < escapeMask.length; index += 1) {
-    distances[index] = escapeMask[index] === 1 ? 0 : FAR;
-  }
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      let best = distances[index];
-      if (x > 0) best = Math.min(best, distances[index - 1] + 1);
-      if (y > 0) {
-        best = Math.min(best, distances[index - width] + 1);
-        if (x > 0) best = Math.min(best, distances[index - width - 1] + DIAGONAL);
-        if (x < width - 1) {
-          best = Math.min(best, distances[index - width + 1] + DIAGONAL);
-        }
-      }
-      distances[index] = best;
-    }
-  }
-  for (let y = height - 1; y >= 0; y -= 1) {
-    for (let x = width - 1; x >= 0; x -= 1) {
-      const index = y * width + x;
-      let best = distances[index];
-      if (x < width - 1) best = Math.min(best, distances[index + 1] + 1);
-      if (y < height - 1) {
-        best = Math.min(best, distances[index + width] + 1);
-        if (x < width - 1) {
-          best = Math.min(best, distances[index + width + 1] + DIAGONAL);
-        }
-        if (x > 0) best = Math.min(best, distances[index + width - 1] + DIAGONAL);
-      }
-      distances[index] = best;
-    }
-  }
-  return distances;
-}
-
-/** Deterministic reservoir sampling keeps a full-domain point budget. */
-function reservoirSlot(itemIndex: number, capacity: number): number {
-  if (itemIndex < capacity) return itemIndex;
-  let hash = (itemIndex + 0x9e3779b9) >>> 0;
-  hash = Math.imul(hash ^ (hash >>> 16), 0x21f0aaad);
-  hash = Math.imul(hash ^ (hash >>> 15), 0x735a2d97);
-  hash = (hash ^ (hash >>> 15)) >>> 0;
-  const candidate = Math.floor(hash / 0x1_0000_0000 * (itemIndex + 1));
-  return candidate < capacity ? candidate : -1;
 }
 
 function assertOrbit3DGeometry(): void {

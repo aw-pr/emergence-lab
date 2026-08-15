@@ -1496,8 +1496,14 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dBuild;
     if (mode === "orbit3d" && isLogisticMandelbrotState(kernel)) {
       canvas.dataset.simulationRenderer = "orbit3d-fallback-field";
-    } else if (isKuramotoState(kernel)) canvas.dataset.simulationRenderer = "cpu-kernel";
-    else delete canvas.dataset.simulationRenderer;
+      canvas.dataset.orbit3dSampler = "orbit3d-fallback-field";
+    } else if (isKuramotoState(kernel)) {
+      canvas.dataset.simulationRenderer = "cpu-kernel";
+      delete canvas.dataset.orbit3dSampler;
+    } else {
+      delete canvas.dataset.simulationRenderer;
+      delete canvas.dataset.orbit3dSampler;
+    }
     const expectedLength = this.gridWidth * this.gridHeight * kernel.channelCount;
     if (state.length !== expectedLength) return;
 
@@ -1567,6 +1573,7 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
     canvas.dataset.orbit3dPointBudget = String(stats.pointBudget);
     canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
+    canvas.dataset.orbit3dSampler = stats.samplingPath;
     canvas.dataset.orbit3dMarkerRe = marker.re.toFixed(6);
     canvas.dataset.orbit3dMarkerIm = marker.im.toFixed(6);
     canvas.dataset.orbit3dMarkerPeriod = String(marker.period);
@@ -1686,6 +1693,7 @@ export class WebGLRendererBackend implements RendererBackend {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
+    delete canvas.dataset.orbit3dSampler;
     canvas.dataset.simulationRenderer = "gpu-ping-pong";
     this.setUniforms(
       frame.kernel,
@@ -1789,6 +1797,7 @@ export class WebGLRendererBackend implements RendererBackend {
     if (!this.sceneTexture || !this.sceneFbo) return;
 
     const canvas = this.gl.canvas as HTMLCanvasElement;
+    delete canvas.dataset.orbit3dSampler;
     canvas.dataset.fractalRenderer = "gpu-fragment";
     canvas.dataset.fractalSupersample = scale.toFixed(2);
 
