@@ -39,7 +39,7 @@ uniform float u_fanActive;
 uniform float u_drawDensity;
 uniform float u_cellCount;
 uniform float u_boundaryDetailBaseCellCount;
-uniform float u_boundaryDetailReveal;
+uniform float u_boundaryDetailOpacity;
 uniform float u_edgeGlow;
 // Prebaked clouds upload quantized attributes (u16 positions over the
 // sampler domain, u8 periods) as normalized ints; these remap them back.
@@ -85,9 +85,7 @@ void main() {
   // hashing it gives a spatially fair, frame-stable keep set.
   float cellId = mod(float(gl_VertexID), max(u_cellCount, 1.0));
   float cellSelector = fract(sin(cellId * 12.9898) * 43758.5453);
-  bool boundaryDetailCulled = cellId >= u_boundaryDetailBaseCellCount
-    && (u_boundaryDetailReveal <= 0.0 || cellSelector > u_boundaryDetailReveal);
-  if (boundaryDetailCulled || cellSelector > u_drawDensity) {
+  if (cellSelector > u_drawDensity) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     return;
@@ -107,7 +105,10 @@ void main() {
     : 1.0;
   // Refined sub-cell points carry a fractional weight so the refinement pass
   // raises local resolution without raising local brightness.
-  v_energy *= a_weight;
+  float boundaryDetailOpacity = cellId >= u_boundaryDetailBaseCellCount
+    ? u_boundaryDetailOpacity
+    : 1.0;
+  v_energy *= a_weight * boundaryDetailOpacity;
   if (u_colourMode == 0) {
     int p = int(period + 0.5);
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
@@ -401,12 +402,12 @@ const CAMERA_FAR_PLANE = 20;
 const CAMERA_MIN_DISTANCE = 0.35;
 const CAMERA_PAN_LIMIT = 1.6;
 const CAMERA_MAX_DISTANCE = 12;
-// Boundary detail is useful only once the camera is close enough to inspect
-// individual bulb edges. Cull the raised tier before projection and shading at
-// overview distances, then ease it in after the cloud has spread far enough
-// on screen that the reference machine has ample fragment-rate headroom.
-const BOUNDARY_DETAIL_FULL_DISTANCE = 0.7;
-const BOUNDARY_DETAIL_CULLED_DISTANCE = 1.4;
+// The full raised tier fits under the reference display's vsync boundary only
+// once the camera is this close. A small exit hysteresis prevents a camera
+// hovering at the threshold from repeatedly restarting the temporal fade.
+const BOUNDARY_DETAIL_SHOW_DISTANCE = 0.75;
+const BOUNDARY_DETAIL_HIDE_DISTANCE = 0.8;
+const BOUNDARY_DETAIL_FADE_MS = 300;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
 const DEFAULT_MARKER_RE = -1;
@@ -591,7 +592,7 @@ export class Orbit3DPointCloud {
   private readonly sampleCountUniform: WebGLUniformLocation;
   private readonly drawDensityUniform: WebGLUniformLocation;
   private readonly boundaryDetailBaseCellCountUniform: WebGLUniformLocation;
-  private readonly boundaryDetailRevealUniform: WebGLUniformLocation;
+  private readonly boundaryDetailOpacityUniform: WebGLUniformLocation;
   private readonly edgeGlowUniform: WebGLUniformLocation;
   private readonly posOffsetUniform: WebGLUniformLocation;
   private readonly posScaleUniform: WebGLUniformLocation;
@@ -633,6 +634,9 @@ export class Orbit3DPointCloud {
   private samplingPath: Orbit3DStats["samplingPath"] = "cpu-sampled";
   private boundaryDetail: Orbit3DStats["boundaryDetail"] = "off";
   private boundaryDetailBaseCellCount = 0;
+  private boundaryDetailTierVisible = false;
+  private boundaryDetailFadeProgress = 0;
+  private boundaryDetailFadeUpdatedAt: number | null = null;
   private camera = defaultCameraState();
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
@@ -727,9 +731,9 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_boundaryDetailBaseCellCount"),
       "orbit3d boundary-detail base-cell-count uniform",
     );
-    this.boundaryDetailRevealUniform = requireResource(
-      gl.getUniformLocation(this.pointProgram, "u_boundaryDetailReveal"),
-      "orbit3d boundary-detail reveal uniform",
+    this.boundaryDetailOpacityUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_boundaryDetailOpacity"),
+      "orbit3d boundary-detail opacity uniform",
     );
     this.edgeGlowUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_edgeGlow"),
@@ -1046,6 +1050,7 @@ export class Orbit3DPointCloud {
     this.samplingPath = "prebaked";
     this.boundaryDetail = "off";
     this.boundaryDetailBaseCellCount = 0;
+    this.resetBoundaryDetailFade();
     this.buildFailed = false;
     this.sampleCount = cloud.sampleCount;
     this.plottedScale = cloud.sampleCount / Math.max(1, paramSampleCount);
@@ -1062,6 +1067,7 @@ export class Orbit3DPointCloud {
 
   rebuild(width: number, height: number, params: OrbitParams): void {
     this.cancelBuild();
+    this.resetBoundaryDetailFade();
     this.buildFailed = false;
     const generation = this.buildGeneration;
     const inputWidth = Math.max(1, Math.floor(width));
@@ -1593,21 +1599,18 @@ export class Orbit3DPointCloud {
       this.boundaryDetailBaseCellCountUniform,
       boundaryDetailBaseCellCount,
     );
-    const boundaryDetailReveal = boundaryDetailActive
-      ? boundaryDetailRevealForDistance(this.camera.distance)
-      : 1;
-    const boundaryDetailDrawCellCount = boundaryDetailActive
-      ? Math.min(
-          fullCellCount,
-          boundaryDetailBaseCellCount + Math.ceil(
-            (fullCellCount - boundaryDetailBaseCellCount) *
-              boundaryDetailReveal,
-          ),
-        )
-      : fullCellCount;
-    // The proportional draw range now carries the reveal; avoid applying the
-    // shader's hashed cull a second time to the submitted prefix.
-    gl.uniform1f(this.boundaryDetailRevealUniform, 1);
+    const boundaryDetailOpacity = this.updateBoundaryDetailFade(
+      performance.now(),
+    );
+    const boundaryDetailTierSubmitted = boundaryDetailActive &&
+      (this.boundaryDetailTierVisible || this.boundaryDetailFadeProgress > 0);
+    const boundaryDetailDrawCellCount = boundaryDetailTierSubmitted
+      ? fullCellCount
+      : boundaryDetailBaseCellCount;
+    gl.uniform1f(
+      this.boundaryDetailOpacityUniform,
+      boundaryDetailOpacity,
+    );
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     if (this.quantizedAttributes) {
       gl.uniform3f(this.posOffsetUniform, RE_MIN, IM_MIN, -SAMPLE_CLIP);
@@ -1631,8 +1634,8 @@ export class Orbit3DPointCloud {
     gl.bindVertexArray(this.pointVao);
     if (boundaryDetailDrawCellCount < fullCellCount) {
       // Points are sample-major, so each visible orbit sample owns one
-      // contiguous base prefix followed by the raised tier. Limit that prefix
-      // throughout the fade so hidden detail never enters the draw call.
+      // contiguous base prefix followed by the raised tier. When detail is
+      // hidden, submit exactly that baseline prefix and no raised vertices.
       for (let first = 0; first < this.pointCount; first += fullCellCount) {
         gl.drawArrays(gl.POINTS, first, boundaryDetailDrawCellCount);
       }
@@ -1674,6 +1677,40 @@ export class Orbit3DPointCloud {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
     return true;
+  }
+
+  private resetBoundaryDetailFade(): void {
+    this.boundaryDetailTierVisible = false;
+    this.boundaryDetailFadeProgress = 0;
+    this.boundaryDetailFadeUpdatedAt = null;
+  }
+
+  private updateBoundaryDetailFade(now: number): number {
+    if (this.boundaryDetail !== "active") {
+      this.resetBoundaryDetailFade();
+      return 1;
+    }
+
+    if (this.boundaryDetailTierVisible) {
+      if (this.camera.distance >= BOUNDARY_DETAIL_HIDE_DISTANCE) {
+        this.boundaryDetailTierVisible = false;
+      }
+    } else if (this.camera.distance <= BOUNDARY_DETAIL_SHOW_DISTANCE) {
+      this.boundaryDetailTierVisible = true;
+    }
+
+    const previousUpdate = this.boundaryDetailFadeUpdatedAt;
+    this.boundaryDetailFadeUpdatedAt = now;
+    if (previousUpdate !== null) {
+      const fadeStep = Math.max(0, now - previousUpdate) /
+        BOUNDARY_DETAIL_FADE_MS;
+      this.boundaryDetailFadeProgress = this.boundaryDetailTierVisible
+        ? Math.min(1, this.boundaryDetailFadeProgress + fadeStep)
+        : Math.max(0, this.boundaryDetailFadeProgress - fadeStep);
+    }
+
+    const progress = this.boundaryDetailFadeProgress;
+    return progress * progress * (3 - 2 * progress);
   }
 
   destroy(): void {
@@ -1800,18 +1837,6 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= HIGH_CELL_CEILING) return POINT_BUDGETS.high;
   if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
   return POINT_BUDGETS.extreme;
-}
-
-function boundaryDetailRevealForDistance(cameraDistance: number): number {
-  const progress = Math.max(
-    0,
-    Math.min(
-      1,
-      (BOUNDARY_DETAIL_CULLED_DISTANCE - cameraDistance) /
-        (BOUNDARY_DETAIL_CULLED_DISTANCE - BOUNDARY_DETAIL_FULL_DISTANCE),
-    ),
-  );
-  return progress * progress * (3 - 2 * progress);
 }
 
 function boundedInteger(
