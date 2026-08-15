@@ -7,9 +7,7 @@
 - **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
 - **Verifier:** Claude Fable 5 <claude-fable-5@local>
 - **Worker effort:** medium
-<!-- Verifier effort intentionally unset: autometta delivers `--effort high`
-     as a single argv element and the Claude CLI rejects it. See autometta card
-     30-effort-flags-ifs-wordsplit. Restore once that lands. -->
+- **Verifier effort:** high
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Pairing rationale:** By this point the design decisions are already made
@@ -27,20 +25,33 @@ Stages 34 and 35, both completed. Read
 `docs/spikes/2026-08-14-fp32-orbit-precision.md` for the tolerance numbers and
 stage 35's card and diff for the path it built.
 
-## ORCHESTRATOR: do not dispatch this card until the digest is filled in
+## ORCHESTRATOR: digest filled 2026-08-15 — this card is dispatchable
 
-The **Contract test** section below is deliberately incomplete. The frozen
-assertions cannot be written until stage 34 produces the tolerance numbers they
-assert on, and the contract requires the *orchestrator* to write and freeze
-that block before the worker runs — not the worker.
+The frozen block is committed in
+`src/sims/logistic-mandelbrot/gpu-parity.test.cjs` and its digest is recorded
+in the Contract test section below. Worker notes on what the orchestrator
+froze:
 
-Before dispatching this stage the orchestrator must: write the frozen block
-into the test file between the `AUTOMETTA-CONTRACT-BEGIN
-card=docs/stages/36-logistic-mandelbrot-gpu-parity-fallback.md` and
-`AUTOMETTA-CONTRACT-END` markers, run
-`scripts/check-contract-test-gate.sh print src/sims/logistic-mandelbrot/gpu-parity.test.cjs`,
-and paste the resulting digest into this card. Dispatching with the digest
-unset defeats the freeze gate entirely.
+- **Scope decision, from stage 35's verified measurements**
+  (`state/verifiers/35-logistic-mandelbrot-gpu-sampler.json`): the stage-34
+  gates (2e-6 value, 0.05% period mismatch) are asserted over
+  **stable-interior cells only**, exactly as the spike scopes them. The
+  boundary band is reported separately and sanity-capped (5% production, 1%
+  baker), never gated at interior tolerances — split-double measurably buys
+  nothing there. Do not "fix" a boundary failure by touching the block; that
+  is a finding.
+- The block consumes `loadParityReport(settings)` from a new sibling module
+  `src/sims/logistic-mandelbrot/gpu-parity-harness.cjs` — that module, its
+  fixture or emulated-path choice, and the report plumbing are the worker's
+  deliverable. The expected report shape is documented in the test file's
+  header comment.
+- `scripts/run-kernel-tests.cjs:36` currently discovers only
+  `kernel.test.cjs` under `src/sims/**`; extending discovery so this file
+  actually runs is in scope and required — an undiscovered parity test is the
+  vacuous test criterion 4 exists to catch.
+- Environment: run any manual dev server with `--strictPort` on port 5175 or
+  higher. Ports 5173/5174 may carry servers from other worktrees, and
+  `playwright.config.ts` silently reuses a foreign 5173.
 
 ## Objective
 
@@ -147,8 +158,7 @@ The verifier will check each of these. Failure of any one is a failure of the st
 ## Contract test
 
 - **Test file:** `src/sims/logistic-mandelbrot/gpu-parity.test.cjs`
-- **Assertions digest:** UNSET — orchestrator fills this in after stage 34
-  lands and before this stage is dispatched. See the ORCHESTRATOR note above.
+- **Assertions digest:** sha256:111b37b263b2afb8137c4628eae41ec55f035d2a2c8955f939ad82816d7be30e
 
 ## Out of scope
 
