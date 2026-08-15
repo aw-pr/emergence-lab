@@ -21,6 +21,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -115,6 +117,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "enum",
       default: "period",
       options: ["period", "inside-out", "mono", "cycle"],
+      info: "Chooses how attractor cells are coloured: by period, inside-out by escape depth, a single tone, or animated cycling. Changes the palette mapping instantly.",
     },
     {
       key: "exposure",
@@ -124,6 +127,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.4,
       max: 3,
       step: 0.05,
+      info: "Brightens or dims the whole point cloud. Higher values make faint, high-period cells more visible.",
     },
     // Resolved per frame in the point shader — dragging it is live.
     {
@@ -134,6 +138,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 2,
       step: 0.05,
+      info: "Strength of the glow drawn at cell boundaries. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
     // Share of the point budget spent re-sampling cascade tails on a finer
     // sub-grid. Changing it rebuilds the cloud; 0 disables refinement.
@@ -145,6 +150,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 0.6,
       step: 0.05,
+      info: "Share of the point budget spent re-sampling cascade tails on a finer sub-grid, sharpening the boundary. Changing it rebuilds the point cloud; 0 disables refinement.",
     },
     // GPU-only live-build detail. The CPU fallback ignores this control and
     // retains the tail-refinement plan above rather than attempting 16M points.
@@ -156,6 +162,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.1,
+      info: "GPU-only extra boundary detail added while building the cloud; the CPU fallback ignores it and keeps the tail-refinement plan instead. Changing it rebuilds the cloud, and the extra points only become visible as the camera moves in close.",
     },
     // Culled per frame in the vertex shader, so dragging it is instant — no
     // rebuild. The wider low end is affordable for the same reason.
@@ -167,18 +174,21 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.05,
       max: 1,
       step: 0.05,
+      info: "Fraction of built points actually drawn. Culled per frame in the vertex shader, so dragging it is instant with no rebuild.",
     },
     {
       key: "autoRotate",
       label: "Auto rotate",
       type: "boolean",
       default: true,
+      info: "Lets the camera drift slowly around the cloud when idle.",
     },
     {
       key: "continuousSpin",
       label: "Continuous camera spin",
       type: "boolean",
       default: true,
+      info: "Keeps the camera spinning continuously instead of settling once framing looks good.",
     },
     // Light beam: the tracer sweeping the real axis and its wake.
     {
@@ -186,6 +196,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
       label: "Light beam sweep",
       type: "boolean",
       default: true,
+      group: "Light beam",
+      info: "Shows a tracer light sweeping along the real axis with a fading wake.",
     },
     {
       key: "sweepSpeed",
@@ -195,6 +207,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.03,
       max: 0.6,
       step: 0.01,
+      group: "Light beam",
+      info: "How fast the real-axis sweep tracer moves.",
     },
     // Animation: palette cycling and the period-doubling reveal.
     {
@@ -205,12 +219,14 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 5,
       step: 0.001,
+      info: "Speed of the palette's colour cycling animation.",
     },
     {
       key: "cascadeReveal",
       label: "Cascade reveal",
       type: "boolean",
       default: true,
+      info: "Reveals the period-doubling cascade progressively over time instead of showing it fully formed.",
     },
     {
       key: "cascadeDuration",
@@ -220,6 +236,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 2,
       max: 30,
       step: 0.5,
+      info: "How many seconds the cascade reveal takes to finish.",
     },
     // Sampling: how each c-cell's attractor orbit is computed.
     {
@@ -230,6 +247,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: MIN_WARMUP_ITERATIONS,
       max: MAX_WARMUP_ITERATIONS,
       step: 1,
+      group: "Sampling",
+      info: "Iterations discarded before sampling each cell's attractor, letting the orbit settle first. Changing it rebuilds the point cloud.",
     },
     {
       key: "sampleCount",
@@ -239,6 +258,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: MIN_SAMPLE_COUNT,
       max: MAX_SAMPLE_COUNT,
       step: 1,
+      group: "Sampling",
+      info: "Orbit points sampled per cell once warmup settles. Changing it rebuilds the point cloud; the GPU point budget is fixed, so more samples per cell means fewer cells covered.",
     },
     {
       key: "plottedIterations",
@@ -248,12 +269,15 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 1,
       max: MAX_SAMPLE_COUNT,
       step: 1,
+      group: "Sampling",
+      info: "How many of the sampled orbit points are actually plotted per cell. Changing it rebuilds the point cloud.",
     },
     {
       key: "realSliceOnly",
       label: "Real-axis slice only",
       type: "boolean",
       default: false,
+      info: "Restricts sampling to the real axis only, producing the classic 1D bifurcation diagram instead of the full complex-plane cloud. Changing it rebuilds the point cloud.",
     },
     // Renderer-side: "live" builds in the browser, any other value names a
     // machine-local baked cloud (scripts/bake-orbit3d.mjs). simView extends
@@ -265,6 +289,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "enum",
       default: "live",
       options: ["live"],
+      info: "Chooses between building the point cloud live in the browser or loading a machine-local prebaked cloud, when one is available.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

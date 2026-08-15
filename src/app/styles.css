@@ -920,6 +920,9 @@ details.controls__colour:not([open]) summary {
 }
 
 .control__label--with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
 }
 
@@ -975,6 +978,39 @@ details.controls__colour:not([open]) summary {
 .control__tune-apply {
   margin-top: 2px;
   width: 100%;
+}
+
+.control__info-button {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--fg-dim);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.control__info-button:hover,
+.control__info-button[aria-expanded="true"] {
+  color: var(--fg);
+  border-color: rgba(90, 200, 250, 0.45);
+}
+
+.control__info-popover {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--fg);
+}
+
+.control__info-popover[hidden] {
+  display: none;
 }
 
 .control__value {
