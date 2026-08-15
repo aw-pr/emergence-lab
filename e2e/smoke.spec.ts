@@ -113,6 +113,19 @@ test("Kuramoto local and global coupling stay GPU-resident", async ({ page }) =>
   await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
 });
 
+test("logistic-Mandelbrot reports and completes the GPU cloud path", async ({ page }) => {
+  await page.goto("/#/logistic-mandelbrot");
+  const canvas = page.locator(".sim-view__canvas");
+  await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+  await expect(canvas).toHaveAttribute("data-orbit3d-sampler", "gpu-sampled");
+  await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", {
+    timeout: 15_000,
+  });
+  expect(Number(await canvas.getAttribute("data-orbit3d-points"))).toBeGreaterThan(0);
+  await canvas.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-gpu-sampled.png` });
+});
+
 test("cyclic phase sampling does not draw a false midpoint seam", async ({ page }) => {
   const pixel = await page.evaluate(async () => {
     const { createWebGLRendererBackend } = await import("/src/app/webglRenderer.ts");
