@@ -176,3 +176,13 @@ themselves, and keep the perturb-check (criterion 5's second half). Run the
 case to completion three times; then the full verify; then write the
 envelope as your final action. Headless throughout — nothing here needs
 frame timing.
+
+## Round 4 re-brief (2026-08-15)
+
+Everything is committed and pre-validated on this branch through the round-3
+e2e fix: the feature passed the round-2 verifier's by-hand checks 6/7, and
+the orchestrator ran the repaired e2e case to completion three times
+(3/3 pass) plus `npm run verify` green. Round 4's worker job is confirmation
+only: run `npm run verify` and the popup e2e case once each, and write a
+status "pass" envelope as your final action. Do not modify anything. Do not
+wait on anything after starting it — run to completion, then hand off.
