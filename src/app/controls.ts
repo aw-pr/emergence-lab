@@ -198,6 +198,9 @@ export class ControlsPanel {
       step: number;
     }
   >();
+  private activeInfoButton: HTMLButtonElement | null = null;
+  private activeInfoPopover: HTMLElement | null = null;
+  private readonly infoDismissAbort = new AbortController();
 
   constructor(options: ControlsOptions) {
     this.slug = options.slug;
@@ -226,6 +229,35 @@ export class ControlsPanel {
     this.displayOptions = { ...options.initialDisplayOptions };
     this.resolution = options.initialResolution;
     this.render(options);
+
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!this.activeInfoButton || !this.activeInfoPopover) return;
+        const target = event.target as Node | null;
+        if (
+          target &&
+          (this.activeInfoButton.contains(target) ||
+            this.activeInfoPopover.contains(target))
+        ) {
+          return;
+        }
+        this.closeInfoPopover();
+      },
+      { signal: this.infoDismissAbort.signal, capture: true },
+    );
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") this.closeInfoPopover();
+      },
+      { signal: this.infoDismissAbort.signal },
+    );
+  }
+
+  /** Detaches document-level listeners backing the info popovers. */
+  dispose(): void {
+    this.infoDismissAbort.abort();
   }
 
   setPlayState(isRunning: boolean): void {
@@ -364,6 +396,35 @@ export class ControlsPanel {
       this.container.appendChild(groupSection);
     }
 
+    // Schema-native grouping (ParamDescriptor.group, docs/INTERFACE.md v1.3.0):
+    // params sharing a group render together, sections in first-appearance
+    // schema order, reusing the same collapsible-section mechanism as above.
+    const schemaGroupOrder: string[] = [];
+    for (const descriptor of options.paramSchema) {
+      if (grouped.has(descriptor.key) || !descriptor.group) continue;
+      if (!schemaGroupOrder.includes(descriptor.group)) {
+        schemaGroupOrder.push(descriptor.group);
+      }
+    }
+    for (const groupLabel of schemaGroupOrder) {
+      const members = options.paramSchema.filter(
+        (descriptor) =>
+          descriptor.group === groupLabel && !grouped.has(descriptor.key),
+      );
+      if (members.length === 0) continue;
+      const groupSection = collapsibleSection(
+        this.slug,
+        groupLabel,
+        "controls__params",
+      );
+      for (const descriptor of members) {
+        const current = this.params[descriptor.key] ?? descriptor.default;
+        groupSection.appendChild(this.buildParamControl(descriptor, current));
+        grouped.add(descriptor.key);
+      }
+      this.container.appendChild(groupSection);
+    }
+
     const remainingSchema = options.paramSchema.filter(
       (descriptor) => !grouped.has(descriptor.key),
     );
@@ -419,6 +480,61 @@ export class ControlsPanel {
     this.stepsValueLabel = value;
 
     return wrap;
+  }
+
+  /**
+   * ⓘ affordance for a descriptor's `info` text (docs/INTERFACE.md v1.3.0).
+   * Returns null when the descriptor carries no info: callers must skip
+   * appending anything so info-less controls render exactly as before.
+   */
+  private buildInfoParts(
+    descriptor: ParamDescriptor,
+  ): { button: HTMLButtonElement; popover: HTMLDivElement } | null {
+    if (!descriptor.info) return null;
+
+    const popoverId = `control-info-${this.slug}-${descriptor.key}`;
+
+    const infoButton = document.createElement("button");
+    infoButton.type = "button";
+    infoButton.className = "control__info-button";
+    infoButton.textContent = "ⓘ";
+    infoButton.setAttribute("aria-label", `${descriptor.label} info`);
+    infoButton.setAttribute("aria-expanded", "false");
+    infoButton.setAttribute("aria-describedby", popoverId);
+
+    const popover = document.createElement("div");
+    popover.className = "control__info-popover";
+    popover.id = popoverId;
+    popover.setAttribute("role", "note");
+    popover.textContent = descriptor.info;
+    popover.hidden = true;
+
+    infoButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (popover.hidden) {
+        this.openInfoPopover(infoButton, popover);
+      } else {
+        this.closeInfoPopover();
+      }
+    });
+
+    return { button: infoButton, popover };
+  }
+
+  private openInfoPopover(button: HTMLButtonElement, popover: HTMLElement): void {
+    this.closeInfoPopover();
+    popover.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    this.activeInfoButton = button;
+    this.activeInfoPopover = popover;
+  }
+
+  private closeInfoPopover(): void {
+    if (!this.activeInfoButton || !this.activeInfoPopover) return;
+    this.activeInfoPopover.hidden = true;
+    this.activeInfoButton.setAttribute("aria-expanded", "false");
+    this.activeInfoButton = null;
+    this.activeInfoPopover = null;
   }
 
   private buildParamControl(
@@ -482,6 +598,8 @@ export class ControlsPanel {
     tuneButton.addEventListener("click", () => {
       popover.hidden = !popover.hidden;
     });
+    const info = this.buildInfoParts(descriptor);
+    if (info) label.appendChild(info.button);
     label.appendChild(tuneButton);
     wrap.appendChild(label);
 
@@ -501,6 +619,7 @@ export class ControlsPanel {
     this.paramValueLabels.set(descriptor.key, value);
     wrap.appendChild(value);
     wrap.appendChild(popover);
+    if (info) wrap.appendChild(info.popover);
     this.numberBoundEditors.set(descriptor.key, {
       descriptor,
       input,
@@ -548,7 +667,13 @@ export class ControlsPanel {
     const label = document.createElement("span");
     label.className = "control__label";
     label.textContent = descriptor.label;
+    const info = this.buildInfoParts(descriptor);
+    if (info) {
+      label.classList.add("control__label--with-action");
+      label.appendChild(info.button);
+    }
     wrap.appendChild(label);
+    if (info) wrap.appendChild(info.popover);
 
     input.addEventListener("change", () => {
       this.updateParams({ ...this.params, [descriptor.key]: input.checked });
@@ -567,6 +692,11 @@ export class ControlsPanel {
     const label = document.createElement("span");
     label.className = "control__label";
     label.textContent = descriptor.label;
+    const info = this.buildInfoParts(descriptor);
+    if (info) {
+      label.classList.add("control__label--with-action");
+      label.appendChild(info.button);
+    }
     wrap.appendChild(label);
 
     const select = document.createElement("select");
@@ -580,6 +710,7 @@ export class ControlsPanel {
     }
     this.paramInputs.set(descriptor.key, select);
     wrap.appendChild(select);
+    if (info) wrap.appendChild(info.popover);
 
     select.addEventListener("change", () => {
       this.updateParams({ ...this.params, [descriptor.key]: select.value });
