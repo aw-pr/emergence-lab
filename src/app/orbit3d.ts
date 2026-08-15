@@ -405,8 +405,8 @@ const CAMERA_MAX_DISTANCE = 12;
 // The full raised tier fits under the reference display's vsync boundary only
 // once the camera is this close. A small exit hysteresis prevents a camera
 // hovering at the threshold from repeatedly restarting the temporal fade.
-const BOUNDARY_DETAIL_SHOW_DISTANCE = 0.75;
-const BOUNDARY_DETAIL_HIDE_DISTANCE = 0.8;
+const BOUNDARY_DETAIL_SHOW_DISTANCE = 0.9;
+const BOUNDARY_DETAIL_HIDE_DISTANCE = 0.95;
 const BOUNDARY_DETAIL_FADE_MS = 300;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
