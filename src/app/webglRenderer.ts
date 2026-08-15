@@ -1494,9 +1494,14 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dPoints;
     delete canvas.dataset.orbit3dPointBudget;
     delete canvas.dataset.orbit3dBuild;
+    delete canvas.dataset.orbit3dBoundaryDetail;
     if (mode === "orbit3d" && isLogisticMandelbrotState(kernel)) {
       canvas.dataset.simulationRenderer = "orbit3d-fallback-field";
       canvas.dataset.orbit3dSampler = "orbit3d-fallback-field";
+      canvas.dataset.orbit3dBoundaryDetail =
+        numericParam(frame.params, "boundaryDetail", 0) > 0
+          ? "degraded"
+          : "off";
     } else if (isKuramotoState(kernel)) {
       canvas.dataset.simulationRenderer = "cpu-kernel";
       delete canvas.dataset.orbit3dSampler;
@@ -1574,6 +1579,7 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dPointBudget = String(stats.pointBudget);
     canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
     canvas.dataset.orbit3dSampler = stats.samplingPath;
+    canvas.dataset.orbit3dBoundaryDetail = stats.boundaryDetail;
     canvas.dataset.orbit3dMarkerRe = marker.re.toFixed(6);
     canvas.dataset.orbit3dMarkerIm = marker.im.toFixed(6);
     canvas.dataset.orbit3dMarkerPeriod = String(marker.period);
@@ -1694,6 +1700,7 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
     delete canvas.dataset.orbit3dSampler;
+    delete canvas.dataset.orbit3dBoundaryDetail;
     canvas.dataset.simulationRenderer = "gpu-ping-pong";
     this.setUniforms(
       frame.kernel,
@@ -1799,6 +1806,7 @@ export class WebGLRendererBackend implements RendererBackend {
 
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.orbit3dSampler;
+    delete canvas.dataset.orbit3dBoundaryDetail;
     canvas.dataset.fractalRenderer = "gpu-fragment";
     canvas.dataset.fractalSupersample = scale.toFixed(2);
 
@@ -2665,6 +2673,7 @@ function orbit3dBuildKey(
     numericParam(params, "warmupIterations", 0),
     numericParam(params, "sampleCount", 0),
     numericParam(params, "tailRefinement", -1),
+    numericParam(params, "boundaryDetail", 0),
     params.realSliceOnly === true ? 1 : 0,
     typeof params.modelSource === "string" ? params.modelSource : "live",
   ].join(":");
