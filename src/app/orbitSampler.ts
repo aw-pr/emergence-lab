@@ -249,7 +249,6 @@ export interface OrbitCloudBuffers {
   boundaries: Float32Array;
   weights: Float32Array;
   survivingCells: number;
-  boundaryDetailBaseCells: number;
 }
 
 export interface GpuOrbitCloudOptions {
@@ -260,19 +259,12 @@ export interface GpuOrbitCloudOptions {
   realSliceOnly: boolean;
   maxSurvivingCells: number;
   baseSlotCap: number;
-  baselineMaxSurvivingCells: number;
-  baselineRefineActive: boolean;
-  baselineRefineCandidateCap: number;
-  baselineRefineWarmup: number;
-  baselineRefineSubdivision: number;
-  baselineRefinePointWeight: number;
   refineActive: boolean;
   refineCandidateCap: number;
   refineWarmup: number;
   refineSubdivision: number;
   refinePeriodThreshold: number;
   refinePointWeight: number;
-  boundaryDetailActive: boolean;
 }
 
 interface OrbitSampleResult {
@@ -625,19 +617,12 @@ export function buildGpuOrbitCloud(
     realSliceOnly,
     maxSurvivingCells,
     baseSlotCap,
-    baselineMaxSurvivingCells,
-    baselineRefineActive,
-    baselineRefineCandidateCap,
-    baselineRefineWarmup,
-    baselineRefineSubdivision,
-    baselineRefinePointWeight,
     refineActive,
     refineCandidateCap,
     refineWarmup,
     refineSubdivision,
     refinePeriodThreshold,
     refinePointWeight,
-    boundaryDetailActive,
   } = options;
   const baseCellCount = sampleWidth * sampleHeight;
   const baseCoordinates = new Float64Array(baseCellCount * 2);
@@ -655,36 +640,16 @@ export function buildGpuOrbitCloud(
 
   const escapeMask = base.escaped.slice();
   const baseSlots = new Int32Array(baseSlotCap);
-  const baselineRefineCandidates = new Int32Array(
-    boundaryDetailActive ? baselineRefineCandidateCap : 0,
-  );
   const refineCandidates = new Int32Array(refineCandidateCap);
   let survivorsSeen = 0;
-  let baselineInterestingSeen = 0;
   let interestingSeen = 0;
   for (let cell = 0; cell < base.cellCount; cell += 1) {
-    const escaped = base.escaped[cell] === 1;
-    const boundaryBand =
-      boundaryDetailActive &&
-      isEscapeEdgeCell(base.escaped, sampleWidth, sampleHeight, cell);
-    if (escaped && !boundaryBand) continue;
-    if (!escaped) {
-      const slot = reservoirSlot(survivorsSeen, baseSlotCap);
-      survivorsSeen += 1;
-      if (slot >= 0) baseSlots[slot] = cell;
-    }
-    const period = escaped ? 0 : base.periods[cell];
-    const tailCandidate = !escaped &&
-      (period === 0 || period >= refinePeriodThreshold);
-    if (boundaryDetailActive && baselineRefineActive && tailCandidate) {
-      const candidateSlot = reservoirSlot(
-        baselineInterestingSeen,
-        baselineRefineCandidateCap,
-      );
-      baselineInterestingSeen += 1;
-      if (candidateSlot >= 0) baselineRefineCandidates[candidateSlot] = cell;
-    }
-    if (refineActive && (tailCandidate || boundaryBand)) {
+    if (base.escaped[cell] === 1) continue;
+    const slot = reservoirSlot(survivorsSeen, baseSlotCap);
+    survivorsSeen += 1;
+    if (slot >= 0) baseSlots[slot] = cell;
+    const period = base.periods[cell];
+    if (refineActive && (period === 0 || period >= refinePeriodThreshold)) {
       const candidateSlot = reservoirSlot(interestingSeen, refineCandidateCap);
       interestingSeen += 1;
       if (candidateSlot >= 0) refineCandidates[candidateSlot] = cell;
@@ -692,112 +657,51 @@ export function buildGpuOrbitCloud(
   }
 
   const refineStart = Math.min(survivorsSeen, baseSlotCap);
-  type RefinementBatch = {
-    sample: OrbitSampleResult | null;
-    parents: Int32Array;
-    slots: Int32Array;
-    count: number;
-  };
-  const emptyBatch = (): RefinementBatch => ({
-    sample: null,
-    parents: new Int32Array(0),
-    slots: new Int32Array(0),
-    count: 0,
-  });
-  const buildRefinement = (
-    candidates: Int32Array,
-    candidatesSeen: number,
-    capacity: number,
-    warmup: number,
-    subdivision: number,
-    countReduction = 0,
-  ): RefinementBatch | null => {
-    const candidateCount = Math.min(candidatesSeen, candidates.length);
-    const subCells = subdivision * subdivision;
-    const jobs = candidateCount * subCells;
-    if (jobs === 0 || capacity <= 0) return emptyBatch();
-    const parents = new Int32Array(jobs);
-    const coordinates = new Float64Array(jobs * 2);
+  const refineCapacity = maxSurvivingCells - refineStart;
+  const candidateCount = Math.min(interestingSeen, refineCandidateCap);
+  const refineSubCells = refineSubdivision * refineSubdivision;
+  const refineJobs = refineActive ? candidateCount * refineSubCells : 0;
+  let refine: OrbitSampleResult | null = null;
+  let refineParents = new Int32Array(0);
+  let refineCoordinates = new Float64Array(0);
+  if (refineJobs > 0) {
+    refineParents = new Int32Array(refineJobs);
+    refineCoordinates = new Float64Array(refineJobs * 2);
     const cellWidth = (RE_MAX - RE_MIN) / sampleWidth;
     const cellHeight = (IM_MAX - IM_MIN) / sampleHeight;
-    for (let job = 0; job < jobs; job += 1) {
-      const parent = candidates[(job / subCells) | 0];
-      const sub = job % subCells;
+    for (let job = 0; job < refineJobs; job += 1) {
+      const parent = refineCandidates[(job / refineSubCells) | 0];
+      const sub = job % refineSubCells;
       const px = parent % sampleWidth;
       const py = (parent - px) / sampleWidth;
       const centreRe = cellCoordinate(RE_MIN, RE_MAX, px, sampleWidth);
       const centreIm = py === Math.floor(sampleHeight / 2)
         ? 0
         : cellCoordinate(IM_MIN, IM_MAX, py, sampleHeight);
-      const sx = sub % subdivision;
-      const sy = (sub - sx) / subdivision;
-      parents[job] = parent;
-      coordinates[job * 2] =
-        centreRe + ((sx + 0.5) / subdivision - 0.5) * cellWidth;
-      coordinates[job * 2 + 1] =
-        centreIm + ((sy + 0.5) / subdivision - 0.5) * cellHeight;
+      const sx = sub % refineSubdivision;
+      const sy = (sub - sx) / refineSubdivision;
+      refineParents[job] = parent;
+      refineCoordinates[job * 2] =
+        centreRe + ((sx + 0.5) / refineSubdivision - 0.5) * cellWidth;
+      refineCoordinates[job * 2 + 1] =
+        centreIm + ((sy + 0.5) / refineSubdivision - 0.5) * cellHeight;
     }
-    const sampled = sampler.sample(coordinates, warmup, sampleCount);
-    if (!sampled) return null;
-    let seen = 0;
-    for (let job = 0; job < sampled.cellCount; job += 1) {
-      if (sampled.escaped[job] === 1) continue;
-      seen += 1;
-    }
-    const count = Math.max(
-      0,
-      Math.min(seen, capacity) - countReduction,
-    );
-    const slots = new Int32Array(count);
-    let selectionSeen = 0;
-    for (let job = 0; job < sampled.cellCount; job += 1) {
-      if (sampled.escaped[job] === 1) continue;
-      const slot = reservoirSlot(selectionSeen, count);
-      selectionSeen += 1;
-      if (slot >= 0) slots[slot] = job;
-    }
-    return {
-      sample: sampled,
-      parents,
-      slots,
-      count,
-    };
-  };
+    refine = sampler.sample(refineCoordinates, refineWarmup, sampleCount);
+    if (!refine) return null;
+  }
 
-  let baselineRefine = emptyBatch();
-  if (boundaryDetailActive && baselineRefineActive) {
-    // Keep the ordinary detail-0 refinement byte-for-byte at the front of
-    // each sample so a fully gated draw submits the genuine baseline cloud.
-    const baselineCapacity = Math.max(
-      0,
-      baselineMaxSurvivingCells - refineStart,
-    );
-    const built = buildRefinement(
-      baselineRefineCandidates,
-      baselineInterestingSeen,
-      baselineCapacity,
-      baselineRefineWarmup,
-      baselineRefineSubdivision,
-    );
-    if (!built) return null;
-    baselineRefine = built;
+  const refineSlots = new Int32Array(Math.max(0, refineCapacity));
+  let refineSeen = 0;
+  if (refine) {
+    for (let job = 0; job < refine.cellCount; job += 1) {
+      if (refine.escaped[job] === 1) continue;
+      const slot = reservoirSlot(refineSeen, refineCapacity);
+      refineSeen += 1;
+      if (slot >= 0) refineSlots[slot] = job;
+    }
   }
-  const boundaryDetailBaseCells = refineStart + baselineRefine.count;
-  const refineCapacity = Math.max(0, maxSurvivingCells - refineStart);
-  let refine = emptyBatch();
-  if (refineActive) {
-    const built = buildRefinement(
-      refineCandidates,
-      interestingSeen,
-      refineCapacity,
-      refineWarmup,
-      refineSubdivision,
-      boundaryDetailActive ? baselineRefine.count : 0,
-    );
-    if (!built) return null;
-    refine = built;
-  }
-  const survivingCells = boundaryDetailBaseCells + refine.count;
+  const refineCount = Math.min(refineSeen, refineCapacity);
+  const survivingCells = refineStart + refineCount;
   const pointCount = survivingCells * sampleCount;
   const positions = new Float32Array(pointCount * 3);
   const periods = new Float32Array(pointCount);
@@ -809,13 +713,8 @@ export function buildGpuOrbitCloud(
   for (let slot = 0; slot < refineStart; slot += 1) {
     slotCells[slot] = baseSlots[slot];
   }
-  for (let slot = 0; slot < baselineRefine.count; slot += 1) {
-    slotCells[refineStart + slot] =
-      baselineRefine.parents[baselineRefine.slots[slot]];
-  }
-  for (let slot = 0; slot < refine.count; slot += 1) {
-    slotCells[boundaryDetailBaseCells + slot] =
-      refine.parents[refine.slots[slot]];
+  for (let slot = 0; slot < refineCount; slot += 1) {
+    slotCells[refineStart + slot] = refineParents[refineSlots[slot]];
   }
   const cellScale = realSliceOnly
     ? (RE_MAX - RE_MIN) / sampleWidth
@@ -835,79 +734,21 @@ export function buildGpuOrbitCloud(
       interiors[point] = base.interiors[cell];
       boundaries[point] = Math.min(1, distances[cell] * cellScale);
     }
-    if (baselineRefine.sample) {
-      for (let slot = 0; slot < baselineRefine.count; slot += 1) {
-        const job = baselineRefine.slots[slot];
-        const point = sampleOffset + refineStart + slot;
-        const position = point * 3;
-        positions[position] = baselineRefine.sample.coordinates[job * 2];
-        positions[position + 1] =
-          baselineRefine.sample.coordinates[job * 2 + 1];
-        positions[position + 2] =
-          baselineRefine.sample.samples[
-            sample * baselineRefine.sample.cellCount + job
-          ];
-        periods[point] = baselineRefine.sample.periods[job];
-        interiors[point] = baselineRefine.sample.interiors[job];
-        boundaries[point] = Math.min(
-          1,
-          distances[slotCells[refineStart + slot]] * cellScale,
-        );
-        weights[point] = baselineRefinePointWeight;
-      }
-    }
-    if (!refine.sample) continue;
-    for (let slot = 0; slot < refine.count; slot += 1) {
-      const job = refine.slots[slot];
-      const point = sampleOffset + boundaryDetailBaseCells + slot;
+    if (!refine) continue;
+    for (let slot = 0; slot < refineCount; slot += 1) {
+      const job = refineSlots[slot];
+      const point = sampleOffset + refineStart + slot;
       const position = point * 3;
-      positions[position] = refine.sample.coordinates[job * 2];
-      positions[position + 1] = refine.sample.coordinates[job * 2 + 1];
-      positions[position + 2] =
-        refine.sample.samples[sample * refine.sample.cellCount + job];
-      periods[point] = refine.sample.periods[job];
-      interiors[point] = refine.sample.interiors[job];
-      boundaries[point] = Math.min(
-        1,
-        distances[slotCells[boundaryDetailBaseCells + slot]] * cellScale,
-      );
+      positions[position] = refine.coordinates[job * 2];
+      positions[position + 1] = refine.coordinates[job * 2 + 1];
+      positions[position + 2] = refine.samples[sample * refine.cellCount + job];
+      periods[point] = refine.periods[job];
+      interiors[point] = refine.interiors[job];
+      boundaries[point] = Math.min(1, distances[slotCells[refineStart + slot]] * cellScale);
       weights[point] = refinePointWeight;
     }
   }
-  return {
-    positions,
-    periods,
-    interiors,
-    boundaries,
-    weights,
-    survivingCells,
-    boundaryDetailBaseCells: boundaryDetailActive
-      ? boundaryDetailBaseCells
-      : 0,
-  };
-}
-
-/** True on either sampled side of an escaped/non-escaped cell boundary. */
-function isEscapeEdgeCell(
-  escapeMask: Uint8Array,
-  width: number,
-  height: number,
-  index: number,
-): boolean {
-  const x = index % width;
-  const y = (index - x) / width;
-  const escaped = escapeMask[index];
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      if (nx < 0 || nx >= width) continue;
-      if (escapeMask[ny * width + nx] !== escaped) return true;
-    }
-  }
-  return false;
+  return { positions, periods, interiors, boundaries, weights, survivingCells };
 }
 
 /** Two-pass chamfer distance from each cell to the sampled escape boundary. */
