@@ -1195,9 +1195,7 @@ export class Orbit3DPointCloud {
         ? "active"
         : "degraded"
       : "off";
-    this.boundaryDetailBaseCellCount = boundaryDetailActive
-      ? maxSurvivingCells
-      : 0;
+    this.boundaryDetailBaseCellCount = 0;
     const gl = this.gl;
     if (this.quantizedAttributes) this.configurePointAttributes(false);
 
@@ -1211,6 +1209,12 @@ export class Orbit3DPointCloud {
           realSliceOnly,
           maxSurvivingCells: gpuMaxSurvivingCells,
           baseSlotCap,
+          baselineMaxSurvivingCells: maxSurvivingCells,
+          baselineRefineActive: refineActive,
+          baselineRefineCandidateCap: refineCandidateCap,
+          baselineRefineWarmup: refineWarmup,
+          baselineRefineSubdivision: REFINE_SUBDIVISION,
+          baselineRefinePointWeight: REFINE_POINT_WEIGHT,
           refineActive: gpuRefineActive,
           refineCandidateCap: gpuRefineCandidateCap,
           refineWarmup: boundaryDetailActive
@@ -1480,6 +1484,7 @@ export class Orbit3DPointCloud {
     upload(this.weightBuffer, cloud.weights);
     requireNoGlError(gl, "GPU orbit3d upload");
     this.fullPointCount = cloud.survivingCells * this.sampleCount;
+    this.boundaryDetailBaseCellCount = cloud.boundaryDetailBaseCells;
     this.refreshPointCount();
     this.buildTimer = null;
     this.pendingSlice = null;
