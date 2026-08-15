@@ -118,7 +118,7 @@ test("metadata matches the renderer contract", () => {
   assert.equal(continuousSpin?.default, true);
 
   const boundaryDetail = kernel.paramSchema.find((d) => d.key === "boundaryDetail");
-  assert.equal(boundaryDetail?.default, 0);
+  assert.equal(boundaryDetail?.default, 1);
   assert.equal(boundaryDetail?.min, 0);
   assert.equal(boundaryDetail?.max, 1);
 
