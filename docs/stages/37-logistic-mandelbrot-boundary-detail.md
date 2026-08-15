@@ -297,3 +297,39 @@ the boundary-band camera, where round 3 saw detail 1 at 16.6 ms against
 detail 0's 8.4 ms in some runs — one vsync step below cap is within "at or
 near the display cap" only if it does not reproduce as a consistent halving.
 Spot-check criteria 3 and 1 as before.
+
+## Round 5 re-brief (2026-08-15)
+
+Round 4's prefix pinning is committed at **`212bca1`** and delivered in
+full: fully-gated detail 1 submits exactly the detail-0 draw (9,314,960
+vertices), measured identical to detail 0 at the dolly extreme (125.1 ms
+at every level), the default and mid cameras, and the boundary band. The
+last residual, from the round-4 verifier's 12-point distance sweep: the
+reveal completes at d = 1.25, where the full 13.2M-point draw costs
+8.4-9 ms — just over the 8.33 ms / 120 Hz vsync boundary — so across
+d ≈ 0.95-1.25 detail 1 presents at 60 fps against detail 0's 120. From
+d = 0.7 inward the sweep shows detail 1 matching detail 0 to 0.1 ms
+(8.3/8.3 at 0.7, 0.537, 0.45, 0.35).
+
+**Operator decision: move the reveal so full detail arrives where its
+cost fits under the vsync boundary.** Design point: reveal-complete at or
+inside **d = 0.7**, fade start correspondingly inward (suggested ~1.4, at
+your discretion). The one subtlety, and it is the crux: during partial
+reveal the round-3 draw-range mechanism submits the full buffer with the
+shader cull carrying the transition, so you must confirm — or arrange —
+that frame time inside the new fade band also stays under 8.33 ms at
+those distances. Narrowing or steepening the fade, or extending the
+draw-range mechanism to submit only revealed cells during the transition,
+are both acceptable; changing anything else from `212bca1` is not.
+
+Acceptance is criterion 6 exactly as round 2 worded it, with the round-4
+verifier's 12-point sweep as the reference method: at every detail level
+and every camera distance in that sweep, frame time no worse than detail 0
+at the same camera within measurement noise. All other machinery is
+verified at `212bca1`; spot-check criteria 3 and 1 as before.
+
+**Dispatch note for the worker:** round 4's worker wrote its deliverables
+into the main checkout instead of the run worktree it was dispatched into
+(recorded by the round-4 verifier as a dispatch anomaly). Work in the run
+worktree you are dispatched into — the directory named in "This dispatch"
+— and nowhere else.
