@@ -168,11 +168,16 @@ test("controls info popup opens, closes, and is absent without an info descripto
   await page.locator(".controls__title").click();
   await expect(popover).toBeHidden();
 
-  // Only one popup open at a time.
+  // Only one popup open at a time. The orbit3d canvas keeps a busy rAF loop
+  // running behind the drawer, which starves Playwright's visible/stable
+  // actionability checks under test load, and a real screen-position click
+  // can also mis-hit if the first popover visually overlaps the second
+  // button. Dispatch the click event straight at each element instead —
+  // actionability and screen position aren't what this block asserts.
   const secondButton = infoButtons.nth(1);
-  await firstButton.click();
+  await firstButton.dispatchEvent("click");
   await expect(popover).toBeVisible();
-  await secondButton.click();
+  await secondButton.dispatchEvent("click");
   await expect(popover).toBeHidden();
   await expect(firstButton).toHaveAttribute("aria-expanded", "false");
   await expect(secondButton).toHaveAttribute("aria-expanded", "true");
