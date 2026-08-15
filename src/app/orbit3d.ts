@@ -405,8 +405,8 @@ const CAMERA_MAX_DISTANCE = 12;
 // individual bulb edges. Cull the raised tier before projection and shading at
 // overview distances, then ease it in after the cloud has spread far enough
 // on screen that the reference machine has ample fragment-rate headroom.
-const BOUNDARY_DETAIL_FULL_DISTANCE = 1.25;
-const BOUNDARY_DETAIL_CULLED_DISTANCE = 2.25;
+const BOUNDARY_DETAIL_FULL_DISTANCE = 0.7;
+const BOUNDARY_DETAIL_CULLED_DISTANCE = 1.4;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
 const DEFAULT_MARKER_RE = -1;
@@ -1596,10 +1596,18 @@ export class Orbit3DPointCloud {
     const boundaryDetailReveal = boundaryDetailActive
       ? boundaryDetailRevealForDistance(this.camera.distance)
       : 1;
-    gl.uniform1f(
-      this.boundaryDetailRevealUniform,
-      boundaryDetailReveal,
-    );
+    const boundaryDetailDrawCellCount = boundaryDetailActive
+      ? Math.min(
+          fullCellCount,
+          boundaryDetailBaseCellCount + Math.ceil(
+            (fullCellCount - boundaryDetailBaseCellCount) *
+              boundaryDetailReveal,
+          ),
+        )
+      : fullCellCount;
+    // The proportional draw range now carries the reveal; avoid applying the
+    // shader's hashed cull a second time to the submitted prefix.
+    gl.uniform1f(this.boundaryDetailRevealUniform, 1);
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     if (this.quantizedAttributes) {
       gl.uniform3f(this.posOffsetUniform, RE_MIN, IM_MIN, -SAMPLE_CLIP);
@@ -1621,14 +1629,12 @@ export class Orbit3DPointCloud {
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
     gl.uniform1f(this.cycleBeamUniform, cycleBeam);
     gl.bindVertexArray(this.pointVao);
-    if (
-      boundaryDetailReveal === 0 &&
-      boundaryDetailBaseCellCount < fullCellCount
-    ) {
+    if (boundaryDetailDrawCellCount < fullCellCount) {
       // Points are sample-major, so each visible orbit sample owns one
-      // contiguous base prefix followed by the fully culled raised tier.
+      // contiguous base prefix followed by the raised tier. Limit that prefix
+      // throughout the fade so hidden detail never enters the draw call.
       for (let first = 0; first < this.pointCount; first += fullCellCount) {
-        gl.drawArrays(gl.POINTS, first, boundaryDetailBaseCellCount);
+        gl.drawArrays(gl.POINTS, first, boundaryDetailDrawCellCount);
       }
     } else {
       gl.drawArrays(gl.POINTS, 0, this.pointCount);
