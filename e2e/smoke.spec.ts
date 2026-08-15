@@ -144,13 +144,16 @@ test("controls info popup opens, closes, and is absent without an info descripto
   const popover = page.locator(`#${popoverId}`);
   await expect(popover).toBeHidden();
 
-  // Mouse: click opens, click again closes.
-  await firstButton.click();
+  // The orbit3d canvas keeps a busy rAF loop running behind the drawer,
+  // which starves Playwright's actionability pipeline under test load even
+  // after visible/stable checks pass. Dispatch click events straight at the
+  // elements throughout — actionability is not what this case asserts.
+  await firstButton.dispatchEvent("click");
   await expect(firstButton).toHaveAttribute("aria-expanded", "true");
   await expect(popover).toBeVisible();
   await expect(popover).not.toBeEmpty();
   await page.screenshot({ path: `${SHOT_DIR}/logistic-mandelbrot-info-popup.png` });
-  await firstButton.click();
+  await firstButton.dispatchEvent("click");
   await expect(popover).toBeHidden();
   await expect(firstButton).toHaveAttribute("aria-expanded", "false");
 
@@ -162,18 +165,14 @@ test("controls info popup opens, closes, and is absent without an info descripto
   await expect(popover).toBeHidden();
   await expect(firstButton).toHaveAttribute("aria-expanded", "false");
 
-  // Clicking elsewhere closes it too.
-  await firstButton.click();
+  // Clicking elsewhere closes it too. The outside-dismiss handler listens
+  // for pointerdown on the document (controls.ts), so dispatch that.
+  await firstButton.dispatchEvent("click");
   await expect(popover).toBeVisible();
-  await page.locator(".controls__title").click();
+  await page.locator(".controls__title").dispatchEvent("pointerdown", { bubbles: true });
   await expect(popover).toBeHidden();
 
-  // Only one popup open at a time. The orbit3d canvas keeps a busy rAF loop
-  // running behind the drawer, which starves Playwright's visible/stable
-  // actionability checks under test load, and a real screen-position click
-  // can also mis-hit if the first popover visually overlaps the second
-  // button. Dispatch the click event straight at each element instead —
-  // actionability and screen position aren't what this block asserts.
+  // Only one popup open at a time.
   const secondButton = infoButtons.nth(1);
   await firstButton.dispatchEvent("click");
   await expect(popover).toBeVisible();
@@ -182,9 +181,19 @@ test("controls info popup opens, closes, and is absent without an info descripto
   await expect(firstButton).toHaveAttribute("aria-expanded", "false");
   await expect(secondButton).toHaveAttribute("aria-expanded", "true");
 
-  // A sim with no info descriptors shows no affordance at all.
-  await page.goto("/#/boids");
-  await expect(page.locator(".control__info-button")).toHaveCount(0);
+  // No dead icons: every rendered affordance is wired to a real, non-empty
+  // popover. A fixed "sim with no info text" target does not survive stages
+  // 39a-c giving every sim descriptions, so the no-dead-icon guarantee is
+  // asserted structurally instead.
+  const orphaned = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll(".control__info-button")];
+    return buttons.filter((button) => {
+      const id = button.getAttribute("aria-describedby");
+      const popoverEl = id ? document.getElementById(id) : null;
+      return !popoverEl || !(popoverEl.textContent ?? "").trim();
+    }).length;
+  });
+  expect(orphaned).toBe(0);
 });
 
 test("cyclic phase sampling does not draw a false midpoint seam", async ({ page }) => {
