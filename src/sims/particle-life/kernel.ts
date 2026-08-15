@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -148,6 +150,7 @@ export class ParticleLifeKernel implements SimKernel {
       min: 100,
       max: MAX_PARTICLE_COUNT,
       step: 1,
+      info: "How many particles populate the field. More particles make clusters and orbits denser and easier to read, at the cost of frame rate. Changing it resets the field with a fresh layout.",
     },
     {
       key: "species",
@@ -157,6 +160,7 @@ export class ParticleLifeKernel implements SimKernel {
       min: MIN_SPECIES,
       max: MAX_SPECIES,
       step: 1,
+      info: "How many distinct colour species exist, each with its own row of attraction/repulsion rules to every other species. More species gives richer, more chaotic ecosystems. Changing it resets the field and generates a new attraction matrix.",
     },
     {
       key: "rmax",
@@ -166,6 +170,8 @@ export class ParticleLifeKernel implements SimKernel {
       min: 10,
       max: 120,
       step: 1,
+      group: "Interaction forces",
+      info: "How far apart two particles can be and still feel each other. Larger values let structures form from more distant particles, producing bigger, slower-moving clusters. Changing it resets the field.",
     },
     {
       key: "rmin",
@@ -175,6 +181,8 @@ export class ParticleLifeKernel implements SimKernel {
       min: 2,
       max: 60,
       step: 1,
+      group: "Interaction forces",
+      info: "The distance below which particles always push apart, regardless of species. Larger values keep clusters looser and prevent particles from ever quite touching; it is clamped below the interaction radius, so raising it too high has no further effect. Changing it resets the field.",
     },
     {
       key: "forceScale",
@@ -184,6 +192,8 @@ export class ParticleLifeKernel implements SimKernel {
       min: 1,
       max: 160,
       step: 1,
+      group: "Interaction forces",
+      info: "Overall strength of every attraction and repulsion force. Higher values make particles react faster and more violently, often driving the whole field into constant swirling motion. Changing it resets the field.",
     },
     {
       key: "friction",
@@ -193,6 +203,8 @@ export class ParticleLifeKernel implements SimKernel {
       min: 0,
       max: 0.99,
       step: 0.01,
+      group: "Interaction forces",
+      info: "How quickly particle velocity decays each second. Near 1, particles glide almost frictionlessly and orbits persist; near 0, motion is heavily damped and particles settle quickly into static clumps. Changing it resets the field.",
     },
     {
       key: "matrixBias",
@@ -202,6 +214,8 @@ export class ParticleLifeKernel implements SimKernel {
       min: -0.5,
       max: 0.5,
       step: 0.01,
+      group: "Interaction forces",
+      info: "Shifts every entry of the random species attraction matrix toward attraction (positive) or repulsion (negative). Push it positive for clumpier, more cohesive ecosystems, or negative for ones that scatter apart. Changing it resets the field and reshuffles the matrix.",
     },
     {
       key: "pointSize",
@@ -211,6 +225,7 @@ export class ParticleLifeKernel implements SimKernel {
       min: 4,
       max: 16,
       step: 1,
+      info: "On-screen size of each particle's rendered sphere; does not change the simulation's physics. Changing it resets the field, like every other control here.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
