@@ -13,6 +13,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -44,12 +46,65 @@ export class KuramotoOscillatorsKernel {
   readonly channelLabels = ["Phase"] as const;
   readonly channelRanges = [[0, 1]] as const;
   readonly paramSchema = [
-    { key: "coupling", label: "Coupling", type: "number", default: DEFAULT_COUPLING, min: 0, max: 6, step: 0.05 },
-    { key: "frequencySpread", label: "Frequency spread", type: "number", default: DEFAULT_SPREAD, min: 0, max: 2, step: 0.01 },
-    { key: "timestep", label: "Time step", type: "number", default: DEFAULT_TIMESTEP, min: 0.005, max: 0.15, step: 0.005 },
-    { key: "couplingMode", label: "Coupling mode", type: "enum", default: DEFAULT_MODE, options: ["local", "global"] },
-    { key: "initialPattern", label: "Initial pattern", type: "enum", default: DEFAULT_PATTERN, options: ["vortices", "waves", "random"] },
-    { key: "noise", label: "Phase noise", type: "number", default: DEFAULT_NOISE, min: 0, max: 0.4, step: 0.005 },
+    {
+      key: "coupling",
+      label: "Coupling",
+      type: "number",
+      default: DEFAULT_COUPLING,
+      min: 0,
+      max: 6,
+      step: 0.05,
+      group: "Dynamics",
+      info: "How strongly each oscillator pulls its neighbours' phase toward its own. Higher values snap the field into synchronised patches faster; near zero, phases drift independently and the field looks like noise. Changing it resets the field.",
+    },
+    {
+      key: "frequencySpread",
+      label: "Frequency spread",
+      type: "number",
+      default: DEFAULT_SPREAD,
+      min: 0,
+      max: 2,
+      step: 0.01,
+      group: "Dynamics",
+      info: "Spread of each oscillator's natural, uncoupled cycling rate. At zero every oscillator would cycle identically if uncoupled; higher spread makes synchronisation harder to hold, keeping the field more turbulent. Changing it resets the field.",
+    },
+    {
+      key: "noise",
+      label: "Phase noise",
+      type: "number",
+      default: DEFAULT_NOISE,
+      min: 0,
+      max: 0.4,
+      step: 0.005,
+      group: "Dynamics",
+      info: "Random jitter added to every oscillator's phase each step. A little keeps synchronised patches from freezing solid; a lot dissolves vortices and waves into speckle. Changing it resets the field.",
+    },
+    {
+      key: "timestep",
+      label: "Time step",
+      type: "number",
+      default: DEFAULT_TIMESTEP,
+      min: 0.005,
+      max: 0.15,
+      step: 0.005,
+      info: "Simulated time advanced per frame. Larger steps make patterns evolve and rotate faster but coarsen the integration, which can make tightly coupled regions look unstable. Changing it resets the field.",
+    },
+    {
+      key: "couplingMode",
+      label: "Coupling mode",
+      type: "enum",
+      default: DEFAULT_MODE,
+      options: ["local", "global"],
+      info: "Whether each oscillator couples only to its four grid neighbours (local, producing travelling waves and vortices) or to the field's overall average phase (global, pulling everything toward one shared rhythm). Changing it resets the field.",
+    },
+    {
+      key: "initialPattern",
+      label: "Initial pattern",
+      type: "enum",
+      default: DEFAULT_PATTERN,
+      options: ["vortices", "waves", "random"],
+      info: "Starting phase layout: a vortex/antivortex pair, diagonal travelling waves, or fully random phases. Only affects the field at the moment of reset; the dynamics afterwards are governed by coupling, not by which pattern it started from.",
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;

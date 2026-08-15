@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -299,6 +301,7 @@ export class LorenzAttractorKernel implements SimKernel {
       type: "enum",
       default: DEFAULT_ATTRACTOR,
       options: ATTRACTORS,
+      info: "Which chaotic system draws the trail: Lorenz's butterfly, Rössler's folding spiral, Thomas's coiled loop, Aizawa's spindle, or Halvorsen's three-armed spiral. Each has its own shape, integration speed and screen framing. Changing it resets the trail.",
     },
     {
       key: "sigma",
@@ -308,6 +311,8 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 30,
       step: 0.1,
+      group: "Lorenz parameters",
+      info: "Lorenz's rate of exchange between the two convection-roll variables; only takes effect when Attractor is set to Lorenz, and does nothing observable on the other four systems. Higher values sharpen the butterfly's wing crossings. Changing it resets the trail.",
     },
     {
       key: "rho",
@@ -317,6 +322,8 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 60,
       step: 0.1,
+      group: "Lorenz parameters",
+      info: "Lorenz's driving strength, roughly the temperature difference behind the convection; only takes effect when Attractor is set to Lorenz. Below about 24 the wings collapse to a fixed point instead of chaos; higher values widen and speed up the butterfly. Changing it resets the trail.",
     },
     {
       key: "beta",
@@ -326,6 +333,8 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 10,
       step: 0.0001,
+      group: "Lorenz parameters",
+      info: "Lorenz's geometric damping factor; only takes effect when Attractor is set to Lorenz. Changing it subtly reshapes how tightly the wings curl. Changing it resets the trail.",
     },
     {
       key: "stepsPerFrame",
@@ -335,6 +344,7 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 1,
       max: 64,
       step: 1,
+      info: "How many integration steps run per rendered frame. Higher values trace the orbit faster and extend the visible trail further per second, at the cost of frame rate. Changing it resets the trail.",
     },
     {
       key: "fade",
@@ -344,6 +354,8 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0.9,
       max: 1,
       step: 0.001,
+      group: "Trail rendering",
+      info: "Fraction of trail brightness kept each frame. Near the maximum, the whole orbit's history stays lit as a dense ribbon; lower values fade older trail quickly, leaving only a short comet-like head. Changing it resets the trail.",
     },
     {
       key: "ribbonWidth",
@@ -353,12 +365,16 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0.75,
       max: 4,
       step: 0.05,
+      group: "Trail rendering",
+      info: "Thickness of the deposited trail around the orbit's current point. Wider values give a bolder, more solid-looking ribbon; narrower values show a finer wire-like trace. Changing it resets the trail.",
     },
     {
       key: "colourByHeight",
       label: "Colour by height",
       type: "boolean",
       default: DEFAULT_COLOUR_BY_HEIGHT,
+      group: "Trail rendering",
+      info: "Shades the trail's brightness by its position along the attractor's depth axis, giving the shape a sense of three-dimensional relief. Off deposits every point at the same flat brightness. Changing it resets the trail.",
     },
     {
       key: "cycleSpeed",
@@ -368,6 +384,8 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.01,
+      group: "Trail rendering",
+      info: "How fast the palette cycles as new trail is laid down, so freshly drawn ribbon shifts hue over time while older trail keeps the colour it was drawn in. Zero freezes the palette at a single hue. Changing it resets the trail.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

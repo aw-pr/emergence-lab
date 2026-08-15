@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -94,6 +96,8 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       min: 0,
       max: 512,
       step: 1,
+      group: "Walker behaviour",
+      info: "How many random walkers launch each simulation step. More walkers grow the aggregate faster; zero pauses growth entirely without resetting it. Changing it resets the cluster.",
     },
     {
       key: "maxWalkSteps",
@@ -103,6 +107,8 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       min: 1,
       max: 4096,
       step: 1,
+      group: "Walker behaviour",
+      info: "How many steps a single walker takes before giving up and vanishing without sticking. Low values waste walkers that wander off before reaching the cluster, thinning growth at low stickiness; high values let even distant walkers eventually find their way in. Changing it resets the cluster.",
     },
     {
       key: "spawnRadius",
@@ -112,6 +118,8 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       min: 0.05,
       max: 0.5,
       step: 0.01,
+      group: "Walker behaviour",
+      info: "How far beyond the cluster's current edge new walkers are launched, as a fraction of the grid. A larger gap gives walkers more room to wander before reaching the aggregate, encouraging thinner, more open dendrites. Changing it resets the cluster.",
     },
     {
       key: "stickiness",
@@ -121,6 +129,8 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.01,
+      group: "Walker behaviour",
+      info: "Chance a walker sticks the moment it touches the cluster. At 1, growth is classic open, spiky dendrites; lower values let walkers slip past first contact and pack into gaps, filling out a denser, coral-like mass. Changing it resets the cluster.",
     },
     {
       key: "seedCount",
@@ -130,12 +140,14 @@ export class DiffusionLimitedAggregationKernel implements SimKernel {
       min: 1,
       max: 32,
       step: 1,
+      info: "How many cells the cluster starts from, seeded in a ring around the centre point. More seed cells give the aggregate a fuller, rounder starting core; the count is capped by how many of the fixed candidate offsets fit. Changing it resets the cluster.",
     },
     {
       key: "colourByAge",
       label: "Colour by accretion age",
       type: "boolean",
       default: DEFAULT_COLOUR_BY_AGE,
+      info: "Shades each cell by how early it stuck to the cluster, so the growth rings from centre to edge are visible. Off renders every occupied cell at the same full brightness. Changing it resets the cluster.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

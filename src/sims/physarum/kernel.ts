@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -130,6 +132,7 @@ export class PhysarumKernel implements SimKernel {
       min: 1000,
       max: MAX_AGENT_COUNT,
       step: 1000,
+      info: "How many agents lay down trail. More agents fill the grid with a denser vein network faster; fewer agents produce sparser, more thread-like patterns. Changing it resets the trail field.",
     },
     {
       key: "sensorAngle",
@@ -139,6 +142,8 @@ export class PhysarumKernel implements SimKernel {
       min: 5,
       max: 90,
       step: 0.5,
+      group: "Agent movement",
+      info: "Angle between an agent's forward sensor and its two side sensors. Narrow angles favour straight, thin filaments; wide angles let agents fork toward trail further off-axis, producing branchier networks. Changing it resets the trail field.",
     },
     {
       key: "sensorDistance",
@@ -148,6 +153,8 @@ export class PhysarumKernel implements SimKernel {
       min: 1,
       max: 32,
       step: 1,
+      group: "Agent movement",
+      info: "How far ahead an agent's sensors sample the trail field. Larger values let agents react to distant trail and produce larger-scale structure; small values keep the network fine-grained and local. Changing it resets the trail field.",
     },
     {
       key: "turnSpeed",
@@ -157,6 +164,8 @@ export class PhysarumKernel implements SimKernel {
       min: 1,
       max: 90,
       step: 0.5,
+      group: "Agent movement",
+      info: "How sharply an agent can turn each step to follow the strongest sensed trail. Higher values let the network curl into tight spirals and loops; lower values keep paths gently curving. Changing it resets the trail field.",
     },
     {
       key: "moveSpeed",
@@ -166,6 +175,8 @@ export class PhysarumKernel implements SimKernel {
       min: 0.25,
       max: 4,
       step: 0.05,
+      group: "Agent movement",
+      info: "How far an agent travels each step. Faster movement spreads the network out and grows it more quickly; slower movement keeps trails dense and close together. Changing it resets the trail field.",
     },
     {
       key: "depositAmount",
@@ -175,6 +186,7 @@ export class PhysarumKernel implements SimKernel {
       min: 0.01,
       max: 1,
       step: 0.01,
+      info: "How much trail intensity an agent adds to its current cell each step. Higher values make trails brighter and more persistent against evaporation, reinforcing well-travelled paths faster. Changing it resets the trail field.",
     },
     {
       key: "evaporation",
@@ -184,6 +196,7 @@ export class PhysarumKernel implements SimKernel {
       min: 0.5,
       max: 0.995,
       step: 0.005,
+      info: "Fraction of trail intensity kept after each diffusion pass. Near the maximum, trails linger and blur into broad glowing veins; lower values make the network fade quickly, keeping only the most reinforced paths visible. Changing it resets the trail field.",
     },
     {
       key: "stepsPerFrame",
@@ -193,6 +206,7 @@ export class PhysarumKernel implements SimKernel {
       min: 1,
       max: 8,
       step: 1,
+      info: "How many simulation steps run per rendered frame. Higher values fast-forward the network's growth and evaporation, at the cost of frame rate. Changing it resets the trail field.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

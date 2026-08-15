@@ -7,6 +7,8 @@ type ParamDescriptor = {
   max?: number;
   step?: number;
   options?: readonly string[];
+  info?: string;
+  group?: string;
 };
 
 type SimParams = Record<string, number | boolean | string>;
@@ -140,6 +142,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 28000,
       step: 1,
+      info: "How many boids fly in the flock. More boids make the flow denser and the emergent shapes richer, at the cost of frame rate. Changing it resets the flock.",
     },
     {
       key: "visualRadius",
@@ -149,6 +152,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 64,
       step: 1,
+      info: "How far each boid can see its neighbours. A larger radius pulls more of the flock into each boid's alignment and cohesion averaging, producing bigger, calmer schools; a small radius fragments the flock into many small clusters. Changing it resets the flock.",
     },
     {
       key: "separationRadius",
@@ -158,6 +162,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 32,
       step: 1,
+      info: "How close two boids must get before they push apart. Larger values keep boids more spread out within the flock; it only has an effect while smaller than the visual radius. Changing it resets the flock.",
     },
     {
       key: "maxSpeed",
@@ -167,6 +172,7 @@ export class BoidsKernel implements SimKernel {
       min: 0.25,
       max: 40,
       step: 0.05,
+      info: "Top speed a boid can travel. Raising it makes the whole flock dart and streak faster across the field; lowering it produces a slow, drifting swarm. Changing it resets the flock.",
     },
     {
       key: "alignment",
@@ -176,6 +182,8 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 0.25,
       step: 0.001,
+      group: "Flocking rules",
+      info: "How strongly a boid steers to match its neighbours' heading. Higher values make the flock move in tight, unified streams; near zero, boids ignore each other's direction and the flock looks like scattered traffic. Changing it resets the flock.",
     },
     {
       key: "cohesion",
@@ -185,6 +193,8 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 0.05,
       step: 0.001,
+      group: "Flocking rules",
+      info: "How strongly a boid steers toward the centre of its local neighbours. Higher values pull the flock into a single tight cluster; near zero, boids drift apart into loose, independent groups. Changing it resets the flock.",
     },
     {
       key: "separation",
@@ -194,6 +204,8 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.001,
+      group: "Flocking rules",
+      info: "How strongly a boid pushes away from neighbours that stray inside its separation radius. Higher values keep individual boids from overlapping, giving the flock a looser, more granular texture. Changing it resets the flock.",
     },
     {
       key: "pointSize",
@@ -203,6 +215,7 @@ export class BoidsKernel implements SimKernel {
       min: 4,
       max: 16,
       step: 1,
+      info: "On-screen size of each boid marker; does not change flocking behaviour. Changing it resets the flock, like every other control here.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 

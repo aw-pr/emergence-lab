@@ -28,7 +28,7 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(kernel.channelLabels, ["Phase"]);
   assert.deepEqual(kernel.channelRanges, [[0, 1]]);
   assert.deepEqual(kernel.paramSchema.map((p) => p.key), [
-    "coupling", "frequencySpread", "timestep", "couplingMode", "initialPattern", "noise",
+    "coupling", "frequencySpread", "noise", "timestep", "couplingMode", "initialPattern",
   ]);
 });
 
