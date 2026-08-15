@@ -265,3 +265,35 @@ camera (six wheel-out ticks, distance 12) is the one measurement that must
 move, from ~150 ms to detail 0's ~133 ms within noise. Spot-check criterion
 3 (detail-0 byte-identity) and criterion 1 (parity digest) again; a draw
 range touches the shared draw path.
+
+## Round 4 re-brief (2026-08-15)
+
+Round 3's base-only draw ranges are committed at **`c03d082`**, confirmed
+firing by draw-call instrumentation, and stay. They were not, however, the
+residual: the round-3 verifier's controls show removing the gated points
+from submission buys only ~4 ms of the ~24 ms dolly-extreme gap, and that
+drawing exactly detail 0's vertex count from the detail-1 cloud still costs
+141.5 ms against detail 0's 125.0 ms. **The gap is in the base prefix
+itself:** `boundaryDetailBaseCellCount` is set to `maxSurvivingCells`
+(`orbit3d.ts:1198-1200`) = floor(9,600,000 / 8) = 1,200,000 cells — the
+budget cap — but a real detail-0 build is candidate-bound at 1,164,370
+cells. Fully gated detail 1 therefore draws 9,600,000 vertices where
+detail 0 draws 9,314,960, a larger and differently-composed base cloud,
+and at the dolly extreme the cost is overdraw-dominated (at the default
+camera the same configuration is *faster* than detail 0).
+
+**Round 4 is one change: pin the reveal prefix to the cells a detail-0
+build actually yields, not to the budget cap.** When fully gated, the drawn
+set must be the same cells, same count, same order as a detail-0 build —
+that is what makes far-camera frame time equal by construction. Do not
+change the thresholds, the smoothstep, the draw-range mechanism, or the
+refinement tier from `c03d082`.
+
+Two method notes from the round-3 verifier, binding on the round-4
+verifier: measure with autoRotate, continuousSpin and realAxisSweep all
+off (the spin phase swings 90-160 ms at the dolly extreme and hides a
+24 ms effect; with them off the probe reproduces to 0.1 ms); and re-check
+the boundary-band camera, where round 3 saw detail 1 at 16.6 ms against
+detail 0's 8.4 ms in some runs — one vsync step below cap is within "at or
+near the display cap" only if it does not reproduce as a consistent halving.
+Spot-check criteria 3 and 1 as before.
