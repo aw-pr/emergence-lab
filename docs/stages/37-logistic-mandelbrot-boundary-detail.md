@@ -236,3 +236,32 @@ All other criteria were verified at `091ffb2` and need only spot-check
 re-confirmation that the gating change did not disturb them — detail-0
 byte-identity (criterion 3) and the parity freeze (criterion 1) in
 particular, since a vertex-shader change touches the draw path both share.
+
+## Round 3 re-brief (2026-08-15)
+
+Round 2's gating is committed at **`4356f66`** and verified doing real work:
+smoothstep reveal from culled at distance 2.25 to revealed at 1.25, base
+prefix pinned to the unraised budget, ~two-thirds of the far-camera
+regression removed, boundary-band at display cap, no context loss. The
+residual FAIL on criterion 6 is one mechanism, measured precisely: at the
+dolly extreme (distance 12) the vertex shader's early-out still pays vertex
+fetch, hash and draw submission for all 3,920,824 gated points — a
+reproducible 16.7 ms (12-19%) frame-time penalty against detail 0.
+
+**Round 3 is one change: take fully-culled points out of the draw call.**
+The reveal prefix is already contiguous (`boundaryDetailBaseCellCount`,
+`orbit3d.ts:1116`, `:1198-1200`), so when
+`boundaryDetailRevealForDistance` (`:1781-1790`) returns 0, shrink the draw
+range to the base prefix instead of submitting gated points the shader will
+discard; while the reveal is partial (between 2.25 and 1.25), the existing
+shader cull carries the transition exactly as now. Do not change the
+thresholds, the smoothstep, the buffer layout, or anything else from
+`4356f66`.
+
+Acceptance for round 3 is criterion 6's round-2 wording, now expected to
+hold everywhere: the round-2 verifier measured detail 1 within noise of
+detail 0 at distances 5.098, 2.408 and 0.537 already — the dolly-extreme
+camera (six wheel-out ticks, distance 12) is the one measurement that must
+move, from ~150 ms to detail 0's ~133 ms within noise. Spot-check criterion
+3 (detail-0 byte-identity) and criterion 1 (parity digest) again; a draw
+range touches the shared draw path.
