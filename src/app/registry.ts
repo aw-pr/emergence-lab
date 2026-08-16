@@ -261,6 +261,47 @@ const CATALOGUE: readonly SimEntry[] = [
     },
   },
   {
+    slug: "clifford-dejong",
+    name: "Clifford & De Jong",
+    family: "Chaotic Systems",
+    subtitle: "Two sin/cos rules scatter millions of points into gauzy attractors.",
+    description:
+      "Iterate a four-coefficient trigonometric map and plot every visit: the density histogram condenses into folded, smoke-like figures — Clifford's weighted curls, De Jong's whorls, Svensson's ribbons.",
+    variants: [
+      {
+        variant: "clifford",
+        name: "Clifford Attractor",
+        subtitle: "Pickover's coefficient-weighted sin/cos curls.",
+        description:
+          "Clifford Pickover's map: two sine terms bent by cosine feedback, folding the plane into layered, curling veils.",
+        params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7 },
+      },
+      {
+        variant: "dejong",
+        name: "De Jong Attractor",
+        subtitle: "All-trig folding into dense loops and whorls.",
+        description:
+          "Peter de Jong's map: four pure trig terms confine the orbit to a 4×4 box it fills with knotted, self-crossing whorls.",
+        params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1 },
+      },
+      {
+        variant: "svensson",
+        name: "Svensson Attractor",
+        subtitle: "A scaled variant stretching wide, symmetric ribbons.",
+        description:
+          "Johnny Svensson's variant: a large scaling coefficient stretches the figure into broad, near-symmetric drapes.",
+        // Higher exposure than the schema default: this drape spreads its
+        // density over far more cells than the other two maps, so the same
+        // per-point deposit leaves it looking washed out.
+        params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56, exposure: 0.08 },
+      },
+    ],
+    load: async () => {
+      const mod = await import("../sims/clifford-dejong/kernel.ts");
+      return pickKernelExport(mod as Record<string, unknown>);
+    },
+  },
+  {
     slug: "diffusion-limited-aggregation",
     name: "Diffusion-Limited Aggregation",
     family: "Aggregation & Growth",

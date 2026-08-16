@@ -16,6 +16,7 @@ const ALL_SLUGS = [
   "boids",
   "particle-life",
   "lorenz-attractor",
+  "clifford-dejong",
   "diffusion-limited-aggregation",
   "elementary-cellular-automata",
   "brians-brain",
