@@ -398,7 +398,9 @@ void main() {
   }
 
   if (u_particleGlyph) {
-    vec3 bg = vec3(5.0, 8.0, 18.0) / 255.0;
+    // Black, not the boids navy: the native viewer floats these grains in
+    // plain space, and any background tint mutes the species colours.
+    vec3 bg = vec3(0.0);
     float glyphRadius = clamp(u_particleGlyphRadius, 0.5, 8.0);
     // Bound the search by the actual radius rather than sweeping a fixed window
     // and discarding: at the default radius of 2 that is 25 taps per fragment
