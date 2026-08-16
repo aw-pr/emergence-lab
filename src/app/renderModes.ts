@@ -19,7 +19,7 @@ export function getRenderMode(slug: string): RenderMode {
   if (GRID_SLUGS.has(slug)) return "grid";
   if (FRACTAL_SLUGS.has(slug)) return "fractal";
   if (slug === "logistic-mandelbrot") return "orbit3d";
-  if (slug === "lorenz-attractor") return "smooth";
+  if (slug === "lorenz-attractor" || slug === "clifford-dejong") return "smooth";
   if (slug === "boids" || slug === "particle-life") return "particle";
   return "field";
 }
