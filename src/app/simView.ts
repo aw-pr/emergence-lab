@@ -70,7 +70,7 @@ const PARAM_GROUPS: Readonly<
   // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
   // this per-sim table — see ControlsPanel's schema-native grouping.
   boids: [
-    { label: "Flock", keys: ["boidCount", "maxSpeed"] },
+    { label: "Flock", keys: ["boidCount", "initialFlocks", "maxSpeed"] },
     { label: "Perception", keys: ["visualRadius", "separationRadius"] },
     { label: "Steering", keys: ["alignment", "cohesion", "separation"] },
   ],
@@ -1148,7 +1148,11 @@ function speedProfileFor(slug: string): SpeedProfile {
       // calls (fade sweeps included), so it stays at 1x like the attractors.
       return { initial: 1, control: careful };
     case "boids":
-      return { initial: 5, control: swarm };
+      // 1x, not faster: the renderer samples positions once per rendered
+      // frame, so at Nx the trail accumulator sees every Nth position and the
+      // streaks bead into dotted chains. At 1x they draw as the continuous
+      // comet-tails the native viewer shows.
+      return { initial: 1, control: swarm };
     case "particle-life":
       return { initial: 1, control: swarm };
     case "mandelbrot":
