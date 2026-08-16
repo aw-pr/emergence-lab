@@ -22,6 +22,9 @@ export interface ReferenceSet {
 
 export interface SimSweepConfig {
   slug: string;
+  /** Artifact directory / report id; defaults to the slug. Lets several sweeps
+   * (e.g. one per map of a multi-map kernel) share a slug without colliding. */
+  artifactId?: string;
   /** Channel index scored as the scalar field. */
   primaryChannel: number;
   gridWidth: number;
@@ -135,8 +138,86 @@ const LORENZ: SimSweepConfig = {
   ],
 };
 
+/**
+ * Point-map attractor sweeps: one config per map, sharing the slug. The a/b
+ * axes are the interesting knobs (they set the trig frequencies that fold the
+ * plane); c/d stay at a per-map anchor for the coarse pass. Rendering knobs are
+ * scaled down for the 128² sweep grid — at app defaults 14 000 points/frame
+ * saturate most support cells to 1.0 and the entropy term goes blind. With
+ * exposure 0.015 / fade 0.99 a cell's equilibrium is ≈1.5× its visits-per-frame,
+ * so the density histogram stays graded and the metrics can discriminate.
+ */
+const CLIFFORD_DEJONG_BASE = {
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 260, // ≈2.6×the 1/(1-fade) convergence timescale at fade 0.99
+  fluxGap: 5,
+  dt: 1,
+  primaryChannel: 0, // density histogram
+  coverageThreshold: 0.04,
+} as const;
+
+const CLIFFORD_RENDER = { pointsPerFrame: 14000, exposure: 0.015, fade: 0.99 };
+
+const CLIFFORD: SimSweepConfig = {
+  slug: "clifford-dejong",
+  artifactId: "clifford-dejong-clifford",
+  ...CLIFFORD_DEJONG_BASE,
+  baseParams: { map: "clifford", c: 1.0, d: 0.7, ...CLIFFORD_RENDER },
+  axes: [
+    { key: "a", values: linspace(-2.4, 2.4, 9, 2) },
+    { key: "b", values: linspace(-2.4, 2.4, 9, 2) },
+  ],
+  // References mirror the shipped presets; veils carries the 2026-08-16
+  // promoted coefficients (see docs/sweeps/clifford-dejong-interestingness.md).
+  references: [
+    { id: "classic", label: "Clifford classic", params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7, ...CLIFFORD_RENDER } },
+    { id: "veils", label: "Clifford veils (promoted)", params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0, ...CLIFFORD_RENDER } },
+    { id: "bloom", label: "Clifford bloom", params: { map: "clifford", a: -1.8, b: -2.0, c: -0.5, d: -0.9, ...CLIFFORD_RENDER } },
+  ],
+};
+
+const DEJONG: SimSweepConfig = {
+  slug: "clifford-dejong",
+  artifactId: "clifford-dejong-dejong",
+  ...CLIFFORD_DEJONG_BASE,
+  baseParams: { map: "dejong", c: 2.4, d: -2.1, ...CLIFFORD_RENDER },
+  axes: [
+    { key: "a", values: linspace(-2.8, 2.8, 9, 2) },
+    { key: "b", values: linspace(-2.8, 2.8, 9, 2) },
+  ],
+  // Swan and heart are the 2026-08-16 promotions that replaced the thin
+  // web/scroll sets (0.435/0.262 — small off-centre line figures).
+  references: [
+    { id: "classic", label: "De Jong classic", params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+    { id: "swan", label: "De Jong swan (promoted)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.8, d: -1.87, ...CLIFFORD_RENDER } },
+    { id: "heart", label: "De Jong heart (promoted)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+  ],
+};
+
+const SVENSSON: SimSweepConfig = {
+  slug: "clifford-dejong",
+  artifactId: "clifford-dejong-svensson",
+  ...CLIFFORD_DEJONG_BASE,
+  baseParams: { map: "svensson", c: 1.6, ...CLIFFORD_RENDER },
+  axes: [
+    { key: "a", values: linspace(-2.2, 2.2, 8, 2) },
+    { key: "b", values: linspace(-2.2, 2.2, 8, 2) },
+    // d scales the whole x term on Svensson, so it changes the figure's
+    // character, not just its frame — worth a coarse axis of its own.
+    { key: "d", values: [-6.56, -2.4, 0.9] },
+  ],
+  references: [
+    { id: "drape", label: "Svensson drape", params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56, ...CLIFFORD_RENDER } },
+    { id: "moth", label: "Svensson moth", params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9, ...CLIFFORD_RENDER } },
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
   "lorenz-attractor": LORENZ,
+  "clifford-dejong-clifford": CLIFFORD,
+  "clifford-dejong-dejong": DEJONG,
+  "clifford-dejong-svensson": SVENSSON,
 };

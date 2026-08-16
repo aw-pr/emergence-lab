@@ -64,6 +64,7 @@ async function runSweep(
   await page.goto("/");
   const paramKeys = config.axes.map((a) => a.key);
   const slug = config.slug;
+  const artifactId = config.artifactId ?? config.slug;
 
   const sweepParams = expandSweep(config);
   const candidates: ScoredCandidate[] = [];
@@ -73,7 +74,7 @@ async function runSweep(
     const id = paramKeys.map((k) => `${k}${params[k]}`).join("_");
     candidates.push(await scoreOne(page, config, id, id, params));
     n += 1;
-    if (n % 10 === 0) console.log(`  ${slug}: ${n}/${sweepParams.length} swept`);
+    if (n % 10 === 0) console.log(`  ${artifactId}: ${n}/${sweepParams.length} swept`);
   }
 
   const references: ScoredCandidate[] = [];
@@ -99,13 +100,13 @@ async function runSweep(
       dt: config.dt,
     };
     const frame = await page.evaluate(driveKernel, driverConfig);
-    const rel = `${slug}/${cand.id}.png`;
+    const rel = `${artifactId}/${cand.id}.png`;
     writePng(`${ARTIFACT_ROOT}/${rel}`, frame.frameA, frame.width, frame.height, 3);
     cand.thumb = rel;
   }
 
   const md = [
-    `# Interestingness sweep — ${slug}`,
+    `# Interestingness sweep — ${artifactId}`,
     "",
     `Grid ${config.gridWidth}×${config.gridHeight}, warmup ${config.warmupSteps} steps, flux gap ${config.fluxGap}.`,
     `Scored on channel ${config.primaryChannel}, coverage threshold ${config.coverageThreshold}.`,
@@ -120,19 +121,19 @@ async function runSweep(
     metricsTable(references, paramKeys),
     "",
   ].join("\n");
-  writeText(`${ARTIFACT_ROOT}/${slug}/report.md`, md);
+  writeText(`${ARTIFACT_ROOT}/${artifactId}/report.md`, md);
   writeText(
-    `${ARTIFACT_ROOT}/${slug}/results.json`,
+    `${ARTIFACT_ROOT}/${artifactId}/results.json`,
     JSON.stringify({ ranked, references }, null, 2),
   );
 
-  console.log(`\n=== ${slug} top 5 ===`);
+  console.log(`\n=== ${artifactId} top 5 ===`);
   for (const c of ranked.slice(0, 5)) {
     console.log(
       `  ${c.metrics.score.toFixed(3)}  ${c.id}  (ent ${c.metrics.entropy.toFixed(2)} ac ${c.metrics.spatialAutocorrelation.toFixed(2)} cov ${c.metrics.coverage.toFixed(2)} flux ${c.metrics.temporalFlux.toFixed(4)})`,
     );
   }
-  console.log(`=== ${slug} references ===`);
+  console.log(`=== ${artifactId} references ===`);
   for (const c of references) {
     console.log(`  ${c.metrics.score.toFixed(3)}  ${c.label}`);
   }
@@ -177,4 +178,16 @@ sweepTest("sweep boids", async ({ page }) => {
 
 sweepTest("sweep lorenz", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["lorenz-attractor"]);
+});
+
+sweepTest("sweep clifford coefficients", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["clifford-dejong-clifford"]);
+});
+
+sweepTest("sweep dejong coefficients", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["clifford-dejong-dejong"]);
+});
+
+sweepTest("sweep svensson coefficients", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["clifford-dejong-svensson"]);
 });
