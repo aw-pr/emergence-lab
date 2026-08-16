@@ -1210,10 +1210,10 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
   if (slug === "particle-life") {
-    // Bloom carries the species colour a little past each sphere's rim, so
-    // clusters read as one glowing membrane while the bodies stay distinct.
+    // Matched to the native viewer's starfield look: crisp grains on black,
+    // no trail smear, just enough bloom to let dense clusters glow.
     // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0.66, bloom: 0.35 };
+    return { dotSize: 2, trailFade: 0, bloom: 0.15 };
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };
