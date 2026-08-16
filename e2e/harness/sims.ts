@@ -157,14 +157,7 @@ const CLIFFORD_DEJONG_BASE = {
   coverageThreshold: 0.04,
 } as const;
 
-// driftAmount 0 pins the coefficients: the kernel drifts them by default, and
-// a moving figure would corrupt every structure/flux metric in the sweep.
-const CLIFFORD_RENDER = {
-  pointsPerFrame: 14000,
-  exposure: 0.015,
-  fade: 0.99,
-  driftAmount: 0,
-};
+const CLIFFORD_RENDER = { pointsPerFrame: 14000, exposure: 0.015, fade: 0.99 };
 
 const CLIFFORD: SimSweepConfig = {
   slug: "clifford-dejong",
