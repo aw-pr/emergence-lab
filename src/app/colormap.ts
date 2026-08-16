@@ -225,6 +225,11 @@ export function defaultColourOptionsFor(
       // Cyclic: the hue channel wraps, so the palette has to join at its ends
       // or every lap of the colour cycle would snap through a hard seam.
       return { ...base, preset: "phase", gamma: 1.8, contrast: 1.55 };
+    case "clifford-dejong":
+      // Same cyclic density+hue pairing as the strange attractors, but a
+      // gentler gamma: the point-map histogram carries its structure in faint
+      // single-visit cells that a 1.8 lift would crush to black.
+      return { ...base, preset: "phase", gamma: 1.35, contrast: 1.4 };
     case "mandelbrot":
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };

@@ -51,6 +51,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
   "diffusion-limited-aggregation": ["colourByAge"],
   "game-of-life": ["ageShading"],
   "lorenz-attractor": ["fade", "ribbonWidth", "colourByHeight", "cycleSpeed"],
+  "clifford-dejong": ["exposure", "fade", "colourMode", "cycleSpeed"],
   mandelbrot: ["palettePhase", "cycleSpeed"],
   "julia-set": ["palettePhase", "cycleSpeed"],
   "burning-ship": ["palettePhase", "cycleSpeed"],
@@ -173,6 +174,10 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
     "\\dot{x} = \\sigma(y-x)",
     "\\dot{y} = x(\\rho-z)-y",
     "\\dot{z} = xy-\\beta z",
+  ],
+  "clifford-dejong": [
+    "x_{n+1} = \\sin(a y_n) + c\\cos(a x_n)",
+    "y_{n+1} = \\sin(b x_n) + d\\cos(b y_n)",
   ],
   "belousov-zhabotinsky": [
     "\\dot{A} = D_a\\nabla^2A + f(1-A) + CA - AB",
@@ -1138,6 +1143,10 @@ function speedProfileFor(slug: string): SpeedProfile {
       // substeps per frame); this slider multiplies on top of it, and starting
       // it anywhere but 1 makes "reset to defaults" look like a speed change.
       return { initial: 1, control: careful };
+    case "clifford-dejong":
+      // The felt speed is pointsPerFrame; the slider multiplies whole step()
+      // calls (fade sweeps included), so it stays at 1x like the attractors.
+      return { initial: 1, control: careful };
     case "boids":
       return { initial: 5, control: swarm };
     case "particle-life":
@@ -1204,6 +1213,11 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };
+  }
+  if (slug === "clifford-dejong") {
+    // Fading is kernel-side (its fade param); renderer trails would smear the
+    // histogram. A touch of bloom lifts the saturated filament cores.
+    return { dotSize: 1, trailFade: 0, bloom: 0.35 };
   }
   switch (slug) {
     // Modest glow on the bright-trace and fractal sims; off elsewhere.
