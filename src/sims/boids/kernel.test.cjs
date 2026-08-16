@@ -54,6 +54,7 @@ test("metadata matches the renderer contract", () => {
     kernel.paramSchema.map((descriptor) => descriptor.key),
     [
       "boidCount",
+      "initialFlocks",
       "visualRadius",
       "separationRadius",
       "maxSpeed",
@@ -238,15 +239,17 @@ test("applyImpulse swoops boids radially away from the point, deterministically"
     return sum;
   };
 
+  // Uniform seeding: the clustered default parks every flock on a ring away
+  // from the probed centre, leaving nothing inside the impulse radius.
   const kernel = new BoidsKernel();
-  kernel.init(width, height, { boidCount: 1500 });
+  kernel.init(width, height, { boidCount: 1500, initialFlocks: 0 });
   const before = radialOutwardSum(Array.from(kernel.readState()));
   kernel.applyImpulse(px, py, radius, 1);
   const after = radialOutwardSum(Array.from(kernel.readState()));
   assert.ok(after > before, "mean outward velocity increases after the swoop");
 
   const twin = new BoidsKernel();
-  twin.init(width, height, { boidCount: 1500 });
+  twin.init(width, height, { boidCount: 1500, initialFlocks: 0 });
   twin.applyImpulse(px, py, radius, 1);
   assert.deepEqual(
     Array.from(kernel.readState()),

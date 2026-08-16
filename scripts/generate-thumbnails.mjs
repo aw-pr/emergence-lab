@@ -28,6 +28,8 @@ const HEIGHT = 400;
 const STEPS_BY_SLUG = {
   "gray-scott": 1100,
   "diffusion-limited-aggregation": 220,
+  // Clustered flocks need time to leave their seeding ring and form streams.
+  boids: 300,
 };
 
 function waitForServer(url, timeoutMs) {
