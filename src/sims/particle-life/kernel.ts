@@ -37,7 +37,10 @@ const DEFAULT_MATRIX_BIAS = 0.15;
  * the panel but never reads it, and the renderer draws the glyph from it. 4 was
  * the flat-square default and is too few pixels across to show the shading.
  */
-const DEFAULT_POINT_SIZE = 16;
+/** Small by default: the native viewer draws each particle as a bare grid
+ * cell, and that fine-grained starfield look is the reference. Larger sizes
+ * bring back the lit-sphere rendering for anyone who wants it. */
+const DEFAULT_POINT_SIZE = 3;
 
 const MAX_PARTICLE_COUNT = 20000;
 const MIN_SPECIES = 2;
@@ -222,10 +225,10 @@ export class ParticleLifeKernel implements SimKernel {
       label: "Point size (px)",
       type: "number",
       default: DEFAULT_POINT_SIZE,
-      min: 4,
+      min: 2,
       max: 16,
       step: 1,
-      info: "On-screen size of each particle's rendered sphere; does not change the simulation's physics. Changing it resets the field, like every other control here.",
+      info: "On-screen size of each particle's rendered sphere; does not change the simulation's physics. Small values give fine star-like grains, larger ones shaded spheres. Changing it resets the field, like every other control here.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
