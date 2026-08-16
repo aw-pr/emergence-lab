@@ -67,6 +67,9 @@ const PHONE_FORCED_PERFORMANCE = new Set([
 
 const ULTRA_DEFAULTS = new Set([
   "lorenz-attractor",
+  // Point-map histograms sharpen with every extra cell; the per-frame cost is
+  // the fade sweep, which stays cheap even at the ultra grid.
+  "clifford-dejong",
   "elementary-cellular-automata",
   "game-of-life",
   "diffusion-limited-aggregation",

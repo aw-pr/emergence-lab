@@ -397,6 +397,54 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { attractor: "halvorsen", stepsPerFrame: 12, fade: 0.99 },
     },
   ],
+  "clifford-dejong": [
+    {
+      id: "clifford-classic",
+      label: "Clifford classic",
+      params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7 },
+    },
+    {
+      // Promoted by the 2026-08-16 interestingness sweep (0.481 → 0.740):
+      // the old set (-1.7, 1.3, -0.1, -1.2) drew a few thin ribbons.
+      id: "clifford-veils",
+      label: "Clifford veils",
+      params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0 },
+    },
+    {
+      id: "clifford-bloom",
+      label: "Clifford bloom",
+      params: { map: "clifford", a: -1.8, b: -2.0, c: -0.5, d: -0.9 },
+    },
+    {
+      id: "dejong-classic",
+      label: "De Jong classic",
+      params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1 },
+    },
+    {
+      // Promoted by the 2026-08-16 interestingness sweep (replaced "web",
+      // 0.435 → 0.762, which rendered as a small off-centre line figure).
+      id: "dejong-swan",
+      label: "De Jong swan",
+      params: { map: "dejong", a: 1.4, b: -2.8, c: 2.8, d: -1.87 },
+    },
+    {
+      // Promoted by the same sweep (replaced "scroll", 0.262 → 0.768 — the
+      // top-scoring point-map set of the whole run).
+      id: "dejong-heart",
+      label: "De Jong heart",
+      params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1 },
+    },
+    {
+      id: "svensson-drape",
+      label: "Svensson drape",
+      params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56 },
+    },
+    {
+      id: "svensson-moth",
+      label: "Svensson moth",
+      params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9 },
+    },
+  ],
   "diffusion-limited-aggregation": [
     {
       id: "branching",
