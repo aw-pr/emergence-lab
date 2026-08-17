@@ -46,6 +46,17 @@ const DEFAULT_POINTS_PER_FRAME = 14000;
 const DEFAULT_EXPOSURE = 0.035;
 const DEFAULT_FADE = 0.995;
 const DEFAULT_CYCLE_SPEED = 0.02;
+const DEFAULT_DRIFT_AMOUNT = 0.5;
+const DEFAULT_DRIFT_SPEED = 0.5;
+/** Incommensurate per-coefficient frequencies so the drift path through
+ * coefficient space never closes; the phases spread the initial directions so
+ * all four coefficients do not start moving in lockstep. */
+const DRIFT_FREQS = [1, 1.31, 1.618, 1.93] as const;
+const DRIFT_PHASES = [0, 2.1, 4.2, 0.7] as const;
+/** Drift-time advance per frame at driftSpeed 1: the base-frequency
+ * coefficient completes one full sine cycle every five seconds. */
+const DRIFT_RATE = 0.2 / 60;
+const TAU = Math.PI * 2;
 const WARMUP_STEPS = 100;
 const INITIAL_POINTS = 40000;
 /** Frame margin so the attractor's analytic bound does not kiss the edge. */
@@ -228,6 +239,28 @@ export class CliffordDeJongKernel implements SimKernel {
       info: "Fourth coefficient of the map. On Clifford it scales the y extent; on Svensson it scales the x term, which is why Svensson's classic settings carry a large negative d. Changing it resets the image.",
     },
     {
+      key: "driftAmount",
+      label: "Drift amount",
+      type: "number",
+      default: DEFAULT_DRIFT_AMOUNT,
+      min: 0,
+      max: 1,
+      step: 0.01,
+      group: "Drift",
+      info: "How far the four coefficients wander from their set values, in coefficient units. The wandering happens live, without resetting the image, so the old figure fades out as the new one accumulates and the attractor appears to morph. Crossing a periodic window can momentarily collapse the figure to a loop or a few points before it re-blooms — that is the map's genuine behaviour, not a glitch. Zero pins the coefficients.",
+    },
+    {
+      key: "driftSpeed",
+      label: "Drift speed",
+      type: "number",
+      default: DEFAULT_DRIFT_SPEED,
+      min: 0,
+      max: 1,
+      step: 0.01,
+      group: "Drift",
+      info: "How fast the coefficients wander. Each follows its own sine cycle at a slightly different frequency, so the path through coefficient space never repeats. Slow speeds give a gradual morph; pair a faster drift with a lower fade so the trailing figure keeps up.",
+    },
+    {
       key: "pointsPerFrame",
       label: "Points per frame",
       type: "number",
@@ -295,6 +328,14 @@ export class CliffordDeJongKernel implements SimKernel {
   private fade = DEFAULT_FADE;
   private colourMode: ColourMode = DEFAULT_COLOUR_MODE;
   private cycleSpeed = DEFAULT_CYCLE_SPEED;
+  private driftAmount = DEFAULT_DRIFT_AMOUNT;
+  private driftSpeed = DEFAULT_DRIFT_SPEED;
+  private driftT = 0;
+  /** Effective coefficients: base a-d plus the live drift offsets. */
+  private ea = DEFAULT_A;
+  private eb = DEFAULT_B;
+  private ec = DEFAULT_C;
+  private ed = DEFAULT_D;
   private phase = 0;
   private x = 0.1;
   private y = 0.1;
@@ -352,9 +393,37 @@ export class CliffordDeJongKernel implements SimKernel {
       0,
       1,
     );
+    this.driftAmount = boundedNumber(
+      params,
+      "driftAmount",
+      DEFAULT_DRIFT_AMOUNT,
+      0,
+      1,
+    );
+    this.driftSpeed = boundedNumber(
+      params,
+      "driftSpeed",
+      DEFAULT_DRIFT_SPEED,
+      0,
+      1,
+    );
+    this.driftT = 0;
+    this.ea = this.a;
+    this.eb = this.b;
+    this.ec = this.c;
+    this.ed = this.d;
     this.phase = 0;
 
-    const [boundX, boundY] = this.spec.bounds(this.a, this.b, this.c, this.d);
+    // Frame the whole drift envelope, not just the base coefficients: bounds
+    // grow monotonically with |c| and |d|, so widening those by the drift
+    // amplitude keeps every drifted attractor in shot without the frame
+    // breathing as the coefficients move.
+    const [boundX, boundY] = this.spec.bounds(
+      this.a,
+      this.b,
+      Math.abs(this.c) + this.driftAmount,
+      Math.abs(this.d) + this.driftAmount,
+    );
     this.halfExtentX = boundX * RANGE_MARGIN;
     this.halfExtentY = boundY * RANGE_MARGIN;
     this.maxStep = Math.hypot(2 * boundX, 2 * boundY);
@@ -381,6 +450,23 @@ export class CliffordDeJongKernel implements SimKernel {
     }
 
     this.phase = wrap01(this.phase + this.cycleSpeed * (1 / 60));
+
+    if (this.driftAmount > 0) {
+      // Offsets move once per frame, not per point: within a frame the orbit
+      // samples one fixed attractor, and the fade cross-dissolves between
+      // frames, which is what makes the morph read as one figure deforming.
+      this.driftT += this.driftSpeed * DRIFT_RATE;
+      const amount = this.driftAmount;
+      const t = this.driftT;
+      this.ea =
+        this.a + amount * Math.sin(TAU * DRIFT_FREQS[0] * t + DRIFT_PHASES[0]);
+      this.eb =
+        this.b + amount * Math.sin(TAU * DRIFT_FREQS[1] * t + DRIFT_PHASES[1]);
+      this.ec =
+        this.c + amount * Math.sin(TAU * DRIFT_FREQS[2] * t + DRIFT_PHASES[2]);
+      this.ed =
+        this.d + amount * Math.sin(TAU * DRIFT_FREQS[3] * t + DRIFT_PHASES[3]);
+    }
 
     this.plot(this.pointsPerFrame, 1);
   }
@@ -411,10 +497,10 @@ export class CliffordDeJongKernel implements SimKernel {
     const [nextX, nextY] = this.spec.apply(
       this.x,
       this.y,
-      this.a,
-      this.b,
-      this.c,
-      this.d,
+      this.ea,
+      this.eb,
+      this.ec,
+      this.ed,
     );
     const travelled = Math.hypot(nextX - this.x, nextY - this.y);
     this.x = nextX;
