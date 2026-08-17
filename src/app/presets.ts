@@ -444,6 +444,43 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Svensson moth",
       params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9 },
     },
+    {
+      // Live coefficient drift around the "veils" sweep winner. Fade drops so
+      // the outgoing figure dissolves as fast as the morph moves; exposure
+      // rises to hold mid-tone brightness at the shorter accumulation window.
+      id: "clifford-morph",
+      label: "Clifford morph",
+      params: {
+        map: "clifford",
+        a: -1.8,
+        b: -2.4,
+        c: -1.0,
+        d: 1.0,
+        driftAmount: 0.35,
+        driftSpeed: 0.5,
+        fade: 0.985,
+        exposure: 0.09,
+        pointsPerFrame: 40000,
+      },
+    },
+    {
+      // Same treatment around the "heart" winner, the top scorer of the
+      // 2026-08-16 sweep.
+      id: "dejong-morph",
+      label: "De Jong morph",
+      params: {
+        map: "dejong",
+        a: 1.4,
+        b: -2.8,
+        c: 2.4,
+        d: -2.1,
+        driftAmount: 0.3,
+        driftSpeed: 0.5,
+        fade: 0.985,
+        exposure: 0.09,
+        pointsPerFrame: 40000,
+      },
+    },
   ],
   "diffusion-limited-aggregation": [
     {
