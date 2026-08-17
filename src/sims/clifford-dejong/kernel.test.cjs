@@ -51,6 +51,8 @@ test("metadata matches the renderer contract", () => {
       "b",
       "c",
       "d",
+      "driftAmount",
+      "driftSpeed",
       "pointsPerFrame",
       "exposure",
       "fade",
@@ -196,6 +198,46 @@ test("coefficient changes reshape the attractor", () => {
   const changed = runKernel({ a: -1.7, b: 1.3, c: -0.1, d: -1.2 });
 
   assert.notDeepEqual(changed, baseline);
+});
+
+test("coefficient drift is on by default and deterministic", () => {
+  assert.deepEqual(runKernel({ driftAmount: 0.5 }), runKernel({}));
+
+  const drifting = { driftAmount: 0.5, driftSpeed: 1 };
+  assert.deepEqual(runKernel(drifting, 90), runKernel(drifting, 90));
+});
+
+test("pinning the drift departs from the default morphing run", () => {
+  const pinned = runKernel({ driftAmount: 0 }, 90);
+  const drifting = runKernel({}, 90);
+
+  assert.notDeepEqual(drifting, pinned);
+});
+
+test("drifted orbits stay bounded and framed at maximum amplitude", () => {
+  for (const map of MAPS) {
+    const state = runKernel(
+      { map, ...CLASSIC_PARAMS[map], driftAmount: 1, driftSpeed: 1 },
+      120,
+    );
+
+    assert.ok(
+      state.every((value) => Number.isFinite(value) && value >= 0 && value <= 1),
+      `${map} must stay bounded in [0, 1] while drifting`,
+    );
+    assert.ok(
+      occupiedCells(state) > 100,
+      `${map} must keep drawing a figure while drifting`,
+    );
+  }
+});
+
+test("zero drift speed holds the drifted coefficients near their base", () => {
+  // With speed 0 the drift time never advances, so the offsets stay at their
+  // t=0 values frame after frame: the run must stay deterministic and visibly
+  // attractor-like rather than smearing.
+  const frozen = { driftAmount: 0.8, driftSpeed: 0 };
+  assert.deepEqual(runKernel(frozen, 60), runKernel(frozen, 60));
 });
 
 test("colour modes write different hue fields over the same density", () => {
