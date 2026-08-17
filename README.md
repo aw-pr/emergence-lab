@@ -14,9 +14,9 @@
 
 ![Julia set, escape-time render from the lab](docs/images/julia-hero.png)
 
-## The nineteen
+## The twenty
 
-Nineteen deterministic kernels behind one renderer. Each is a different
+Twenty deterministic kernels behind one renderer. Each is a different
 discipline's way of pointing at the same thing: local rules, global form.
 
 - **Gray-Scott** reaction diffusion. Chemistry's version of the question.
@@ -36,6 +36,7 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Lenia.** Continuous cellular automata, and life gets smooth gliders.
 - **Mandelbrot, Julia, Burning Ship.** Iterated maps as the geometry of feedback.
 - **Logistic Mandelbrot.** The bifurcation cascade hung off the Mandelbrot set as a curtain.
+- **Clifford-DeJong.** Clifford, De Jong, and Svensson point-map attractors, with live coefficient drift.
 
 Gray-Scott is the priority kernel. The others are calibrated and held.
 
