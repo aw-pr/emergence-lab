@@ -18,6 +18,17 @@ import {
   reservoirSlot,
   type OrbitCloudBuffers,
 } from "./orbitSampler.ts";
+import {
+  buildOrbitSurface,
+  planOrbitSurfaceCellRefinement,
+  orbitSurfaceDiagnosticMode,
+  ORBIT_SURFACE_CONTOUR_BISECTION_STEPS,
+  ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+  type OrbitSurfaceDiagnosticMode,
+  type OrbitSurfaceMesh,
+  type OrbitSurfaceRefinedCell,
+  type OrbitSurfaceSample,
+} from "./orbitSurface.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -40,6 +51,7 @@ uniform float u_drawDensity;
 uniform float u_cellCount;
 uniform float u_boundaryDetailBaseCellCount;
 uniform float u_boundaryDetailOpacity;
+uniform float u_hybridMode;
 uniform float u_edgeGlow;
 // Prebaked clouds upload quantized attributes (u16 positions over the
 // sampler domain, u8 periods) as normalized ints; these remap them back.
@@ -78,6 +90,11 @@ void main() {
     position.z * 0.56,
     position.y * 0.85
   );
+  if (u_hybridMode > 0.5 && period > 0.5) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
   // Density culls whole cells (every sample of a c-value together), matching
   // the old build-time semantics — fewer c-plane sites, full orbit columns —
   // but resolved here per frame so the slider needs no rebuild. The layout is
@@ -85,7 +102,8 @@ void main() {
   // hashing it gives a spatially fair, frame-stable keep set.
   float cellId = mod(float(gl_VertexID), max(u_cellCount, 1.0));
   float cellSelector = fract(sin(cellId * 12.9898) * 43758.5453);
-  if (cellSelector > u_drawDensity) {
+  float dissolveDensity = u_hybridMode > 0.5 && period < 0.5 ? a_weight : 1.0;
+  if (cellSelector > u_drawDensity * dissolveDensity) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     return;
@@ -179,6 +197,160 @@ void main() {
     * mix(1.0, 1.25, min(v_selfGlow, 1.0));
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
+}
+`;
+
+const SURFACE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec3 a_position;
+in vec3 a_normal;
+in float a_period;
+in float a_interior;
+in float a_boundary;
+in float a_rank;
+in float a_edgeFade;
+in float a_dissolve;
+uniform mat4 u_viewProjection;
+uniform vec2 u_gridSize;
+uniform int u_colourMode;
+uniform sampler2D u_palette;
+uniform float u_phase;
+uniform float u_paletteReverse;
+uniform float u_visibleIterations;
+uniform float u_markerRe;
+uniform float u_fanActive;
+out vec3 v_world;
+out vec3 v_normal;
+out vec3 v_colour;
+out float v_fanGlow;
+out float v_markerGlow;
+out float v_edgeFade;
+out float v_dissolve;
+
+vec3 periodHue(int p) {
+  int index = (p - 1) % 7;
+  if (index == 0) return vec3(0.129, 0.569, 0.549);
+  if (index == 1) return vec3(0.255, 0.431, 0.686);
+  if (index == 2) return vec3(0.800, 0.278, 0.471);
+  if (index == 3) return vec3(0.933, 0.612, 0.094);
+  if (index == 4) return vec3(0.165, 0.863, 0.863);
+  if (index == 5) return vec3(0.369, 0.788, 0.384);
+  return vec3(0.549, 0.314, 0.745);
+}
+
+void main() {
+  if (a_rank + 0.5 >= u_visibleIterations) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    v_world = vec3(0.0);
+    v_normal = vec3(0.0, 1.0, 0.0);
+    v_colour = vec3(0.0);
+    v_fanGlow = 0.0;
+    v_markerGlow = 0.0;
+    v_edgeFade = 0.0;
+    v_dissolve = 0.0;
+    return;
+  }
+
+  float cIm = -1.0 + ((a_position.y + 0.5) / max(u_gridSize.y, 1.0)) * 2.0;
+  if (abs(a_position.y - floor(u_gridSize.y * 0.5)) < 0.25) cIm = 0.0;
+  vec2 c = vec2(
+    -2.0 + ((a_position.x + 0.5) / max(u_gridSize.x, 1.0)) * 3.0,
+    cIm
+  );
+  v_world = vec3((c.x + 0.5) * 0.78, a_position.z * 0.56, c.y * 0.85);
+  v_normal = normalize(vec3(
+    a_normal.x * max(u_gridSize.x, 1.0) / (3.0 * 0.78),
+    a_normal.z / 0.56,
+    a_normal.y * max(u_gridSize.y, 1.0) / (2.0 * 0.85)
+  ));
+  gl_Position = u_viewProjection * vec4(v_world, 1.0);
+
+  float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
+  if (u_colourMode == 0) {
+    v_colour = mix(periodHue(int(a_period + 0.5)), vec3(1.0), 0.2) * 1.1;
+  } else if (u_colourMode == 1) {
+    float t = clamp(a_interior, 0.0, 1.0);
+    if (u_paletteReverse > 0.5) t = 1.0 - t;
+    v_colour = mix(texture(u_palette, vec2(t, 0.5)).rgb, vec3(1.0), 0.12) * 1.1;
+  } else if (u_colourMode == 3) {
+    float band = a_boundary * 3.0;
+    if (u_paletteReverse > 0.5) band = -band;
+    vec3 cycling = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
+    v_colour = mix(vec3(0.44, 0.47, 0.53), cycling, step(a_period, 0.5));
+  } else {
+    float offAxis = clamp(abs(c.y), 0.0, 1.0);
+    v_colour = mix(vec3(0.08, 0.38, 0.92), vec3(1.0, 0.35, 0.12), height)
+      * mix(1.35, 0.82, offAxis);
+  }
+
+  float age = c.x - u_markerRe;
+  float behindFront = smoothstep(-0.02, 0.04, age);
+  float wake = 1.0 - smoothstep(0.55, 1.8, age);
+  float reach = min(1.48, 0.04 + max(age, 0.0) * 0.9);
+  float lateral = 1.0 - smoothstep(max(0.0, reach - 0.16), reach, abs(c.y));
+  float rim = 1.0 - smoothstep(0.035, 0.13, abs(abs(c.y) - reach));
+  float front = (1.0 - smoothstep(0.015, 0.06, abs(age)))
+    * (1.0 - smoothstep(0.03, 0.14, abs(c.y)));
+  v_fanGlow = u_fanActive
+    * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
+  v_markerGlow = u_fanActive * (1.0 - smoothstep(0.006, 0.025, abs(age)));
+  v_edgeFade = a_edgeFade;
+  v_dissolve = a_dissolve;
+}
+`;
+
+const SURFACE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform vec3 u_cameraPosition;
+uniform float u_opacity;
+uniform int u_opaqueMode;
+uniform int u_diagnosticMode;
+in vec3 v_world;
+in vec3 v_normal;
+in vec3 v_colour;
+in float v_fanGlow;
+in float v_markerGlow;
+in float v_edgeFade;
+in float v_dissolve;
+out vec4 outColor;
+
+void main() {
+  vec3 normal = normalize(v_normal);
+  if (u_diagnosticMode == 1) {
+    vec3 flatColour = vec3(0.42, 0.78, 0.94);
+    outColor = vec4(flatColour * u_opacity, u_opacity);
+    return;
+  }
+  if (u_diagnosticMode == 2) {
+    vec3 normalColour = normal * 0.5 + 0.5;
+    outColor = vec4(normalColour * u_opacity, u_opacity);
+    return;
+  }
+  vec3 viewDirection = normalize(u_cameraPosition - v_world);
+  if (dot(normal, viewDirection) < 0.0) normal = -normal;
+  vec3 keyDirection = normalize(vec3(-0.42, 0.7, 0.55));
+  float key = max(0.0, dot(normal, keyDirection));
+  float fill = 0.5 + 0.5 * max(0.0, dot(normal, vec3(0.35, 0.2, -0.91)));
+  float fresnel = pow(1.0 - clamp(dot(normal, viewDirection), 0.0, 1.0), 2.6);
+  vec3 rim = mix(vec3(0.16, 0.82, 1.0), vec3(1.0), fresnel) * fresnel;
+  vec3 beam = mix(v_colour, vec3(0.48, 0.94, 1.0), 0.7)
+    * (v_fanGlow * 0.34 + v_markerGlow * 0.75);
+  vec3 energy = v_colour * (0.2 + key * 0.48 + fill * 0.14) + rim * 0.52 + beam;
+  float edgeFade = smoothstep(0.0, 1.0, v_edgeFade);
+  float coverage = edgeFade * smoothstep(0.0, 1.0, v_dissolve);
+  if (u_opaqueMode == 1) {
+    float threshold = fract(52.9829189 * fract(dot(
+      floor(gl_FragCoord.xy),
+      vec2(0.06711056, 0.00583715)
+    )));
+    if (threshold > coverage) discard;
+    outColor = vec4(energy, 1.0);
+    return;
+  }
+  float alpha = u_opacity * coverage;
+  outColor = vec4(energy * alpha, alpha);
 }
 `;
 
@@ -368,6 +540,13 @@ const POINT_BUDGETS = {
   extreme: 9_600_000,
   boundaryDetail: 16_000_000,
 } as const;
+const SURFACE_GRID_SIZES = {
+  performance: 192,
+  balanced: 256,
+  high: 384,
+  ultra: 512,
+  extreme: 768,
+} as const;
 
 const SURVIVING_CELL_ESTIMATE = 0.22;
 
@@ -396,6 +575,11 @@ const BOUNDARY_DETAIL_WARMUP = 20_000;
 const BOUNDARY_DETAIL_POINT_WEIGHT = 0.05;
 
 const BUILD_SLICE_MS = 8;
+export const ORBIT_SURFACE_EDGE_ERROR_PX = 0.75;
+export const ORBIT_SURFACE_MAX_REFINEMENT_DEPTH = 4;
+/** Deterministic ceiling on adaptive boundary leaf cells. */
+export const ORBIT_SURFACE_REFINEMENT_CELL_BUDGET = 32_768;
+export const ORBIT_SURFACE_DISSOLVE_BAND_CELLS = 2.5;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
@@ -527,6 +711,11 @@ export type Orbit3DCameraPose = "default" | "side";
 
 export type Orbit3DColourMode = "period" | "inside-out" | "mono" | "cycle";
 
+export type Orbit3DGeometryMode = "cloud" | "hybrid";
+
+export type Orbit3DSurfaceDiagnosticMode = OrbitSurfaceDiagnosticMode;
+export const orbit3dSurfaceDiagnosticMode = orbitSurfaceDiagnosticMode;
+
 const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
   period: 0,
   "inside-out": 1,
@@ -540,6 +729,42 @@ export interface Orbit3DStats {
   building: boolean;
   samplingPath: "gpu-sampled" | "cpu-sampled" | "cpu-sampled-gpu-failed" | "prebaked";
   boundaryDetail: "off" | "active" | "degraded";
+  geometryMode: Orbit3DGeometryMode;
+  triangleCount: number;
+  refinedCellCount: number;
+  refinedCellShare: number;
+  buildMedianSliceMs: number;
+  buildMaxSliceMs: number;
+  finalisationMs: number;
+  surfaceAvailable: boolean;
+  surfaceFallback: string | null;
+}
+
+interface SurfaceResources {
+  program: WebGLProgram;
+  vao: WebGLVertexArrayObject;
+  positionBuffer: WebGLBuffer;
+  normalBuffer: WebGLBuffer;
+  periodBuffer: WebGLBuffer;
+  interiorBuffer: WebGLBuffer;
+  boundaryBuffer: WebGLBuffer;
+  rankBuffer: WebGLBuffer;
+  edgeFadeBuffer: WebGLBuffer;
+  dissolveBuffer: WebGLBuffer;
+  indexBuffer: WebGLBuffer;
+  viewProjectionUniform: WebGLUniformLocation;
+  gridSizeUniform: WebGLUniformLocation;
+  colourModeUniform: WebGLUniformLocation;
+  paletteUniform: WebGLUniformLocation | null;
+  phaseUniform: WebGLUniformLocation;
+  paletteReverseUniform: WebGLUniformLocation;
+  visibleIterationsUniform: WebGLUniformLocation;
+  markerReUniform: WebGLUniformLocation;
+  fanActiveUniform: WebGLUniformLocation;
+  cameraPositionUniform: WebGLUniformLocation;
+  opacityUniform: WebGLUniformLocation;
+  opaqueModeUniform: WebGLUniformLocation;
+  diagnosticModeUniform: WebGLUniformLocation;
 }
 
 export interface Orbit3DMarkerReadout {
@@ -593,6 +818,7 @@ export class Orbit3DPointCloud {
   private readonly drawDensityUniform: WebGLUniformLocation;
   private readonly boundaryDetailBaseCellCountUniform: WebGLUniformLocation;
   private readonly boundaryDetailOpacityUniform: WebGLUniformLocation;
+  private readonly hybridModeUniform: WebGLUniformLocation;
   private readonly edgeGlowUniform: WebGLUniformLocation;
   private readonly posOffsetUniform: WebGLUniformLocation;
   private readonly posScaleUniform: WebGLUniformLocation;
@@ -611,8 +837,10 @@ export class Orbit3DPointCloud {
   private readonly groundFanActiveUniform: WebGLUniformLocation;
   private readonly groundCycleBeamUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
+  private readonly surface: SurfaceResources | null;
   private accumulationTexture: WebGLTexture | null = null;
   private accumulationFbo: WebGLFramebuffer | null = null;
+  private accumulationDepth: WebGLRenderbuffer | null = null;
   private targetWidth = 0;
   private targetHeight = 0;
   private pointCount = 0;
@@ -644,6 +872,19 @@ export class Orbit3DPointCloud {
     period: 0,
   };
   private markerOrbitPointCount = 0;
+  private geometryMode: Orbit3DGeometryMode = "cloud";
+  private triangleCount = 0;
+  private refinedCellCount = 0;
+  private refinedCellShare = 0;
+  private buildMedianSliceMs = 0;
+  private buildMaxSliceMs = 0;
+  private finalisationMs = 0;
+  private surfaceGridWidth = 1;
+  private surfaceGridHeight = 1;
+  private surfaceVisibleIterations = DEFAULT_SAMPLE_COUNT;
+  private pointHybridCull = false;
+  private surfaceFallback: string | null = null;
+  private surfaceResourceFailed = false;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -735,6 +976,10 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_boundaryDetailOpacity"),
       "orbit3d boundary-detail opacity uniform",
     );
+    this.hybridModeUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_hybridMode"),
+      "orbit3d hybrid-mode uniform",
+    );
     this.edgeGlowUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_edgeGlow"),
       "orbit3d edge-glow uniform",
@@ -803,6 +1048,7 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
       "orbit3d exposure uniform",
     );
+    this.surface = createSurfaceResources(gl);
     gl.useProgram(this.groundProgram);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_texture"), 0);
     gl.uniform2f(
@@ -828,12 +1074,27 @@ export class Orbit3DPointCloud {
   }
 
   get stats(): Orbit3DStats {
+    const surfaceAvailable =
+      this.geometryMode === "hybrid" &&
+      this.surface !== null &&
+      this.accumulationDepth !== null &&
+      !this.surfaceResourceFailed &&
+      this.surfaceFallback === null;
     return {
       pointCount: this.pointCount,
       pointBudget: this.pointBudget,
       building: this.building,
       samplingPath: this.samplingPath,
       boundaryDetail: this.boundaryDetail,
+      geometryMode: this.geometryMode,
+      triangleCount: this.triangleCount,
+      refinedCellCount: this.refinedCellCount,
+      refinedCellShare: this.refinedCellShare,
+      buildMedianSliceMs: this.buildMedianSliceMs,
+      buildMaxSliceMs: this.buildMaxSliceMs,
+      finalisationMs: this.finalisationMs,
+      surfaceAvailable,
+      surfaceFallback: this.surfaceFallback,
     };
   }
 
@@ -986,6 +1247,7 @@ export class Orbit3DPointCloud {
   }
 
   setPlottedIterations(value: number): void {
+    this.surfaceVisibleIterations = boundedInteger(value, 1, 96, 1);
     this.lastPlottedRequest = value;
     this.visibleIterations = boundedInteger(
       Math.round(value * this.plottedScale),
@@ -1065,7 +1327,13 @@ export class Orbit3DPointCloud {
     this.refreshPointCount();
   }
 
-  rebuild(width: number, height: number, params: OrbitParams): void {
+  rebuild(
+    width: number,
+    height: number,
+    params: OrbitParams,
+    viewportWidth = width,
+    viewportHeight = height,
+  ): void {
     this.cancelBuild();
     this.resetBoundaryDetailFade();
     this.buildFailed = false;
@@ -1091,6 +1359,49 @@ export class Orbit3DPointCloud {
     const realSliceOnly = params.realSliceOnly === true;
     this.plottedScale = 1;
     this.lastPlottedRequest = plottedIterations;
+    this.geometryMode = params.geometryMode === "hybrid" ? "hybrid" : "cloud";
+    this.triangleCount = 0;
+    this.refinedCellCount = 0;
+    this.refinedCellShare = 0;
+    this.buildMedianSliceMs = 0;
+    this.buildMaxSliceMs = 0;
+    this.finalisationMs = 0;
+    this.surfaceVisibleIterations = plottedIterations;
+    this.pointHybridCull = false;
+    this.surfaceFallback = null;
+    if (this.geometryMode === "hybrid") {
+      if (realSliceOnly) {
+        this.surfaceFallback = "real-slice-only";
+      } else if (!this.surface || this.surfaceResourceFailed) {
+        this.surfaceFallback = "surface-resources";
+      } else if (!this.accumulationDepth) {
+        this.surfaceFallback = "depth-target";
+      } else {
+        this.samplingPath = "cpu-sampled";
+        this.boundaryDetail = "off";
+        this.boundaryDetailBaseCellCount = 0;
+        try {
+          this.rebuildHybrid(
+            inputWidth,
+            inputHeight,
+            sampleCount,
+            plottedIterations,
+            warmupIterations,
+            generation,
+            viewportWidth,
+            viewportHeight,
+          );
+          return;
+        } catch (error) {
+          console.error(
+            "logistic-mandelbrot: hybrid surface build failed; falling back to cloud",
+            error,
+          );
+          this.surfaceResourceFailed = true;
+          this.surfaceFallback = "surface-allocation";
+        }
+      }
+    }
     // A baked cloud supersedes the live build for the full 2D view: the live
     // build still starts (and paints first, since the file is large), then the
     // baked buffers swap in when the fetch resolves. Sampling params are baked
@@ -1476,6 +1787,554 @@ export class Orbit3DPointCloud {
     buildSlice(BUILD_SLICE_MS);
   }
 
+  private rebuildHybrid(
+    inputWidth: number,
+    inputHeight: number,
+    sampleCount: number,
+    plottedIterations: number,
+    warmupIterations: number,
+    generation: number,
+    viewportWidth: number,
+    viewportHeight: number,
+  ): void {
+    const gridSize = surfaceGridSizeFor(inputWidth * inputHeight);
+    const sampleWidth = gridSize;
+    const sampleHeight = gridSize;
+    const cellCount = sampleWidth * sampleHeight;
+    const coarseQuadCount = Math.max(0, (sampleWidth - 1) * (sampleHeight - 1));
+    const pointBudget = Math.max(sampleCount, pointBudgetFor(inputWidth * inputHeight));
+    const samples = new Float32Array(cellCount * sampleCount);
+    const periods = new Int16Array(cellCount);
+    const interiors = new Float32Array(cellCount);
+    const boundaries = new Float32Array(cellCount);
+    const dissolves = new Float32Array(cellCount).fill(1);
+    const escaped = new Uint8Array(cellCount);
+    const measure = { interior: 1 };
+    const refinedCells: OrbitSurfaceRefinedCell[] = [];
+    const refinedCellIndices = new Set<number>();
+    const refinedLeavesByCell = new Map<number, OrbitSurfaceRefinedCell[]>();
+    const adaptiveSamples = new Map<number, OrbitSurfaceSample>();
+    let contourSampleValues = new Float32Array(0);
+    let contourPeriods = new Int16Array(0);
+    let contourInteriors = new Float32Array(0);
+    let contourEscaped = new Uint8Array(0);
+    const contourSamples = new Map<number, number>();
+    let contourSampleCount = 0;
+    const transitionEdges: number[] = [];
+    const transitionEdgeKeys = new Set<number>();
+    const sliceDurations: number[] = [];
+    const refinementDivisions = 2 ** ORBIT_SURFACE_MAX_REFINEMENT_DEPTH;
+    const contourCoordinateScale =
+      refinementDivisions * 2 ** (ORBIT_SURFACE_CONTOUR_BISECTION_STEPS + 1);
+    const contourCoordinateWidth =
+      (sampleWidth - 1) * contourCoordinateScale + 1;
+    const edgeCoordinateWidth = (sampleWidth - 1) * refinementDivisions + 1;
+    const edgeCoordinateCount =
+      edgeCoordinateWidth * ((sampleHeight - 1) * refinementDivisions + 1);
+    const refinementMatrix = cameraMatrix(
+      Math.max(0.25, viewportWidth / Math.max(1, viewportHeight)),
+      this.camera,
+    );
+    let phase: "coarse" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
+    let cell = 0;
+    let refinementScan = 0;
+    let edgeScan = 0;
+    let transitionEdge = 0;
+    let periodicDistances: Float32Array = new Float32Array(cellCount);
+
+    this.pointCount = 0;
+    this.fullPointCount = 0;
+    this.pointBudget = pointBudget;
+    this.sampleCount = sampleCount;
+    this.visibleIterations = plottedIterations;
+    this.surfaceVisibleIterations = plottedIterations;
+    this.surfaceGridWidth = sampleWidth;
+    this.surfaceGridHeight = sampleHeight;
+    this.building = true;
+
+    const buildSlice = (budgetMs: number): void => {
+      if (generation !== this.buildGeneration) return;
+      this.buildTimer = null;
+      const sliceStart = performance.now();
+      const stopAt = sliceStart + budgetMs;
+      while (true) {
+        if (phase === "coarse") {
+          if (cell >= cellCount) {
+            prepareDissolveCoverages();
+            phase = "refinement-scan";
+            continue;
+          }
+          const x = cell % sampleWidth;
+          const y = (cell - x) / sampleWidth;
+          measure.interior = 1;
+          const result = sampleAttractorCell(
+            gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
+            y === Math.floor(sampleHeight / 2)
+              ? 0
+              : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+            warmupIterations,
+            sampleCount,
+            samples,
+            cell * sampleCount,
+            measure,
+          );
+          if (result === ESCAPED) escaped[cell] = 1;
+          else {
+            periods[cell] = result;
+            interiors[cell] = measure.interior;
+          }
+          cell += 1;
+        } else if (phase === "refinement-scan") {
+          if (refinementScan >= coarseQuadCount) {
+            phase = "edge-scan";
+            continue;
+          }
+          const x = refinementScan % (sampleWidth - 1);
+          const y = (refinementScan - x) / (sampleWidth - 1);
+          const topLeft = y * sampleWidth + x;
+          const topLeftPeriod = coarsePeriod(topLeft);
+          const topRightPeriod = coarsePeriod(topLeft + 1);
+          const bottomLeftPeriod = coarsePeriod(topLeft + sampleWidth);
+          const bottomRightPeriod = coarsePeriod(topLeft + sampleWidth + 1);
+          const boundary =
+            (
+              topLeftPeriod > 0 ||
+              topRightPeriod > 0 ||
+              bottomLeftPeriod > 0 ||
+              bottomRightPeriod > 0
+            ) &&
+            (
+              topRightPeriod !== topLeftPeriod ||
+              bottomLeftPeriod !== topLeftPeriod ||
+              bottomRightPeriod !== topLeftPeriod
+            );
+          if (boundary) {
+            const remaining = ORBIT_SURFACE_REFINEMENT_CELL_BUDGET - refinedCells.length;
+            if (remaining > 0) {
+              const plan = planOrbitSurfaceCellRefinement(
+                x,
+                y,
+                sampleSurfacePoint,
+                sampleCount,
+                projectSurfacePoint,
+                ORBIT_SURFACE_EDGE_ERROR_PX,
+                ORBIT_SURFACE_MAX_REFINEMENT_DEPTH,
+                remaining,
+              );
+              refinedCells.push(...plan.cells);
+              refinedCellIndices.add(refinementScan);
+              refinedLeavesByCell.set(refinementScan, plan.cells);
+            }
+          }
+          refinementScan += 1;
+        } else if (phase === "edge-scan") {
+          if (edgeScan >= coarseQuadCount) {
+            const contourCapacity =
+              transitionEdges.length / 4 * ORBIT_SURFACE_CONTOUR_BISECTION_STEPS;
+            contourSampleValues = new Float32Array(contourCapacity * sampleCount);
+            contourPeriods = new Int16Array(contourCapacity);
+            contourInteriors = new Float32Array(contourCapacity);
+            contourEscaped = new Uint8Array(contourCapacity);
+            phase = "contour-sample";
+            continue;
+          }
+          const x = edgeScan % (sampleWidth - 1);
+          const y = (edgeScan - x) / (sampleWidth - 1);
+          if (refinedCellIndices.has(edgeScan)) {
+            for (const leaf of refinedLeavesByCell.get(edgeScan) ?? []) {
+              const size = leaf.size ?? 1 / 2 ** leaf.depth;
+              queueQuadEdges(leaf.x, leaf.y, leaf.x + size, leaf.y + size);
+            }
+          } else {
+            queueQuadEdges(x, y, x + 1, y + 1);
+          }
+          edgeScan += 1;
+        } else {
+          if (transitionEdge * 4 >= transitionEdges.length) {
+            recordSlice(sliceStart, budgetMs);
+            finaliseHybrid();
+            return;
+          }
+          const edgeOffset = transitionEdge * 4;
+          const x0 = transitionEdges[edgeOffset];
+          const y0 = transitionEdges[edgeOffset + 1];
+          const x1 = transitionEdges[edgeOffset + 2];
+          const y1 = transitionEdges[edgeOffset + 3];
+          prepareContourEdge(x0, y0, x1, y1);
+          transitionEdge += 1;
+        }
+
+        if (performance.now() >= stopAt) {
+          recordSlice(sliceStart, budgetMs);
+          this.buildTimer = window.setTimeout(() => buildSlice(BUILD_SLICE_MS), 0);
+          return;
+        }
+      }
+    };
+
+    const coarsePeriod = (index: number): number =>
+      escaped[index] === 0 && periods[index] > 0 ? periods[index] : 0;
+
+    const lookupPreparedSample = (x: number, y: number): OrbitSurfaceSample | null => {
+      if (
+        Number.isInteger(x) &&
+        Number.isInteger(y) &&
+        x >= 0 &&
+        x < sampleWidth &&
+        y >= 0 &&
+        y < sampleHeight
+      ) {
+        const index = y * sampleWidth + x;
+        return {
+          samples,
+          sampleOffset: index * sampleCount,
+          period: periods[index],
+          interior: interiors[index],
+          boundary: boundaries[index],
+          dissolve: dissolves[index],
+          escaped: escaped[index] !== 0,
+        };
+      }
+      const key = surfacePointId(x, y);
+      const adaptive = adaptiveSamples.get(key);
+      if (adaptive) {
+        return {
+          ...adaptive,
+          boundary: boundaryAtGrid(x, y),
+          dissolve: dissolveAtGrid(x, y),
+        };
+      }
+      const contourIndex = contourSamples.get(key);
+      if (contourIndex === undefined) return null;
+      return {
+        samples: contourSampleValues,
+        sampleOffset: contourIndex * sampleCount,
+        period: contourPeriods[contourIndex],
+        interior: contourInteriors[contourIndex],
+        boundary: boundaryAtGrid(x, y),
+        dissolve: dissolveAtGrid(x, y),
+        escaped: contourEscaped[contourIndex] !== 0,
+      };
+    };
+
+    const preparedSample = (x: number, y: number): OrbitSurfaceSample => {
+      const sample = lookupPreparedSample(x, y);
+      if (!sample) {
+        throw new Error(`Orbit surface sample was not prepared at ${x},${y}.`);
+      }
+      return sample;
+    };
+
+    const lookupPreparedPeriod = (x: number, y: number): number | undefined => {
+      if (
+        Number.isInteger(x) &&
+        Number.isInteger(y) &&
+        x >= 0 &&
+        x < sampleWidth &&
+        y >= 0 &&
+        y < sampleHeight
+      ) {
+        return coarsePeriod(y * sampleWidth + x);
+      }
+      const key = surfacePointId(x, y);
+      const adaptive = adaptiveSamples.get(key);
+      if (adaptive) return adaptive.escaped ? 0 : adaptive.period;
+      const contourIndex = contourSamples.get(key);
+      if (contourIndex === undefined) return undefined;
+      return contourEscaped[contourIndex] === 0 ? contourPeriods[contourIndex] : 0;
+    };
+
+    const sampleSurfacePoint = (x: number, y: number): OrbitSurfaceSample => {
+      const prepared = lookupPreparedSample(x, y);
+      if (prepared) return prepared;
+      const values = new Float32Array(sampleCount);
+      measure.interior = 1;
+      const result = sampleAttractorCell(
+        gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
+        y === Math.floor(sampleHeight / 2)
+          ? 0
+          : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+        warmupIterations,
+        sampleCount,
+        values,
+        0,
+        measure,
+      );
+      const sample: OrbitSurfaceSample = {
+        samples: values,
+        period: result === ESCAPED ? 0 : result,
+        interior: result === ESCAPED ? 1 : measure.interior,
+        boundary: boundaryAtGrid(x, y),
+        dissolve: dissolveAtGrid(x, y),
+        escaped: result === ESCAPED,
+      };
+      adaptiveSamples.set(surfacePointId(x, y), sample);
+      return sample;
+    };
+
+    const projectSurfacePoint = (x: number, y: number, height: number) => {
+      const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
+      const cIm = y === Math.floor(sampleHeight / 2)
+        ? 0
+        : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+      const clip = transformPoint(refinementMatrix, [
+        (cRe + 0.5) * WORLD_RE_SCALE,
+        height * WORLD_ORBIT_SCALE,
+        cIm * WORLD_IM_SCALE,
+      ]);
+      const reciprocalW = clip[3] > Number.EPSILON ? 1 / clip[3] : 0;
+      return {
+        x: (clip[0] * reciprocalW * 0.5 + 0.5) * Math.max(1, viewportWidth),
+        y: (0.5 - clip[1] * reciprocalW * 0.5) * Math.max(1, viewportHeight),
+      };
+    };
+
+    const preparedOrSampleContourPeriod = (x: number, y: number): number => {
+      const prepared = lookupPreparedPeriod(x, y);
+      if (prepared !== undefined) return prepared;
+      measure.interior = 1;
+      const result = sampleAttractorCell(
+        gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
+        y === Math.floor(sampleHeight / 2)
+          ? 0
+          : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+        warmupIterations,
+        sampleCount,
+        contourSampleValues,
+        contourSampleCount * sampleCount,
+        measure,
+      );
+      contourPeriods[contourSampleCount] = result === ESCAPED ? 0 : result;
+      contourInteriors[contourSampleCount] = result === ESCAPED ? 1 : measure.interior;
+      contourEscaped[contourSampleCount] = result === ESCAPED ? 1 : 0;
+      contourSamples.set(surfacePointId(x, y), contourSampleCount);
+      contourSampleCount += 1;
+      return result === ESCAPED ? 0 : result;
+    };
+
+    const prepareContourEdge = (
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+    ): void => {
+      const firstIsLow = x0 < x1 || (x0 === x1 && y0 <= y1);
+      let lowX = firstIsLow ? x0 : x1;
+      let lowY = firstIsLow ? y0 : y1;
+      let highX = firstIsLow ? x1 : x0;
+      let highY = firstIsLow ? y1 : y0;
+      const lowPeriod = lookupPreparedPeriod(lowX, lowY) ?? 0;
+      for (let step = 0; step < ORBIT_SURFACE_CONTOUR_BISECTION_STEPS; step += 1) {
+        const x = (lowX + highX) * 0.5;
+        const y = (lowY + highY) * 0.5;
+        if (preparedOrSampleContourPeriod(x, y) === lowPeriod) {
+          lowX = x;
+          lowY = y;
+        } else {
+          highX = x;
+          highY = y;
+        }
+      }
+    };
+
+    const queueQuadEdges = (
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+    ): void => {
+      queueTransitionEdge(x0, y0, x0, y1);
+      queueTransitionEdge(x0, y1, x1, y0);
+      queueTransitionEdge(x1, y0, x0, y0);
+      queueTransitionEdge(x0, y1, x1, y1);
+      queueTransitionEdge(x1, y1, x1, y0);
+    };
+
+    const queueTransitionEdge = (
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+    ): void => {
+      const firstPeriod = lookupPreparedPeriod(x0, y0) ?? 0;
+      const secondPeriod = lookupPreparedPeriod(x1, y1) ?? 0;
+      if (firstPeriod === secondPeriod || (firstPeriod <= 0 && secondPeriod <= 0)) {
+        return;
+      }
+      const first = edgePointId(x0, y0);
+      const second = edgePointId(x1, y1);
+      const key = first < second
+        ? first * edgeCoordinateCount + second
+        : second * edgeCoordinateCount + first;
+      if (transitionEdgeKeys.has(key)) return;
+      transitionEdgeKeys.add(key);
+      transitionEdges.push(x0, y0, x1, y1);
+    };
+
+    const surfacePointId = (x: number, y: number): number =>
+      Math.round(y * contourCoordinateScale) * contourCoordinateWidth
+      + Math.round(x * contourCoordinateScale);
+
+    const edgePointId = (x: number, y: number): number =>
+      Math.round(y * refinementDivisions) * edgeCoordinateWidth
+      + Math.round(x * refinementDivisions);
+
+    const prepareDissolveCoverages = (): void => {
+      const chaosMask = new Uint8Array(cellCount);
+      const periodicMask = new Uint8Array(cellCount);
+      for (let index = 0; index < cellCount; index += 1) {
+        const period = coarsePeriod(index);
+        chaosMask[index] = escaped[index] === 0 && period === 0 ? 1 : 0;
+        periodicMask[index] = period > 0 ? 1 : 0;
+      }
+      const chaosDistances = boundaryDistanceField(chaosMask, sampleWidth, sampleHeight);
+      periodicDistances = boundaryDistanceField(periodicMask, sampleWidth, sampleHeight);
+      for (let index = 0; index < cellCount; index += 1) {
+        dissolves[index] = dissolveCoverage(chaosDistances[index]);
+      }
+    };
+
+    const boundaryAtGrid = (x: number, y: number): number =>
+      interpolateGrid(boundaries, x, y);
+
+    const dissolveAtGrid = (x: number, y: number): number =>
+      interpolateGrid(dissolves, x, y);
+
+    const interpolateGrid = (values: Float32Array, x: number, y: number): number => {
+      const left = Math.max(0, Math.min(sampleWidth - 1, Math.floor(x)));
+      const right = Math.max(0, Math.min(sampleWidth - 1, Math.ceil(x)));
+      const top = Math.max(0, Math.min(sampleHeight - 1, Math.floor(y)));
+      const bottom = Math.max(0, Math.min(sampleHeight - 1, Math.ceil(y)));
+      const tx = x - Math.floor(x);
+      const ty = y - Math.floor(y);
+      const topValue = values[top * sampleWidth + left] * (1 - tx)
+        + values[top * sampleWidth + right] * tx;
+      const bottomValue = values[bottom * sampleWidth + left] * (1 - tx)
+        + values[bottom * sampleWidth + right] * tx;
+      return topValue * (1 - ty) + bottomValue * ty;
+    };
+
+    const dissolveCoverage = (distance: number): number =>
+      Math.min(1, Math.max(0, distance - 0.5) / ORBIT_SURFACE_DISSOLVE_BAND_CELLS);
+
+    const recordSlice = (startedAt: number, budgetMs: number): void => {
+      if (Number.isFinite(budgetMs)) {
+        sliceDurations.push(performance.now() - startedAt);
+      }
+    };
+
+    const finaliseHybrid = (): void => {
+      const finalisationStart = performance.now();
+      const cellScale =
+        ((RE_MAX - RE_MIN) / sampleWidth + (IM_MAX - IM_MIN) / sampleHeight) / 2;
+      const distances = boundaryDistanceField(escaped, sampleWidth, sampleHeight);
+      for (let index = 0; index < cellCount; index += 1) {
+        boundaries[index] = Math.min(1, distances[index] * cellScale);
+      }
+
+      let mesh: OrbitSurfaceMesh | null = null;
+      try {
+        mesh = buildOrbitSurface(
+          {
+            width: sampleWidth,
+            height: sampleHeight,
+            sampleCount,
+            samples,
+            periods,
+            interiors,
+            boundaries,
+            dissolves,
+            escaped,
+          },
+          ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+          { sampler: preparedSample, refinedCells },
+        );
+      } catch {
+        this.surfaceResourceFailed = true;
+        this.surfaceFallback = "surface-allocation";
+      }
+      const surfaceReady = mesh ? this.uploadSurfaceMesh(mesh) : false;
+      this.pointHybridCull = surfaceReady;
+      this.triangleCount = surfaceReady && mesh ? mesh.indices.length / 3 : 0;
+      this.refinedCellCount = refinedCells.length;
+      this.refinedCellShare = coarseQuadCount > 0
+        ? refinedCellIndices.size / coarseQuadCount
+        : 0;
+
+      const boundedCells = new Int32Array(cellCount);
+      let boundedCount = 0;
+      for (let index = 0; index < cellCount; index += 1) {
+        if (escaped[index] === 0) {
+          boundedCells[boundedCount] = index;
+          boundedCount += 1;
+        }
+      }
+      const pointSampleCount = boundedCount === 0
+        ? sampleCount
+        : Math.max(1, Math.min(sampleCount, Math.floor(pointBudget / boundedCount)));
+      const fullPointCount = boundedCount * pointSampleCount;
+      const positions = new Float32Array(fullPointCount * 3);
+      const pointPeriods = new Float32Array(fullPointCount);
+      const pointInteriors = new Float32Array(fullPointCount);
+      const pointBoundaries = new Float32Array(fullPointCount);
+      const pointWeights = new Float32Array(fullPointCount).fill(1);
+      for (let slot = 0; slot < boundedCount; slot += 1) {
+        const sourceCell = boundedCells[slot];
+        const x = sourceCell % sampleWidth;
+        const y = (sourceCell - x) / sampleWidth;
+        const cRe = cellCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
+        const cIm = y === Math.floor(sampleHeight / 2)
+          ? 0
+          : cellCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+        for (let sample = 0; sample < pointSampleCount; sample += 1) {
+          const point = sample * boundedCount + slot;
+          const offset = point * 3;
+          positions[offset] = cRe;
+          positions[offset + 1] = cIm;
+          positions[offset + 2] = samples[sourceCell * sampleCount + sample];
+          pointPeriods[point] = periods[sourceCell];
+          pointInteriors[point] = interiors[sourceCell];
+          pointBoundaries[point] = boundaries[sourceCell];
+          if (periods[sourceCell] === 0) {
+            pointWeights[point] = dissolveCoverage(periodicDistances[sourceCell]);
+          }
+        }
+      }
+
+      const gl = this.gl;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, pointPeriods, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, pointInteriors, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, pointBoundaries, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, pointWeights, gl.STATIC_DRAW);
+      this.fullPointCount = fullPointCount;
+      this.sampleCount = pointSampleCount;
+      this.visibleIterations = Math.min(plottedIterations, pointSampleCount);
+      this.refreshPointCount();
+
+      const orderedSlices = [...sliceDurations].sort((left, right) => left - right);
+      const middle = Math.floor(orderedSlices.length / 2);
+      this.buildMedianSliceMs = orderedSlices.length === 0
+        ? 0
+        : orderedSlices.length % 2 === 0
+          ? (orderedSlices[middle - 1] + orderedSlices[middle]) / 2
+          : orderedSlices[middle];
+      this.buildMaxSliceMs = orderedSlices.at(-1) ?? 0;
+      this.finalisationMs = performance.now() - finalisationStart;
+      this.buildTimer = null;
+      this.building = false;
+      this.pendingSlice = null;
+    };
+
+    this.pendingSlice = buildSlice;
+    buildSlice(BUILD_SLICE_MS);
+  }
+
   private applyLiveCloud(cloud: OrbitCloudBuffers): void {
     const gl = this.gl;
     clearGlErrors(gl);
@@ -1529,6 +2388,45 @@ export class Orbit3DPointCloud {
     this.pointCount = cells * this.visibleIterations;
   }
 
+  private uploadSurfaceMesh(mesh: OrbitSurfaceMesh): boolean {
+    const surface = this.surface;
+    if (!surface || !this.accumulationDepth || this.surfaceResourceFailed) {
+      this.surfaceFallback = !surface ? "surface-resources" : "depth-target";
+      return false;
+    }
+    const gl = this.gl;
+    clearGlErrors(gl);
+    gl.bindVertexArray(surface.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.periodBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.periods, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.interiorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.interiors, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.boundaryBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.boundaries, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.rankBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.ranks, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.edgeFadeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.edgeFades, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.dissolveBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.dissolves, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, surface.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    if (gl.getError() !== gl.NO_ERROR) {
+      clearGlErrors(gl);
+      this.surfaceResourceFailed = true;
+      this.surfaceFallback = "surface-upload";
+      return false;
+    }
+    this.surfaceFallback = null;
+    return true;
+  }
+
+
   draw(
     width: number,
     height: number,
@@ -1540,18 +2438,25 @@ export class Orbit3DPointCloud {
     phase = 0,
     paletteReverse = false,
     drawDensity = 1,
+    surfaceOpacity = 0.4,
     edgeGlow = 0.6,
+    surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.accumulationFbo);
     gl.viewport(0, 0, this.targetWidth, this.targetHeight);
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.depthMask(true);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
     const cycleBeam = colourMode === "cycle" ? 1 : 0;
 
     if (ground) {
+      if (this.accumulationDepth) gl.enable(gl.DEPTH_TEST);
+      else gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
       gl.useProgram(this.groundProgram);
       gl.uniformMatrix4fv(this.groundViewProjectionUniform, false, viewProjection);
       gl.uniform2f(this.groundTexCentreUniform, ground.centre[0], ground.centre[1]);
@@ -1564,6 +2469,20 @@ export class Orbit3DPointCloud {
       gl.bindVertexArray(this.groundVao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
+
+    const surfaceDrawn = this.drawSurface(
+      viewProjection,
+      colourMode,
+      palette,
+      phase,
+      paletteReverse,
+      fanActive,
+      surfaceOpacity,
+      surfaceDiagnosticMode,
+    );
+    gl.depthMask(true);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
@@ -1610,6 +2529,10 @@ export class Orbit3DPointCloud {
     gl.uniform1f(
       this.boundaryDetailOpacityUniform,
       boundaryDetailOpacity,
+    );
+    gl.uniform1f(
+      this.hybridModeUniform,
+      surfaceDrawn && this.pointHybridCull ? 1 : 0,
     );
     gl.uniform1f(this.edgeGlowUniform, Math.max(0, Math.min(2, edgeGlow)));
     if (this.quantizedAttributes) {
@@ -1679,6 +2602,86 @@ export class Orbit3DPointCloud {
     return true;
   }
 
+  private drawSurface(
+    viewProjection: Float32Array,
+    colourMode: Orbit3DColourMode,
+    palette: WebGLTexture | null,
+    phase: number,
+    paletteReverse: boolean,
+    fanActive: boolean,
+    opacityValue: number,
+    diagnosticMode: Orbit3DSurfaceDiagnosticMode,
+  ): boolean {
+    const surface = this.surface;
+    if (
+      this.geometryMode === "hybrid" &&
+      !this.accumulationDepth &&
+      this.surfaceFallback === null
+    ) {
+      this.surfaceFallback = "depth-target";
+    }
+    if (
+      this.geometryMode !== "hybrid" ||
+      this.surfaceFallback !== null ||
+      this.surfaceResourceFailed ||
+      !this.accumulationDepth ||
+      !surface ||
+      this.triangleCount <= 0
+    ) {
+      return false;
+    }
+    const gl = this.gl;
+    const opacity = Math.min(1, Math.max(0.1, opacityValue));
+    clearGlErrors(gl);
+    gl.enable(gl.DEPTH_TEST);
+    if (opacity >= 1) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    } else {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.depthMask(false);
+    }
+    gl.useProgram(surface.program);
+    gl.uniformMatrix4fv(surface.viewProjectionUniform, false, viewProjection);
+    gl.uniform2f(
+      surface.gridSizeUniform,
+      this.surfaceGridWidth,
+      this.surfaceGridHeight,
+    );
+    gl.uniform1i(surface.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
+    gl.uniform1i(surface.paletteUniform, 3);
+    gl.uniform1f(surface.phaseUniform, phase);
+    gl.uniform1f(surface.paletteReverseUniform, paletteReverse ? 1 : 0);
+    gl.uniform1f(
+      surface.visibleIterationsUniform,
+      Math.max(1, this.surfaceVisibleIterations),
+    );
+    gl.uniform1f(surface.markerReUniform, this.marker.re);
+    gl.uniform1f(surface.fanActiveUniform, fanActive ? 1 : 0);
+    const eye = cameraEye(this.camera);
+    gl.uniform3f(surface.cameraPositionUniform, eye[0], eye[1], eye[2]);
+    gl.uniform1f(surface.opacityUniform, opacity);
+    gl.uniform1i(surface.opaqueModeUniform, opacity >= 1 ? 1 : 0);
+    gl.uniform1i(
+      surface.diagnosticModeUniform,
+      diagnosticMode === "flat" ? 1 : diagnosticMode === "normals" ? 2 : 0,
+    );
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, palette);
+    gl.bindVertexArray(surface.vao);
+    gl.drawElements(gl.TRIANGLES, this.triangleCount * 3, gl.UNSIGNED_INT, 0);
+    gl.bindVertexArray(null);
+    if (gl.getError() !== gl.NO_ERROR) {
+      clearGlErrors(gl);
+      this.surfaceResourceFailed = true;
+      this.surfaceFallback = "surface-draw";
+      this.triangleCount = 0;
+      return false;
+    }
+    return true;
+  }
+
   private resetBoundaryDetailFade(): void {
     this.boundaryDetailTierVisible = false;
     this.boundaryDetailFadeProgress = 0;
@@ -1733,6 +2736,7 @@ export class Orbit3DPointCloud {
     gl.deleteProgram(this.markerProgram);
     gl.deleteProgram(this.groundProgram);
     gl.deleteProgram(this.toneMapProgram);
+    if (this.surface) releaseSurfaceResources(gl, this.surface);
   }
 
   private ensureAccumulationTarget(width: number, height: number): boolean {
@@ -1753,7 +2757,11 @@ export class Orbit3DPointCloud {
     const gl = this.gl;
     const texture = gl.createTexture();
     const fbo = gl.createFramebuffer();
-    if (!texture || !fbo) return false;
+    if (!texture || !fbo) {
+      if (texture) gl.deleteTexture(texture);
+      if (fbo) gl.deleteFramebuffer(fbo);
+      return false;
+    }
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -1778,7 +2786,31 @@ export class Orbit3DPointCloud {
       texture,
       0,
     );
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    let depth: WebGLRenderbuffer | null = gl.createRenderbuffer();
+    if (depth) {
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+      gl.framebufferRenderbuffer(
+        gl.FRAMEBUFFER,
+        gl.DEPTH_ATTACHMENT,
+        gl.RENDERBUFFER,
+        depth,
+      );
+    }
+    let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE && depth) {
+      gl.framebufferRenderbuffer(
+        gl.FRAMEBUFFER,
+        gl.DEPTH_ATTACHMENT,
+        gl.RENDERBUFFER,
+        null,
+      );
+      gl.deleteRenderbuffer(depth);
+      depth = null;
+      status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    }
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
       gl.deleteFramebuffer(fbo);
       gl.deleteTexture(texture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1786,6 +2818,7 @@ export class Orbit3DPointCloud {
     }
     this.accumulationTexture = texture;
     this.accumulationFbo = fbo;
+    this.accumulationDepth = depth;
     this.targetWidth = width;
     this.targetHeight = height;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1795,8 +2828,10 @@ export class Orbit3DPointCloud {
   private releaseAccumulationTarget(): void {
     if (this.accumulationTexture) this.gl.deleteTexture(this.accumulationTexture);
     if (this.accumulationFbo) this.gl.deleteFramebuffer(this.accumulationFbo);
+    if (this.accumulationDepth) this.gl.deleteRenderbuffer(this.accumulationDepth);
     this.accumulationTexture = null;
     this.accumulationFbo = null;
+    this.accumulationDepth = null;
     this.targetWidth = 0;
     this.targetHeight = 0;
   }
@@ -1838,6 +2873,162 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
   return POINT_BUDGETS.extreme;
 }
+
+function surfaceGridSizeFor(cellCount: number): number {
+  if (cellCount <= PERFORMANCE_CELL_CEILING) return SURFACE_GRID_SIZES.performance;
+  if (cellCount <= BALANCED_CELL_CEILING) return SURFACE_GRID_SIZES.balanced;
+  if (cellCount <= HIGH_CELL_CEILING) return SURFACE_GRID_SIZES.high;
+  if (cellCount <= ULTRA_CELL_CEILING) return SURFACE_GRID_SIZES.ultra;
+  return SURFACE_GRID_SIZES.extreme;
+}
+
+function gridCoordinate(
+  min: number,
+  max: number,
+  gridIndex: number,
+  gridSize: number,
+): number {
+  return min + ((gridIndex + 0.5) / Math.max(1, gridSize)) * (max - min);
+}
+
+function createSurfaceResources(
+  gl: WebGL2RenderingContext,
+): SurfaceResources | null {
+  let program: WebGLProgram | null = null;
+  let vao: WebGLVertexArrayObject | null = null;
+  let positionBuffer: WebGLBuffer | null = null;
+  let normalBuffer: WebGLBuffer | null = null;
+  let periodBuffer: WebGLBuffer | null = null;
+  let interiorBuffer: WebGLBuffer | null = null;
+  let boundaryBuffer: WebGLBuffer | null = null;
+  let rankBuffer: WebGLBuffer | null = null;
+  let edgeFadeBuffer: WebGLBuffer | null = null;
+  let dissolveBuffer: WebGLBuffer | null = null;
+  let indexBuffer: WebGLBuffer | null = null;
+  try {
+    program = createProgram(gl, SURFACE_VERTEX_SHADER, SURFACE_FRAGMENT_SHADER);
+    vao = requireResource(gl.createVertexArray(), "orbit3d surface VAO");
+    positionBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface position buffer",
+    );
+    normalBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface normal buffer",
+    );
+    periodBuffer = requireResource(gl.createBuffer(), "orbit3d surface period buffer");
+    interiorBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface interior buffer",
+    );
+    boundaryBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface boundary buffer",
+    );
+    rankBuffer = requireResource(gl.createBuffer(), "orbit3d surface rank buffer");
+    edgeFadeBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface edge-fade buffer",
+    );
+    dissolveBuffer = requireResource(
+      gl.createBuffer(),
+      "orbit3d surface dissolve buffer",
+    );
+    indexBuffer = requireResource(gl.createBuffer(), "orbit3d surface index buffer");
+
+    gl.bindVertexArray(vao);
+    bindSurfaceAttribute("a_position", positionBuffer, 3);
+    bindSurfaceAttribute("a_normal", normalBuffer, 3);
+    bindSurfaceAttribute("a_period", periodBuffer, 1);
+    bindSurfaceAttribute("a_interior", interiorBuffer, 1);
+    bindSurfaceAttribute("a_boundary", boundaryBuffer, 1);
+    bindSurfaceAttribute("a_rank", rankBuffer, 1);
+    bindSurfaceAttribute("a_edgeFade", edgeFadeBuffer, 1);
+    bindSurfaceAttribute("a_dissolve", dissolveBuffer, 1);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bindVertexArray(null);
+
+    const uniform = (name: string): WebGLUniformLocation =>
+      requireResource(
+        gl.getUniformLocation(program as WebGLProgram, name),
+        `orbit3d surface ${name} uniform`,
+      );
+    const resources: SurfaceResources = {
+      program,
+      vao,
+      positionBuffer,
+      normalBuffer,
+      periodBuffer,
+      interiorBuffer,
+      boundaryBuffer,
+      rankBuffer,
+      edgeFadeBuffer,
+      dissolveBuffer,
+      indexBuffer,
+      viewProjectionUniform: uniform("u_viewProjection"),
+      gridSizeUniform: uniform("u_gridSize"),
+      colourModeUniform: uniform("u_colourMode"),
+      paletteUniform: uniform("u_palette"),
+      phaseUniform: uniform("u_phase"),
+      paletteReverseUniform: uniform("u_paletteReverse"),
+      visibleIterationsUniform: uniform("u_visibleIterations"),
+      markerReUniform: uniform("u_markerRe"),
+      fanActiveUniform: uniform("u_fanActive"),
+      cameraPositionUniform: uniform("u_cameraPosition"),
+      opacityUniform: uniform("u_opacity"),
+      opaqueModeUniform: uniform("u_opaqueMode"),
+      diagnosticModeUniform: uniform("u_diagnosticMode"),
+    };
+    gl.useProgram(program);
+    gl.uniform1i(resources.paletteUniform, 3);
+    return resources;
+  } catch {
+    if (vao) gl.deleteVertexArray(vao);
+    if (positionBuffer) gl.deleteBuffer(positionBuffer);
+    if (normalBuffer) gl.deleteBuffer(normalBuffer);
+    if (periodBuffer) gl.deleteBuffer(periodBuffer);
+    if (interiorBuffer) gl.deleteBuffer(interiorBuffer);
+    if (boundaryBuffer) gl.deleteBuffer(boundaryBuffer);
+    if (rankBuffer) gl.deleteBuffer(rankBuffer);
+    if (edgeFadeBuffer) gl.deleteBuffer(edgeFadeBuffer);
+    if (dissolveBuffer) gl.deleteBuffer(dissolveBuffer);
+    if (indexBuffer) gl.deleteBuffer(indexBuffer);
+    if (program) gl.deleteProgram(program);
+    gl.bindVertexArray(null);
+    clearGlErrors(gl);
+    return null;
+  }
+
+  function bindSurfaceAttribute(
+    name: string,
+    buffer: WebGLBuffer,
+    size: number,
+  ): void {
+    const location = gl.getAttribLocation(program as WebGLProgram, name);
+    if (location < 0) throw new Error(`Unable to locate orbit3d surface ${name}.`);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+  }
+}
+
+function releaseSurfaceResources(
+  gl: WebGL2RenderingContext,
+  surface: SurfaceResources,
+): void {
+  gl.deleteVertexArray(surface.vao);
+  gl.deleteBuffer(surface.positionBuffer);
+  gl.deleteBuffer(surface.normalBuffer);
+  gl.deleteBuffer(surface.periodBuffer);
+  gl.deleteBuffer(surface.interiorBuffer);
+  gl.deleteBuffer(surface.boundaryBuffer);
+  gl.deleteBuffer(surface.rankBuffer);
+  gl.deleteBuffer(surface.edgeFadeBuffer);
+  gl.deleteBuffer(surface.dissolveBuffer);
+  gl.deleteBuffer(surface.indexBuffer);
+  gl.deleteProgram(surface.program);
+}
+
 
 function boundedInteger(
   value: number | boolean | string | undefined,
