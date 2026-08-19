@@ -70,6 +70,7 @@ const PARAM_GROUPS: Readonly<
   // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
   // this per-sim table — see ControlsPanel's schema-native grouping.
   boids: [
+    { label: "Obstacles", keys: ["obstacleLayout", "obstacleAmount"] },
     { label: "Flock", keys: ["boidCount", "initialFlocks", "maxSpeed"] },
     { label: "Perception", keys: ["visualRadius", "separationRadius"] },
     { label: "Steering", keys: ["alignment", "cohesion", "separation"] },

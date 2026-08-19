@@ -53,6 +53,8 @@ test("metadata matches the renderer contract", () => {
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
     [
+      "obstacleLayout",
+      "obstacleAmount",
       "boidCount",
       "initialFlocks",
       "visualRadius",
@@ -62,8 +64,6 @@ test("metadata matches the renderer contract", () => {
       "cohesion",
       "separation",
       "pointSize",
-      "obstacleLayout",
-      "obstacleAmount",
     ],
   );
 
@@ -90,7 +90,7 @@ test("metadata matches the renderer contract", () => {
     (descriptor) => descriptor.key === "obstacleLayout",
   );
   assert.equal(obstacleLayout.type, "enum");
-  assert.equal(obstacleLayout.default, "none");
+  assert.equal(obstacleLayout.default, "reef");
   assert.deepEqual(obstacleLayout.options, [
     "none",
     "breakwaters",

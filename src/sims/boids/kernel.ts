@@ -102,7 +102,7 @@ function obstacleLayoutParam(params: SimParams): ObstacleLayout {
   return typeof value === "string" &&
     (OBSTACLE_LAYOUTS as readonly string[]).includes(value)
     ? (value as ObstacleLayout)
-    : "none";
+    : "reef";
 }
 
 function mulberry32(seed: number): () => number {
@@ -165,6 +165,24 @@ export class BoidsKernel implements SimKernel {
     [-1, 1],
   ] as const;
   readonly paramSchema = [
+    {
+      key: "obstacleLayout",
+      label: "Obstacle layout",
+      type: "enum",
+      default: "reef",
+      options: OBSTACLE_LAYOUTS,
+      info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. None leaves the released open field untouched. Changing it resets the flock.",
+    },
+    {
+      key: "obstacleAmount",
+      label: "Obstacle amount",
+      type: "number",
+      default: 0.5,
+      min: 0.1,
+      max: 1,
+      step: 0.05,
+      info: "How much of the field the chosen obstacles occupy. Higher values add more obstacles and make each one larger, creating stronger breaks in the flow. Changing it resets the flock.",
+    },
     {
       key: "boidCount",
       label: "Boid count",
@@ -257,24 +275,6 @@ export class BoidsKernel implements SimKernel {
       max: 16,
       step: 1,
       info: "On-screen size of each boid marker; does not change flocking behaviour. Changing it resets the flock, like every other control here.",
-    },
-    {
-      key: "obstacleLayout",
-      label: "Obstacle layout",
-      type: "enum",
-      default: "none",
-      options: OBSTACLE_LAYOUTS,
-      info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. None leaves the released open field untouched. Changing it resets the flock.",
-    },
-    {
-      key: "obstacleAmount",
-      label: "Obstacle amount",
-      type: "number",
-      default: 0.5,
-      min: 0.1,
-      max: 1,
-      step: 0.05,
-      info: "How much of the field the chosen obstacles occupy. Higher values add more obstacles and make each one larger, creating stronger breaks in the flow. Changing it resets the flock.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
