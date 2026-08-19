@@ -32,6 +32,8 @@ const LIVE_MODEL_SOURCE = "live";
  */
 const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
   "logistic-mandelbrot": [
+    "geometryMode",
+    "surfaceOpacity",
     "colourMode",
     "exposure",
     "edgeGlow",

@@ -15,9 +15,12 @@ import {
 import type { SimKernel } from "./types.ts";
 import {
   GROUND_DOMAIN,
+  ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
   Orbit3DPointCloud,
+  orbit3dSurfaceDiagnosticMode,
   type Orbit3DColourMode,
   type Orbit3DGroundPlane,
+  type Orbit3DSurfaceDiagnosticMode,
 } from "./orbit3d.ts";
 import {
   createKuramotoInitialFields,
@@ -1442,10 +1445,22 @@ export class WebGLRendererBackend implements RendererBackend {
     params: Record<string, number | boolean | string>,
   ): boolean {
     if (!this.orbit3d?.available) return false;
-    const buildKey = orbit3dBuildKey(this.gridWidth, this.gridHeight, params);
+    const buildKey = orbit3dBuildKey(
+      this.gridWidth,
+      this.gridHeight,
+      this.displayWidth,
+      this.displayHeight,
+      params,
+    );
     if (buildKey !== this.orbit3dBuildKey) {
       this.orbit3dBuildKey = buildKey;
-      this.orbit3d.rebuild(this.gridWidth, this.gridHeight, params);
+      this.orbit3d.rebuild(
+        this.gridWidth,
+        this.gridHeight,
+        params,
+        this.displayWidth,
+        this.displayHeight,
+      );
     } else {
       this.orbit3d.setPlottedIterations(numericParam(params, "plottedIterations", 1));
     }
@@ -1497,6 +1512,17 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dPointBudget;
     delete canvas.dataset.orbit3dBuild;
     delete canvas.dataset.orbit3dBoundaryDetail;
+    delete canvas.dataset.orbit3dGeometry;
+    delete canvas.dataset.orbit3dTriangles;
+    delete canvas.dataset.orbit3dRefinedCells;
+    delete canvas.dataset.orbit3dRefinedShare;
+    delete canvas.dataset.orbit3dSliceMedianMs;
+    delete canvas.dataset.orbit3dSliceMaxMs;
+    delete canvas.dataset.orbit3dFinalisationMs;
+    delete canvas.dataset.orbit3dSurface;
+    delete canvas.dataset.orbit3dSurfaceFallback;
+    delete canvas.dataset.orbit3dSurfaceDiagnostic;
+    delete canvas.dataset.orbit3dDissolveBandCells;
     if (mode === "orbit3d" && isLogisticMandelbrotState(kernel)) {
       canvas.dataset.simulationRenderer = "orbit3d-fallback-field";
       canvas.dataset.orbit3dSampler = "orbit3d-fallback-field";
@@ -1539,7 +1565,6 @@ export class WebGLRendererBackend implements RendererBackend {
 
   private drawOrbit3d(frame: RendererBackendFrame): void {
     const canvas = this.gl.canvas as HTMLCanvasElement;
-    const stats = this.orbit3d?.stats;
     const exposure = numericParam(frame.params, "exposure", 1);
     const colourMode = orbit3dColourMode(frame.params);
     const cycling =
@@ -1554,9 +1579,9 @@ export class WebGLRendererBackend implements RendererBackend {
           )
         : 0;
     const fanActive = frame.params.realAxisSweep === true;
+    const surfaceDiagnosticMode = orbit3dSurfaceDiagnosticModeFromUrl();
     const ground = this.ensureOrbit3dGround(frame, phase, cycling);
     if (
-      !stats ||
       !this.orbit3d?.draw(
         this.displayWidth,
         this.displayHeight,
@@ -1568,11 +1593,14 @@ export class WebGLRendererBackend implements RendererBackend {
         phase,
         frame.colourOptions.paletteCycleReverse === true,
         numericParam(frame.params, "pointDensity", 1),
+        numericParam(frame.params, "surfaceOpacity", 0.4),
         numericParam(frame.params, "edgeGlow", 0.6),
+        surfaceDiagnosticMode,
       )
     ) {
       return;
     }
+    const stats = this.orbit3d.stats;
     const marker = this.orbit3d.markerReadout;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
@@ -1582,6 +1610,27 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
     canvas.dataset.orbit3dSampler = stats.samplingPath;
     canvas.dataset.orbit3dBoundaryDetail = stats.boundaryDetail;
+    canvas.dataset.orbit3dGeometry = stats.geometryMode;
+    canvas.dataset.orbit3dTriangles = String(stats.triangleCount);
+    canvas.dataset.orbit3dRefinedCells = String(stats.refinedCellCount);
+    canvas.dataset.orbit3dRefinedShare = stats.refinedCellShare.toFixed(6);
+    canvas.dataset.orbit3dSliceMedianMs = stats.buildMedianSliceMs.toFixed(3);
+    canvas.dataset.orbit3dSliceMaxMs = stats.buildMaxSliceMs.toFixed(3);
+    canvas.dataset.orbit3dFinalisationMs = stats.finalisationMs.toFixed(3);
+    canvas.dataset.orbit3dSurfaceDiagnostic = surfaceDiagnosticMode;
+    canvas.dataset.orbit3dDissolveBandCells = String(
+      ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
+    );
+    canvas.dataset.orbit3dSurface = stats.surfaceAvailable
+      ? "available"
+      : stats.geometryMode === "hybrid"
+        ? "fallback"
+        : "not-requested";
+    if (stats.surfaceFallback) {
+      canvas.dataset.orbit3dSurfaceFallback = stats.surfaceFallback;
+    } else {
+      delete canvas.dataset.orbit3dSurfaceFallback;
+    }
     canvas.dataset.orbit3dMarkerRe = marker.re.toFixed(6);
     canvas.dataset.orbit3dMarkerIm = marker.im.toFixed(6);
     canvas.dataset.orbit3dMarkerPeriod = String(marker.period);
@@ -2667,11 +2716,17 @@ function isCircularPhaseState(kernel: SimKernel): boolean {
 function orbit3dBuildKey(
   width: number,
   height: number,
+  viewportWidth: number,
+  viewportHeight: number,
   params: Record<string, number | boolean | string>,
 ): string {
+  const hybrid = params.geometryMode === "hybrid";
   return [
     width,
     height,
+    hybrid ? viewportWidth : 0,
+    hybrid ? viewportHeight : 0,
+    hybrid ? "hybrid" : "cloud",
     numericParam(params, "warmupIterations", 0),
     numericParam(params, "sampleCount", 0),
     numericParam(params, "tailRefinement", -1),
@@ -2697,6 +2752,12 @@ function orbit3dColourMode(
   return value === "inside-out" || value === "mono" || value === "cycle"
     ? value
     : "period";
+}
+
+function orbit3dSurfaceDiagnosticModeFromUrl(): Orbit3DSurfaceDiagnosticMode {
+  return orbit3dSurfaceDiagnosticMode(
+    new URLSearchParams(window.location.search).get("surfaceDiagnostic"),
+  );
 }
 
 function fractalKind(kernel: SimKernel): number {

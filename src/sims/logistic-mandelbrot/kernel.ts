@@ -112,6 +112,24 @@ export class LogisticMandelbrotKernel implements SimKernel {
   readonly paramSchema = [
     // View: how the object is rendered.
     {
+      key: "geometryMode",
+      label: "Geometry",
+      type: "enum",
+      default: "cloud",
+      options: ["cloud", "hybrid"],
+      info: "Switches between the GPU-sampled point cloud and the hybrid point-cloud plus sheet view.",
+    },
+    {
+      key: "surfaceOpacity",
+      label: "Surface opacity",
+      type: "number",
+      default: 0.4,
+      min: 0.1,
+      max: 1,
+      step: 0.05,
+      info: "Controls sheet transparency without rebuilding the hybrid geometry; 1 draws opaque depth-writing sheets.",
+    },
+    {
       key: "colourMode",
       label: "Colour mode",
       type: "enum",
