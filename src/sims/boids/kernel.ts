@@ -48,6 +48,26 @@ const BINNING_MIN_BOIDS = 256;
 const NEIGHBOUR_LIMIT = 48;
 const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
+const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef"] as const;
+type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
+
+type CircleObstacle = {
+  kind: "circle";
+  x: number;
+  y: number;
+  radius: number;
+};
+
+type CapsuleObstacle = {
+  kind: "capsule";
+  x: number;
+  y: number;
+  halfX: number;
+  halfY: number;
+  radius: number;
+};
+
+type Obstacle = CircleObstacle | CapsuleObstacle;
 
 function hashAngle(a: number, b: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b);
@@ -75,6 +95,14 @@ function numberParam(
 ): number {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function obstacleLayoutParam(params: SimParams): ObstacleLayout {
+  const value = params.obstacleLayout;
+  return typeof value === "string" &&
+    (OBSTACLE_LAYOUTS as readonly string[]).includes(value)
+    ? (value as ObstacleLayout)
+    : "none";
 }
 
 function mulberry32(seed: number): () => number {
@@ -230,6 +258,24 @@ export class BoidsKernel implements SimKernel {
       step: 1,
       info: "On-screen size of each boid marker; does not change flocking behaviour. Changing it resets the flock, like every other control here.",
     },
+    {
+      key: "obstacleLayout",
+      label: "Obstacle layout",
+      type: "enum",
+      default: "none",
+      options: OBSTACLE_LAYOUTS,
+      info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. None leaves the released open field untouched. Changing it resets the flock.",
+    },
+    {
+      key: "obstacleAmount",
+      label: "Obstacle amount",
+      type: "number",
+      default: 0.5,
+      min: 0.1,
+      max: 1,
+      step: 0.05,
+      info: "How much of the field the chosen obstacles occupy. Higher values add more obstacles and make each one larger, creating stronger breaks in the flow. Changing it resets the flock.",
+    },
   ] as const satisfies readonly ParamDescriptor[];
 
   private width = 0;
@@ -253,6 +299,7 @@ export class BoidsKernel implements SimKernel {
   private alignment = DEFAULT_ALIGNMENT;
   private cohesion = DEFAULT_COHESION;
   private separation = DEFAULT_SEPARATION;
+  private obstacles: Obstacle[] = [];
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -298,6 +345,9 @@ export class BoidsKernel implements SimKernel {
     this.initialFlocks = Math.floor(
       clamp(numberParam(params, "initialFlocks", DEFAULT_INITIAL_FLOCKS), 0, 12),
     );
+    const obstacleLayout = obstacleLayoutParam(params);
+    const obstacleAmount = clamp(numberParam(params, "obstacleAmount", 0.5), 0.1, 1);
+    this.obstacles = this.createObstacles(obstacleLayout, obstacleAmount);
     // Optional run-to-run variety: a non-zero seed shifts the initial flock so
     // each load/reset differs. Absent (0), seeding stays a pure function of the
     // grid size and boid count, keeping init reproducible.
@@ -322,6 +372,11 @@ export class BoidsKernel implements SimKernel {
 
     this.stepCounter = 0;
     this.seedBoids();
+    if (this.obstacles.length > 0) {
+      for (let i = 0; i < this.boidCount; i += 1) {
+        this.resolveObstaclePenetration(i);
+      }
+    }
     this.rasterise();
   }
 
@@ -343,11 +398,21 @@ export class BoidsKernel implements SimKernel {
 
     const nextVx = this.nextVx;
     const nextVy = this.nextVy;
-    for (let i = 0; i < this.boidCount; i += 1) {
-      this.vx[i] = nextVx[i];
-      this.vy[i] = nextVy[i];
-      this.x[i] = wrap(this.x[i] + this.vx[i] * timeStep, this.width);
-      this.y[i] = wrap(this.y[i] + this.vy[i] * timeStep, this.height);
+    if (this.obstacles.length === 0) {
+      for (let i = 0; i < this.boidCount; i += 1) {
+        this.vx[i] = nextVx[i];
+        this.vy[i] = nextVy[i];
+        this.x[i] = wrap(this.x[i] + this.vx[i] * timeStep, this.width);
+        this.y[i] = wrap(this.y[i] + this.vy[i] * timeStep, this.height);
+      }
+    } else {
+      for (let i = 0; i < this.boidCount; i += 1) {
+        this.vx[i] = nextVx[i];
+        this.vy[i] = nextVy[i];
+        this.x[i] = wrap(this.x[i] + this.vx[i] * timeStep, this.width);
+        this.y[i] = wrap(this.y[i] + this.vy[i] * timeStep, this.height);
+        this.resolveObstaclePenetration(i);
+      }
     }
 
     this.rasterise();
@@ -524,6 +589,12 @@ export class BoidsKernel implements SimKernel {
     velocityX += Math.cos(angle) * wander;
     velocityY += Math.sin(angle) * wander;
 
+    if (this.obstacles.length > 0) {
+      const steered = this.obstacleSteer(i, velocityX, velocityY);
+      velocityX = steered[0];
+      velocityY = steered[1];
+    }
+
     const limited = limitVector(velocityX, velocityY, this.maxSpeed);
     this.nextVx[i] = limited[0];
     this.nextVy[i] = limited[1];
@@ -600,6 +671,198 @@ export class BoidsKernel implements SimKernel {
     this.nextVy = new Float32Array(0);
     this.binHead = new Int32Array(0);
     this.binNext = new Int32Array(0);
+    this.obstacles = [];
+  }
+
+  private createObstacles(layout: ObstacleLayout, amount: number): Obstacle[] {
+    if (layout === "none" || this.width === 0 || this.height === 0) {
+      return [];
+    }
+
+    const obstacles: Obstacle[] = [];
+    const minDimension = Math.min(this.width, this.height);
+
+    if (layout === "breakwaters") {
+      const count = 3 + Math.floor(amount * 5);
+      const halfLength = minDimension * (0.055 + amount * 0.06);
+      const radius = minDimension * (0.012 + amount * 0.018);
+      const directionLength = Math.hypot(this.width, this.height);
+      const halfX = (this.width / directionLength) * halfLength;
+      const halfY = (this.height / directionLength) * halfLength;
+
+      for (let index = 0; index < count; index += 1) {
+        const progress = (index + 1) / (count + 1);
+        const stagger = (index % 2 === 0 ? -1 : 1) * minDimension * 0.045;
+        obstacles.push({
+          kind: "capsule",
+          x: this.width * (0.1 + progress * 0.8) + stagger,
+          y: this.height * (0.86 - progress * 0.72) + stagger,
+          halfX,
+          halfY,
+          radius,
+        });
+      }
+      return obstacles;
+    }
+
+    if (layout === "rocks") {
+      const count = 5 + Math.floor(amount * 11);
+      const baseRadius = minDimension * (0.012 + amount * 0.018);
+      for (let index = 0; index < count; index += 1) {
+        const xUnit = (0.19 + index * 0.61803398875) % 1;
+        const yUnit = (0.31 + index * 0.41421356237) % 1;
+        const variation = 0.72 + 0.38 * (0.5 + 0.5 * Math.sin(index * 2.17));
+        obstacles.push({
+          kind: "circle",
+          x: this.width * (0.08 + xUnit * 0.84),
+          y: this.height * (0.08 + yUnit * 0.84),
+          radius: baseRadius * variation,
+        });
+      }
+      return obstacles;
+    }
+
+    const count = 5 + Math.floor(amount * 8);
+    const arcRadius = minDimension * 0.3;
+    const centreX = this.width * 0.5;
+    const centreY = this.height * 0.52;
+    const obstacleRadius = minDimension * (0.01 + amount * 0.014);
+    const capsuleHalfLength = minDimension * (0.035 + amount * 0.035);
+    for (let index = 0; index < count; index += 1) {
+      const progress = index / Math.max(1, count - 1);
+      const angle = Math.PI * (0.18 + progress * 1.34);
+      const brokenOffset = (index % 2 === 0 ? -1 : 1) * minDimension * 0.018;
+      const x = centreX + Math.cos(angle) * (arcRadius + brokenOffset);
+      const y = centreY + Math.sin(angle) * (arcRadius + brokenOffset);
+      if (index % 3 === 1) {
+        obstacles.push({
+          kind: "capsule",
+          x,
+          y,
+          halfX: -Math.sin(angle) * capsuleHalfLength,
+          halfY: Math.cos(angle) * capsuleHalfLength,
+          radius: obstacleRadius * 0.8,
+        });
+      } else {
+        obstacles.push({
+          kind: "circle",
+          x,
+          y,
+          radius: obstacleRadius * (0.82 + (index % 4) * 0.09),
+        });
+      }
+    }
+    return obstacles;
+  }
+
+  private obstacleSurface(
+    obstacle: Obstacle,
+    pointX: number,
+    pointY: number,
+    fallbackAngle: number,
+  ): readonly [number, number, number] {
+    const relativeX = torusDelta(obstacle.x, pointX, this.width);
+    const relativeY = torusDelta(obstacle.y, pointY, this.height);
+    let offsetX = relativeX;
+    let offsetY = relativeY;
+
+    if (obstacle.kind === "capsule") {
+      const halfLengthSq = obstacle.halfX * obstacle.halfX + obstacle.halfY * obstacle.halfY;
+      const projection = clamp(
+        (relativeX * obstacle.halfX + relativeY * obstacle.halfY) / halfLengthSq,
+        -1,
+        1,
+      );
+      offsetX -= obstacle.halfX * projection;
+      offsetY -= obstacle.halfY * projection;
+    }
+
+    const distance = Math.hypot(offsetX, offsetY);
+    if (distance > 1e-6) {
+      return [distance - obstacle.radius, offsetX / distance, offsetY / distance];
+    }
+    return [
+      -obstacle.radius,
+      Math.cos(fallbackAngle),
+      Math.sin(fallbackAngle),
+    ];
+  }
+
+  private obstacleSteer(
+    boidIndex: number,
+    velocityX: number,
+    velocityY: number,
+  ): readonly [number, number] {
+    const avoidanceRadius = Math.max(10, this.maxSpeed * 0.9);
+    let steerX = 0;
+    let steerY = 0;
+
+    for (let index = 0; index < this.obstacles.length; index += 1) {
+      const surface = this.obstacleSurface(
+        this.obstacles[index],
+        this.x[boidIndex],
+        this.y[boidIndex],
+        hashAngle(boidIndex, index + 17),
+      );
+      if (surface[0] >= avoidanceRadius) {
+        continue;
+      }
+
+      const ramp = clamp(1 - surface[0] / avoidanceRadius, 0, 1.35);
+      const repulsion = this.maxSpeed * 0.38 * ramp * ramp;
+      let tangentX = -surface[2];
+      let tangentY = surface[1];
+      const tangentVelocity = velocityX * tangentX + velocityY * tangentY;
+      if (
+        tangentVelocity < 0 ||
+        (Math.abs(tangentVelocity) < 1e-6 && hashAngle(boidIndex, index) > Math.PI)
+      ) {
+        tangentX = -tangentX;
+        tangentY = -tangentY;
+      }
+      const deflection = this.maxSpeed * 0.18 * ramp;
+      steerX += surface[1] * repulsion + tangentX * deflection;
+      steerY += surface[2] * repulsion + tangentY * deflection;
+    }
+
+    return [velocityX + steerX, velocityY + steerY];
+  }
+
+  private resolveObstaclePenetration(boidIndex: number): void {
+    for (let pass = 0; pass < 4; pass += 1) {
+      let moved = false;
+      for (let index = 0; index < this.obstacles.length; index += 1) {
+        const surface = this.obstacleSurface(
+          this.obstacles[index],
+          this.x[boidIndex],
+          this.y[boidIndex],
+          hashAngle(boidIndex, index + 101),
+        );
+        if (surface[0] >= 0) {
+          continue;
+        }
+
+        const correction = -surface[0] + 0.05;
+        this.x[boidIndex] = wrap(
+          this.x[boidIndex] + surface[1] * correction,
+          this.width,
+        );
+        this.y[boidIndex] = wrap(
+          this.y[boidIndex] + surface[2] * correction,
+          this.height,
+        );
+
+        const inwardVelocity = this.vx[boidIndex] * surface[1] + this.vy[boidIndex] * surface[2];
+        if (inwardVelocity < 0) {
+          this.vx[boidIndex] -= surface[1] * inwardVelocity;
+          this.vy[boidIndex] -= surface[2] * inwardVelocity;
+        }
+        moved = true;
+      }
+      if (!moved) {
+        return;
+      }
+    }
   }
 
   private seedBoids(): void {

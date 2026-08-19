@@ -62,6 +62,8 @@ test("metadata matches the renderer contract", () => {
       "cohesion",
       "separation",
       "pointSize",
+      "obstacleLayout",
+      "obstacleAmount",
     ],
   );
 
@@ -84,7 +86,30 @@ test("metadata matches the renderer contract", () => {
   assert.equal(maxSpeed.default, 36);
   assert.equal(maxSpeed.max, 40);
 
-  for (const descriptor of kernel.paramSchema) {
+  const obstacleLayout = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "obstacleLayout",
+  );
+  assert.equal(obstacleLayout.type, "enum");
+  assert.equal(obstacleLayout.default, "none");
+  assert.deepEqual(obstacleLayout.options, [
+    "none",
+    "breakwaters",
+    "rocks",
+    "reef",
+  ]);
+
+  const obstacleAmount = kernel.paramSchema.find(
+    (descriptor) => descriptor.key === "obstacleAmount",
+  );
+  assert.equal(obstacleAmount.type, "number");
+  assert.equal(obstacleAmount.default, 0.5);
+  assert.equal(obstacleAmount.min, 0.1);
+  assert.equal(obstacleAmount.max, 1);
+  assert.equal(obstacleAmount.step, 0.05);
+
+  for (const descriptor of kernel.paramSchema.filter(
+    (candidate) => candidate.type === "number",
+  )) {
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -93,6 +118,35 @@ test("metadata matches the renderer contract", () => {
     assert.ok(descriptor.min <= descriptor.default);
     assert.ok(descriptor.default <= descriptor.max);
   }
+});
+
+test("obstacle layout none is byte-identical to the released kernel fixture", () => {
+  const releasedFixture = Buffer.from(
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/sRZwPug2QL6P3A8+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD+ojUs+2xdLvvHeWrwAAAAAAAAAAAAAAAAAAAAAAACAP+f9ez4AC1C+ozAOPgAAAAAAAAAAAAAAAAAAAAAAAIA/cJe/PoBTv76YSqG8AAAAAAAAAAAAAAAAAAAAAAAAgD/VVIQ+sfp4vtGBsz0AAIA/fAcWPzlZ5b7DesE+AACAP5F+Xz63dV6+ONarPAAAgD/DqaY+cSCiviZ7mj0AAAAAAAAAAAAAAAAAAAAAAACAP9agjz4wVIW+kaLVPQAAAAAAAAAAAAAAAAAAAAAAAIA/F+7BPvubj77QU4I+AACAP7/OHT7h0gq+LBWWvQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD9vpZk+xOA3vs80dj4AAAAAAAAAAAAAAAAAAAAAAACAP+NLaD6jKVu+PQGaPQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8FaHw+RFgtvtR3Nz4AAIA/JKZNPqmlR75sSEW9AAAAAAAAAAAAAAAAAAAAAAAAgD/lQlg+EYhUvin3Hz0AAAAAAAAAAAAAAAAAAAAAAACAP9ygdz45iEy+/5cLPgAAgD9GRck92ImrvamQUj0AAIA/q2SiPtmSlr5NSPM9AACAP7TCST68wiu+g7bTPQAAAAAAAAAAAAAAAAAAAAAAAIA/fH53PnzpYL4sks49AAAAAAAAAAAAAAAAAAAAAAAAgD/qSZc+JJQ2vstIcT4AAAAAAAAAAAAAAAAAAAAAAACAP/UYcD4jYVa+fDnYPQAAgD/Yd0A+LJsevp0Q2j0AAAAAAAAAAAAAAAAAAAAA",
+    "base64",
+  );
+  const kernel = new BoidsKernel();
+  kernel.init(8, 6, {
+    boidCount: 24,
+    initialFlocks: 6,
+    visualRadius: 5,
+    separationRadius: 2,
+    maxSpeed: 0.75,
+    alignment: 0.08,
+    cohesion: 0.01,
+    separation: 0.22,
+    seed: 4242,
+    obstacleLayout: "none",
+    obstacleAmount: 1,
+  });
+  for (let index = 0; index < 320; index += 1) {
+    kernel.step(1);
+  }
+
+  const state = kernel.readState();
+  const actual = Buffer.from(state.buffer, state.byteOffset, state.byteLength);
+  assert.equal(state.length, 192);
+  assert.equal(Buffer.compare(actual, releasedFixture), 0);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
@@ -266,6 +320,152 @@ test("applyImpulse is a safe no-op at zero strength and off-grid", () => {
   assert.deepEqual(Array.from(kernel.readState()), before);
 
   assert.doesNotThrow(() => kernel.applyImpulse(-10, -10, 5, 1));
+});
+
+function torusDeltaForTest(from, to, limit) {
+  let delta = to - from;
+  const half = limit / 2;
+  if (delta > half) delta -= limit;
+  if (delta < -half) delta += limit;
+  return delta;
+}
+
+function obstacleSignedDistance(obstacle, x, y, width, height) {
+  let offsetX = torusDeltaForTest(obstacle.x, x, width);
+  let offsetY = torusDeltaForTest(obstacle.y, y, height);
+  if (obstacle.kind === "capsule") {
+    const halfLengthSq =
+      obstacle.halfX * obstacle.halfX + obstacle.halfY * obstacle.halfY;
+    const rawProjection =
+      (offsetX * obstacle.halfX + offsetY * obstacle.halfY) / halfLengthSq;
+    const projection = Math.max(-1, Math.min(1, rawProjection));
+    offsetX -= obstacle.halfX * projection;
+    offsetY -= obstacle.halfY * projection;
+  }
+  return Math.hypot(offsetX, offsetY) - obstacle.radius;
+}
+
+function placeFixedAdjacentScenario(kernel, obstacle) {
+  let normalX = 1;
+  let normalY = 0;
+  let tangentX = 0;
+  let tangentY = 1;
+  if (obstacle.kind === "capsule") {
+    const halfLength = Math.hypot(obstacle.halfX, obstacle.halfY);
+    tangentX = obstacle.halfX / halfLength;
+    tangentY = obstacle.halfY / halfLength;
+    normalX = -tangentY;
+    normalY = tangentX;
+  }
+
+  for (let index = 0; index < kernel.x.length; index += 1) {
+    const tangentOffset = (index - 1.5) * 0.8;
+    const surfaceOffset = obstacle.radius + 1 + index * 0.3;
+    kernel.x[index] = obstacle.x + normalX * surfaceOffset + tangentX * tangentOffset;
+    kernel.y[index] = obstacle.y + normalY * surfaceOffset + tangentY * tangentOffset;
+    kernel.vx[index] = -normalX * 1.5;
+    kernel.vy[index] = -normalY * 1.5;
+  }
+}
+
+function syntheticObstacleRun(layout) {
+  const params = {
+    boidCount: 4,
+    initialFlocks: 0,
+    visualRadius: 1,
+    separationRadius: 1,
+    maxSpeed: 2,
+    alignment: 0,
+    cohesion: 0,
+    separation: 0,
+    obstacleLayout: layout,
+    obstacleAmount: 0.5,
+  };
+  const kernel = new BoidsKernel();
+  kernel.init(160, 120, params);
+  return { kernel, params };
+}
+
+test("obstacle placement and adjacent steering are deterministic", () => {
+  const first = syntheticObstacleRun("breakwaters");
+  const second = syntheticObstacleRun("breakwaters");
+  assert.deepEqual(first.kernel.obstacles, second.kernel.obstacles);
+  assert.ok(first.kernel.obstacles.length > 0);
+
+  const obstacle = first.kernel.obstacles[0];
+  placeFixedAdjacentScenario(first.kernel, obstacle);
+  placeFixedAdjacentScenario(second.kernel, obstacle);
+  for (let index = 0; index < 24; index += 1) {
+    first.kernel.step(1);
+    second.kernel.step(1);
+  }
+  assert.deepEqual(Array.from(first.kernel.x), Array.from(second.kernel.x));
+  assert.deepEqual(Array.from(first.kernel.y), Array.from(second.kernel.y));
+  assert.deepEqual(Array.from(first.kernel.vx), Array.from(second.kernel.vx));
+  assert.deepEqual(Array.from(first.kernel.vy), Array.from(second.kernel.vy));
+
+  const open = syntheticObstacleRun("none");
+  placeFixedAdjacentScenario(open.kernel, obstacle);
+  for (let index = 0; index < 24; index += 1) {
+    open.kernel.step(1);
+  }
+  assert.notDeepEqual(Array.from(first.kernel.x), Array.from(open.kernel.x));
+});
+
+for (const layout of ["breakwaters", "rocks", "reef"]) {
+  test(`${layout} keeps every boid outside obstacle surfaces`, () => {
+    const width = 160;
+    const height = 120;
+    const kernel = new BoidsKernel();
+    kernel.init(width, height, {
+      boidCount: 320,
+      initialFlocks: 6,
+      visualRadius: 18,
+      separationRadius: 6,
+      maxSpeed: 4,
+      obstacleLayout: layout,
+      obstacleAmount: 0.75,
+    });
+    assert.ok(kernel.obstacles.length > 0);
+
+    for (let step = 0; step < 320; step += 1) {
+      kernel.step(1);
+      for (let boid = 0; boid < kernel.x.length; boid += 1) {
+        for (const obstacle of kernel.obstacles) {
+          assert.ok(
+            obstacleSignedDistance(
+              obstacle,
+              kernel.x[boid],
+              kernel.y[boid],
+              width,
+              height,
+            ) >= -1e-4,
+            `${layout} boid ${boid} penetrated an obstacle at step ${step}`,
+          );
+        }
+      }
+    }
+  });
+}
+
+test("applyImpulse still changes heading with obstacles active", () => {
+  const params = {
+    boidCount: 1500,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.5,
+  };
+  const kernel = new BoidsKernel();
+  kernel.init(64, 64, params);
+  const before = Array.from(kernel.readState());
+  kernel.applyImpulse(32, 32, 30, 1);
+  const after = Array.from(kernel.readState());
+  assert.notDeepEqual(after, before);
+
+  const twin = new BoidsKernel();
+  twin.init(64, 64, params);
+  twin.applyImpulse(32, 32, 30, 1);
+  assert.deepEqual(Array.from(twin.readState()), after);
 });
 
 test("destroy releases state and leaves step/readState safe", () => {
