@@ -48,6 +48,11 @@ const BINNING_MIN_BOIDS = 256;
 const NEIGHBOUR_LIMIT = 48;
 const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
+export const OBSTACLE_RENDER_MARGIN = 3;
+const OBSTACLE_CELL_GUARD = Math.SQRT1_2;
+const OBSTACLE_RIM_WIDTH = 1.15;
+const OBSTACLE_BODY = [0.86, 0.08, -0.44, 0] as const;
+const OBSTACLE_RIM = [0.9, 0.55, -0.34, 0] as const;
 const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef"] as const;
 type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
 
@@ -113,6 +118,53 @@ function mulberry32(seed: number): () => number {
     mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed);
     return ((mixed ^ (mixed >>> 14)) >>> 0) / 0x100000000;
   };
+}
+
+function valueNoiseHash(x: number, y: number, seed: number): number {
+  let hash = seed ^ Math.imul(x, 0x1f123bb5) ^ Math.imul(y, 0x5f356495);
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x7feb352d);
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x846ca68b);
+  hash ^= hash >>> 16;
+  return (hash >>> 0) / 0x100000000;
+}
+
+function smoothNoiseStep(value: number): number {
+  return value * value * (3 - 2 * value);
+}
+
+function valueNoise2d(x: number, y: number, seed: number): number {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const tx = smoothNoiseStep(x - x0);
+  const ty = smoothNoiseStep(y - y0);
+  const top =
+    valueNoiseHash(x0, y0, seed) * (1 - tx) +
+    valueNoiseHash(x0 + 1, y0, seed) * tx;
+  const bottom =
+    valueNoiseHash(x0, y0 + 1, seed) * (1 - tx) +
+    valueNoiseHash(x0 + 1, y0 + 1, seed) * tx;
+  return top * (1 - ty) + bottom * ty;
+}
+
+function fractalValueNoise(
+  x: number,
+  y: number,
+  scale: number,
+  seed: number,
+): number {
+  let amplitude = 0.56;
+  let frequency = 1 / scale;
+  let value = 0;
+  let weight = 0;
+  for (let octave = 0; octave < 4; octave += 1) {
+    value += valueNoise2d(x * frequency, y * frequency, seed + octave * 1013) * amplitude;
+    weight += amplitude;
+    amplitude *= 0.52;
+    frequency *= 2.07;
+  }
+  return value / weight;
 }
 
 function wrap(value: number, limit: number): number {
@@ -300,6 +352,8 @@ export class BoidsKernel implements SimKernel {
   private cohesion = DEFAULT_COHESION;
   private separation = DEFAULT_SEPARATION;
   private obstacles: Obstacle[] = [];
+  private obstacleRaster = new Uint8Array(0);
+  private obstacleCells = new Uint32Array(0);
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -359,6 +413,7 @@ export class BoidsKernel implements SimKernel {
     } else {
       this.state.fill(0);
     }
+    this.buildObstacleRaster(obstacleLayout, obstacleAmount);
 
     if (this.x.length !== this.boidCount) {
       this.x = new Float32Array(this.boidCount);
@@ -672,6 +727,8 @@ export class BoidsKernel implements SimKernel {
     this.binHead = new Int32Array(0);
     this.binNext = new Int32Array(0);
     this.obstacles = [];
+    this.obstacleRaster = new Uint8Array(0);
+    this.obstacleCells = new Uint32Array(0);
   }
 
   private createObstacles(layout: ObstacleLayout, amount: number): Obstacle[] {
@@ -753,6 +810,76 @@ export class BoidsKernel implements SimKernel {
       }
     }
     return obstacles;
+  }
+
+  private buildObstacleRaster(layout: ObstacleLayout, amount: number): void {
+    if (this.obstacles.length === 0 || this.width === 0 || this.height === 0) {
+      this.obstacleRaster = new Uint8Array(0);
+      this.obstacleCells = new Uint32Array(0);
+      return;
+    }
+
+    const raster = new Uint8Array(this.width * this.height);
+    const cells: number[] = [];
+    const layoutCode = OBSTACLE_LAYOUTS.indexOf(layout);
+    const baseSeed =
+      Math.imul(this.width, 0x45d9f3b) ^
+      Math.imul(this.height, 0x119de1f3) ^
+      Math.imul(Math.round(amount * 1000), 0x3449f5) ^
+      Math.imul(layoutCode + 1, 0x27d4eb2d);
+
+    for (let y = 0; y < this.height; y += 1) {
+      for (let x = 0; x < this.width; x += 1) {
+        const pointX = x + 0.5;
+        const pointY = y + 0.5;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+        let nearestIndex = 0;
+
+        for (let index = 0; index < this.obstacles.length; index += 1) {
+          const surface = this.obstacleSurface(
+            this.obstacles[index],
+            pointX,
+            pointY,
+            0,
+          );
+          if (surface[0] < nearestDistance) {
+            nearestDistance = surface[0];
+            nearestIndex = index;
+          }
+        }
+
+        if (nearestDistance > -OBSTACLE_CELL_GUARD) {
+          continue;
+        }
+
+        const obstacle = this.obstacles[nearestIndex];
+        const maximumInset = Math.max(
+          OBSTACLE_CELL_GUARD,
+          Math.min(OBSTACLE_RENDER_MARGIN, obstacle.radius * 0.42),
+        );
+        const noise = fractalValueNoise(
+          pointX,
+          pointY,
+          Math.max(2.2, obstacle.radius * 0.72),
+          baseSeed ^ Math.imul(nearestIndex + 1, 0x9e3779b1),
+        );
+        const inset =
+          OBSTACLE_CELL_GUARD +
+          (maximumInset - OBSTACLE_CELL_GUARD) * noise;
+        const renderedDistance = nearestDistance + inset;
+        if (renderedDistance > 0) {
+          continue;
+        }
+
+        const cell = y * this.width + x;
+        const tone = renderedDistance > -OBSTACLE_RIM_WIDTH ? 2 : 1;
+        raster[cell] = tone;
+        cells.push(cell);
+      }
+    }
+
+    this.obstacleRaster = raster;
+    this.obstacleCells = Uint32Array.from(cells);
   }
 
   private obstacleSurface(
@@ -963,6 +1090,17 @@ export class BoidsKernel implements SimKernel {
         this.state[index + 2] = clamp(this.state[index + 2] / count, -1, 1);
         this.state[index + 3] = clamp(this.state[index + 3] / count, -1, 1);
       }
+    }
+
+    for (let index = 0; index < this.obstacleCells.length; index += 1) {
+      const offset = this.obstacleCells[index] * CHANNEL_COUNT;
+      const tone = this.obstacleRaster[this.obstacleCells[index]] === 2
+        ? OBSTACLE_RIM
+        : OBSTACLE_BODY;
+      this.state[offset] = tone[0];
+      this.state[offset + 1] = tone[1];
+      this.state[offset + 2] = tone[2];
+      this.state[offset + 3] = tone[3];
     }
   }
 }

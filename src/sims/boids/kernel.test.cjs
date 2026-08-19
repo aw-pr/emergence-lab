@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   BoidsKernel,
+  OBSTACLE_RENDER_MARGIN,
   selfTest,
 } = require("../../../.test-build/sims/boids/kernel.js");
 
@@ -410,6 +411,112 @@ test("obstacle placement and adjacent steering are deterministic", () => {
     open.kernel.step(1);
   }
   assert.notDeepEqual(Array.from(first.kernel.x), Array.from(open.kernel.x));
+});
+
+test("obstacle rasterisation is deterministic for identical layout params", () => {
+  for (const layout of ["breakwaters", "rocks", "reef"]) {
+    const params = {
+      boidCount: 48,
+      initialFlocks: 0,
+      obstacleLayout: layout,
+      obstacleAmount: 0.75,
+      seed: 991,
+    };
+    const first = new BoidsKernel();
+    const second = new BoidsKernel();
+    first.init(240, 180, params);
+    second.init(240, 180, params);
+
+    assert.ok(first.obstacleCells.length > 0, `${layout} raster is non-empty`);
+    assert.deepEqual(
+      Array.from(first.obstacleRaster),
+      Array.from(second.obstacleRaster),
+      `${layout} mask is deterministic`,
+    );
+    assert.deepEqual(
+      Array.from(first.readState()),
+      Array.from(second.readState()),
+      `${layout} published state is deterministic`,
+    );
+  }
+});
+
+test("rendered obstacle silhouettes stay inside the collision surface margin", () => {
+  const width = 240;
+  const height = 180;
+  const rasterTolerance = Math.SQRT2;
+
+  for (const layout of ["breakwaters", "rocks", "reef"]) {
+    const kernel = new BoidsKernel();
+    kernel.init(width, height, {
+      boidCount: 24,
+      initialFlocks: 0,
+      obstacleLayout: layout,
+      obstacleAmount: 0.9,
+    });
+
+    let boundaryCells = 0;
+    for (let cell = 0; cell < kernel.obstacleRaster.length; cell += 1) {
+      if (kernel.obstacleRaster[cell] === 0) continue;
+      const x = cell % width;
+      const y = Math.floor(cell / width);
+      const distance = Math.min(
+        ...kernel.obstacles.map((obstacle) =>
+          obstacleSignedDistance(obstacle, x + 0.5, y + 0.5, width, height),
+        ),
+      );
+      assert.ok(distance <= 0, `${layout} rendered outside collision surface`);
+
+      const neighbours = [
+        x === 0 ? -1 : cell - 1,
+        x === width - 1 ? -1 : cell + 1,
+        y === 0 ? -1 : cell - width,
+        y === height - 1 ? -1 : cell + width,
+      ];
+      if (neighbours.some((neighbour) =>
+        neighbour < 0 || kernel.obstacleRaster[neighbour] === 0
+      )) {
+        boundaryCells += 1;
+        assert.ok(
+          distance >= -(OBSTACLE_RENDER_MARGIN + rasterTolerance),
+          `${layout} silhouette exceeded its inset margin`,
+        );
+      }
+    }
+    assert.ok(boundaryCells > 0, `${layout} has a rendered boundary`);
+  }
+});
+
+test("obstacle body and rim values preserve documented channel ranges", () => {
+  const ranges = [
+    [0, 1],
+    [0, 1],
+    [-1, 1],
+    [-1, 1],
+  ];
+
+  for (const layout of ["breakwaters", "rocks", "reef"]) {
+    const kernel = new BoidsKernel();
+    kernel.init(240, 180, {
+      boidCount: 48,
+      initialFlocks: 0,
+      obstacleLayout: layout,
+      obstacleAmount: 0.8,
+    });
+    kernel.step(1);
+
+    const tones = new Set();
+    for (const cell of kernel.obstacleCells) {
+      tones.add(kernel.obstacleRaster[cell]);
+      const offset = cell * kernel.channelCount;
+      for (let channel = 0; channel < kernel.channelCount; channel += 1) {
+        const [min, max] = ranges[channel];
+        assert.ok(kernel.readState()[offset + channel] >= min);
+        assert.ok(kernel.readState()[offset + channel] <= max);
+      }
+    }
+    assert.deepEqual(tones, new Set([1, 2]), `${layout} publishes body and rim`);
+  }
 });
 
 for (const layout of ["breakwaters", "rocks", "reef"]) {
