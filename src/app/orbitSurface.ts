@@ -54,29 +54,11 @@ export interface OrbitSurfaceRefinedCell {
   depth: number;
   /** Leaf width in grid cells. Omitted for the legacy uniform-depth form. */
   size?: number;
-  /** Coarse quad that owns an adaptive leaf crossing an integer coordinate. */
-  coarseX?: number;
-  coarseY?: number;
 }
 
 export interface OrbitSurfaceBuildOptions {
   sampler?: OrbitSurfaceSampler;
   refinedCells?: readonly OrbitSurfaceRefinedCell[];
-  /** Closed component boundaries in the same grid coordinates as the mesh. */
-  boundaryCurves?: readonly OrbitSurfaceBoundaryPolyline[];
-}
-
-export interface OrbitSurfaceBoundaryPolyline {
-  componentId: string;
-  period: number;
-  points: readonly OrbitSurfaceProjectedPoint[];
-}
-
-export interface OrbitSurfaceCurveProximity {
-  componentId: string;
-  period: number;
-  distance: number;
-  inside: boolean;
 }
 
 export interface OrbitSurfaceTransition {
@@ -119,170 +101,6 @@ export const ORBIT_SURFACE_TRIANGLE_LIMIT = 1_199_999;
 /** Fixed sampling work for every disagreeing contour edge. */
 export const ORBIT_SURFACE_CONTOUR_BISECTION_STEPS = 6;
 
-/** Coverage shared by sheet fading and chaotic cloud-band selection. */
-export function orbitSurfaceDissolveCoverage(
-  distanceCells: number,
-  bandCells: number,
-): number {
-  const width = Number.isFinite(bandCells) ? Math.max(0, bandCells) : 0;
-  if (width === 0) return distanceCells > 0.5 ? 1 : 0;
-  return Math.min(1, Math.max(0, distanceCells - 0.5) / width);
-}
-
-/** True only for bounded chaotic samples inside the sheet dissolve band. */
-export function isOrbitSurfaceCloudBandSample(
-  period: number,
-  escaped: boolean,
-  periodicDistanceCells: number,
-  bandCells: number,
-): boolean {
-  return !escaped && period === 0 &&
-    orbitSurfaceDissolveCoverage(periodicDistanceCells, bandCells) < 1;
-}
-
-/**
- * Deterministic sub-cell sites matching the cloud path's square refinement
- * lattice. The parent centre is omitted because its coarse sample is already
- * present.
- */
-export function orbitSurfaceCloudRefinementOffsets(
-  subdivision: number,
-): ReadonlyArray<OrbitSurfaceProjectedPoint> {
-  const divisions = Math.max(1, Math.floor(subdivision));
-  const offsets: OrbitSurfaceProjectedPoint[] = [];
-  for (let y = 0; y < divisions; y += 1) {
-    for (let x = 0; x < divisions; x += 1) {
-      const offsetX = (x + 0.5) / divisions - 0.5;
-      const offsetY = (y + 0.5) / divisions - 0.5;
-      if (Math.abs(offsetX) <= Number.EPSILON && Math.abs(offsetY) <= Number.EPSILON) {
-        continue;
-      }
-      offsets.push({ x: offsetX, y: offsetY });
-    }
-  }
-  return offsets;
-}
-
-/** Point-in-polygon membership for one closed traced component boundary. */
-export function orbitSurfaceCurveContains(
-  curve: OrbitSurfaceBoundaryPolyline,
-  x: number,
-  y: number,
-): boolean {
-  if (pointPolylineDistance(x, y, curve.points) <= 1e-9) return true;
-  let inside = false;
-  for (let index = 0, previous = curve.points.length - 1;
-    index < curve.points.length;
-    previous = index, index += 1) {
-    const first = curve.points[index];
-    const second = curve.points[previous];
-    if (
-      (first.y > y) !== (second.y > y) &&
-      x < (second.x - first.x) * (y - first.y) /
-        (second.y - first.y) + first.x
-    ) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/** Nearest traced boundary, optionally restricted to one period. */
-export function nearestOrbitSurfaceBoundary(
-  curves: readonly OrbitSurfaceBoundaryPolyline[],
-  x: number,
-  y: number,
-  period?: number,
-): OrbitSurfaceCurveProximity | null {
-  let nearest: OrbitSurfaceCurveProximity | null = null;
-  for (const curve of curves) {
-    if (period !== undefined && curve.period !== period) continue;
-    const distance = pointPolylineDistance(x, y, curve.points);
-    if (!nearest || distance < nearest.distance) {
-      nearest = {
-        componentId: curve.componentId,
-        period: curve.period,
-        distance,
-        inside: orbitSurfaceCurveContains(curve, x, y),
-      };
-    }
-  }
-  return nearest;
-}
-
-/** Exact polyline crossing of one mesh edge for a target component period. */
-export function locateOrbitSurfaceCurveTransition(
-  first: OrbitSurfaceProjectedPoint,
-  second: OrbitSurfaceProjectedPoint,
-  period: number,
-  curves: readonly OrbitSurfaceBoundaryPolyline[],
-): (OrbitSurfaceProjectedPoint & { componentId: string }) | null {
-  const hits: Array<OrbitSurfaceProjectedPoint & {
-    componentId: string;
-    edgeAmount: number;
-    preferred: boolean;
-  }> = [];
-  for (const curve of curves) {
-    if (curve.period !== period) continue;
-    const firstInside = orbitSurfaceCurveContains(curve, first.x, first.y);
-    const secondInside = orbitSurfaceCurveContains(curve, second.x, second.y);
-    for (let index = 1; index < curve.points.length; index += 1) {
-      const hit = segmentIntersection(
-        first,
-        second,
-        curve.points[index - 1],
-        curve.points[index],
-      );
-      if (!hit) continue;
-      hits.push({
-        x: hit.x,
-        y: hit.y,
-        componentId: curve.componentId,
-        edgeAmount: hit.edgeAmount,
-        preferred: firstInside !== secondInside,
-      });
-    }
-  }
-  hits.sort((left, right) =>
-    Number(right.preferred) - Number(left.preferred) ||
-    Math.abs(left.edgeAmount - 0.5) - Math.abs(right.edgeAmount - 0.5) ||
-    left.componentId.localeCompare(right.componentId));
-  const hit = hits[0];
-  return hit ? { x: hit.x, y: hit.y, componentId: hit.componentId } : null;
-}
-
-/** True when any traced curve segment crosses or lies inside a grid rectangle. */
-export function orbitSurfaceCurveIntersectsRect(
-  curves: readonly OrbitSurfaceBoundaryPolyline[],
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  period?: number,
-): boolean {
-  const left = Math.min(x0, x1);
-  const right = Math.max(x0, x1);
-  const top = Math.min(y0, y1);
-  const bottom = Math.max(y0, y1);
-  for (const curve of curves) {
-    if (period !== undefined && curve.period !== period) continue;
-    for (let index = 1; index < curve.points.length; index += 1) {
-      const first = curve.points[index - 1];
-      const second = curve.points[index];
-      if (
-        Math.max(first.x, second.x) < left ||
-        Math.min(first.x, second.x) > right ||
-        Math.max(first.y, second.y) < top ||
-        Math.min(first.y, second.y) > bottom
-      ) {
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Refine one coarse boundary quad against the projected contour chord error.
  * Each accepted leaf is compared with one further bisection level, including
@@ -297,7 +115,6 @@ export function planOrbitSurfaceCellRefinement(
   errorBudgetPx: number,
   maxDepth: number,
   cellBudget: number,
-  boundaryCurves: readonly OrbitSurfaceBoundaryPolyline[] = [],
 ): OrbitSurfaceRefinementPlan {
   const leaves: OrbitSurfaceRefinedCell[] = [];
   const boundedDepth = Math.max(0, Math.min(8, Math.floor(maxDepth)));
@@ -322,27 +139,15 @@ export function planOrbitSurfaceCellRefinement(
       sampler,
       sampleCount,
       project,
-      boundaryCurves,
     );
     const half = size * 0.5;
     const children = [
-      projectedContourSegments(left, top, left + half, top + half, sampler, sampleCount, project, boundaryCurves),
-      projectedContourSegments(left + half, top, left + size, top + half, sampler, sampleCount, project, boundaryCurves),
-      projectedContourSegments(left, top + half, left + half, top + size, sampler, sampleCount, project, boundaryCurves),
-      projectedContourSegments(left + half, top + half, left + size, top + size, sampler, sampleCount, project, boundaryCurves),
+      projectedContourSegments(left, top, left + half, top + half, sampler, sampleCount, project),
+      projectedContourSegments(left + half, top, left + size, top + half, sampler, sampleCount, project),
+      projectedContourSegments(left, top + half, left + half, top + size, sampler, sampleCount, project),
+      projectedContourSegments(left + half, top + half, left + size, top + size, sampler, sampleCount, project),
     ];
-    const error = Math.max(
-      projectedContourError(parent, children.flat()),
-      projectedAnalyticChordError(
-        parent,
-        boundaryCurves,
-        left,
-        top,
-        left + size,
-        top + size,
-        project,
-      ),
-    );
+    const error = projectedContourError(parent, children.flat());
     const canSplit =
       error > threshold &&
       depth < boundedDepth &&
@@ -358,7 +163,7 @@ export function planOrbitSurfaceCellRefinement(
     if (error > threshold && depth < boundedDepth) budgetExhausted = true;
     maxErrorPx = Math.max(maxErrorPx, error);
     segmentCount += parent.length;
-    leaves.push({ x: left, y: top, depth, size, coarseX: x, coarseY: y });
+    leaves.push({ x: left, y: top, depth, size });
   }
 }
 
@@ -434,10 +239,7 @@ export function locateOrbitSurfaceTransition(
 interface ProjectedContourSegment {
   first: OrbitSurfaceProjectedPoint;
   second: OrbitSurfaceProjectedPoint;
-  gridFirst: OrbitSurfaceProjectedPoint;
-  gridSecond: OrbitSurfaceProjectedPoint;
   period: number;
-  componentId?: string;
 }
 
 function projectedContourSegments(
@@ -448,7 +250,6 @@ function projectedContourSegments(
   sampler: OrbitSurfaceSampler,
   sampleCount: number,
   project: OrbitSurfaceProjector,
-  boundaryCurves: readonly OrbitSurfaceBoundaryPolyline[] = [],
 ): ProjectedContourSegment[] {
   const at = (x: number, y: number): OrbitSurfaceSamplePoint => ({
     x,
@@ -473,8 +274,6 @@ function projectedContourSegments(
       const intersections: Array<{
         transition: OrbitSurfaceTransition;
         fallback: OrbitSurfaceSample;
-        first: OrbitSurfaceSamplePoint;
-        second: OrbitSurfaceSamplePoint;
       }> = [];
       for (let corner = 0; corner < corners.length; corner += 1) {
         const first = corners[corner];
@@ -487,45 +286,19 @@ function projectedContourSegments(
         intersections.push({
           transition: locateOrbitSurfaceTransition(first, second, sampler, sampleCount),
           fallback: firstInside ? first.sample : second.sample,
-          first,
-          second,
         });
       }
       if (intersections.length !== 2) continue;
-      const projected = intersections.map(({ transition, fallback, first, second }) => {
+      const projected = intersections.map(({ transition, fallback }) => {
         const sample = transition.samplesByPeriod.get(period) ?? fallback;
         const point = transition.pointsByPeriod.get(period) ?? transition;
-        const curvePoint = locateOrbitSurfaceCurveTransition(
-          first,
-          second,
-          period,
-          boundaryCurves,
+        return project(
+          point.x,
+          point.y,
+          lowestSurfaceHeight(sample, period),
         );
-        const gridPoint = {
-          x: curvePoint?.x ?? point.x,
-          y: curvePoint?.y ?? point.y,
-        };
-        return {
-          point: project(
-            gridPoint.x,
-            gridPoint.y,
-            lowestSurfaceHeight(sample, period),
-          ),
-          gridPoint,
-          componentId: curvePoint?.componentId,
-        };
       });
-      const componentId = projected[0].componentId === projected[1].componentId
-        ? projected[0].componentId
-        : undefined;
-      segments.push({
-        first: projected[0].point,
-        second: projected[1].point,
-        gridFirst: projected[0].gridPoint,
-        gridSecond: projected[1].gridPoint,
-        period,
-        componentId,
-      });
+      segments.push({ first: projected[0], second: projected[1], period });
     }
   }
 }
@@ -536,12 +309,7 @@ function projectedContourError(
 ): number {
   let maximum = 0;
   for (const segment of bisected) {
-    const candidates = coarse.filter((candidate) =>
-      candidate.period === segment.period &&
-      (
-        segment.componentId === undefined ||
-        candidate.componentId === segment.componentId
-      ));
+    const candidates = coarse.filter((candidate) => candidate.period === segment.period);
     if (candidates.length === 0) {
       maximum = Math.max(
         maximum,
@@ -559,68 +327,6 @@ function projectedContourError(
         nearest = Math.min(nearest, projectedPointSegmentDistance(point, candidate));
       }
       maximum = Math.max(maximum, nearest);
-    }
-  }
-  return maximum;
-}
-
-function projectedAnalyticChordError(
-  contour: readonly ProjectedContourSegment[],
-  curves: readonly OrbitSurfaceBoundaryPolyline[],
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  project: OrbitSurfaceProjector,
-): number {
-  if (curves.length === 0) return 0;
-  const origin = project(x0, y0, 0);
-  const projectedX = project(x1, y0, 0);
-  const projectedY = project(x0, y1, 0);
-  const width = Math.max(Number.EPSILON, x1 - x0);
-  const height = Math.max(Number.EPSILON, y1 - y0);
-  const pixelsPerCell = Math.max(
-    Math.hypot(projectedX.x - origin.x, projectedX.y - origin.y) / width,
-    Math.hypot(projectedY.x - origin.x, projectedY.y - origin.y) / height,
-  );
-  let maximum = 0;
-  for (const curve of curves) {
-    if (!orbitSurfaceCurveIntersectsRect([curve], x0, y0, x1, y1)) {
-      continue;
-    }
-    const candidates = contour.filter((segment) =>
-      segment.componentId === curve.componentId);
-    if (candidates.length === 0) {
-      maximum = Math.max(maximum, Math.min(width, height) * pixelsPerCell);
-      continue;
-    }
-    for (let index = 1; index < curve.points.length; index += 1) {
-      const first = curve.points[index - 1];
-      const second = curve.points[index];
-      for (const point of [
-        first,
-        { x: (first.x + second.x) * 0.5, y: (first.y + second.y) * 0.5 },
-        second,
-      ]) {
-        if (
-          point.x < x0 - 1e-9 || point.x > x1 + 1e-9 ||
-          point.y < y0 - 1e-9 || point.y > y1 + 1e-9
-        ) {
-          continue;
-        }
-        let nearest = Number.POSITIVE_INFINITY;
-        for (const candidate of candidates) {
-          nearest = Math.min(
-            nearest,
-            projectedPointSegmentDistance(point, {
-              ...candidate,
-              first: candidate.gridFirst,
-              second: candidate.gridSecond,
-            }),
-          );
-        }
-        maximum = Math.max(maximum, nearest * pixelsPerCell);
-      }
     }
   }
   return maximum;
@@ -725,13 +431,12 @@ export function buildOrbitSurface(
 
   const indices: number[] = [];
   const sampler = options.sampler;
-  const boundaryCurves = options.boundaryCurves ?? [];
   const refinedCoarseCells = new Set<string>();
   const refinedLeaves = new Map<string, OrbitSurfaceRefinedCell[]>();
   if (sampler) {
     for (const cell of options.refinedCells ?? []) {
-      const x = Math.floor(cell.coarseX ?? cell.x);
-      const y = Math.floor(cell.coarseY ?? cell.y);
+      const x = Math.floor(cell.x);
+      const y = Math.floor(cell.y);
       const depth = Math.max(0, Math.min(8, Math.floor(cell.depth)));
       if (x < 0 || y < 0 || x + 1 >= width || y + 1 >= height) continue;
       if (depth <= 0 && cell.size !== 1) continue;
@@ -767,7 +472,6 @@ export function buildOrbitSurface(
   const transitions = new Map<string, OrbitSurfaceTransition>();
   const transitionVertices = new Map<string, number>();
   const chaosTransitionVertices = new Set<number>();
-  const periodTransitionVertices = new Set<number>();
 
   for (let y = 0; y + 1 < height; y += 1) {
     for (let x = 0; x + 1 < width; x += 1) {
@@ -798,12 +502,7 @@ export function buildOrbitSurface(
     interiors: new Float32Array(interiorValues),
     boundaries: new Float32Array(boundaryValues),
     ranks: new Float32Array(rankValues),
-    edgeFades: surfaceEdgeFades(
-      periodValues.length,
-      indices,
-      chaosTransitionVertices,
-      periodTransitionVertices,
-    ),
+    edgeFades: surfaceEdgeFades(periodValues.length, indices, chaosTransitionVertices),
     dissolves: new Float32Array(dissolveValues),
     indices: new Uint32Array(indices),
   };
@@ -1030,29 +729,14 @@ export function buildOrbitSurface(
     const vertexKey = `${key}|${period}|${rank}`;
     const existing = transitionVertices.get(vertexKey);
     if (existing !== undefined) return existing;
-    const fallback = first.period === period ? first : second;
-    const curveTransition = locateOrbitSurfaceCurveTransition(
-      first,
-      second,
-      period,
-      boundaryCurves,
-    );
-    let sample = fallback.sample;
-    let transitionPoint: OrbitSurfaceProjectedPoint = curveTransition ?? fallback;
-    if (!curveTransition) {
-      let transition = transitions.get(key);
-      if (!transition) {
-        transition = locateOrbitSurfaceTransition(
-          first,
-          second,
-          sampler as OrbitSurfaceSampler,
-          sampleCount,
-        );
-        transitions.set(key, transition);
-      }
-      sample = transition.samplesByPeriod.get(period) ?? fallback.sample;
-      transitionPoint = transition.pointsByPeriod.get(period) ?? transition;
+    let transition = transitions.get(key);
+    if (!transition) {
+      transition = locateOrbitSurfaceTransition(first, second, sampler as OrbitSurfaceSampler, sampleCount);
+      transitions.set(key, transition);
     }
+    const fallback = first.period === period ? first : second;
+    const sample = transition.samplesByPeriod.get(period) ?? fallback.sample;
+    const transitionPoint = transition.pointsByPeriod.get(period) ?? transition;
     const heights = sortedSurfaceHeights(sample, period);
     const height = finiteOr(heights[rank], fallback.heights[rank]);
     const vertex = periodValues.length;
@@ -1063,13 +747,10 @@ export function buildOrbitSurface(
     rankValues.push(rank);
     const chaosTransition = first.period === 0 || second.period === 0;
     dissolveValues.push(
-      chaosTransition || curveTransition
-        ? 0
-        : clamp01(sample.dissolve ?? fallback.sample.dissolve ?? 1),
+      chaosTransition ? 0 : clamp01(sample.dissolve ?? fallback.sample.dissolve ?? 1),
     );
     transitionVertices.set(vertexKey, vertex);
     if (chaosTransition) chaosTransitionVertices.add(vertex);
-    else periodTransitionVertices.add(vertex);
     return vertex;
   }
 
@@ -1283,7 +964,6 @@ function surfaceEdgeFades(
   vertexCount: number,
   indices: number[],
   chaosTransitionVertices: ReadonlySet<number>,
-  periodTransitionVertices: ReadonlySet<number>,
 ): Float32Array {
   const incidence = new Uint8Array(vertexCount);
   for (const index of indices) incidence[index] += 1;
@@ -1293,10 +973,8 @@ function surfaceEdgeFades(
   for (const edge of surfaceEdges(indices).values()) {
     if (edge.count !== 1) continue;
     if (
-      (chaosTransitionVertices.has(edge.first) &&
-        chaosTransitionVertices.has(edge.second)) ||
-      (periodTransitionVertices.has(edge.first) &&
-        periodTransitionVertices.has(edge.second))
+      chaosTransitionVertices.has(edge.first) &&
+      chaosTransitionVertices.has(edge.second)
     ) {
       continue;
     }
@@ -1320,11 +998,7 @@ function surfaceEdgeFades(
   }
 
   return Float32Array.from(rings, (ring, vertex) =>
-    incidence[vertex] === 0
-      ? 0
-      : periodTransitionVertices.has(vertex)
-        ? 1
-        : EDGE_FEATHER_LEVELS[ring]);
+    incidence[vertex] === 0 ? 0 : EDGE_FEATHER_LEVELS[ring]);
 }
 
 interface SurfaceEdge {
@@ -1358,58 +1032,4 @@ function finiteOr(value: number | undefined, fallback: number): number {
 
 function clamp01(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
-}
-
-function pointPolylineDistance(
-  x: number,
-  y: number,
-  points: readonly OrbitSurfaceProjectedPoint[],
-): number {
-  let nearest = Number.POSITIVE_INFINITY;
-  for (let index = 1; index < points.length; index += 1) {
-    const first = points[index - 1];
-    const second = points[index];
-    const dx = second.x - first.x;
-    const dy = second.y - first.y;
-    const lengthSquared = dx * dx + dy * dy;
-    const amount = lengthSquared <= Number.EPSILON
-      ? 0
-      : Math.max(0, Math.min(1,
-          ((x - first.x) * dx + (y - first.y) * dy) / lengthSquared));
-    nearest = Math.min(
-      nearest,
-      Math.hypot(x - (first.x + amount * dx), y - (first.y + amount * dy)),
-    );
-  }
-  return nearest;
-}
-
-function segmentIntersection(
-  first: OrbitSurfaceProjectedPoint,
-  second: OrbitSurfaceProjectedPoint,
-  curveFirst: OrbitSurfaceProjectedPoint,
-  curveSecond: OrbitSurfaceProjectedPoint,
-): (OrbitSurfaceProjectedPoint & { edgeAmount: number }) | null {
-  const edgeX = second.x - first.x;
-  const edgeY = second.y - first.y;
-  const curveX = curveSecond.x - curveFirst.x;
-  const curveY = curveSecond.y - curveFirst.y;
-  const determinant = edgeX * curveY - edgeY * curveX;
-  if (Math.abs(determinant) <= 1e-12) return null;
-  const offsetX = curveFirst.x - first.x;
-  const offsetY = curveFirst.y - first.y;
-  const edgeAmount = (offsetX * curveY - offsetY * curveX) / determinant;
-  const curveAmount = (offsetX * edgeY - offsetY * edgeX) / determinant;
-  if (
-    edgeAmount < -1e-9 || edgeAmount > 1 + 1e-9 ||
-    curveAmount < -1e-9 || curveAmount > 1 + 1e-9
-  ) {
-    return null;
-  }
-  const boundedAmount = Math.max(0, Math.min(1, edgeAmount));
-  return {
-    x: first.x + boundedAmount * edgeX,
-    y: first.y + boundedAmount * edgeY,
-    edgeAmount: boundedAmount,
-  };
 }
