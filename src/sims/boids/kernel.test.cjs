@@ -434,6 +434,16 @@ test("obstacle rasterisation is deterministic for identical layout params", () =
       `${layout} mask is deterministic`,
     );
     assert.deepEqual(
+      Array.from(first.obstacleNormalX),
+      Array.from(second.obstacleNormalX),
+      `${layout} crest normals are deterministic`,
+    );
+    assert.deepEqual(
+      Array.from(first.obstacleNormalY),
+      Array.from(second.obstacleNormalY),
+      `${layout} crest normals are deterministic`,
+    );
+    assert.deepEqual(
       Array.from(first.readState()),
       Array.from(second.readState()),
       `${layout} published state is deterministic`,
@@ -487,7 +497,51 @@ test("rendered obstacle silhouettes stay inside the collision surface margin", (
   }
 });
 
-test("obstacle body and rim values preserve documented channel ranges", () => {
+function rockSilhouetteSignature(kernel, obstacle, width, height) {
+  const radialSamples = [];
+  for (let sample = 0; sample < 72; sample += 1) {
+    const angle = (sample / 72) * Math.PI * 2;
+    let furthest = 0;
+    for (let radius = 0; radius <= obstacle.radius + 1; radius += 0.25) {
+      const x = Math.floor(
+        ((obstacle.x + Math.cos(angle) * radius) % width + width) % width,
+      );
+      const y = Math.floor(
+        ((obstacle.y + Math.sin(angle) * radius) % height + height) % height,
+      );
+      if (kernel.obstacleRaster[y * width + x] > 0) {
+        furthest = radius;
+      }
+    }
+    radialSamples.push(Math.round((furthest / obstacle.radius) * 64));
+  }
+  return radialSamples.join(",");
+}
+
+test("default rocks have individually varied silhouettes", () => {
+  const width = 640;
+  const height = 480;
+  const kernel = new BoidsKernel();
+  kernel.init(width, height, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.5,
+  });
+
+  assert.ok(kernel.obstacles.length > 1);
+  assert.ok(kernel.obstacles.every((obstacle) => obstacle.kind === "circle"));
+  const signatures = kernel.obstacles.map((obstacle) =>
+    rockSilhouetteSignature(kernel, obstacle, width, height)
+  );
+  assert.equal(
+    new Set(signatures).size,
+    signatures.length,
+    "no two default rocks share an identical normalised silhouette",
+  );
+});
+
+test("obstacle depth tones preserve channel ranges and stay below flock brightness", () => {
   const ranges = [
     [0, 1],
     [0, 1],
@@ -514,9 +568,51 @@ test("obstacle body and rim values preserve documented channel ranges", () => {
         assert.ok(kernel.readState()[offset + channel] >= min);
         assert.ok(kernel.readState()[offset + channel] <= max);
       }
+      assert.ok(kernel.readState()[offset] < 1, `${layout} stays below flock density`);
+      assert.ok(kernel.readState()[offset + 1] <= 0.42 + 1e-6);
     }
-    assert.deepEqual(tones, new Set([1, 2]), `${layout} publishes body and rim`);
+    assert.ok(tones.size >= 4, `${layout} publishes a visible depth gradient`);
+    assert.ok(Math.min(...tones) >= 1);
+    assert.ok(Math.max(...tones) <= 8);
   }
+});
+
+test("crest bias responds more strongly to incoming than departing flow", () => {
+  const width = 160;
+  const height = 120;
+  const kernel = new BoidsKernel();
+  kernel.init(width, height, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.5,
+  });
+
+  const obstacleCellIndex = Array.from(kernel.obstacleNormalX).findIndex(
+    (normalX, index) => Math.hypot(normalX, kernel.obstacleNormalY[index]) > 120,
+  );
+  assert.ok(obstacleCellIndex >= 0);
+  const cell = kernel.obstacleCells[obstacleCellIndex];
+  const cellX = cell % width;
+  const cellY = Math.floor(cell / width);
+  const normalX = kernel.obstacleNormalX[obstacleCellIndex] / 127;
+  const normalY = kernel.obstacleNormalY[obstacleCellIndex] / 127;
+  const sampleX = Math.floor(((cellX + normalX * 6) % width + width) % width);
+  const sampleY = Math.floor(((cellY + normalY * 6) % height + height) % height);
+  const offset = (sampleY * width + sampleX) * kernel.channelCount;
+
+  kernel.state.fill(0);
+  kernel.state[offset] = 1;
+  kernel.state[offset + 2] = -normalX;
+  kernel.state[offset + 3] = -normalY;
+  const incoming = kernel.sampleObstacleArrival(obstacleCellIndex);
+
+  kernel.state[offset + 2] = normalX;
+  kernel.state[offset + 3] = normalY;
+  const departing = kernel.sampleObstacleArrival(obstacleCellIndex);
+
+  assert.ok(incoming > 0.95);
+  assert.equal(departing, 0.3);
 });
 
 for (const layout of ["breakwaters", "rocks", "reef"]) {

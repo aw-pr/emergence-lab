@@ -50,9 +50,11 @@ const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
 export const OBSTACLE_RENDER_MARGIN = 3;
 const OBSTACLE_CELL_GUARD = Math.SQRT1_2;
-const OBSTACLE_RIM_WIDTH = 1.15;
-const OBSTACLE_BODY = [0.86, 0.08, -0.44, 0] as const;
-const OBSTACLE_RIM = [0.9, 0.55, -0.34, 0] as const;
+const OBSTACLE_DEPTH_LEVELS = 8;
+const OBSTACLE_CORE = [0.82, 0.04, -0.5, 0] as const;
+const OBSTACLE_CREST = [0.89, 0.42, -0.36, 0] as const;
+const OBSTACLE_ARRIVAL_DISTANCES = [6, 16, 28] as const;
+const OBSTACLE_ARRIVAL_LATERAL = [-4, 0, 4] as const;
 const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef"] as const;
 type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
 
@@ -91,6 +93,10 @@ function clamp(value: number, min: number, max: number): number {
     return max;
   }
   return value;
+}
+
+function lerp(from: number, to: number, amount: number): number {
+  return from + (to - from) * amount;
 }
 
 function numberParam(
@@ -354,6 +360,9 @@ export class BoidsKernel implements SimKernel {
   private obstacles: Obstacle[] = [];
   private obstacleRaster = new Uint8Array(0);
   private obstacleCells = new Uint32Array(0);
+  private obstacleNormalX = new Int8Array(0);
+  private obstacleNormalY = new Int8Array(0);
+  private obstacleArrival = new Float32Array(0);
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -729,6 +738,9 @@ export class BoidsKernel implements SimKernel {
     this.obstacles = [];
     this.obstacleRaster = new Uint8Array(0);
     this.obstacleCells = new Uint32Array(0);
+    this.obstacleNormalX = new Int8Array(0);
+    this.obstacleNormalY = new Int8Array(0);
+    this.obstacleArrival = new Float32Array(0);
   }
 
   private createObstacles(layout: ObstacleLayout, amount: number): Obstacle[] {
@@ -816,11 +828,16 @@ export class BoidsKernel implements SimKernel {
     if (this.obstacles.length === 0 || this.width === 0 || this.height === 0) {
       this.obstacleRaster = new Uint8Array(0);
       this.obstacleCells = new Uint32Array(0);
+      this.obstacleNormalX = new Int8Array(0);
+      this.obstacleNormalY = new Int8Array(0);
+      this.obstacleArrival = new Float32Array(0);
       return;
     }
 
     const raster = new Uint8Array(this.width * this.height);
     const cells: number[] = [];
+    const normalX: number[] = [];
+    const normalY: number[] = [];
     const layoutCode = OBSTACLE_LAYOUTS.indexOf(layout);
     const baseSeed =
       Math.imul(this.width, 0x45d9f3b) ^
@@ -834,6 +851,8 @@ export class BoidsKernel implements SimKernel {
         const pointY = y + 0.5;
         let nearestDistance = Number.POSITIVE_INFINITY;
         let nearestIndex = 0;
+        let nearestNormalX = 0;
+        let nearestNormalY = 0;
 
         for (let index = 0; index < this.obstacles.length; index += 1) {
           const surface = this.obstacleSurface(
@@ -845,6 +864,8 @@ export class BoidsKernel implements SimKernel {
           if (surface[0] < nearestDistance) {
             nearestDistance = surface[0];
             nearestIndex = index;
+            nearestNormalX = surface[1];
+            nearestNormalY = surface[2];
           }
         }
 
@@ -853,33 +874,108 @@ export class BoidsKernel implements SimKernel {
         }
 
         const obstacle = this.obstacles[nearestIndex];
+        const insetRatio = layout === "breakwaters" ? 0.26 : 0.42;
         const maximumInset = Math.max(
           OBSTACLE_CELL_GUARD,
-          Math.min(OBSTACLE_RENDER_MARGIN, obstacle.radius * 0.42),
+          Math.min(OBSTACLE_RENDER_MARGIN, obstacle.radius * insetRatio),
         );
-        const noise = fractalValueNoise(
+        const inset = this.obstacleRenderInset(
+          layout,
+          obstacle,
+          nearestIndex,
           pointX,
           pointY,
-          Math.max(2.2, obstacle.radius * 0.72),
-          baseSeed ^ Math.imul(nearestIndex + 1, 0x9e3779b1),
+          maximumInset,
+          baseSeed,
         );
-        const inset =
-          OBSTACLE_CELL_GUARD +
-          (maximumInset - OBSTACLE_CELL_GUARD) * noise;
         const renderedDistance = nearestDistance + inset;
         if (renderedDistance > 0) {
           continue;
         }
 
         const cell = y * this.width + x;
-        const tone = renderedDistance > -OBSTACLE_RIM_WIDTH ? 2 : 1;
+        const depth = clamp(
+          -renderedDistance / Math.max(2.5, obstacle.radius * 0.72),
+          0,
+          1,
+        );
+        const tone = 1 + Math.round((1 - depth) * (OBSTACLE_DEPTH_LEVELS - 1));
         raster[cell] = tone;
         cells.push(cell);
+        normalX.push(Math.round(nearestNormalX * 127));
+        normalY.push(Math.round(nearestNormalY * 127));
       }
     }
 
     this.obstacleRaster = raster;
     this.obstacleCells = Uint32Array.from(cells);
+    this.obstacleNormalX = Int8Array.from(normalX);
+    this.obstacleNormalY = Int8Array.from(normalY);
+    this.obstacleArrival = new Float32Array(cells.length);
+  }
+
+  private obstacleRenderInset(
+    layout: ObstacleLayout,
+    obstacle: Obstacle,
+    obstacleIndex: number,
+    pointX: number,
+    pointY: number,
+    maximumInset: number,
+    baseSeed: number,
+  ): number {
+    const range = maximumInset - OBSTACLE_CELL_GUARD;
+    if (range <= 0) {
+      return OBSTACLE_CELL_GUARD;
+    }
+
+    const relativeX = torusDelta(obstacle.x, pointX, this.width);
+    const relativeY = torusDelta(obstacle.y, pointY, this.height);
+    const phase = hashAngle(baseSeed, obstacleIndex + 31);
+
+    if (obstacle.kind === "capsule") {
+      const halfLength = Math.hypot(obstacle.halfX, obstacle.halfY);
+      const tangentX = obstacle.halfX / halfLength;
+      const tangentY = obstacle.halfY / halfLength;
+      const along = relativeX * tangentX + relativeY * tangentY;
+      const wavelength = Math.max(8, halfLength * (layout === "reef" ? 1.1 : 1.65));
+      const longWave = 0.5 + 0.5 * Math.sin((along / wavelength) * TWO_PI + phase);
+      const roughness = fractalValueNoise(
+        pointX,
+        pointY,
+        Math.max(5, obstacle.radius * (layout === "reef" ? 1.05 : 1.45)),
+        layout === "reef"
+          ? baseSeed ^ 0x517cc1b7
+          : baseSeed ^ Math.imul(obstacleIndex + 1, 0x9e3779b1),
+      );
+      const profile = layout === "reef"
+        ? longWave * 0.62 + roughness * 0.38
+        : longWave * 0.82 + roughness * 0.18;
+      const amplitude = layout === "reef" ? 0.72 : 0.46;
+      return OBSTACLE_CELL_GUARD + range * amplitude * profile;
+    }
+
+    const angle = Math.atan2(relativeY, relativeX);
+    const lobeCount = 3 + ((obstacleIndex * 5 + 2) % 6);
+    const lobes = 0.5 + 0.5 * Math.sin(angle * lobeCount + phase);
+    const roughness = fractalValueNoise(
+      pointX,
+      pointY,
+      Math.max(2.2, obstacle.radius * 0.58),
+      layout === "reef"
+        ? baseSeed ^ 0x517cc1b7
+        : baseSeed ^ Math.imul(obstacleIndex + 1, 0x9e3779b1),
+    );
+    let profile = lobes * 0.64 + roughness * 0.36;
+    if (layout === "reef") {
+      const formationAngle = Math.atan2(
+        pointY - this.height * 0.52,
+        pointX - this.width * 0.5,
+      );
+      const formation = 0.5 + 0.5 * Math.sin(formationAngle * 4 + phase * 0.25);
+      profile = profile * 0.68 + formation * 0.32;
+    }
+    const amplitude = 0.58 + ((obstacleIndex * 7) % 5) * 0.095;
+    return OBSTACLE_CELL_GUARD + range * amplitude * profile;
   }
 
   private obstacleSurface(
@@ -1093,15 +1189,61 @@ export class BoidsKernel implements SimKernel {
     }
 
     for (let index = 0; index < this.obstacleCells.length; index += 1) {
-      const offset = this.obstacleCells[index] * CHANNEL_COUNT;
-      const tone = this.obstacleRaster[this.obstacleCells[index]] === 2
-        ? OBSTACLE_RIM
-        : OBSTACLE_BODY;
-      this.state[offset] = tone[0];
-      this.state[offset + 1] = tone[1];
-      this.state[offset + 2] = tone[2];
-      this.state[offset + 3] = tone[3];
+      this.obstacleArrival[index] = this.sampleObstacleArrival(index);
     }
+
+    for (let index = 0; index < this.obstacleCells.length; index += 1) {
+      const cell = this.obstacleCells[index];
+      const offset = cell * CHANNEL_COUNT;
+      const depthCrest =
+        (this.obstacleRaster[cell] - 1) / (OBSTACLE_DEPTH_LEVELS - 1);
+      const crest = clamp(
+        depthCrest * (0.54 + this.obstacleArrival[index] * 0.46),
+        0,
+        1,
+      );
+      this.state[offset] = lerp(OBSTACLE_CORE[0], OBSTACLE_CREST[0], crest);
+      this.state[offset + 1] = lerp(OBSTACLE_CORE[1], OBSTACLE_CREST[1], crest);
+      this.state[offset + 2] = lerp(OBSTACLE_CORE[2], OBSTACLE_CREST[2], crest);
+      this.state[offset + 3] = lerp(OBSTACLE_CORE[3], OBSTACLE_CREST[3], crest);
+    }
+  }
+
+  private sampleObstacleArrival(obstacleCellIndex: number): number {
+    const cell = this.obstacleCells[obstacleCellIndex];
+    const cellX = cell % this.width;
+    const cellY = Math.floor(cell / this.width);
+    const normalX = this.obstacleNormalX[obstacleCellIndex] / 127;
+    const normalY = this.obstacleNormalY[obstacleCellIndex] / 127;
+    const tangentX = -normalY;
+    const tangentY = normalX;
+    let arrival = 0;
+
+    for (const distance of OBSTACLE_ARRIVAL_DISTANCES) {
+      for (const lateral of OBSTACLE_ARRIVAL_LATERAL) {
+        const sampleX = Math.floor(wrap(
+          cellX + normalX * distance + tangentX * lateral,
+          this.width,
+        ));
+        const sampleY = Math.floor(wrap(
+          cellY + normalY * distance + tangentY * lateral,
+          this.height,
+        ));
+        const offset = (sampleY * this.width + sampleX) * CHANNEL_COUNT;
+        const density = this.state[offset];
+        if (density <= 0) {
+          continue;
+        }
+        const inwardHeading = clamp(
+          -(this.state[offset + 2] * normalX + this.state[offset + 3] * normalY),
+          0,
+          1,
+        );
+        arrival = Math.max(arrival, density * (0.3 + inwardHeading * 0.7));
+      }
+    }
+
+    return arrival;
   }
 }
 
