@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   BoidsKernel,
+  MAX_CUSTOM_OBSTACLES,
   OBSTACLE_RENDER_MARGIN,
   selfTest,
 } = require("../../../.test-build/sims/boids/kernel.js");
@@ -97,6 +98,7 @@ test("metadata matches the renderer contract", () => {
     "breakwaters",
     "rocks",
     "reef",
+    "custom",
   ]);
 
   const obstacleAmount = kernel.paramSchema.find(
@@ -669,6 +671,137 @@ test("applyImpulse still changes heading with obstacles active", () => {
   twin.init(64, 64, params);
   twin.applyImpulse(32, 32, 30, 1);
   assert.deepEqual(Array.from(twin.readState()), after);
+});
+
+function customKernel(params = {}) {
+  const kernel = new BoidsKernel();
+  kernel.init(160, 120, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "custom",
+    obstacleAmount: 0.5,
+    ...params,
+  });
+  return kernel;
+}
+
+test("custom edit API places deterministic rocks and drag capsules", () => {
+  const first = customKernel();
+  const second = customKernel();
+
+  assert.equal(first.obstacles.length, 0);
+  assert.equal(first.placeCustomRock(30, 40), true);
+  assert.equal(first.placeCustomCapsule(70, 30, 110, 70), true);
+  second.placeCustomRock(30, 40);
+  second.placeCustomCapsule(70, 30, 110, 70);
+
+  assert.deepEqual(first.obstacles, second.obstacles);
+  assert.equal(first.obstacles[0].kind, "circle");
+  assert.equal(first.obstacles[0].x, 30);
+  assert.equal(first.obstacles[0].y, 40);
+  assert.equal(first.obstacles[1].kind, "capsule");
+  assert.equal(first.obstacles[1].x, 90);
+  assert.equal(first.obstacles[1].y, 50);
+  assert.equal(first.obstacles[1].halfX, 20);
+  assert.equal(first.obstacles[1].halfY, 20);
+  assert.ok(Math.abs(first.obstacles[1].radius - 1.68) < 1e-9);
+  assert.ok(first.obstacleCells.length > 0);
+  assert.deepEqual(
+    Array.from(first.obstacleRaster),
+    Array.from(second.obstacleRaster),
+  );
+
+  const small = customKernel({ obstacleAmount: 0.1 });
+  const large = customKernel({ obstacleAmount: 1 });
+  small.placeCustomRock(30, 40);
+  large.placeCustomRock(30, 40);
+  assert.ok(large.obstacles[0].radius > small.obstacles[0].radius);
+});
+
+test("custom edit API removes the clicked obstacle and clears the field", () => {
+  const kernel = customKernel();
+  kernel.placeCustomRock(30, 40);
+  kernel.placeCustomCapsule(70, 30, 110, 70);
+
+  assert.equal(kernel.removeCustomObstacleAt(30, 40), true);
+  assert.equal(kernel.obstacles.length, 1);
+  assert.equal(kernel.obstacles[0].kind, "capsule");
+  assert.equal(kernel.removeCustomObstacleAt(5, 5), false);
+  assert.equal(kernel.clearCustomObstacles(), true);
+  assert.equal(kernel.obstacles.length, 0);
+  assert.equal(kernel.obstacleCells.length, 0);
+});
+
+test("custom obstacle bound replaces the oldest obstacle first", () => {
+  const kernel = customKernel();
+  for (let index = 0; index < MAX_CUSTOM_OBSTACLES + 2; index += 1) {
+    kernel.placeCustomRock(5 + index, 20 + (index % 4) * 20);
+  }
+
+  assert.equal(kernel.obstacles.length, MAX_CUSTOM_OBSTACLES);
+  assert.equal(kernel.obstacles[0].x, 7);
+  assert.equal(
+    kernel.obstacles[MAX_CUSTOM_OBSTACLES - 1].x,
+    5 + MAX_CUSTOM_OBSTACLES + 1,
+  );
+});
+
+test("live custom edits preserve boid arrays except collision resolution", () => {
+  const kernel = customKernel({ boidCount: 4 });
+  kernel.x.set([50, 10, 130, 140]);
+  kernel.y.set([50, 10, 90, 20]);
+  kernel.vx.set([1, 0.5, -0.5, 0.25]);
+  kernel.vy.set([0, -0.25, 0.75, -1]);
+  const x = kernel.x;
+  const y = kernel.y;
+  const vx = kernel.vx;
+  const vy = kernel.vy;
+  const before = {
+    x: Array.from(x),
+    y: Array.from(y),
+    vx: Array.from(vx),
+    vy: Array.from(vy),
+  };
+
+  kernel.placeCustomRock(50, 50);
+
+  assert.equal(kernel.x, x);
+  assert.equal(kernel.y, y);
+  assert.equal(kernel.vx, vx);
+  assert.equal(kernel.vy, vy);
+  assert.notDeepEqual([kernel.x[0], kernel.y[0]], [before.x[0], before.y[0]]);
+  assert.deepEqual(Array.from(kernel.x).slice(1), before.x.slice(1));
+  assert.deepEqual(Array.from(kernel.y).slice(1), before.y.slice(1));
+  assert.deepEqual(Array.from(kernel.vx).slice(1), before.vx.slice(1));
+  assert.deepEqual(Array.from(kernel.vy).slice(1), before.vy.slice(1));
+});
+
+test("preset layouts ignore custom edits and the custom field survives switching", () => {
+  const edited = customKernel();
+  edited.placeCustomRock(25, 35);
+  edited.placeCustomCapsule(60, 20, 100, 50);
+  const customObstacles = structuredClone(edited.obstacles);
+
+  const presetParams = {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.5,
+  };
+  edited.init(160, 120, presetParams);
+  const cleanPreset = new BoidsKernel();
+  cleanPreset.init(160, 120, presetParams);
+  assert.deepEqual(edited.obstacles, cleanPreset.obstacles);
+  assert.deepEqual(
+    Array.from(edited.readState()),
+    Array.from(cleanPreset.readState()),
+  );
+
+  edited.init(160, 120, {
+    ...presetParams,
+    obstacleLayout: "custom",
+  });
+  assert.deepEqual(edited.obstacles, customObstacles);
 });
 
 test("destroy releases state and leaves step/readState safe", () => {

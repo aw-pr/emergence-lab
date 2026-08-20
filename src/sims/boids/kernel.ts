@@ -55,8 +55,11 @@ const OBSTACLE_CORE = [0.82, 0.04, -0.5, 0] as const;
 const OBSTACLE_CREST = [0.89, 0.42, -0.36, 0] as const;
 const OBSTACLE_ARRIVAL_DISTANCES = [6, 16, 28] as const;
 const OBSTACLE_ARRIVAL_LATERAL = [-4, 0, 4] as const;
-const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef"] as const;
+const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef", "custom"] as const;
 type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
+
+/** Custom fields stay bounded so live raster rebuilds cannot grow without limit. */
+export const MAX_CUSTOM_OBSTACLES = 64;
 
 type CircleObstacle = {
   kind: "circle";
@@ -229,7 +232,7 @@ export class BoidsKernel implements SimKernel {
       type: "enum",
       default: "reef",
       options: OBSTACLE_LAYOUTS,
-      info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. None leaves the released open field untouched. Changing it resets the flock.",
+      info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. Custom starts with an empty field for drawing your own obstacles. None leaves the released open field untouched. Changing it resets the flock.",
     },
     {
       key: "obstacleAmount",
@@ -357,7 +360,10 @@ export class BoidsKernel implements SimKernel {
   private alignment = DEFAULT_ALIGNMENT;
   private cohesion = DEFAULT_COHESION;
   private separation = DEFAULT_SEPARATION;
+  private obstacleLayout: ObstacleLayout = "reef";
+  private obstacleAmount = 0.5;
   private obstacles: Obstacle[] = [];
+  private customObstacles: Obstacle[] = [];
   private obstacleRaster = new Uint8Array(0);
   private obstacleCells = new Uint32Array(0);
   private obstacleNormalX = new Int8Array(0);
@@ -410,7 +416,11 @@ export class BoidsKernel implements SimKernel {
     );
     const obstacleLayout = obstacleLayoutParam(params);
     const obstacleAmount = clamp(numberParam(params, "obstacleAmount", 0.5), 0.1, 1);
-    this.obstacles = this.createObstacles(obstacleLayout, obstacleAmount);
+    this.obstacleLayout = obstacleLayout;
+    this.obstacleAmount = obstacleAmount;
+    this.obstacles = obstacleLayout === "custom"
+      ? this.customObstacles.slice()
+      : this.createObstacles(obstacleLayout, obstacleAmount);
     // Optional run-to-run variety: a non-zero seed shifts the initial flock so
     // each load/reset differs. Absent (0), seeding stays a pure function of the
     // grid size and boid count, keeping init reproducible.
@@ -723,6 +733,91 @@ export class BoidsKernel implements SimKernel {
     this.rasterise();
   }
 
+  getObstacleEditBounds(): readonly [number, number] {
+    return [this.width, this.height];
+  }
+
+  placeCustomRock(x: number, y: number): boolean {
+    if (!this.canEditCustomObstacles(x, y)) {
+      return false;
+    }
+
+    const radius = Math.min(this.width, this.height) *
+      (0.012 + this.obstacleAmount * 0.018);
+    this.appendCustomObstacle({
+      kind: "circle",
+      x: clamp(x, 0, Math.max(0, this.width - 1e-6)),
+      y: clamp(y, 0, Math.max(0, this.height - 1e-6)),
+      radius,
+    });
+    return true;
+  }
+
+  placeCustomCapsule(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): boolean {
+    if (
+      !this.canEditCustomObstacles(startX, startY) ||
+      !Number.isFinite(endX) ||
+      !Number.isFinite(endY)
+    ) {
+      return false;
+    }
+
+    const x1 = clamp(startX, 0, Math.max(0, this.width - 1e-6));
+    const y1 = clamp(startY, 0, Math.max(0, this.height - 1e-6));
+    const x2 = clamp(endX, 0, Math.max(0, this.width - 1e-6));
+    const y2 = clamp(endY, 0, Math.max(0, this.height - 1e-6));
+    const halfX = (x2 - x1) * 0.5;
+    const halfY = (y2 - y1) * 0.5;
+    if (Math.hypot(halfX, halfY) < 0.5) {
+      return this.placeCustomRock(x1, y1);
+    }
+
+    const radius = Math.min(this.width, this.height) *
+      (0.008 + this.obstacleAmount * 0.012);
+    this.appendCustomObstacle({
+      kind: "capsule",
+      x: x1 + halfX,
+      y: y1 + halfY,
+      halfX,
+      halfY,
+      radius,
+    });
+    return true;
+  }
+
+  removeCustomObstacleAt(x: number, y: number): boolean {
+    if (!this.canEditCustomObstacles(x, y)) {
+      return false;
+    }
+
+    for (let index = this.customObstacles.length - 1; index >= 0; index -= 1) {
+      if (this.obstacleSurface(this.customObstacles[index], x, y, 0)[0] <= 0) {
+        this.customObstacles.splice(index, 1);
+        this.rebuildCustomObstacles(false);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  clearCustomObstacles(): boolean {
+    if (this.obstacleLayout !== "custom") {
+      return false;
+    }
+    if (this.customObstacles.length === 0) {
+      return true;
+    }
+
+    this.customObstacles.length = 0;
+    this.rebuildCustomObstacles(false);
+    return true;
+  }
+
   destroy(): void {
     this.width = 0;
     this.height = 0;
@@ -744,7 +839,12 @@ export class BoidsKernel implements SimKernel {
   }
 
   private createObstacles(layout: ObstacleLayout, amount: number): Obstacle[] {
-    if (layout === "none" || this.width === 0 || this.height === 0) {
+    if (
+      layout === "none" ||
+      layout === "custom" ||
+      this.width === 0 ||
+      this.height === 0
+    ) {
       return [];
     }
 
@@ -822,6 +922,33 @@ export class BoidsKernel implements SimKernel {
       }
     }
     return obstacles;
+  }
+
+  private canEditCustomObstacles(x: number, y: number): boolean {
+    return this.obstacleLayout === "custom" &&
+      this.width > 0 &&
+      this.height > 0 &&
+      Number.isFinite(x) &&
+      Number.isFinite(y);
+  }
+
+  private appendCustomObstacle(obstacle: Obstacle): void {
+    if (this.customObstacles.length >= MAX_CUSTOM_OBSTACLES) {
+      this.customObstacles.shift();
+    }
+    this.customObstacles.push(obstacle);
+    this.rebuildCustomObstacles(true);
+  }
+
+  private rebuildCustomObstacles(resolvePenetration: boolean): void {
+    this.obstacles = this.customObstacles.slice();
+    this.buildObstacleRaster("custom", this.obstacleAmount);
+    if (resolvePenetration) {
+      for (let index = 0; index < this.boidCount; index += 1) {
+        this.resolveObstaclePenetration(index);
+      }
+    }
+    this.rasterise();
   }
 
   private buildObstacleRaster(layout: ObstacleLayout, amount: number): void {
