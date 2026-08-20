@@ -60,6 +60,8 @@ type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
 
 /** Custom fields stay bounded so live raster rebuilds cannot grow without limit. */
 export const MAX_CUSTOM_OBSTACLES = 64;
+/** Shorter drags are treated as taps, avoiding near-zero breakwater slivers. */
+export const CUSTOM_OBSTACLE_DRAG_THRESHOLD = 8;
 
 type CircleObstacle = {
   kind: "circle";
@@ -78,6 +80,10 @@ type CapsuleObstacle = {
 };
 
 type Obstacle = CircleObstacle | CapsuleObstacle;
+
+function isFiniteRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function hashAngle(a: number, b: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b);
@@ -737,6 +743,67 @@ export class BoidsKernel implements SimKernel {
     return [this.width, this.height];
   }
 
+  getCustomObstacles(): readonly Obstacle[] {
+    return this.customObstacles.map((obstacle) => ({ ...obstacle }));
+  }
+
+  restoreCustomObstacles(snapshot: readonly unknown[]): boolean {
+    if (!Array.isArray(snapshot) || this.width === 0 || this.height === 0) {
+      return false;
+    }
+
+    const restored: Obstacle[] = [];
+    const first = Math.max(0, snapshot.length - MAX_CUSTOM_OBSTACLES);
+    for (let index = first; index < snapshot.length; index += 1) {
+      const candidate = snapshot[index];
+      if (!isFiniteRecord(candidate)) {
+        return false;
+      }
+
+      const { kind, x, y, radius } = candidate;
+      if (
+        (kind !== "circle" && kind !== "capsule") ||
+        typeof x !== "number" ||
+        !Number.isFinite(x) ||
+        typeof y !== "number" ||
+        !Number.isFinite(y) ||
+        typeof radius !== "number" ||
+        !Number.isFinite(radius) ||
+        radius <= 0
+      ) {
+        return false;
+      }
+
+      const base = {
+        x: clamp(x, 0, Math.max(0, this.width - 1e-6)),
+        y: clamp(y, 0, Math.max(0, this.height - 1e-6)),
+        radius: clamp(radius, 0.25, Math.max(this.width, this.height)),
+      };
+      if (kind === "circle") {
+        restored.push({ kind, ...base });
+        continue;
+      }
+
+      const { halfX, halfY } = candidate;
+      if (
+        typeof halfX !== "number" ||
+        !Number.isFinite(halfX) ||
+        typeof halfY !== "number" ||
+        !Number.isFinite(halfY) ||
+        Math.hypot(halfX, halfY) <= 0
+      ) {
+        return false;
+      }
+      restored.push({ kind, ...base, halfX, halfY });
+    }
+
+    this.customObstacles = restored;
+    if (this.obstacleLayout === "custom") {
+      this.rebuildCustomObstacles(true);
+    }
+    return true;
+  }
+
   placeCustomRock(x: number, y: number): boolean {
     if (!this.canEditCustomObstacles(x, y)) {
       return false;
@@ -771,11 +838,14 @@ export class BoidsKernel implements SimKernel {
     const y1 = clamp(startY, 0, Math.max(0, this.height - 1e-6));
     const x2 = clamp(endX, 0, Math.max(0, this.width - 1e-6));
     const y2 = clamp(endY, 0, Math.max(0, this.height - 1e-6));
-    const halfX = (x2 - x1) * 0.5;
-    const halfY = (y2 - y1) * 0.5;
-    if (Math.hypot(halfX, halfY) < 0.5) {
+    const deltaX = x2 - x1;
+    const deltaY = y2 - y1;
+    if (Math.hypot(deltaX, deltaY) < CUSTOM_OBSTACLE_DRAG_THRESHOLD) {
       return this.placeCustomRock(x1, y1);
     }
+
+    const halfX = deltaX * 0.5;
+    const halfY = deltaY * 0.5;
 
     const radius = Math.min(this.width, this.height) *
       (0.008 + this.obstacleAmount * 0.012);

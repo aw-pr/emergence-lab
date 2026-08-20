@@ -4,6 +4,7 @@ const BOUNDS_PREFIX = "el:bounds";
 const VALUES_PREFIX = "el:values";
 const RESOLUTION_PREFIX = "el:resolution";
 const SECTIONS_PREFIX = "el:sections";
+const CUSTOM_OBSTACLES_PREFIX = "el:custom-obstacles";
 
 function readStorage(key: string): string | null {
   try {
@@ -122,6 +123,30 @@ export function saveValues(
 
 export function clearValues(slug: string): void {
   removeStorage(valuesKey(slug));
+}
+
+function customObstaclesKey(slug: string): string {
+  return `${CUSTOM_OBSTACLES_PREFIX}:${slug}`;
+}
+
+export function loadCustomObstacleField(slug: string): readonly unknown[] | null {
+  const raw = readStorage(customObstaclesKey(slug));
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCustomObstacleField(
+  slug: string,
+  obstacles: readonly unknown[],
+): void {
+  writeStorage(customObstaclesKey(slug), JSON.stringify(obstacles));
 }
 
 /**

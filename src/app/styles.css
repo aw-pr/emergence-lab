@@ -451,6 +451,10 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
+.boids-obstacle-tools[hidden] {
+  display: none;
+}
+
 .fractal-hud__zoom {
   min-width: 78px;
   padding: 6px 9px 6px 18px;
@@ -487,6 +491,12 @@ code {
   color: rgba(225, 248, 255, 0.86);
   font: 500 16px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
   cursor: pointer;
+}
+
+.boids-obstacle-tools__clear {
+  width: auto;
+  padding: 0 10px;
+  font-size: 11px;
 }
 
 .fractal-hud__button:last-child {

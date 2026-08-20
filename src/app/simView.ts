@@ -20,10 +20,16 @@ import {
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
-import { loadRenderOptions, loadResolution } from "./persistence.ts";
+import {
+  loadCustomObstacleField,
+  loadRenderOptions,
+  loadResolution,
+  saveCustomObstacleField,
+} from "./persistence.ts";
 
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
 const LIVE_MODEL_SOURCE = "live";
+const dismissedCustomObstacleHints = new Set<string>();
 
 interface BoidsObstacleEditor {
   placeCustomRock(x: number, y: number): boolean;
@@ -34,6 +40,9 @@ interface BoidsObstacleEditor {
     endY: number,
   ): boolean;
   removeCustomObstacleAt(x: number, y: number): boolean;
+  clearCustomObstacles(): boolean;
+  getCustomObstacles(): readonly unknown[];
+  restoreCustomObstacles(snapshot: readonly unknown[]): boolean;
 }
 
 interface PointerCellMapper {
@@ -518,6 +527,49 @@ export async function renderSimView(
     qualityProfile,
   });
 
+  const obstacleEditor = slug === "boids"
+    ? kernel as SimKernel & BoidsObstacleEditor
+    : undefined;
+  if (obstacleEditor) {
+    const persisted = loadCustomObstacleField(slug);
+    if (persisted) {
+      obstacleEditor.restoreCustomObstacles(persisted);
+    }
+  }
+
+  let obstacleTools: BoidsObstacleTools | undefined;
+  const persistObstacleField = (): void => {
+    if (!obstacleEditor) return;
+    saveCustomObstacleField(slug, obstacleEditor.getCustomObstacles());
+  };
+  const finishObstacleEdit = (edited: boolean): boolean => {
+    if (!edited) return false;
+    persistObstacleField();
+    dismissedCustomObstacleHints.add(slug);
+    obstacleTools?.hideHint();
+    return true;
+  };
+  if (obstacleEditor) {
+    obstacleTools = buildBoidsObstacleTools({
+      hintDismissed: () => dismissedCustomObstacleHints.has(slug),
+      onDismissHint: () => {
+        dismissedCustomObstacleHints.add(slug);
+        obstacleTools?.hideHint();
+      },
+      onClear: () => {
+        const hadObstacles = obstacleEditor.getCustomObstacles().length > 0;
+        if (obstacleEditor.clearCustomObstacles()) {
+          persistObstacleField();
+          if (hadObstacles) {
+            dismissedCustomObstacleHints.add(slug);
+            obstacleTools?.hideHint();
+          }
+        }
+      },
+    });
+    layout.stage.insertBefore(obstacleTools.root, layout.legend);
+  }
+
   const controls = new ControlsPanel({
     slug,
     container: layout.sidebar,
@@ -572,6 +624,7 @@ export async function renderSimView(
         renderer.setDisplayOptions(displayOptions);
       },
       onParamChange: (next) => {
+        obstacleTools?.setCustomMode(next.obstacleLayout === "custom");
         renderer.updateParams(next);
       },
       onResolutionChange: (preset) => {
@@ -582,6 +635,10 @@ export async function renderSimView(
       },
     },
   });
+
+  obstacleTools?.setCustomMode(
+    controls.getParams().obstacleLayout === "custom",
+  );
 
   layout.sidebar.prepend(layout.drawerHandle);
 
@@ -614,8 +671,7 @@ export async function renderSimView(
     // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
     layout.canvas.classList.add("sim-view__canvas--interactive");
     let pointerTarget: PointerImpulseTarget = renderer;
-    if (slug === "boids") {
-      const editor = kernel as SimKernel & BoidsObstacleEditor;
+    if (obstacleEditor) {
       // Renderer owns the canvas-to-grid contract, including letterboxing and
       // the WebGL Y flip. Delegate to it so custom edits and impulses coincide.
       const pointerMapper = renderer as unknown as PointerCellMapper;
@@ -634,20 +690,33 @@ export async function renderSimView(
           controls.getParams().obstacleLayout === "custom",
         placeCustomRock: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
-          return point ? editor.placeCustomRock(point[0], point[1]) : false;
+          return finishObstacleEdit(
+            point
+              ? obstacleEditor.placeCustomRock(point[0], point[1])
+              : false,
+          );
         },
         placeCustomCapsule: (startX, startY, endX, endY) => {
           const start = obstaclePoint(startX, startY);
           const end = obstaclePoint(endX, endY);
-          return start && end
-            ? editor.placeCustomCapsule(start[0], start[1], end[0], end[1])
-            : false;
+          return finishObstacleEdit(
+            start && end
+              ? obstacleEditor.placeCustomCapsule(
+                  start[0],
+                  start[1],
+                  end[0],
+                  end[1],
+                )
+              : false,
+          );
         },
         removeCustomObstacleAt: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
-          return point
-            ? editor.removeCustomObstacleAt(point[0], point[1])
-            : false;
+          return finishObstacleEdit(
+            point
+              ? obstacleEditor.removeCustomObstacleAt(point[0], point[1])
+              : false,
+          );
         },
       };
     }
@@ -793,6 +862,65 @@ export async function renderSimView(
       controls.dispose();
     },
     toggleImmersive,
+  };
+}
+
+interface BoidsObstacleTools {
+  root: HTMLElement;
+  setCustomMode(enabled: boolean): void;
+  hideHint(): void;
+}
+
+function buildBoidsObstacleTools(options: {
+  hintDismissed(): boolean;
+  onDismissHint(): void;
+  onClear(): void;
+}): BoidsObstacleTools {
+  const root = document.createElement("div");
+  root.className = "fractal-hud boids-obstacle-tools";
+  root.setAttribute("aria-label", "Custom obstacle tools");
+
+  const hint = document.createElement("output");
+  hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
+  hint.value = "Click to place a rock · Drag for a breakwater · Click a rock to remove";
+  root.appendChild(hint);
+
+  const controls = document.createElement("div");
+  controls.className = "fractal-hud__controls";
+
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "fractal-hud__button";
+  dismiss.textContent = "×";
+  dismiss.setAttribute("aria-label", "Dismiss obstacle drawing hint");
+  dismiss.addEventListener("click", options.onDismissHint);
+  controls.appendChild(dismiss);
+
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "fractal-hud__button boids-obstacle-tools__clear";
+  clear.textContent = "Clear obstacles";
+  clear.addEventListener("click", options.onClear);
+  controls.appendChild(clear);
+  root.appendChild(controls);
+
+  const hideHint = (): void => {
+    hint.hidden = true;
+    dismiss.hidden = true;
+  };
+
+  return {
+    root,
+    setCustomMode(enabled) {
+      root.hidden = !enabled;
+      if (!enabled || options.hintDismissed()) {
+        hideHint();
+      } else {
+        hint.hidden = false;
+        dismiss.hidden = false;
+      }
+    },
+    hideHint,
   };
 }
 
