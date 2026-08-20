@@ -58,7 +58,7 @@ const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef", "custom"] as c
 type ObstacleLayout = (typeof OBSTACLE_LAYOUTS)[number];
 
 /** Composed fields stay bounded so live raster rebuilds cannot grow without limit. */
-export const MAX_CUSTOM_OBSTACLES = 64;
+export const MAX_CUSTOM_OBSTACLES = 96;
 /** Shorter drags are treated as taps, avoiding near-zero breakwater slivers. */
 export const CUSTOM_OBSTACLE_DRAG_THRESHOLD = 8;
 
@@ -746,13 +746,26 @@ export class BoidsKernel implements SimKernel {
     return true;
   }
 
+  /**
+   * Grid-unit spacing between successive rocks in a pointer-drawn boulder
+   * line: close enough to read as one arc, open enough that a full-width
+   * drag stays well inside the composed obstacle cap.
+   */
+  customRockTrailSpacing(): number {
+    return this.customRockRadius() * 1.6;
+  }
+
+  private customRockRadius(): number {
+    return Math.min(this.width, this.height) *
+      (0.012 + this.obstacleAmount * 0.018);
+  }
+
   placeCustomRock(x: number, y: number): boolean {
     if (!this.canEditCustomObstacles(x, y)) {
       return false;
     }
 
-    const radius = Math.min(this.width, this.height) *
-      (0.012 + this.obstacleAmount * 0.018);
+    const radius = this.customRockRadius();
     return this.appendCustomObstacle({
       kind: "circle",
       x: clamp(x, 0, Math.max(0, this.width - 1e-6)),
