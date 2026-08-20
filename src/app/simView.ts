@@ -33,12 +33,7 @@ const dismissedCustomObstacleHints = new Set<string>();
 
 interface BoidsObstacleEditor {
   placeCustomRock(x: number, y: number): boolean;
-  placeCustomCapsule(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-  ): boolean;
+  customRockTrailSpacing(): number;
   removeCustomObstacleAt(x: number, y: number): boolean;
   clearCustomObstacles(): boolean;
   getCustomObstacles(): readonly unknown[];
@@ -678,6 +673,7 @@ export async function renderSimView(
         const point = pointerMapper.pointerToCell(clientX, clientY);
         return point ? [point.x, point.y] : undefined;
       };
+      let lastTrailPoint: readonly [number, number] | undefined;
       pointerTarget = {
         editsObstacles: () => true,
         placeCustomRock: (clientX, clientY) => {
@@ -688,19 +684,23 @@ export async function renderSimView(
               : false,
           );
         },
-        placeCustomCapsule: (startX, startY, endX, endY) => {
-          const start = obstaclePoint(startX, startY);
-          const end = obstaclePoint(endX, endY);
-          return finishObstacleEdit(
-            start && end
-              ? obstacleEditor.placeCustomCapsule(
-                  start[0],
-                  start[1],
-                  end[0],
-                  end[1],
-                )
-              : false,
-          );
+        beginCustomTrail: () => {
+          lastTrailPoint = undefined;
+        },
+        placeCustomTrailPoint: (clientX, clientY) => {
+          const point = obstaclePoint(clientX, clientY);
+          if (!point) return false;
+          if (lastTrailPoint) {
+            const spacing = obstacleEditor.customRockTrailSpacing();
+            const travelled = Math.hypot(
+              point[0] - lastTrailPoint[0],
+              point[1] - lastTrailPoint[1],
+            );
+            if (travelled < spacing) return false;
+          }
+          const placed = obstacleEditor.placeCustomRock(point[0], point[1]);
+          if (placed) lastTrailPoint = point;
+          return finishObstacleEdit(placed);
         },
         removeCustomObstacleAt: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
@@ -873,7 +873,7 @@ function buildBoidsObstacleTools(options: {
 
   const hint = document.createElement("output");
   hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
-  hint.value = "Click to drop a boulder · Drag for a breakwater · Click a dropped boulder to remove";
+  hint.value = "Click to drop a boulder · Hold and drag for a boulder line · Click a dropped boulder to remove";
   root.appendChild(hint);
 
   const controls = document.createElement("div");
