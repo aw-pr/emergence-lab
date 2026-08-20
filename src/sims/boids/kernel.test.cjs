@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   BoidsKernel,
+  CUSTOM_OBSTACLE_DRAG_THRESHOLD,
   MAX_CUSTOM_OBSTACLES,
   OBSTACLE_RENDER_MARGIN,
   selfTest,
@@ -685,6 +686,32 @@ function customKernel(params = {}) {
   return kernel;
 }
 
+test("short custom drags place rocks instead of sliver capsules", () => {
+  const kernel = customKernel();
+
+  assert.equal(
+    kernel.placeCustomCapsule(
+      30,
+      40,
+      30 + CUSTOM_OBSTACLE_DRAG_THRESHOLD - 0.01,
+      40,
+    ),
+    true,
+  );
+  assert.equal(kernel.obstacles[0].kind, "circle");
+
+  assert.equal(
+    kernel.placeCustomCapsule(
+      60,
+      40,
+      60 + CUSTOM_OBSTACLE_DRAG_THRESHOLD,
+      40,
+    ),
+    true,
+  );
+  assert.equal(kernel.obstacles[1].kind, "capsule");
+});
+
 test("custom edit API places deterministic rocks and drag capsules", () => {
   const first = customKernel();
   const second = customKernel();
@@ -730,6 +757,38 @@ test("custom edit API removes the clicked obstacle and clears the field", () => 
   assert.equal(kernel.clearCustomObstacles(), true);
   assert.equal(kernel.obstacles.length, 0);
   assert.equal(kernel.obstacleCells.length, 0);
+
+  kernel.init(160, 120, {
+    boidCount: 30,
+    initialFlocks: 0,
+    obstacleLayout: "custom",
+    obstacleAmount: 0.5,
+  });
+  assert.equal(kernel.obstacles.length, 0);
+});
+
+test("custom obstacle snapshots survive flock-resetting parameter changes", () => {
+  const kernel = customKernel();
+  kernel.placeCustomRock(25, 35);
+  kernel.placeCustomCapsule(60, 20, 100, 50);
+  const snapshot = kernel.getCustomObstacles();
+
+  kernel.init(160, 120, {
+    boidCount: 48,
+    initialFlocks: 0,
+    visualRadius: 32,
+    separationRadius: 12,
+    obstacleLayout: "custom",
+    obstacleAmount: 0.5,
+  });
+  assert.deepEqual(kernel.obstacles, snapshot);
+
+  const reloaded = customKernel({ boidCount: 48, visualRadius: 32 });
+  assert.equal(reloaded.restoreCustomObstacles(snapshot), true);
+  assert.deepEqual(reloaded.obstacles, snapshot);
+
+  snapshot[0].x = 120;
+  assert.notEqual(reloaded.obstacles[0].x, snapshot[0].x);
 });
 
 test("custom obstacle bound replaces the oldest obstacle first", () => {
