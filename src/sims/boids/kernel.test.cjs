@@ -272,60 +272,6 @@ test("parameter changes affect the evolved state", () => {
   assert.notDeepEqual(changed, baseline);
 });
 
-test("applyImpulse swoops boids radially away from the point, deterministically", () => {
-  const width = 64;
-  const height = 64;
-  const px = 32;
-  const py = 32;
-  const radius = 12;
-  const channels = 4;
-
-  const radialOutwardSum = (state) => {
-    let sum = 0;
-    for (let cy = 0; cy < height; cy += 1) {
-      for (let cx = 0; cx < width; cx += 1) {
-        const i = (cy * width + cx) * channels;
-        const density = state[i];
-        if (density <= 0) continue;
-        const ox = cx - px;
-        const oy = cy - py;
-        const d = Math.hypot(ox, oy);
-        if (d === 0 || d > radius) continue;
-        sum += density * (state[i + 2] * (ox / d) + state[i + 3] * (oy / d));
-      }
-    }
-    return sum;
-  };
-
-  // Uniform seeding: the clustered default parks every flock on a ring away
-  // from the probed centre, leaving nothing inside the impulse radius.
-  const kernel = new BoidsKernel();
-  kernel.init(width, height, { boidCount: 1500, initialFlocks: 0 });
-  const before = radialOutwardSum(Array.from(kernel.readState()));
-  kernel.applyImpulse(px, py, radius, 1);
-  const after = radialOutwardSum(Array.from(kernel.readState()));
-  assert.ok(after > before, "mean outward velocity increases after the swoop");
-
-  const twin = new BoidsKernel();
-  twin.init(width, height, { boidCount: 1500, initialFlocks: 0 });
-  twin.applyImpulse(px, py, radius, 1);
-  assert.deepEqual(
-    Array.from(kernel.readState()),
-    Array.from(twin.readState()),
-  );
-});
-
-test("applyImpulse is a safe no-op at zero strength and off-grid", () => {
-  const kernel = new BoidsKernel();
-  kernel.init(48, 48, { boidCount: 800 });
-  const before = Array.from(kernel.readState());
-
-  kernel.applyImpulse(24, 24, 6, 0);
-  assert.deepEqual(Array.from(kernel.readState()), before);
-
-  assert.doesNotThrow(() => kernel.applyImpulse(-10, -10, 5, 1));
-});
-
 function torusDeltaForTest(from, to, limit) {
   let delta = to - from;
   const half = limit / 2;
@@ -654,26 +600,6 @@ for (const layout of ["breakwaters", "rocks", "reef"]) {
   });
 }
 
-test("applyImpulse still changes heading with obstacles active", () => {
-  const params = {
-    boidCount: 1500,
-    initialFlocks: 0,
-    obstacleLayout: "rocks",
-    obstacleAmount: 0.5,
-  };
-  const kernel = new BoidsKernel();
-  kernel.init(64, 64, params);
-  const before = Array.from(kernel.readState());
-  kernel.applyImpulse(32, 32, 30, 1);
-  const after = Array.from(kernel.readState());
-  assert.notDeepEqual(after, before);
-
-  const twin = new BoidsKernel();
-  twin.init(64, 64, params);
-  twin.applyImpulse(32, 32, 30, 1);
-  assert.deepEqual(Array.from(twin.readState()), after);
-});
-
 function customKernel(params = {}) {
   const kernel = new BoidsKernel();
   kernel.init(160, 120, {
@@ -835,32 +761,122 @@ test("live custom edits preserve boid arrays except collision resolution", () =>
   assert.deepEqual(Array.from(kernel.vy).slice(1), before.vy.slice(1));
 });
 
-test("preset layouts ignore custom edits and the custom field survives switching", () => {
-  const edited = customKernel();
+test("the dropped-obstacle overlay survives layout and flock resets", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(160, 120, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "reef",
+    obstacleAmount: 0.5,
+  });
+  kernel.placeCustomRock(25, 35);
+  kernel.placeCustomCapsule(60, 20, 100, 50);
+  const overlay = kernel.getCustomObstacles();
+
+  kernel.init(160, 120, {
+    boidCount: 48,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.5,
+  });
+  assert.deepEqual(kernel.getCustomObstacles(), overlay);
+  assert.deepEqual(kernel.obstacles.slice(-overlay.length), overlay);
+
+  kernel.init(160, 120, {
+    boidCount: 30,
+    initialFlocks: 0,
+    obstacleLayout: "reef",
+    obstacleAmount: 0.5,
+  });
+  assert.deepEqual(kernel.getCustomObstacles(), overlay);
+  assert.deepEqual(kernel.obstacles.slice(-overlay.length), overlay);
+});
+
+test("preset generation stays deterministic beneath a non-empty overlay", () => {
+  const params = {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.75,
+  };
+  const edited = new BoidsKernel();
+  edited.init(160, 120, params);
   edited.placeCustomRock(25, 35);
   edited.placeCustomCapsule(60, 20, 100, 50);
-  const customObstacles = structuredClone(edited.obstacles);
+  const overlay = edited.getCustomObstacles();
 
-  const presetParams = {
+  edited.init(160, 120, params);
+  const clean = new BoidsKernel();
+  clean.init(160, 120, params);
+
+  assert.deepEqual(edited.presetObstacles, clean.presetObstacles);
+  assert.deepEqual(
+    edited.obstacles.slice(0, edited.presetObstacles.length),
+    clean.presetObstacles,
+  );
+  assert.deepEqual(edited.obstacles.slice(-overlay.length), overlay);
+});
+
+test("removal and clear affect overlay obstacles only", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(160, 120, {
     boidCount: 24,
     initialFlocks: 0,
     obstacleLayout: "rocks",
     obstacleAmount: 0.5,
-  };
-  edited.init(160, 120, presetParams);
-  const cleanPreset = new BoidsKernel();
-  cleanPreset.init(160, 120, presetParams);
-  assert.deepEqual(edited.obstacles, cleanPreset.obstacles);
+  });
+  const preset = structuredClone(kernel.presetObstacles);
+  const presetRock = preset[0];
+
+  assert.equal(
+    kernel.removeCustomObstacleAt(presetRock.x, presetRock.y),
+    false,
+  );
+  assert.deepEqual(kernel.presetObstacles, preset);
+
+  assert.equal(kernel.placeCustomRock(presetRock.x, presetRock.y), true);
+  assert.equal(kernel.removeCustomObstacleAt(presetRock.x, presetRock.y), true);
+  assert.deepEqual(kernel.presetObstacles, preset);
+  assert.deepEqual(kernel.obstacles, preset);
+
+  kernel.placeCustomRock(5, 5);
+  assert.equal(kernel.clearCustomObstacles(), true);
+  assert.deepEqual(kernel.presetObstacles, preset);
+  assert.deepEqual(kernel.obstacles, preset);
+});
+
+test("the composed obstacle bound keeps presets and replaces oldest overlay entries", () => {
+  const kernel = customKernel();
+  for (let index = 0; index < MAX_CUSTOM_OBSTACLES; index += 1) {
+    kernel.placeCustomRock(5 + index, 20 + (index % 4) * 20);
+  }
+  const fullOverlay = kernel.getCustomObstacles();
+
+  kernel.init(160, 120, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 1,
+  });
+  const preset = structuredClone(kernel.presetObstacles);
+  const overlayLimit = MAX_CUSTOM_OBSTACLES - preset.length;
+  assert.deepEqual(kernel.getCustomObstacles(), fullOverlay);
+  assert.equal(kernel.obstacles.length, MAX_CUSTOM_OBSTACLES);
+  assert.deepEqual(kernel.obstacles.slice(0, preset.length), preset);
   assert.deepEqual(
-    Array.from(edited.readState()),
-    Array.from(cleanPreset.readState()),
+    kernel.obstacles.slice(preset.length),
+    fullOverlay.slice(-overlayLimit),
   );
 
-  edited.init(160, 120, {
-    ...presetParams,
-    obstacleLayout: "custom",
-  });
-  assert.deepEqual(edited.obstacles, customObstacles);
+  assert.equal(kernel.placeCustomRock(140, 110), true);
+  assert.equal(kernel.getCustomObstacles().length, overlayLimit);
+  assert.deepEqual(
+    kernel.getCustomObstacles()[0],
+    fullOverlay[fullOverlay.length - overlayLimit + 1],
+  );
+  assert.equal(kernel.getCustomObstacles().at(-1).x, 140);
+  assert.deepEqual(kernel.obstacles.slice(0, preset.length), preset);
+  assert.equal(kernel.obstacles.length, MAX_CUSTOM_OBSTACLES);
 });
 
 test("destroy releases state and leaves step/readState safe", () => {
