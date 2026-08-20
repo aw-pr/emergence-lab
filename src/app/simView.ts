@@ -25,6 +25,24 @@ import { loadRenderOptions, loadResolution } from "./persistence.ts";
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
 const LIVE_MODEL_SOURCE = "live";
 
+interface BoidsObstacleEditor {
+  placeCustomRock(x: number, y: number): boolean;
+  placeCustomCapsule(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): boolean;
+  removeCustomObstacleAt(x: number, y: number): boolean;
+}
+
+interface PointerCellMapper {
+  pointerToCell(
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } | null;
+}
+
 /**
  * Kernel params hoisted into the View section, per sim: everything about how
  * the object is drawn rather than what is simulated. Sims not listed keep
@@ -151,7 +169,10 @@ import {
   isFractalSlug,
   type Orbit3DMarkerClientSnapshot,
 } from "./fractalCanvas.ts";
-import { attachPointerImpulse } from "./pointerImpulse.ts";
+import {
+  attachPointerImpulse,
+  type PointerImpulseTarget,
+} from "./pointerImpulse.ts";
 import {
   getRenderMode,
   shouldUseSmoothCanvasPresentation,
@@ -592,7 +613,45 @@ export async function renderSimView(
     // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
     // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
     layout.canvas.classList.add("sim-view__canvas--interactive");
-    detachPointerImpulse = attachPointerImpulse(layout.canvas, renderer);
+    let pointerTarget: PointerImpulseTarget = renderer;
+    if (slug === "boids") {
+      const editor = kernel as SimKernel & BoidsObstacleEditor;
+      // Renderer owns the canvas-to-grid contract, including letterboxing and
+      // the WebGL Y flip. Delegate to it so custom edits and impulses coincide.
+      const pointerMapper = renderer as unknown as PointerCellMapper;
+      const obstaclePoint = (
+        clientX: number,
+        clientY: number,
+      ): readonly [number, number] | undefined => {
+        const point = pointerMapper.pointerToCell(clientX, clientY);
+        return point ? [point.x, point.y] : undefined;
+      };
+      pointerTarget = {
+        supportsImpulse: () => renderer.supportsImpulse(),
+        applyPointerImpulse: (clientX, clientY, strength) =>
+          renderer.applyPointerImpulse(clientX, clientY, strength),
+        isCustomObstacleMode: () =>
+          controls.getParams().obstacleLayout === "custom",
+        placeCustomRock: (clientX, clientY) => {
+          const point = obstaclePoint(clientX, clientY);
+          return point ? editor.placeCustomRock(point[0], point[1]) : false;
+        },
+        placeCustomCapsule: (startX, startY, endX, endY) => {
+          const start = obstaclePoint(startX, startY);
+          const end = obstaclePoint(endX, endY);
+          return start && end
+            ? editor.placeCustomCapsule(start[0], start[1], end[0], end[1])
+            : false;
+        },
+        removeCustomObstacleAt: (clientX, clientY) => {
+          const point = obstaclePoint(clientX, clientY);
+          return point
+            ? editor.removeCustomObstacleAt(point[0], point[1])
+            : false;
+        },
+      };
+    }
+    detachPointerImpulse = attachPointerImpulse(layout.canvas, pointerTarget);
     // The note lives on the same condition as the handler, so it can never
     // advertise a poke the sim would ignore. It reads between the model's
     // origin and its equations, so insert it rather than append.
