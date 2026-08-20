@@ -106,3 +106,22 @@ touched.
 - **Codex (worker):** sandboxed, no browser; interaction evidence is
   verifier-side. Make the edit API unit-testable so your own confidence
   comes from the pure tests.
+
+## Re-brief (2026-08-20, after verifier FAIL on attempt 1)
+
+Attempt 1 is preserved at commit `ff6c6dd` on branch
+`wip/47-custom-obstacles-attempt-1`. Reuse it: cherry-pick or re-apply that
+work rather than starting over. Four of five criteria passed; the single
+failure and its exact fix:
+
+- **Defect:** obstacles land vertically mirrored from the pointer, so
+  click-remove also misses. `src/app/simView.ts:611-622` maps `clientY`
+  straight through `((clientY - rect.top) / rect.height * height)` with
+  neither the WebGL2 y-flip nor the letterbox contain-rect.
+- **Fix:** reuse the established impulse mapping in
+  `src/app/renderer.ts:430` and `:442` (`gridHeight - yTop` for
+  `backend.kind === "webgl2"`, plus the contain-rect), or extract that
+  mapping into a shared helper and call it from both paths. Do not
+  hand-roll a second mapping.
+- Everything else from attempt 1 stands as passed: the kernel edit API,
+  live rebuild, bounds, preset restoration, and test coverage.
