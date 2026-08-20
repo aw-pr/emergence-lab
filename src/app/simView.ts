@@ -624,7 +624,6 @@ export async function renderSimView(
         renderer.setDisplayOptions(displayOptions);
       },
       onParamChange: (next) => {
-        obstacleTools?.setCustomMode(next.obstacleLayout === "custom");
         renderer.updateParams(next);
       },
       onResolutionChange: (preset) => {
@@ -635,10 +634,6 @@ export async function renderSimView(
       },
     },
   });
-
-  obstacleTools?.setCustomMode(
-    controls.getParams().obstacleLayout === "custom",
-  );
 
   layout.sidebar.prepend(layout.drawerHandle);
 
@@ -666,14 +661,15 @@ export async function renderSimView(
   let detachFractalViewKeys: (() => void) | undefined;
   let detachOrbit3dInteractions: (() => void) | undefined;
   let detachPointerImpulse: (() => void) | undefined;
-  if (!fractal && renderer.supportsImpulse()) {
-    // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
-    // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
+  if (!fractal && (obstacleEditor || renderer.supportsImpulse())) {
+    // Non-fractal sims either edit boids obstacles or poke kernels that expose
+    // applyImpulse. Fractals reserve pointer gestures for pan and zoom.
     layout.canvas.classList.add("sim-view__canvas--interactive");
     let pointerTarget: PointerImpulseTarget = renderer;
     if (obstacleEditor) {
       // Renderer owns the canvas-to-grid contract, including letterboxing and
-      // the WebGL Y flip. Delegate to it so custom edits and impulses coincide.
+      // the WebGL Y flip. Delegate to it so dropped obstacles land at the
+      // pointer in every layout.
       const pointerMapper = renderer as unknown as PointerCellMapper;
       const obstaclePoint = (
         clientX: number,
@@ -683,11 +679,7 @@ export async function renderSimView(
         return point ? [point.x, point.y] : undefined;
       };
       pointerTarget = {
-        supportsImpulse: () => renderer.supportsImpulse(),
-        applyPointerImpulse: (clientX, clientY, strength) =>
-          renderer.applyPointerImpulse(clientX, clientY, strength),
-        isCustomObstacleMode: () =>
-          controls.getParams().obstacleLayout === "custom",
+        editsObstacles: () => true,
         placeCustomRock: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
           return finishObstacleEdit(
@@ -867,7 +859,6 @@ export async function renderSimView(
 
 interface BoidsObstacleTools {
   root: HTMLElement;
-  setCustomMode(enabled: boolean): void;
   hideHint(): void;
 }
 
@@ -878,11 +869,11 @@ function buildBoidsObstacleTools(options: {
 }): BoidsObstacleTools {
   const root = document.createElement("div");
   root.className = "fractal-hud boids-obstacle-tools";
-  root.setAttribute("aria-label", "Custom obstacle tools");
+  root.setAttribute("aria-label", "Dropped boulder tools");
 
   const hint = document.createElement("output");
   hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
-  hint.value = "Click to place a rock · Drag for a breakwater · Click a rock to remove";
+  hint.value = "Click to drop a boulder · Drag for a breakwater · Click a dropped boulder to remove";
   root.appendChild(hint);
 
   const controls = document.createElement("div");
@@ -899,7 +890,7 @@ function buildBoidsObstacleTools(options: {
   const clear = document.createElement("button");
   clear.type = "button";
   clear.className = "fractal-hud__button boids-obstacle-tools__clear";
-  clear.textContent = "Clear obstacles";
+  clear.textContent = "Clear dropped boulders";
   clear.addEventListener("click", options.onClear);
   controls.appendChild(clear);
   root.appendChild(controls);
@@ -908,18 +899,12 @@ function buildBoidsObstacleTools(options: {
     hint.hidden = true;
     dismiss.hidden = true;
   };
+  if (options.hintDismissed()) {
+    hideHint();
+  }
 
   return {
     root,
-    setCustomMode(enabled) {
-      root.hidden = !enabled;
-      if (!enabled || options.hintDismissed()) {
-        hideHint();
-      } else {
-        hint.hidden = false;
-        dismiss.hidden = false;
-      }
-    },
     hideHint,
   };
 }
