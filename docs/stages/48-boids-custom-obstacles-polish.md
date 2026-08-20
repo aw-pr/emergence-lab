@@ -99,3 +99,20 @@ touched.
 
 - **Codex (worker):** sandboxed, no browser; presentation judgement is
   verifier-side.
+
+## Re-brief (2026-08-20, after verifier FAIL on attempt 1)
+
+Attempt 1 is preserved at commit `58fd7a9` on branch
+`wip/48-polish-attempt-1`. Reuse it. All functional behaviour passed; only
+two presentation defects remain, both pinpointed by the verifier:
+
+1. The Clear obstacles button inherits `.fractal-hud__button`'s fixed 31px
+   glyph-button width (`src/app/styles.css:480-486`), clipping its label to
+   overlapping fragments. Give the text button an auto/intrinsic width
+   (its own modifier class) instead of the glyph square.
+2. The tools HUD is never actually hidden outside custom mode:
+   `setCustomMode` sets `root.hidden` (`src/app/simView.ts:919`) but the
+   author rule `.fractal-hud { display: grid }`
+   (`src/app/styles.css:442-446`) overrides the UA `[hidden]` rule. Hide it
+   with an explicit rule (e.g. `.fractal-hud[hidden] { display: none }`) or
+   a class toggle, so nothing renders on preset layouts or other sims.
