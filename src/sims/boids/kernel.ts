@@ -1,3 +1,9 @@
+export {
+  removeObstacleLayoutSlot,
+  upsertObstacleLayoutSlot,
+  type CustomObstacleLayoutSlot,
+} from "./layoutStore.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -62,14 +68,14 @@ export const MAX_CUSTOM_OBSTACLES = 96;
 /** Shorter drags are treated as taps, avoiding near-zero breakwater slivers. */
 export const CUSTOM_OBSTACLE_DRAG_THRESHOLD = 8;
 
-type CircleObstacle = {
+export type CircleObstacle = {
   kind: "circle";
   x: number;
   y: number;
   radius: number;
 };
 
-type CapsuleObstacle = {
+export type CapsuleObstacle = {
   kind: "capsule";
   x: number;
   y: number;
@@ -78,10 +84,140 @@ type CapsuleObstacle = {
   radius: number;
 };
 
-type Obstacle = CircleObstacle | CapsuleObstacle;
+export type Obstacle = CircleObstacle | CapsuleObstacle;
+
+export const OBSTACLE_LAYOUT_FORMAT_VERSION = 1;
+
+export type ObstacleLayoutDecodeResult =
+  | { ok: true; obstacles: Obstacle[] }
+  | { ok: false; error: string };
 
 function isFiniteRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNormalised(value: unknown): value is number {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1;
+}
+
+function isNormalisedOffset(value: unknown): value is number {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= -1 &&
+    value <= 1;
+}
+
+/** Encode editable obstacles without canvas-size assumptions or whitespace. */
+export function encodeObstacleLayout(
+  obstacles: readonly Obstacle[],
+  width: number,
+  height: number,
+): string {
+  if (width <= 0 || height <= 0) {
+    throw new Error("Obstacle layouts need a positive canvas size");
+  }
+  const scale = Math.min(width, height);
+  return JSON.stringify({
+    version: OBSTACLE_LAYOUT_FORMAT_VERSION,
+    obstacles: obstacles.map((obstacle) =>
+      obstacle.kind === "circle"
+        ? {
+            kind: obstacle.kind,
+            x: obstacle.x / width,
+            y: obstacle.y / height,
+            radius: obstacle.radius / scale,
+          }
+        : {
+            kind: obstacle.kind,
+            x: obstacle.x / width,
+            y: obstacle.y / height,
+            halfX: obstacle.halfX / width,
+            halfY: obstacle.halfY / height,
+            radius: obstacle.radius / scale,
+          }
+    ),
+  });
+}
+
+/** Decode a v1 layout, ignoring unknown fields so additive changes stay readable. */
+export function decodeObstacleLayout(
+  serialised: string,
+  width: number,
+  height: number,
+): ObstacleLayoutDecodeResult {
+  if (width <= 0 || height <= 0) {
+    return { ok: false, error: "The canvas is not ready yet." };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialised);
+  } catch {
+    return { ok: false, error: "That is not valid JSON." };
+  }
+  if (!isFiniteRecord(parsed)) {
+    return { ok: false, error: "A layout must be a JSON object." };
+  }
+  if (parsed.version !== OBSTACLE_LAYOUT_FORMAT_VERSION) {
+    return {
+      ok: false,
+      error: `Unsupported layout version: ${String(parsed.version)}.`,
+    };
+  }
+  if (!Array.isArray(parsed.obstacles)) {
+    return { ok: false, error: "The layout has no obstacles array." };
+  }
+  if (parsed.obstacles.length > MAX_CUSTOM_OBSTACLES) {
+    return {
+      ok: false,
+      error: `A layout can contain at most ${MAX_CUSTOM_OBSTACLES} obstacles.`,
+    };
+  }
+
+  const scale = Math.min(width, height);
+  const obstacles: Obstacle[] = [];
+  for (let index = 0; index < parsed.obstacles.length; index += 1) {
+    const candidate = parsed.obstacles[index];
+    if (!isFiniteRecord(candidate)) {
+      return { ok: false, error: `Obstacle ${index + 1} is not an object.` };
+    }
+    if (
+      (candidate.kind !== "circle" && candidate.kind !== "capsule") ||
+      !isNormalised(candidate.x) ||
+      !isNormalised(candidate.y) ||
+      !isNormalised(candidate.radius) ||
+      candidate.radius <= 0
+    ) {
+      return { ok: false, error: `Obstacle ${index + 1} has invalid geometry.` };
+    }
+
+    const base = {
+      x: candidate.x * width,
+      y: candidate.y * height,
+      radius: candidate.radius * scale,
+    };
+    if (candidate.kind === "circle") {
+      obstacles.push({ kind: candidate.kind, ...base });
+      continue;
+    }
+    if (
+      !isNormalisedOffset(candidate.halfX) ||
+      !isNormalisedOffset(candidate.halfY) ||
+      (candidate.halfX === 0 && candidate.halfY === 0)
+    ) {
+      return { ok: false, error: `Obstacle ${index + 1} has invalid geometry.` };
+    }
+    obstacles.push({
+      kind: candidate.kind,
+      ...base,
+      halfX: candidate.halfX * width,
+      halfY: candidate.halfY * height,
+    });
+  }
+  return { ok: true, obstacles };
 }
 
 function hashAngle(a: number, b: number): number {
@@ -689,6 +825,20 @@ export class BoidsKernel implements SimKernel {
 
   getCustomObstacles(): readonly Obstacle[] {
     return this.customObstacles.map((obstacle) => ({ ...obstacle }));
+  }
+
+  exportCustomObstacleLayout(): string {
+    return encodeObstacleLayout(this.customObstacles, this.width, this.height);
+  }
+
+  importCustomObstacleLayout(serialised: string): ObstacleLayoutDecodeResult {
+    const decoded = decodeObstacleLayout(serialised, this.width, this.height);
+    if (!decoded.ok) {
+      return decoded;
+    }
+    this.customObstacles = decoded.obstacles;
+    this.rebuildObstacleComposition(true);
+    return decoded;
   }
 
   restoreCustomObstacles(snapshot: readonly unknown[]): boolean {

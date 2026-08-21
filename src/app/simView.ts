@@ -21,10 +21,14 @@ import {
   type StepsControlOptions,
 } from "./controls.ts";
 import {
+  deleteCustomObstacleLayout,
   loadCustomObstacleField,
+  loadCustomObstacleLayouts,
   loadRenderOptions,
   loadResolution,
+  saveCustomObstacleLayout,
   saveCustomObstacleField,
+  type CustomObstacleLayoutSlot,
 } from "./persistence.ts";
 
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
@@ -38,6 +42,10 @@ interface BoidsObstacleEditor {
   clearCustomObstacles(): boolean;
   getCustomObstacles(): readonly unknown[];
   restoreCustomObstacles(snapshot: readonly unknown[]): boolean;
+  exportCustomObstacleLayout(): string;
+  importCustomObstacleLayout(serialised: string):
+    | { ok: true; obstacles: readonly unknown[] }
+    | { ok: false; error: string };
 }
 
 interface PointerCellMapper {
@@ -525,17 +533,27 @@ export async function renderSimView(
   const obstacleEditor = slug === "boids"
     ? kernel as SimKernel & BoidsObstacleEditor
     : undefined;
+  let initialObstacleMessage = "";
   if (obstacleEditor) {
     const persisted = loadCustomObstacleField(slug);
-    if (persisted) {
-      obstacleEditor.restoreCustomObstacles(persisted);
+    if (typeof persisted === "string") {
+      const restoredField = obstacleEditor.importCustomObstacleLayout(persisted);
+      if (!restoredField.ok) {
+        initialObstacleMessage = `Saved field was ignored: ${restoredField.error}`;
+      }
+    } else if (persisted) {
+      if (obstacleEditor.restoreCustomObstacles(persisted)) {
+        saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
+      } else {
+        initialObstacleMessage = "The older saved field could not be restored.";
+      }
     }
   }
 
   let obstacleTools: BoidsObstacleTools | undefined;
   const persistObstacleField = (): void => {
     if (!obstacleEditor) return;
-    saveCustomObstacleField(slug, obstacleEditor.getCustomObstacles());
+    saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
   };
   const finishObstacleEdit = (edited: boolean): boolean => {
     if (!edited) return false;
@@ -545,7 +563,18 @@ export async function renderSimView(
     return true;
   };
   if (obstacleEditor) {
+    const applyObstacleLayout = (serialised: string): LayoutActionResult => {
+      const imported = obstacleEditor.importCustomObstacleLayout(serialised);
+      if (!imported.ok) {
+        return { ok: false, message: imported.error };
+      }
+      persistObstacleField();
+      dismissedCustomObstacleHints.add(slug);
+      obstacleTools?.hideHint();
+      return { ok: true, message: "Layout loaded." };
+    };
     obstacleTools = buildBoidsObstacleTools({
+      initialMessage: initialObstacleMessage,
       hintDismissed: () => dismissedCustomObstacleHints.has(slug),
       onDismissHint: () => {
         dismissedCustomObstacleHints.add(slug);
@@ -561,6 +590,23 @@ export async function renderSimView(
           }
         }
       },
+      loadSlots: () => loadCustomObstacleLayouts(slug),
+      onSaveSlot: (name) => {
+        const saved = saveCustomObstacleLayout(
+          slug,
+          name,
+          obstacleEditor.exportCustomObstacleLayout(),
+        );
+        return saved
+          ? { ok: true, message: `Saved “${name.trim().slice(0, 64)}”.` }
+          : { ok: false, message: "Enter a name and check local storage is available." };
+      },
+      onLoadSlot: (serialised) => applyObstacleLayout(serialised),
+      onDeleteSlot: (name) =>
+        deleteCustomObstacleLayout(slug, name)
+          ? { ok: true, message: `Deleted “${name}”.` }
+          : { ok: false, message: "That saved layout could not be deleted." },
+      onImport: (serialised) => applyObstacleLayout(serialised),
     });
     layout.stage.insertBefore(obstacleTools.root, layout.legend);
   }
@@ -862,10 +908,21 @@ interface BoidsObstacleTools {
   hideHint(): void;
 }
 
+interface LayoutActionResult {
+  ok: boolean;
+  message: string;
+}
+
 function buildBoidsObstacleTools(options: {
+  initialMessage: string;
   hintDismissed(): boolean;
   onDismissHint(): void;
   onClear(): void;
+  loadSlots(): CustomObstacleLayoutSlot[];
+  onSaveSlot(name: string): LayoutActionResult;
+  onLoadSlot(serialised: string): LayoutActionResult;
+  onDeleteSlot(name: string): LayoutActionResult;
+  onImport(serialised: string): LayoutActionResult;
 }): BoidsObstacleTools {
   const root = document.createElement("div");
   root.className = "fractal-hud boids-obstacle-tools";
@@ -878,6 +935,165 @@ function buildBoidsObstacleTools(options: {
 
   const controls = document.createElement("div");
   controls.className = "fractal-hud__controls";
+
+  const layouts = document.createElement("details");
+  layouts.className = "boids-obstacle-layouts";
+  const layoutsToggle = document.createElement("summary");
+  layoutsToggle.className = "fractal-hud__button";
+  layoutsToggle.textContent = "Layouts";
+  layouts.appendChild(layoutsToggle);
+
+  const popup = document.createElement("div");
+  popup.className = "controls__params boids-obstacle-layouts__popup";
+  popup.setAttribute("aria-label", "Saved obstacle layouts");
+
+  const nameRow = document.createElement("label");
+  nameRow.className = "control control--enum";
+  const nameLabel = document.createElement("span");
+  nameLabel.className = "control__label";
+  nameLabel.textContent = "Layout name";
+  const nameInput = document.createElement("input");
+  nameInput.className = "control__value";
+  nameInput.type = "text";
+  nameInput.maxLength = 64;
+  nameInput.placeholder = "My layout";
+  nameRow.append(nameLabel, nameInput);
+  popup.appendChild(nameRow);
+
+  const makeButton = (label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "fractal-hud__button";
+    button.textContent = label;
+    return button;
+  };
+
+  const save = makeButton("Save current");
+  popup.appendChild(save);
+
+  const slotRow = document.createElement("label");
+  slotRow.className = "control control--enum";
+  const slotLabel = document.createElement("span");
+  slotLabel.className = "control__label";
+  slotLabel.textContent = "Saved layouts";
+  const slotSelect = document.createElement("select");
+  slotSelect.className = "control__value";
+  slotRow.append(slotLabel, slotSelect);
+  popup.appendChild(slotRow);
+
+  const slotActions = document.createElement("div");
+  slotActions.className = "fractal-hud__controls";
+  const load = makeButton("Load");
+  const remove = makeButton("Delete");
+  const exportLayout = makeButton("Export");
+  slotActions.append(load, remove, exportLayout);
+  popup.appendChild(slotActions);
+
+  const transferRow = document.createElement("label");
+  transferRow.className = "control control--enum";
+  const transferLabel = document.createElement("span");
+  transferLabel.className = "control__label";
+  transferLabel.textContent = "Layout JSON";
+  const transfer = document.createElement("textarea");
+  transfer.className = "control__value";
+  transfer.rows = 3;
+  transfer.spellcheck = false;
+  transfer.placeholder = "Paste an exported layout";
+  transferRow.append(transferLabel, transfer);
+  popup.appendChild(transferRow);
+
+  const importLayout = makeButton("Import and load");
+  popup.appendChild(importLayout);
+
+  const status = document.createElement("output");
+  status.className = "control__value boids-obstacle-layouts__status";
+  status.setAttribute("aria-live", "polite");
+  popup.appendChild(status);
+  layouts.appendChild(popup);
+  controls.appendChild(layouts);
+
+  let slots: CustomObstacleLayoutSlot[] = [];
+  const setStatus = (result: LayoutActionResult): void => {
+    status.value = result.message;
+    status.dataset.state = result.ok ? "ok" : "error";
+  };
+  const refreshSlots = (selectedName?: string): void => {
+    slots = options.loadSlots();
+    slotSelect.replaceChildren();
+    if (slots.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "No saved layouts";
+      slotSelect.appendChild(empty);
+      slotSelect.disabled = true;
+      return;
+    }
+    slotSelect.disabled = false;
+    for (const slot of slots) {
+      const option = document.createElement("option");
+      option.value = slot.name;
+      option.textContent = slot.name;
+      slotSelect.appendChild(option);
+    }
+    if (selectedName && slots.some((slot) => slot.name === selectedName)) {
+      slotSelect.value = selectedName;
+    }
+  };
+  const selectedSlot = (): CustomObstacleLayoutSlot | undefined =>
+    slots.find((slot) => slot.name === slotSelect.value);
+
+  save.addEventListener("click", () => {
+    const result = options.onSaveSlot(nameInput.value);
+    setStatus(result);
+    if (result.ok) refreshSlots(nameInput.value.trim().slice(0, 64));
+  });
+  load.addEventListener("click", () => {
+    const slot = selectedSlot();
+    setStatus(
+      slot
+        ? options.onLoadSlot(slot.layout)
+        : { ok: false, message: "Choose a saved layout first." },
+    );
+  });
+  remove.addEventListener("click", () => {
+    const slot = selectedSlot();
+    if (!slot) {
+      setStatus({ ok: false, message: "Choose a saved layout first." });
+      return;
+    }
+    const result = options.onDeleteSlot(slot.name);
+    setStatus(result);
+    if (result.ok) refreshSlots();
+  });
+  exportLayout.addEventListener("click", () => {
+    const slot = selectedSlot();
+    if (!slot) {
+      setStatus({ ok: false, message: "Choose a saved layout first." });
+      return;
+    }
+    transfer.value = slot.layout;
+    transfer.select();
+    setStatus({ ok: true, message: "Export ready to copy." });
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(slot.layout).then(
+        () => setStatus({ ok: true, message: "Export copied." }),
+        () => {},
+      );
+    }
+  });
+  importLayout.addEventListener("click", () => {
+    const serialised = transfer.value.trim();
+    setStatus(
+      serialised
+        ? options.onImport(serialised)
+        : { ok: false, message: "Paste a layout string first." },
+    );
+  });
+  refreshSlots();
+  if (options.initialMessage) {
+    setStatus({ ok: false, message: options.initialMessage });
+    layouts.open = true;
+  }
 
   const dismiss = document.createElement("button");
   dismiss.type = "button";
