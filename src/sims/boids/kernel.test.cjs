@@ -6,8 +6,14 @@ const {
   CUSTOM_OBSTACLE_DRAG_THRESHOLD,
   MAX_CUSTOM_OBSTACLES,
   OBSTACLE_RENDER_MARGIN,
+  decodeObstacleLayout,
+  encodeObstacleLayout,
   selfTest,
 } = require("../../../.test-build/sims/boids/kernel.js");
+const {
+  removeObstacleLayoutSlot,
+  upsertObstacleLayoutSlot,
+} = require("../../../.test-build/sims/boids/layoutStore.js");
 
 function defaultsFromSchema(kernel) {
   return Object.fromEntries(
@@ -877,6 +883,103 @@ test("the composed obstacle bound keeps presets and replaces oldest overlay entr
   assert.equal(kernel.getCustomObstacles().at(-1).x, 140);
   assert.deepEqual(kernel.obstacles.slice(0, preset.length), preset);
   assert.equal(kernel.obstacles.length, MAX_CUSTOM_OBSTACLES);
+});
+
+test("obstacle layout JSON round-trips and scales with the world", () => {
+  const kernel = customKernel();
+  kernel.placeCustomRock(24, 36);
+  kernel.placeCustomCapsule(56, 24, 104, 72);
+  const original = kernel.getCustomObstacles();
+  const encoded = encodeObstacleLayout(original, 160, 120);
+
+  assert.equal(encoded.includes("\n"), false);
+  assert.equal(JSON.parse(encoded).version, 1);
+  const sameSize = decodeObstacleLayout(encoded, 160, 120);
+  assert.equal(sameSize.ok, true);
+  assert.deepEqual(sameSize.obstacles, original);
+
+  const doubleSize = decodeObstacleLayout(encoded, 320, 240);
+  assert.equal(doubleSize.ok, true);
+  assert.deepEqual(
+    doubleSize.obstacles,
+    original.map((obstacle) =>
+      Object.fromEntries(
+        Object.entries(obstacle).map(([key, value]) => [
+          key,
+          typeof value === "number" ? value * 2 : value,
+        ]),
+      )
+    ),
+  );
+});
+
+test("decoder accepts a hand-edited layout with additive fields", () => {
+  const decoded = decodeObstacleLayout(
+    JSON.stringify({
+      version: 1,
+      title: "Hand edited",
+      obstacles: [
+        { kind: "circle", x: 0.25, y: 0.5, radius: 0.1, note: "centre-left" },
+        {
+          kind: "capsule",
+          x: 0.75,
+          y: 0.25,
+          halfX: -0.1,
+          halfY: 0.2,
+          radius: 0.05,
+        },
+      ],
+    }),
+    200,
+    100,
+  );
+
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.obstacles, [
+    { kind: "circle", x: 50, y: 50, radius: 10 },
+    {
+      kind: "capsule",
+      x: 150,
+      y: 25,
+      halfX: -20,
+      halfY: 20,
+      radius: 5,
+    },
+  ]);
+});
+
+test("malformed layout strings are rejected without throwing", () => {
+  const malformed = [
+    "not json",
+    "[]",
+    '{"version":2,"obstacles":[]}',
+    '{"version":1,"obstacles":"none"}',
+    '{"version":1,"obstacles":[{"kind":"circle","x":2,"y":0.5,"radius":0.1}]}',
+  ];
+
+  for (const serialised of malformed) {
+    assert.doesNotThrow(() => decodeObstacleLayout(serialised, 160, 120));
+    const result = decodeObstacleLayout(serialised, 160, 120);
+    assert.equal(result.ok, false);
+    assert.ok(result.error.length > 0);
+  }
+});
+
+test("named obstacle layout slots stay isolated", () => {
+  let slots = upsertObstacleLayoutSlot([], "Alpha", "alpha-v1");
+  slots = upsertObstacleLayoutSlot(slots, "Beta", "beta-v1");
+  slots = upsertObstacleLayoutSlot(slots, "Alpha", "alpha-v2");
+  assert.deepEqual(slots, [
+    { name: "Alpha", layout: "alpha-v2" },
+    { name: "Beta", layout: "beta-v1" },
+  ]);
+
+  const withoutAlpha = removeObstacleLayoutSlot(slots, "Alpha");
+  assert.deepEqual(withoutAlpha, [{ name: "Beta", layout: "beta-v1" }]);
+  assert.deepEqual(slots, [
+    { name: "Alpha", layout: "alpha-v2" },
+    { name: "Beta", layout: "beta-v1" },
+  ]);
 });
 
 test("destroy releases state and leaves step/readState safe", () => {
