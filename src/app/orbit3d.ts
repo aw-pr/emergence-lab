@@ -2520,14 +2520,6 @@ export class Orbit3DPointCloud {
       };
     };
 
-    const preparedSample = (x: number, y: number): OrbitSurfaceSample => {
-      const sample = lookupPreparedSample(x, y);
-      if (!sample) {
-        throw new Error(`Orbit surface sample was not prepared at ${x},${y}.`);
-      }
-      return sample;
-    };
-
     const lookupPreparedPeriod = (x: number, y: number): number | undefined => {
       if (
         Number.isInteger(x) &&
@@ -2811,7 +2803,12 @@ export class Orbit3DPointCloud {
             escaped,
           },
           ORBIT_SURFACE_MAX_HEIGHT_JUMP,
-          { sampler: preparedSample, refinedCells, boundaryCurves },
+          // sampleSurfacePoint, not preparedSample: the transition locator
+          // bisects to dyadic midpoints that edge preparation cannot be
+          // guaranteed to enumerate identically, and a lookup miss must
+          // self-heal with the same deterministic sample computation rather
+          // than throw the whole surface into the sheetless fallback.
+          { sampler: sampleSurfacePoint, refinedCells, boundaryCurves },
         );
       } catch {
         this.surfaceResourceFailed = true;
