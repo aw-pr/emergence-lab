@@ -549,79 +549,71 @@ test("curve-trimmed mesh vertices land on the curve and dissolve at true zero di
   assertMeshSound(mesh);
 });
 
-test("live-grid analytic trimming does not require unprepared categorical midpoints", () => {
-  const width = 768;
-  const height = 768;
-  const count = width * height;
-  const samples = new Float32Array(count);
-  const periods = new Int16Array(count);
-  const interiors = new Float32Array(count);
-  const boundaries = new Float32Array(count);
-  const dissolves = new Float32Array(count).fill(1);
-  const escaped = new Uint8Array(count);
-  const sheetCell = 610 * width + 414;
-  samples[sheetCell] = 0.1;
-  periods[sheetCell] = 1;
-  interiors[sheetCell] = 0.4;
-  boundaries[sheetCell] = 0.2;
-
-  const boundaryCurves = [{
-    componentId: "live-period-1",
-    period: 1,
-    points: [
-      { x: 413.75, y: 609.75 },
-      { x: 414.25, y: 609.75 },
-      { x: 414.25, y: 610.25 },
-      { x: 413.75, y: 610.25 },
-      { x: 413.75, y: 609.75 },
-    ],
-  }];
-  const preparedSampler = (x, y) => {
-    if (x === 414 && y === 610.5) {
-      throw new Error(`Orbit surface sample was not prepared at ${x},${y}.`);
-    }
-    if (!Number.isInteger(x) || !Number.isInteger(y)) {
-      const inside = surface.orbitSurfaceCurveContains(boundaryCurves[0], x, y);
-      return {
-        samples: new Float32Array([inside ? 0.1 : 0]),
-        period: inside ? 1 : 0,
-        interior: inside ? 0.4 : 0,
-        boundary: inside ? 0.2 : 0,
-        dissolve: inside ? 1 : 0,
-        escaped: false,
-      };
-    }
-    const cell = y * width + x;
+test("an under-covering traced curve never bites the sampled silhouette", () => {
+  // A sparse or partial trace can close an arc with one long chord. The
+  // sampled orbit is the membership authority, so the built mesh must still
+  // span the full sampled disc rather than being cut back to the chord.
+  const width = 33;
+  const height = 33;
+  const centre = 16;
+  const radius = 10;
+  const sampler = (x, y) => {
+    const inside = Math.hypot(x - centre, y - centre) <= radius;
     return {
-      samples,
-      sampleOffset: cell,
-      period: periods[cell],
-      interior: interiors[cell],
-      boundary: boundaries[cell],
-      dissolve: dissolves[cell],
-      escaped: escaped[cell] !== 0,
+      samples: new Float32Array([inside ? 0.1 + x * 0.002 : 0]),
+      period: inside ? 1 : 0,
+      interior: 0.4,
+      boundary: 0.2,
+      dissolve: inside ? 1 : 0,
+      escaped: false,
     };
   };
-
-  let mesh;
-  assert.doesNotThrow(() => {
-    mesh = surface.buildOrbitSurface(
-      {
-        width,
-        height,
-        sampleCount: 1,
-        samples,
-        periods,
-        interiors,
-        boundaries,
-        dissolves,
-        escaped,
-      },
-      surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
-      { sampler: preparedSampler, boundaryCurves },
-    );
-  });
+  // A circle whose upper-left quadrant is replaced by a straight chord, so
+  // the polygon under-covers the sampled disc in exactly that quadrant.
+  const points = [];
+  for (let index = 0; index <= 96; index += 1) {
+    const angle = (Math.PI / 2) + (index / 96) * ((Math.PI * 2) * 0.75);
+    points.push({
+      x: centre + Math.cos(angle) * radius,
+      y: centre + Math.sin(angle) * radius,
+    });
+  }
+  points.push(points[0]);
+  const boundaryCurves = [{ componentId: "under-cover", period: 1, points }];
+  const cells = analyticSurfaceCells(width, height, 1, sampler);
+  const cache = new Map();
+  const totalSampler = (x, y) => {
+    const key = `${x},${y}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const sample = sampler(x, y);
+    cache.set(key, sample);
+    return sample;
+  };
+  const mesh = surface.buildOrbitSurface(
+    cells,
+    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+    { sampler: totalSampler, boundaryCurves },
+  );
   assert.ok(mesh.indices.length > 0);
+  // Max radial extent of mesh vertices in the missing quadrant: the chord
+  // sits at radius * cos(45 deg) = 7.07, the sampled disc reaches 10.
+  let quadrantExtent = 0;
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const x = mesh.positions[vertex * 3];
+    const y = mesh.positions[vertex * 3 + 1];
+    if (x <= centre && y <= centre) {
+      quadrantExtent = Math.max(
+        quadrantExtent,
+        Math.hypot(x - centre, y - centre),
+      );
+    }
+  }
+  assert.ok(
+    quadrantExtent >= radius - 1.5,
+    `sampled silhouette was bitten back to ${quadrantExtent} cells`,
+  );
+  assertMeshSound(mesh);
 });
 
 test("metadata matches the renderer contract", () => {
