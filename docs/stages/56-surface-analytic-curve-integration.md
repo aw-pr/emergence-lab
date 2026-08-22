@@ -1,0 +1,133 @@
+# Stage card 56-surface-analytic-curve-integration: tessellate against the true curves
+
+## Metadata
+
+- **Authored:** 2026-08-22
+- **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
+- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Verifier:** Claude Opus 5 <claude-opus-5@local>
+- **Verifier panel:** false
+- **Pairing rationale:** the operator is conserving Claude quota this
+  window, so Sol (who built the stage-53 tracer) takes the worker seat;
+  Opus verifies cross-family with a headless browser pass. No Requires
+  GUI declaration: the Claude verifier is unsandboxed by nature and the
+  Codex worker needs no browser.
+
+## Objective
+
+Stage 53 built and validated the analytic edge-curve tracer
+(`src/app/orbitSurfaceCurves.ts`: closed-form period-1 cardioid and
+period-2 circle, predictor-corrector continuation for higher periods,
+traced chord error 0.038 px full window against the current mesh's
+0.315 px) but stopped cleanly at integration: the finite sampler emitted
+period-labelled contours outside the exact components. Stage 54 then
+landed exactly the missing prerequisite, the exact component classifier
+and catalogue through period 8 (`src/app/orbitSurfaceComponents.ts`),
+deliberately left unconsumed. This stage joins the two: sheet boundaries
+follow the analytic curves instead of the sampled contour.
+
+1. **Trim tessellation against traced curves.** Where a sheet's component
+   boundary is covered by a traced curve (period 1 and 2 closed forms,
+   continuation-traced components from the catalogue), the mesh boundary
+   follows the curve: boundary vertices land on it and the silhouette
+   chord error against the analytic curve is at or below 0.25 px in the
+   default and close review framings.
+2. **Curve-distance dissolve.** The sheet-edge dissolve and the cloud-side
+   band grade by true distance to the analytic curve rather than by cell
+   distance to the sampled contour, removing the residual geometric
+   stepping at silhouettes.
+3. **Honest fallback.** Components the tracer cannot cover (beyond its
+   period range or failing continuation) keep the stage-55 sampled
+   behaviour unchanged; the harness reports which components are
+   curve-trimmed and which fall back.
+
+## Inputs (read these in your own context)
+
+- `state/verifiers/55-surface-cloud-parity-and-seam-refinement.json`
+- `docs/plans/2026-08-22-analytic-edge-curves.md`
+- `docs/plans/2026-08-22-surface-coverage-and-edge-saturation.md`
+- `docs/plans/2026-08-22-surface-cloud-parity-and-seam-refinement.md`
+- `src/app/orbitSurfaceCurves.ts`
+- `src/app/orbitSurfaceComponents.ts`
+- `src/app/orbitSurface.ts`
+- `src/app/orbit3d.ts`
+- `src/app/webglRenderer.ts`
+- `scripts/analyze-sheet-edges.cjs`
+- `src/sims/logistic-mandelbrot/kernel.test.cjs`
+- `docs/verification.md`
+
+## Deliverables
+
+1. Curve-trimmed tessellation for analytically covered components, wired
+   through the hybrid build path.
+2. Curve-distance dissolve and band grading for those components.
+3. `scripts/analyze-sheet-edges.cjs` extended with silhouette chord error
+   against the analytic curves and the curve-trimmed versus fallback
+   component split.
+4. A findings note under `docs/plans/` recording the integration design,
+   the per-window chord figures, and the fallback set.
+5. Updated pure fixtures in `src/sims/logistic-mandelbrot/kernel.test.cjs`
+   where the trimming and grading are testable purely.
+
+## Constraints
+
+- Cloud mode (the factory default) stays byte-identical; every change is
+  gated behind hybrid mode.
+- `buildOrbitSurface`'s public contract is unchanged; extend rather than
+  rewrite.
+- Stage-55 cloud parity, stage-54 coverage and band figures, and the
+  frozen chord (0.75 px) and alternation (0.15) floors hold everywhere;
+  the 0.25 px analytic target applies where curves cover.
+- The 8 ms median slice discipline holds (timer-quantum readings adjacent
+  to 8.0 acceptable); the 1,199,999 triangle cap holds; report peak
+  geometry.
+- No new dependency; no git mutations by the worker; stop cleanly on
+  budget exhaustion; relative paths; UK English, no em dash.
+
+## Acceptance criteria
+
+1. `npm run verify` is green.
+2. `node scripts/analyze-sheet-edges.cjs` shows silhouette chord error
+   against the analytic curves at or below 0.25 px for curve-trimmed
+   components in the default and close windows, holds every stage-54 and
+   stage-55 figure, and is byte-identical across two runs.
+3. Verifier-side headless browser check: sheet silhouettes on the primary
+   cardioid and period-2 circle read as smooth curves with no stepping at
+   review zoom (captures against the stage-55 evidence); fallback
+   components are visually unchanged from stage 55; no new sparkle or
+   shimmer during rotation.
+4. Median slice time within the 8 ms discipline; maximum slice,
+   finalisation, peak geometry and triangle count reported with
+   before-and-after figures.
+5. Cloud mode indistinguishable from the stage-55 state; no console or
+   WebGL errors.
+
+## Contract test
+
+- **Test file:** None
+- **Assertions digest:** None
+
+## Out of scope
+
+- Extending the tracer's period range or continuation robustness beyond
+  what integration needs; merging to dev or main; presets, thumbnails,
+  other simulations.
+
+## Budget
+
+- **Worker wall-clock:** 90 minutes
+- **Verifier wall-clock:** 60 minutes
+
+## Verifier handoff
+
+The envelope states: which components are curve-trimmed and which fall
+back and why, the analytic chord figures per window, how the
+curve-distance dissolve replaces cell distance, the harness numbers, the
+slice and memory figures, and the files touched.
+
+## Family-specific notes
+
+- **Codex (worker):** the sandbox cannot reach the window server; do not
+  launch a browser. The harness and pure fixtures are your feedback loop.
+- **Claude (verifier):** run the browser pass fully headless; never
+  attach to the operator's Chrome or open a headed window.
