@@ -20,6 +20,8 @@ import {
 } from "./orbitSampler.ts";
 import {
   buildOrbitSurface,
+  isOrbitSurfaceCloudBandSample,
+  orbitSurfaceDissolveCoverage,
   planOrbitSurfaceCellRefinement,
   orbitSurfaceDiagnosticMode,
   ORBIT_SURFACE_CONTOUR_BISECTION_STEPS,
@@ -575,11 +577,14 @@ const BOUNDARY_DETAIL_WARMUP = 20_000;
 const BOUNDARY_DETAIL_POINT_WEIGHT = 0.05;
 
 const BUILD_SLICE_MS = 8;
-export const ORBIT_SURFACE_EDGE_ERROR_PX = 0.75;
-export const ORBIT_SURFACE_MAX_REFINEMENT_DEPTH = 4;
+export const ORBIT_SURFACE_EDGE_ERROR_PX = 0.5;
+export const ORBIT_SURFACE_MAX_REFINEMENT_DEPTH = 5;
 /** Deterministic ceiling on adaptive boundary leaf cells. */
 export const ORBIT_SURFACE_REFINEMENT_CELL_BUDGET = 32_768;
-export const ORBIT_SURFACE_DISSOLVE_BAND_CELLS = 2.5;
+export const ORBIT_SURFACE_DISSOLVE_BAND_CELLS = 8;
+export const ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION = 5;
+export const ORBIT_SURFACE_BAND_SAMPLES_PER_CELL = 4;
+export const ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS = 0.25;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
@@ -736,6 +741,8 @@ export interface Orbit3DStats {
   buildMedianSliceMs: number;
   buildMaxSliceMs: number;
   finalisationMs: number;
+  bandPointCount: number;
+  peakGeometryBytes: number;
   surfaceAvailable: boolean;
   surfaceFallback: string | null;
 }
@@ -879,6 +886,8 @@ export class Orbit3DPointCloud {
   private buildMedianSliceMs = 0;
   private buildMaxSliceMs = 0;
   private finalisationMs = 0;
+  private bandPointCount = 0;
+  private peakGeometryBytes = 0;
   private surfaceGridWidth = 1;
   private surfaceGridHeight = 1;
   private surfaceVisibleIterations = DEFAULT_SAMPLE_COUNT;
@@ -1093,6 +1102,8 @@ export class Orbit3DPointCloud {
       buildMedianSliceMs: this.buildMedianSliceMs,
       buildMaxSliceMs: this.buildMaxSliceMs,
       finalisationMs: this.finalisationMs,
+      bandPointCount: this.bandPointCount,
+      peakGeometryBytes: this.peakGeometryBytes,
       surfaceAvailable,
       surfaceFallback: this.surfaceFallback,
     };
@@ -1366,6 +1377,8 @@ export class Orbit3DPointCloud {
     this.buildMedianSliceMs = 0;
     this.buildMaxSliceMs = 0;
     this.finalisationMs = 0;
+    this.bandPointCount = 0;
+    this.peakGeometryBytes = 0;
     this.surfaceVisibleIterations = plottedIterations;
     this.pointHybridCull = false;
     this.surfaceFallback = null;
@@ -1814,6 +1827,10 @@ export class Orbit3DPointCloud {
     const refinedCellIndices = new Set<number>();
     const refinedLeavesByCell = new Map<number, OrbitSurfaceRefinedCell[]>();
     const adaptiveSamples = new Map<number, OrbitSurfaceSample>();
+    const bandSamples: Array<{ x: number; y: number; sample: OrbitSurfaceSample }> = [];
+    const bandBaseCells: number[] = [];
+    const bandSampleKeys = new Set<number>();
+    const bandAcceptedCounts = new Uint8Array(cellCount);
     let contourSampleValues = new Float32Array(0);
     let contourPeriods = new Int16Array(0);
     let contourInteriors = new Float32Array(0);
@@ -1835,11 +1852,13 @@ export class Orbit3DPointCloud {
       Math.max(0.25, viewportWidth / Math.max(1, viewportHeight)),
       this.camera,
     );
-    let phase: "coarse" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
+    let phase: "coarse" | "band-scan" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
     let cell = 0;
+    let bandScan = 0;
     let refinementScan = 0;
     let edgeScan = 0;
     let transitionEdge = 0;
+    let bandBaseCellCount = 0;
     let periodicDistances: Float32Array = new Float32Array(cellCount);
 
     this.pointCount = 0;
@@ -1861,7 +1880,7 @@ export class Orbit3DPointCloud {
         if (phase === "coarse") {
           if (cell >= cellCount) {
             prepareDissolveCoverages();
-            phase = "refinement-scan";
+            phase = "band-scan";
             continue;
           }
           const x = cell % sampleWidth;
@@ -1884,6 +1903,44 @@ export class Orbit3DPointCloud {
             interiors[cell] = measure.interior;
           }
           cell += 1;
+        } else if (phase === "band-scan") {
+          const candidatesPerCell = ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION ** 2;
+          if (bandScan >= bandBaseCells.length * candidatesPerCell) {
+            phase = "refinement-scan";
+            continue;
+          }
+          const sourceCell = bandBaseCells[Math.floor(bandScan / candidatesPerCell)];
+          const subCell = bandScan % candidatesPerCell;
+          if (bandAcceptedCounts[sourceCell] < ORBIT_SURFACE_BAND_SAMPLES_PER_CELL) {
+            const sourceX = sourceCell % sampleWidth;
+            const sourceY = (sourceCell - sourceX) / sampleWidth;
+            const subX = subCell % ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION;
+            const subY = (subCell - subX) / ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION;
+            const x = sourceX
+              + (
+                (subX + 0.5) / ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION - 0.5
+              ) * ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS;
+            const y = sourceY
+              + (
+                (subY + 0.5) / ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION - 0.5
+              ) * ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS;
+            if (
+              (x !== sourceX || y !== sourceY) &&
+              x >= 0 && x <= sampleWidth - 1 &&
+              y >= 0 && y <= sampleHeight - 1
+            ) {
+              const key = surfacePointId(x, y);
+              if (!bandSampleKeys.has(key)) {
+                const sample = sampleSurfacePoint(x, y);
+                if (sample.period === 0 && !sample.escaped) {
+                  bandSampleKeys.add(key);
+                  bandSamples.push({ x, y, sample });
+                  bandAcceptedCounts[sourceCell] += 1;
+                }
+              }
+            }
+          }
+          bandScan += 1;
         } else if (phase === "refinement-scan") {
           if (refinementScan >= coarseQuadCount) {
             phase = "edge-scan";
@@ -2191,6 +2248,15 @@ export class Orbit3DPointCloud {
       periodicDistances = boundaryDistanceField(periodicMask, sampleWidth, sampleHeight);
       for (let index = 0; index < cellCount; index += 1) {
         dissolves[index] = dissolveCoverage(chaosDistances[index]);
+        if (isOrbitSurfaceCloudBandSample(
+          coarsePeriod(index),
+          escaped[index] !== 0,
+          periodicDistances[index],
+          ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
+        )) {
+          bandBaseCellCount += 1;
+          bandBaseCells.push(index);
+        }
       }
     };
 
@@ -2215,7 +2281,7 @@ export class Orbit3DPointCloud {
     };
 
     const dissolveCoverage = (distance: number): number =>
-      Math.min(1, Math.max(0, distance - 0.5) / ORBIT_SURFACE_DISSOLVE_BAND_CELLS);
+      orbitSurfaceDissolveCoverage(distance, ORBIT_SURFACE_DISSOLVE_BAND_CELLS);
 
     const recordSlice = (startedAt: number, budgetMs: number): void => {
       if (Number.isFinite(budgetMs)) {
@@ -2272,7 +2338,8 @@ export class Orbit3DPointCloud {
       const pointSampleCount = boundedCount === 0
         ? sampleCount
         : Math.max(1, Math.min(sampleCount, Math.floor(pointBudget / boundedCount)));
-      const fullPointCount = boundedCount * pointSampleCount;
+      const pointSiteCount = boundedCount + bandSamples.length;
+      const fullPointCount = pointSiteCount * pointSampleCount;
       const positions = new Float32Array(fullPointCount * 3);
       const pointPeriods = new Float32Array(fullPointCount);
       const pointInteriors = new Float32Array(fullPointCount);
@@ -2282,21 +2349,49 @@ export class Orbit3DPointCloud {
         const sourceCell = boundedCells[slot];
         const x = sourceCell % sampleWidth;
         const y = (sourceCell - x) / sampleWidth;
+        writePointSite(slot, x, y, {
+          samples,
+          sampleOffset: sourceCell * sampleCount,
+          period: periods[sourceCell],
+          interior: interiors[sourceCell],
+          boundary: boundaries[sourceCell],
+          escaped: false,
+        }, periodicDistances[sourceCell]);
+      }
+      for (let index = 0; index < bandSamples.length; index += 1) {
+        const band = bandSamples[index];
+        writePointSite(
+          boundedCount + index,
+          band.x,
+          band.y,
+          band.sample,
+          interpolateGrid(periodicDistances, band.x, band.y),
+        );
+      }
+
+      function writePointSite(
+        slot: number,
+        x: number,
+        y: number,
+        sampled: OrbitSurfaceSample,
+        periodicDistance: number,
+      ): void {
         const cRe = cellCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
         const cIm = y === Math.floor(sampleHeight / 2)
           ? 0
           : cellCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+        const sampleOffset = Math.max(0, Math.floor(sampled.sampleOffset ?? 0));
         for (let sample = 0; sample < pointSampleCount; sample += 1) {
-          const point = sample * boundedCount + slot;
+          const point = sample * pointSiteCount + slot;
           const offset = point * 3;
           positions[offset] = cRe;
           positions[offset + 1] = cIm;
-          positions[offset + 2] = samples[sourceCell * sampleCount + sample];
-          pointPeriods[point] = periods[sourceCell];
-          pointInteriors[point] = interiors[sourceCell];
-          pointBoundaries[point] = boundaries[sourceCell];
-          if (periods[sourceCell] === 0) {
-            pointWeights[point] = dissolveCoverage(periodicDistances[sourceCell]);
+          positions[offset + 2] = sampled.samples[sampleOffset + sample];
+          pointPeriods[point] = sampled.period;
+          pointInteriors[point] = sampled.interior;
+          pointBoundaries[point] = sampled.boundary;
+          if (sampled.period === 0) {
+            pointWeights[point] = dissolveCoverage(periodicDistance);
           }
         }
       }
@@ -2313,6 +2408,8 @@ export class Orbit3DPointCloud {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, pointWeights, gl.STATIC_DRAW);
       this.fullPointCount = fullPointCount;
+      this.bandPointCount = (bandBaseCellCount + bandSamples.length) * pointSampleCount;
+      this.pointBudget = pointBudget + bandSamples.length * pointSampleCount;
       this.sampleCount = pointSampleCount;
       this.visibleIterations = Math.min(plottedIterations, pointSampleCount);
       this.refreshPointCount();
@@ -2326,6 +2423,12 @@ export class Orbit3DPointCloud {
           : orderedSlices[middle];
       this.buildMaxSliceMs = orderedSlices.at(-1) ?? 0;
       this.finalisationMs = performance.now() - finalisationStart;
+      this.peakGeometryBytes = positions.byteLength
+        + pointPeriods.byteLength
+        + pointInteriors.byteLength
+        + pointBoundaries.byteLength
+        + pointWeights.byteLength
+        + (mesh ? orbitSurfaceMeshBytes(mesh) : 0);
       this.buildTimer = null;
       this.building = false;
       this.pendingSlice = null;
@@ -2872,6 +2975,18 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= HIGH_CELL_CEILING) return POINT_BUDGETS.high;
   if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
   return POINT_BUDGETS.extreme;
+}
+
+function orbitSurfaceMeshBytes(mesh: OrbitSurfaceMesh): number {
+  return mesh.positions.byteLength
+    + mesh.normals.byteLength
+    + mesh.periods.byteLength
+    + mesh.interiors.byteLength
+    + mesh.boundaries.byteLength
+    + mesh.ranks.byteLength
+    + mesh.edgeFades.byteLength
+    + mesh.dissolves.byteLength
+    + mesh.indices.byteLength;
 }
 
 function surfaceGridSizeFor(cellCount: number): number {
