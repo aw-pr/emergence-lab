@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-08-22
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
-- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
 - **Verifier:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier panel:** false
 - **Pairing rationale:** the operator is conserving Claude quota this
@@ -166,3 +166,40 @@ between the two before anything else.
 - Start from the WIP commit; the curve tracing and the 0.25 px analytic
   chord figures stand. All original criteria and the stage-54/55
   baselines stand unchanged.
+
+## Re-brief (2026-08-22, attempt 3)
+
+Attempt 2 (committed as `wip/56-attempt-2`, 67ef4e7) fixed the slicing
+(defect 2 confirmed gone: max slice 36.3 ms) but re-briefed defect 1
+persists identically and the worker seat moves to Terra for fresh eyes.
+
+- **The persisting fatal defect:** the live hybrid still throws "Orbit
+  surface sample was not prepared at 414,610.5" and drops to the
+  sheetless surface-allocation fallback (0 triangles against stage 55's
+  445,023). The verified call path: `preparedSample`
+  (`src/app/orbit3d.ts:2050`) via `locateOrbitSurfaceTransition`
+  (`src/app/orbitSurface.ts:188`), `vertexAtTransition` (:671),
+  `appendTriangle` (:562), `appendBaseTriangle` (:531), `appendBaseQuad`
+  (:511), from `buildOrbitSurface`. Note the half coordinate: the
+  transition locator queries samples at positions between cell corners.
+  Preparation must cover every lookup the transition locator can perform
+  along analytic boundaries, not only the corner lattice.
+- **Reproduce before fixing, in your own loop.** `buildOrbitSurface` is
+  pure, so this throw is reachable without a browser. First deliverable
+  of the attempt: a pure fixture or harness case that calls the surface
+  build through the same configuration the live default framing uses
+  (analytic integration on, live grid resolution and window) and throws
+  exactly this error against the `wip/56-attempt-2` tree. Only then fix
+  it and show the same case passing. Attempt 2 added a "strict
+  lookup-only" check that passes while the live path throws; that check
+  is not covering the transition-locator lookups, which is the gap.
+- **Refinement spend:** refined cells rose 6,214 to 8,814 against the
+  re-brief's "spend less, not more". Land at or below the stage-55
+  figure.
+- **Findings honesty:** "verifier to measure" placeholders are a
+  deliverable failure. Everything pure-computable must carry measured
+  numbers in the note: triangle count, refined leaves and geometry bytes
+  from the pure build at the live configuration. Only the browser timing
+  columns (slice, finalisation) may be marked for verifier measurement.
+- Start from `wip/56-attempt-2`; the slicing work and the analytic chord
+  figures stand. All original criteria and baselines stand unchanged.
