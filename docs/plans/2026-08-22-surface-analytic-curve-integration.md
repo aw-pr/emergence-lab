@@ -8,32 +8,40 @@ forms. Higher periods start from the stage-54 catalogue seed and multiplier
 angle. A deterministic 128-step continuation ceiling keeps each live trace
 bounded. Failures retain the stage-55 sampled contour and are reported.
 
-The fatal attempt-2 failure is reproduced by a pure 768 by 768 fixture before
-the fix. It throws the verifier's exact error,
-`Orbit surface sample was not prepared at 414,610.5`, through
-`buildOrbitSurface`, `vertexAtTransition`, and
-`locateOrbitSurfaceTransition`. The surface builder previously ran six
-categorical midpoint lookups before checking whether a traced curve already
-provided the exact crossing. It now resolves the analytic crossing first and
-runs categorical bisection only for sampled fallback edges. The same fixture
-passes and emits triangles after the change.
+The sampled orbit is the sole membership authority (attempt-5 fix, commit
+`9494820`). Traced curves never change a cell's period in either direction:
+demotion near a curve cut straight facets into the sheets wherever a sparse
+trace closed an arc with a chord, and containment rescue converted the
+slow-converging chaotic ring inside each component into sheet, collapsing
+the edge cloud band. Curves retain three refining roles: refinement
+allocation near crossings, analytic transition-vertex snapping (resolved
+before categorical bisection), and distance values applied only within 2
+cells of agreement with the sampled field. The band and cloud figures are
+therefore bit-identical to stage 55. The former hard-coded-coordinate
+fixture is replaced by a genuine property test: an under-covering traced
+curve must not bite the sampled silhouette
+(`src/sims/logistic-mandelbrot/kernel.test.cjs`).
 
 ## Integration design
 
 The surface builder's return contract is unchanged. Its options accept closed
 boundary polylines. Triangle-edge crossings come from those polylines, and
 curve-intersecting cells enter refinement even when all four coarse corners
-share a label. Analytic refinement stops at depth 4. Its allowance is 5,592
-leaves, leaving the live build's 622 sampled-fallback leaves unchanged and
-holding the stage-55 total ceiling of 6,214.
+share a label. Analytic refinement stops at depth 4 under a 5,592-leaf
+allowance. Rescue-free integration keeps the whole stage-55 sampled
+boundary (6,214 leaves at the verifier's DPR2 rig) and adds 769 analytic
+leaves near curve crossings, landing at 6,983 within the 7,000 envelope.
 
 Adaptive leaves carry their owning coarse quad, so integer sub-cell boundaries
 remain attached to the correct tessellation cell. The harness now mirrors the
 live two-part preparation protocol: the planning sampler prepares adaptive
 points, then an edge scan prepares the categorical bisection points needed by
-fallback contours. Tessellation uses a strict lookup-only sampler. The full
-768 by 768 default-window build therefore exercises the same prepared-sample
-invariant as the live path rather than a small proxy.
+fallback contours. Tessellation uses the same total sampler as the live
+path: a lookup miss self-heals by computing the sample on demand, and the
+harness reports the on-demand count (zero in every window). The full 768 by
+768 build projects through the verifier rig's device-pixel viewport (1280 by
+720 at devicePixelRatio 2) and reproduces the live refinement spend and
+triangle count exactly.
 
 Analytic work stays inside the sliced phase loop. Catalogue tracing runs one
 bounded component at a time, grid relabelling runs cell by cell, and
@@ -42,11 +50,12 @@ quantisation and finalisation because the worker sandbox cannot launch it.
 
 ## Curve-distance grading
 
-The traced path supplies membership and distance in grid-cell units. Inside a
-covered component, sheet dissolve comes from true distance to that component
-curve. Outside it, cloud-band selection and weight use true curve distance
-within the 12-cell band. The sampled distance field remains unchanged for
-untraced components and points outside analytic influence. An exact curve
+The traced path supplies distance only, never membership. Inside a covered
+component, sheet dissolve comes from true distance to that component curve
+when that distance agrees with the sampled periodic field to within 2 cells;
+where a trace diverges from the sampled edge, the sampled field wins, so the
+dissolve band and the cloud band never migrate to a bogus chord. Cloud-band
+selection uses the unmodified sampled distance field. An exact curve
 crossing has dissolve zero.
 
 Curve lookup rejects components by bounding box before polyline distance is
@@ -55,13 +64,18 @@ evaluated, avoiding a full point comparison against every curve.
 ## Deterministic harness result
 
 Two complete `node scripts/analyze-sheet-edges.cjs` runs were byte-identical.
-SHA-256: `4f6c8d1ebd491d01bcd7bd06bee971575a9190d9040c18f3d42a15e4f2a0ce13`.
+SHA-256: `a2a28795041109198be4c1c9b1121622af8bdd94658043ad200a152ff1d0875f`.
 
-| Window | Curve-trimmed components | Fallback components | Boundary vertex error | Silhouette chord error | Prepared invariant |
-|---|---|---|---:|---:|---|
-| full-default | p1@49, p2@100, p3@30, p3@115, p7@51, p7@203 | p3@220 did not close; p4@118 singular corrector | 0.000004 px | 0.247848 px | pass |
-| period-2-bulb | p1@104, p2@70, p6@47, p6@362, p8@52, p8@388 | p4@189 singular corrector | 0.000008 px | 0.220530 px | pass |
-| period-8-cascade | none | p4@19 singular corrector; p8@91 did not close | not applicable | not applicable | pass |
+| Window | Curve-trimmed components | Fallback components | Boundary vertex error | Silhouette chord error | Demoted cells |
+|---|---|---|---:|---:|---:|
+| full-default | p1@49, p2@100, p3@30, p3@115, p7@51, p7@203 | p3@220 did not close; p4@118 singular corrector | 0.000004 px | 0.247848 px | 0 |
+| period-2-bulb | p1@104, p2@70, p6@47, p6@362, p8@52, p8@388 | p4@189 singular corrector | 0.000008 px | 0.220530 px | 0 |
+| period-8-cascade | none | p4@19 singular corrector; p8@91 did not close | not applicable | not applicable | 0 |
+
+The live 768 by 768 row gates on zero demoted cells and measures the
+silhouette chord against the traced curves at the live grid: maximum
+0.428864 cells (worst component p1@108761), snapped boundary vertices at
+0.000041 cells.
 
 The cascade fixture honestly remains sampled because neither catalogue
 component closes under the existing tracer. Extending continuation robustness
@@ -99,27 +113,29 @@ cloud-parity constants remain unchanged.
 
 ## Measured pure-build cost
 
-| Window | Refined leaves | Analytic/fallback | Triangles | Mesh bytes |
-|---|---:|---:|---:|---:|
-| full-default | 413 | 402/11 | 2,233 | 144,348 |
-| period-2-bulb | 799 | 797/2 | 5,585 | 279,564 |
-| period-8-cascade | 155 | 0/155 | 4,204 | 194,256 |
-| live-default-768 | 6,214 | 5,592/622 | 431,129 | 16,194,780 |
+| Window | Triangles | Mesh bytes |
+|---|---:|---:|
+| full-default | 3,649 | 226,380 |
+| period-2-bulb | 12,862 | 660,408 |
+| period-8-cascade | 4,204 | 194,256 |
+| live-default-768 | 436,766 | 16,833,624 |
 
-The live point buffers remain 371,114,240 bytes at 13,254,080 points. Adding
-the measured mesh gives a pure-computable peak geometry figure of 387,309,020
-bytes. The triangle count is below the 1,199,999 cap. The refinement total is
-equal to, not above, the stage-55 figure, while every sampled fallback leaf is
-retained.
+The live row refines 6,983 leaves at the DPR2 rig viewport. The live point
+buffers remain 371,114,240 bytes at 13,254,080 points; adding the measured
+mesh gives a pure-computable peak geometry figure of 387,947,864 bytes. The
+triangle count is below the 1,199,999 cap with 2.75x headroom. The
+refinement total is 769 leaves above the stage-55 figure, the cost of
+rescue-free analytic snapping, within the 7,000 envelope; every sampled
+fallback leaf is retained.
 
 | Figure | Stage 55 | Stage 56 pure after |
 |---|---:|---:|
 | Median slice | 8.000 ms | verifier to measure |
 | Maximum slice | 37.400 ms | verifier to measure |
 | Finalisation | 2,004.500 ms | verifier to measure |
-| Peak geometry | 388,734,260 B | 387,309,020 B |
-| Triangles | 445,023 | 431,129 |
-| Refined leaves | 6,214 | 6,214 |
+| Peak geometry | 388,734,260 B | 387,947,864 B |
+| Triangles | 445,023 | 436,766 |
+| Refined leaves | 6,214 | 6,983 |
 
 The verifier should measure the three browser timing rows, confirm cloud-mode
 pixel identity, inspect the cardioid and period-2 circle at review zoom, and
