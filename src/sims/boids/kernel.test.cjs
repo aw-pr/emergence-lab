@@ -758,6 +758,22 @@ test("short custom drags place rocks instead of sliver capsules", () => {
   assert.equal(kernel.obstacles[1].kind, "capsule");
 });
 
+test("chained wall segments stay solid at their shared joint", () => {
+  const kernel = customKernel();
+
+  const spacing = kernel.customWallSegmentSpacing();
+  assert.ok(spacing > 0);
+  assert.equal(kernel.placeCustomCapsule(30, 40, 30 + spacing, 40), true);
+  assert.equal(
+    kernel.placeCustomCapsule(30 + spacing, 40, 30 + spacing, 40 + spacing),
+    true,
+  );
+  assert.equal(kernel.obstacles.length, 2);
+  assert.equal(kernel.obstacles[0].kind, "capsule");
+  assert.equal(kernel.obstacles[1].kind, "capsule");
+  assert.equal(kernel.removeCustomObstacleAt(30 + spacing, 40), true);
+});
+
 test("custom edit API places deterministic rocks and drag capsules", () => {
   const first = customKernel();
   const second = customKernel();

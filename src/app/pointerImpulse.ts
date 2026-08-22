@@ -4,6 +4,7 @@ export interface PointerImpulseTarget {
   editsObstacles?(): boolean;
   beginCustomTrail?(): void;
   placeCustomTrailPoint?(clientX: number, clientY: number): boolean;
+  endCustomTrail?(clientX: number, clientY: number): boolean;
   placeCustomRock?(clientX: number, clientY: number): boolean;
   removeCustomObstacleAt?(clientX: number, clientY: number): boolean;
 }
@@ -17,8 +18,8 @@ const OBSTACLE_DRAG_THRESHOLD = 4;
  * their own pointer gestures and never use this. Returns a detach function.
  *
  * Obstacle gestures: a tap removes the dropped obstacle under the pointer or
- * drops a boulder; holding and dragging lays a live line of boulders that
- * follows the pointer, spaced by the target's trail spacing.
+ * drops a boulder; holding and dragging lays a solid breakwater that follows
+ * the pointer, built live from capsule segments sampled along the path.
  */
 export function attachPointerImpulse(
   canvas: HTMLCanvasElement,
@@ -76,7 +77,10 @@ export function attachPointerImpulse(
     if (activePointerId === null || ev.pointerId !== activePointerId) return;
     if (obstacleGesture && commitObstacleGesture) {
       if (trailActive) {
-        target.placeCustomTrailPoint?.(ev.clientX, ev.clientY);
+        (target.endCustomTrail ?? target.placeCustomTrailPoint)?.(
+          ev.clientX,
+          ev.clientY,
+        );
       } else if (!target.removeCustomObstacleAt?.(ev.clientX, ev.clientY)) {
         target.placeCustomRock?.(ev.clientX, ev.clientY);
       }

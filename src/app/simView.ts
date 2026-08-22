@@ -37,7 +37,13 @@ const dismissedCustomObstacleHints = new Set<string>();
 
 interface BoidsObstacleEditor {
   placeCustomRock(x: number, y: number): boolean;
-  customRockTrailSpacing(): number;
+  placeCustomCapsule(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): boolean;
+  customWallSegmentSpacing(): number;
   removeCustomObstacleAt(x: number, y: number): boolean;
   clearCustomObstacles(): boolean;
   getCustomObstacles(): readonly unknown[];
@@ -736,17 +742,44 @@ export async function renderSimView(
         placeCustomTrailPoint: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
           if (!point) return false;
-          if (lastTrailPoint) {
-            const spacing = obstacleEditor.customRockTrailSpacing();
-            const travelled = Math.hypot(
-              point[0] - lastTrailPoint[0],
-              point[1] - lastTrailPoint[1],
-            );
-            if (travelled < spacing) return false;
+          if (!lastTrailPoint) {
+            lastTrailPoint = point;
+            return false;
           }
-          const placed = obstacleEditor.placeCustomRock(point[0], point[1]);
+          const spacing = obstacleEditor.customWallSegmentSpacing();
+          const travelled = Math.hypot(
+            point[0] - lastTrailPoint[0],
+            point[1] - lastTrailPoint[1],
+          );
+          if (travelled < spacing) return false;
+          const placed = obstacleEditor.placeCustomCapsule(
+            lastTrailPoint[0],
+            lastTrailPoint[1],
+            point[0],
+            point[1],
+          );
           if (placed) lastTrailPoint = point;
           return finishObstacleEdit(placed);
+        },
+        endCustomTrail: (clientX, clientY) => {
+          const point = obstaclePoint(clientX, clientY);
+          const from = lastTrailPoint;
+          lastTrailPoint = undefined;
+          if (!point || !from) return false;
+          // Below a third of the sampling length the capsule would collapse
+          // to its rock fallback and leave a bulb on the wall end.
+          const travelled = Math.hypot(point[0] - from[0], point[1] - from[1]);
+          if (travelled < obstacleEditor.customWallSegmentSpacing() / 3) {
+            return false;
+          }
+          return finishObstacleEdit(
+            obstacleEditor.placeCustomCapsule(
+              from[0],
+              from[1],
+              point[0],
+              point[1],
+            ),
+          );
         },
         removeCustomObstacleAt: (clientX, clientY) => {
           const point = obstaclePoint(clientX, clientY);
@@ -930,7 +963,7 @@ function buildBoidsObstacleTools(options: {
 
   const hint = document.createElement("output");
   hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
-  hint.value = "Click to drop a boulder · Hold and drag for a boulder line · Click a dropped boulder to remove";
+  hint.value = "Click to drop a boulder · Hold and drag to lay a breakwater · Click a dropped obstacle to remove";
   root.appendChild(hint);
 
   const controls = document.createElement("div");

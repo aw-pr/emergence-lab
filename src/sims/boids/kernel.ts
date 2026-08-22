@@ -916,12 +916,23 @@ export class BoidsKernel implements SimKernel {
   }
 
   /**
-   * Grid-unit spacing between successive rocks in a pointer-drawn boulder
-   * line: close enough to read as one arc, open enough that a full-width
-   * drag stays well inside the composed obstacle cap.
+   * Grid-unit sampling length for a pointer-drawn breakwater. Successive
+   * samples become capsule segments that share endpoints, so the wall is
+   * solid at any spacing; this only bounds the segment count so a
+   * full-width drag stays well inside the composed obstacle cap.
    */
-  customRockTrailSpacing(): number {
-    return this.customRockRadius() * 1.6;
+  customWallSegmentSpacing(): number {
+    // Floored above the capsule threshold so a segment sampled at this
+    // spacing never collapses to the rock fallback on small worlds.
+    return Math.max(
+      this.customWallRadius() * 3,
+      CUSTOM_OBSTACLE_DRAG_THRESHOLD * 1.5,
+    );
+  }
+
+  private customWallRadius(): number {
+    return Math.min(this.width, this.height) *
+      (0.008 + this.obstacleAmount * 0.012);
   }
 
   private customRockRadius(): number {
@@ -970,8 +981,7 @@ export class BoidsKernel implements SimKernel {
     const halfX = deltaX * 0.5;
     const halfY = deltaY * 0.5;
 
-    const radius = Math.min(this.width, this.height) *
-      (0.008 + this.obstacleAmount * 0.012);
+    const radius = this.customWallRadius();
     return this.appendCustomObstacle({
       kind: "capsule",
       x: x1 + halfX,
