@@ -621,6 +621,14 @@ export const ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS = 0.75;
 export const ORBIT_SURFACE_BAND_SAMPLE_WEIGHT = 0.5;
 export const ORBIT_SURFACE_ANALYTIC_CHORD_ERROR_C = 0.00075;
 const ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS = 12;
+/**
+ * A curve-derived distance may replace the sampled distance field only when
+ * the two agree to within this many cells. Where a traced polyline diverges
+ * from the sampled sheet edge (a sparse trace closing an arc with a chord),
+ * the curve distance is wrong by many cells and the sampled field must win,
+ * or the dissolve band and the edge cloud band migrate to the bogus chord.
+ */
+const ORBIT_SURFACE_ANALYTIC_AGREEMENT_CELLS = 2;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
@@ -1955,7 +1963,6 @@ export class Orbit3DPointCloud {
       minY: number;
       maxY: number;
     }> = [];
-    const tracedPeriods = new Set<number>();
     let componentRegions: ReturnType<typeof buildOrbitSurfaceComponentCatalogue> = [];
     const tracedComponents: ReturnType<
       typeof traceOrbitSurfaceComponentCatalogue
@@ -2266,68 +2273,14 @@ export class Orbit3DPointCloud {
       return result;
     };
 
-    const curveAwarePeriod = (
-      x: number,
-      y: number,
-      sampledPeriod: number,
-    ): number => {
-      for (const entry of boundaryCurveBounds) {
-        const { curve } = entry;
-        if (
-          curve.period <= sampleCount &&
-          x >= entry.minX && x <= entry.maxX &&
-          y >= entry.minY && y <= entry.maxY &&
-          orbitSurfaceCurveContains(curve, x, y)
-        ) {
-          return curve.period;
-        }
-      }
-      if (sampledPeriod <= 0) return 0;
-      if (sampledPeriod <= 2 && tracedPeriods.has(sampledPeriod)) return 0;
-      const nearest = nearestBoundaryAt(
-        x,
-        y,
-        sampledPeriod,
-        ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS,
-      );
-      if (!nearest) return sampledPeriod;
-      return nearest.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS
-        ? 0
-        : sampledPeriod;
-    };
-
-    const sampleCurveAwareCell = (
-      cRe: number,
-      cIm: number,
-      x: number,
-      y: number,
-      values: Float32Array,
-      offset: number,
-      measure: { interior: number },
-    ): number => {
-      const sampled = sampleClassifiedCell(cRe, cIm, values, offset, measure);
-      const sampledPeriod = sampled === ESCAPED ? 0 : sampled;
-      const analyticPeriod = curveAwarePeriod(x, y, sampledPeriod);
-      if (analyticPeriod === sampledPeriod) return sampled;
-      if (analyticPeriod <= 0) return sampled === ESCAPED ? ESCAPED : 0;
-      const classification = classifyOrbitSurfaceComponent(cRe, cIm, {
-        multiplierMargin: 0,
-      });
-      if (
-        classification.period === analyticPeriod &&
-        writeOrbitSurfaceCycleSamples(
-          classification,
-          cRe,
-          cIm,
-          values,
-          offset,
-          sampleCount,
-        )
-      ) {
-        measure.interior = Math.max(0, Math.min(1, classification.multiplier));
-      }
-      return analyticPeriod;
-    };
+    // The sampled orbit is the sole membership authority. A traced curve is
+    // a fit to that data: it can under-cover a component (a sparse polyline
+    // closes an arc with one long chord), and rescuing cells it contains
+    // converts the slow-converging chaotic ring just inside each component
+    // into sheet, which is exactly the bright edge cloud band. Curves
+    // therefore refine geometry only — refinement allocation, transition
+    // vertex snapping, and agreement-guarded distances — and never change a
+    // cell's period in either direction.
 
     const prepareAnalyticCatalogue = () =>
       buildOrbitSurfaceComponentCatalogue(
@@ -2373,8 +2326,6 @@ export class Orbit3DPointCloud {
         minY: Math.min(...curve.points.map((point) => point.y)),
         maxY: Math.max(...curve.points.map((point) => point.y)),
       }));
-      tracedPeriods.clear();
-      for (const curve of boundaryCurves) tracedPeriods.add(curve.period);
       this.curveTrimmedComponentCount = tracedComponents.length;
       this.curveFallbackComponentCount = fallbackComponents.length;
 
@@ -2382,41 +2333,10 @@ export class Orbit3DPointCloud {
     };
 
     const relabelAnalyticCell = (index: number): void => {
-      const x = index % sampleWidth;
-      const y = (index - x) / sampleWidth;
-      const currentPeriod = escaped[index] === 0 ? periods[index] : 0;
-      const analyticPeriod = curveAwarePeriod(x, y, currentPeriod);
-      if (analyticPeriod > 0) {
-        if (analyticPeriod !== currentPeriod) {
-          const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
-          const cIm = y === Math.floor(sampleHeight / 2)
-            ? 0
-            : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
-          const classification = classifyOrbitSurfaceComponent(cRe, cIm, {
-            multiplierMargin: 0,
-          });
-          if (
-            classification.period === analyticPeriod &&
-            writeOrbitSurfaceCycleSamples(
-              classification,
-              cRe,
-              cIm,
-              samples,
-              index * sampleCount,
-              sampleCount,
-            )
-          ) {
-            interiors[index] = Math.max(
-              0,
-              Math.min(1, classification.multiplier),
-            );
-          }
-        }
-        periods[index] = analyticPeriod;
-        escaped[index] = 0;
+      // Membership is fixed at base sampling; this phase only recounts the
+      // sheet cells the diagnostics report after the curves are traced.
+      if (escaped[index] === 0 && periods[index] > 0) {
         sheetPeriodicCellCount += 1;
-      } else if (currentPeriod > 0) {
-        periods[index] = 0;
       }
     };
 
@@ -2548,15 +2468,7 @@ export class Orbit3DPointCloud {
       const cIm = y === Math.floor(sampleHeight / 2)
         ? 0
         : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
-      const result = sampleCurveAwareCell(
-        cRe,
-        cIm,
-        x,
-        y,
-        values,
-        0,
-        measure,
-      );
+      const result = sampleClassifiedCell(cRe, cIm, values, 0, measure);
       const sample: OrbitSurfaceSample = {
         samples: values,
         period: result === ESCAPED ? 0 : result,
@@ -2594,11 +2506,9 @@ export class Orbit3DPointCloud {
       const cIm = y === Math.floor(sampleHeight / 2)
         ? 0
         : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
-      const result = sampleCurveAwareCell(
+      const result = sampleClassifiedCell(
         cRe,
         cIm,
-        x,
-        y,
         contourSampleValues,
         contourSampleCount * sampleCount,
         measure,
@@ -2698,22 +2608,11 @@ export class Orbit3DPointCloud {
       const sheetCurve = period > 0
         ? nearestBoundaryAt(x, y, period)
         : null;
-      dissolves[index] = sheetCurve?.inside
+      dissolves[index] = sheetCurve?.inside &&
+          Math.abs(sheetCurve.distance - periodicDistances[index]) <=
+            ORBIT_SURFACE_ANALYTIC_AGREEMENT_CELLS
         ? dissolveCoverage(sheetCurve.distance)
         : dissolveCoverage(chaosDistances[index]);
-      const periodicCurve = nearestBoundaryAt(
-        x,
-        y,
-        undefined,
-        ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS,
-      );
-      if (
-        periodicCurve &&
-        (periodicCurve.inside ||
-          periodicCurve.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS)
-      ) {
-        periodicDistances[index] = periodicCurve.distance;
-      }
       if (isOrbitSurfaceCloudBandSample(
         period,
         escaped[index] !== 0,
@@ -2731,12 +2630,19 @@ export class Orbit3DPointCloud {
     const dissolveAtGrid = (x: number, y: number, period: number): number => {
       if (period > 0) {
         const curve = nearestBoundaryAt(x, y, period);
-        if (curve?.inside) return dissolveCoverage(curve.distance);
+        if (
+          curve?.inside &&
+          Math.abs(curve.distance - interpolateGrid(periodicDistances, x, y)) <=
+            ORBIT_SURFACE_ANALYTIC_AGREEMENT_CELLS
+        ) {
+          return dissolveCoverage(curve.distance);
+        }
       }
       return interpolateGrid(dissolves, x, y);
     };
 
     const periodicDistanceAtGrid = (x: number, y: number): number => {
+      const sampled = interpolateGrid(periodicDistances, x, y);
       const curve = nearestBoundaryAt(
         x,
         y,
@@ -2745,12 +2651,12 @@ export class Orbit3DPointCloud {
       );
       if (
         curve &&
-        (curve.inside ||
-          curve.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS)
+        Math.abs(curve.distance - sampled) <=
+          ORBIT_SURFACE_ANALYTIC_AGREEMENT_CELLS
       ) {
         return curve.distance;
       }
-      return interpolateGrid(periodicDistances, x, y);
+      return sampled;
     };
 
     const interpolateGrid = (values: Float32Array, x: number, y: number): number => {
