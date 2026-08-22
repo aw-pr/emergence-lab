@@ -1,5 +1,3 @@
-import type { OrbitSurfaceComponentRegion } from "./orbitSurfaceComponents.js";
-
 export interface OrbitSurfaceComplex {
   re: number;
   im: number;
@@ -34,27 +32,6 @@ export interface OrbitSurfaceBoundaryTraceOptions {
   maxChordError?: number;
   rootTolerance?: number;
   maxCorrectorIterations?: number;
-  /** Deterministic work ceiling for callers that must keep one trace bounded. */
-  maxContinuationSteps?: number;
-}
-
-export interface OrbitSurfaceTracedComponent {
-  componentId: string;
-  firstCell: number;
-  period: number;
-  curve: OrbitSurfaceBoundaryCurve;
-}
-
-export interface OrbitSurfaceCurveFallback {
-  componentId: string;
-  firstCell: number;
-  period: number;
-  reason: string;
-}
-
-export interface OrbitSurfaceComponentTraceResult {
-  traced: OrbitSurfaceTracedComponent[];
-  fallback: OrbitSurfaceCurveFallback[];
 }
 
 const TWO_PI = Math.PI * 2;
@@ -160,10 +137,6 @@ export function traceOrbitSurfaceBoundary(
     1,
     Math.floor(options.maxCorrectorIterations ?? DEFAULT_MAX_CORRECTOR_ITERATIONS),
   );
-  const maxContinuationSteps = Math.max(
-    1,
-    Math.floor(options.maxContinuationSteps ?? Number.MAX_SAFE_INTEGER),
-  );
   const first = correctOrbitSurfaceBoundaryPoint(
     period,
     startAngle,
@@ -175,15 +148,8 @@ export function traceOrbitSurfaceBoundary(
   const points = [first];
   let step = initialStep;
   let maximumAcceptedError = 0;
-  let continuationSteps = 0;
 
   while (points.at(-1)!.angle < endAngle - Number.EPSILON) {
-    continuationSteps += 1;
-    if (continuationSteps > maxContinuationSteps) {
-      throw new Error(
-        `Orbit surface boundary continuation exceeded ${maxContinuationSteps} steps for period ${period}.`,
-      );
-    }
     const current = points.at(-1)!;
     const targetAngle = Math.min(endAngle, current.angle + step);
     const predicted = predict(points, targetAngle);
@@ -284,56 +250,6 @@ export function tracePrimaryOrbitSurfaceBoundary(
     maximumAcceptedError = Math.max(maximumAcceptedError, error);
     points.push(second);
   }
-}
-
-/**
- * Trace every component in a deterministic catalogue. Periods 1 and 2 use
- * their closed forms; higher periods continue from the catalogue's best
- * conditioned interior seed. A failed component is returned explicitly so a
- * caller can preserve its sampled contour instead of silently dropping it.
- */
-export function traceOrbitSurfaceComponentCatalogue(
-  regions: readonly OrbitSurfaceComponentRegion[],
-  maxChordError = 1e-3,
-  maxContinuationSteps?: number,
-): OrbitSurfaceComponentTraceResult {
-  const traced: OrbitSurfaceTracedComponent[] = [];
-  const fallback: OrbitSurfaceCurveFallback[] = [];
-  const ordered = [...regions].sort((left, right) =>
-    left.period - right.period || left.firstCell - right.firstCell);
-  for (const region of ordered) {
-    const componentId = `period-${region.period}-cell-${region.firstCell}`;
-    try {
-      const curve = region.period === 1 || region.period === 2
-        ? tracePrimaryOrbitSurfaceBoundary(region.period, maxChordError)
-        : traceOrbitSurfaceBoundary(
-            region.period,
-            {
-              angle: region.seed.multiplierAngle ?? 0,
-              c: region.seed.c,
-              cycle: region.seed.cycle,
-            },
-            { maxChordError, maxContinuationSteps },
-          );
-      if (!curve.closed || curve.points.length < 4) {
-        throw new Error("continuation did not close");
-      }
-      traced.push({
-        componentId,
-        firstCell: region.firstCell,
-        period: region.period,
-        curve,
-      });
-    } catch (error) {
-      fallback.push({
-        componentId,
-        firstCell: region.firstCell,
-        period: region.period,
-        reason: error instanceof Error ? error.message : "continuation failed",
-      });
-    }
-  }
-  return { traced, fallback };
 }
 
 interface CycleEvaluation {
