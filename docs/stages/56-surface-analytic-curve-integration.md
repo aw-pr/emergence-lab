@@ -131,3 +131,38 @@ slice and memory figures, and the files touched.
   launch a browser. The harness and pure fixtures are your feedback loop.
 - **Claude (verifier):** run the browser pass fully headless; never
   attach to the operator's Chrome or open a headed window.
+
+## Re-brief (2026-08-22, attempt 2)
+
+Attempt 1 (committed for reference as `wip/56-attempt-1`, 02fd130) was
+verified FAIL on the browser and performance clauses. The harness was
+green while the live hybrid rendered no sheets at all; close the gap
+between the two before anything else.
+
+- **Defect 1, fatal:** in the live build the exception "Orbit surface
+  sample was not prepared at 414,610.5" is thrown from the prepared-sample
+  path and swallowed by the catch at the surface build call site
+  (attempt 1's `src/app/orbit3d.ts:2723-2726`), dropping hybrid to the
+  surface-allocation fallback: `orbit3dSurface` reads "fallback" and
+  `orbit3dTriangles` is 0 against stage 55's 445,686. Fix the invariant,
+  do not widen the catch. Every cell the analytic relabelling marks as
+  sheet must have its sample prepared before tessellation consumes it.
+- **Defect 2:** `prepareAnalyticIntegration` traces 49 component curves
+  and relabels the whole grid in one unsliced call at the end of the
+  coarse phase, a 1.9 to 5.5 second blocking slice, 48x to 137x the
+  stage-55 maximum. Move the analytic work inside the sliced loop or
+  chunk it under the slice budget; maximum slice must land in the
+  stage-55 range.
+- **Defect 3:** refined cells hit the 32,768 `ORBIT_SURFACE_REFINEMENT_
+  CELL_BUDGET` ceiling (stage 55 used about 6,250). Curve-trimmed
+  boundaries must not blow the refinement budget; if trimming reduces the
+  need for refinement, spend less, not more.
+- **Harness gap, required deliverable:** the harness passed while the
+  live path threw. Extend `scripts/analyze-sheet-edges.cjs` (or a pure
+  fixture) to execute the same prepared-sample invariant the live
+  tessellation relies on, so a regression of defect 1 fails in the
+  worker's own loop. The findings note must carry measured after columns
+  for slice, finalisation, peak geometry and triangle count.
+- Start from the WIP commit; the curve tracing and the 0.25 px analytic
+  chord figures stand. All original criteria and the stage-54/55
+  baselines stand unchanged.
