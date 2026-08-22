@@ -1528,6 +1528,8 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dSurfaceFallback;
     delete canvas.dataset.orbit3dSurfaceDiagnostic;
     delete canvas.dataset.orbit3dDissolveBandCells;
+    delete canvas.dataset.orbit3dCurveTrimmedComponents;
+    delete canvas.dataset.orbit3dCurveFallbackComponents;
     if (mode === "orbit3d" && isLogisticMandelbrotState(kernel)) {
       canvas.dataset.simulationRenderer = "orbit3d-fallback-field";
       canvas.dataset.orbit3dSampler = "orbit3d-fallback-field";
@@ -1632,6 +1634,12 @@ export class WebGLRendererBackend implements RendererBackend {
       canvas.dataset.orbit3dSheetCoverage = stats.sheetCoverageShare.toFixed(6);
       canvas.dataset.orbit3dSamplerCoverage = stats.samplerCoverageShare.toFixed(6);
       canvas.dataset.orbit3dCloudBandCells = String(ORBIT_SURFACE_CLOUD_BAND_CELLS);
+      canvas.dataset.orbit3dCurveTrimmedComponents = String(
+        stats.curveTrimmedComponentCount,
+      );
+      canvas.dataset.orbit3dCurveFallbackComponents = String(
+        stats.curveFallbackComponentCount,
+      );
     } else {
       delete canvas.dataset.orbit3dBandPoints;
       delete canvas.dataset.orbit3dHybridCloudPointsBefore;
@@ -1640,6 +1648,8 @@ export class WebGLRendererBackend implements RendererBackend {
       delete canvas.dataset.orbit3dSheetCoverage;
       delete canvas.dataset.orbit3dSamplerCoverage;
       delete canvas.dataset.orbit3dCloudBandCells;
+      delete canvas.dataset.orbit3dCurveTrimmedComponents;
+      delete canvas.dataset.orbit3dCurveFallbackComponents;
     }
     canvas.dataset.orbit3dSurfaceDiagnostic = surfaceDiagnosticMode;
     canvas.dataset.orbit3dDissolveBandCells = String(

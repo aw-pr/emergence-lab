@@ -9,6 +9,13 @@ const surface = require(path.join(
   "app",
   "orbitSurface.ts",
 ));
+const orbit3d = require(path.join(
+  __dirname,
+  "..",
+  "src",
+  "app",
+  "orbit3d.ts",
+));
 const curves = require(path.join(
   __dirname,
   "..",
@@ -38,8 +45,11 @@ const REFERENCE_DEPTH = 5;
 const REFERENCE_BISECTION_STEPS = 12;
 const DEPTHS = [1, 2, 3, 4, 5];
 const EDGE_ERROR_PX = 0.5;
+const ANALYTIC_EDGE_ERROR_PX = 0.25;
 const MAX_REFINEMENT_DEPTH = 5;
+const ANALYTIC_MAX_REFINEMENT_DEPTH = 4;
 const REFINEMENT_CELL_BUDGET = 32768;
+const ANALYTIC_REFINEMENT_CELL_BUDGET = 5592;
 // Sheet-side fade width, unchanged from stage 52.
 const DISSOLVE_BAND_CELLS = 8;
 // Cloud-side band, re-tuned by this stage.
@@ -105,6 +115,7 @@ const COMPONENT_MARGIN_SWEEP = [0, 0.005, 0.02, 0.05, 0.15];
 const MAX_COMPONENT_PERIOD = components.ORBIT_SURFACE_MAX_COMPONENT_PERIOD;
 const VERIFIER_VIEWPORT = { width: 1280, height: 720, pixelsPerCell: 8 };
 const ANALYTIC_CURVE_MAX_CHORD_ERROR_C = 0.00075;
+const ANALYTIC_TRIM_INFLUENCE_CELLS = 12;
 const WINDOWS = [
   {
     name: "full-default",
@@ -139,6 +150,15 @@ const WINDOWS = [
     imMax: 0.02,
   },
 ];
+const LIVE_DEFAULT_WINDOW = {
+  name: "live-default-768",
+  width: 768,
+  height: 768,
+  reMin: -2,
+  reMax: 1,
+  imMin: -1,
+  imMax: 1,
+};
 
 const coverageResults = WINDOWS.map(analyseCoverageWindow);
 const results = WINDOWS.flatMap((spec) => analyseWindow(spec, false));
@@ -170,6 +190,37 @@ const periodTransitionSeamResults = [analysePeriodTransitionSeamFixture()];
 const analyticCurveResults = WINDOWS
   .filter((spec) => spec.modelsPrimaryCurves === true)
   .map(analyseAnalyticCurveWindow);
+const curveIntegrationResults = WINDOWS.map(analyseCurveIntegrationWindow);
+const liveCurveIntegrationResult = analyseCurveIntegrationWindow(
+  LIVE_DEFAULT_WINDOW,
+  {
+    project: orbit3d.orbit3dDefaultSurfaceProjector(
+      LIVE_DEFAULT_WINDOW.width,
+      LIVE_DEFAULT_WINDOW.height,
+      VERIFIER_VIEWPORT.width,
+      VERIFIER_VIEWPORT.height,
+    ),
+    measureSilhouette: false,
+    pointCount: LIVE_CLOUD_PARITY.cloudReferencePoints,
+  },
+);
+for (const row of curveIntegrationResults) {
+  if (
+    row.curveTrimmedComponents.length > 0 &&
+    row.silhouetteChordErrorPx > ANALYTIC_EDGE_ERROR_PX
+  ) {
+    throw new Error(
+      `${row.window} analytic silhouette exceeded ${ANALYTIC_EDGE_ERROR_PX}px`,
+    );
+  }
+}
+if (
+  !liveCurveIntegrationResult.preparedSampleInvariant ||
+  liveCurveIntegrationResult.triangleCount <= 0 ||
+  liveCurveIntegrationResult.refinedCells > 6_214
+) {
+  throw new Error("Pure live-default analytic surface build failed its invariant.");
+}
 const costResults = WINDOWS.map((spec, index) => {
   const baseline = baselineAdaptiveResults[index];
   const adaptive = adaptiveResults[index];
@@ -428,6 +479,60 @@ for (const row of analyticCurveResults) {
   );
 }
 console.log("");
+console.log("Curve-trimmed silhouette and component fallback split");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Trimmed".padStart(9),
+    "Fallback".padStart(10),
+    "Silhouette chord px".padStart(21),
+    "Prepared".padStart(10),
+    "Triangles".padStart(11),
+    "Geometry bytes".padStart(16),
+  ].join("  "),
+);
+for (const row of curveIntegrationResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      String(row.curveTrimmedComponents.length).padStart(9),
+      String(row.fallbackComponents.length).padStart(10),
+      row.silhouetteChordErrorPx.toFixed(6).padStart(21),
+      String(row.preparedSampleInvariant).padStart(10),
+      String(row.triangleCount).padStart(11),
+      String(row.meshGeometryBytes).padStart(16),
+    ].join("  "),
+  );
+  console.log(`  trimmed: ${row.curveTrimmedComponents.join(", ") || "none"}`);
+  console.log(`  fallback: ${row.fallbackComponents.join(", ") || "none"}`);
+}
+console.log("");
+console.log("Pure live-default surface build");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Trimmed".padStart(9),
+    "Fallback".padStart(10),
+    "Prepared".padStart(10),
+    "Refined".padStart(10),
+    "Triangles".padStart(11),
+    "Mesh bytes".padStart(12),
+    "Peak geometry".padStart(15),
+  ].join("  "),
+);
+console.log(
+  [
+    liveCurveIntegrationResult.window.padEnd(20),
+    String(liveCurveIntegrationResult.curveTrimmedComponents.length).padStart(9),
+    String(liveCurveIntegrationResult.fallbackComponents.length).padStart(10),
+    String(liveCurveIntegrationResult.preparedSampleInvariant).padStart(10),
+    String(liveCurveIntegrationResult.refinedCells).padStart(10),
+    String(liveCurveIntegrationResult.triangleCount).padStart(11),
+    String(liveCurveIntegrationResult.meshGeometryBytes).padStart(12),
+    String(liveCurveIntegrationResult.peakGeometryBytes).padStart(15),
+  ].join("  "),
+);
+console.log("");
 console.log("Chaotic cloud density in the sheet-edge band");
 console.log(
   [
@@ -521,6 +626,9 @@ console.log(JSON.stringify({
     referenceDepth: REFERENCE_DEPTH,
     referenceBisectionSteps: REFERENCE_BISECTION_STEPS,
     edgeErrorPx: EDGE_ERROR_PX,
+    analyticEdgeErrorPx: ANALYTIC_EDGE_ERROR_PX,
+    analyticMaxRefinementDepth: ANALYTIC_MAX_REFINEMENT_DEPTH,
+    analyticRefinementCellBudget: ANALYTIC_REFINEMENT_CELL_BUDGET,
     maxRefinementDepth: MAX_REFINEMENT_DEPTH,
     refinementCellBudget: REFINEMENT_CELL_BUDGET,
     dissolveBandCells: DISSOLVE_BAND_CELLS,
@@ -535,6 +643,7 @@ console.log(JSON.stringify({
     maxComponentPeriod: MAX_COMPONENT_PERIOD,
     verifierViewport: VERIFIER_VIEWPORT,
     analyticCurveMaxChordErrorC: ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
+    analyticTrimInfluenceCells: ANALYTIC_TRIM_INFLUENCE_CELLS,
     windows: WINDOWS,
   },
   liveCloudParity: {
@@ -552,6 +661,8 @@ console.log(JSON.stringify({
   cloudParityResults,
   periodTransitionSeamResults,
   analyticCurveResults,
+  curveIntegrationResults,
+  liveCurveIntegrationResult,
   baselineBandDensityResults,
   baselineClassifiedBandResults,
   bandDensityResults,
@@ -715,6 +826,443 @@ function analyseAnalyticCurveWindow(spec) {
     ),
     tracedCurveMaxChordErrorPx: rounded(analytic.maxChordErrorPx),
     tracedCurvePoints: analytic.pointCount,
+  };
+}
+
+function analyseCurveIntegrationWindow(spec, options = {}) {
+  const fixture = buildCurveIntegrationFixture(spec);
+  const cells = buildCoarseCells(spec, fixture.sample);
+  const refinedCells = [];
+  const preparedSamples = new Map();
+  const preparingSample = (x, y) => {
+    const sample = fixture.sample(x, y);
+    preparedSamples.set(`${coordinateKey(x)},${coordinateKey(y)}`, sample);
+    return sample;
+  };
+  const preparedSample = (x, y) => {
+    const sample = preparedSamples.get(`${coordinateKey(x)},${coordinateKey(y)}`);
+    if (!sample) {
+      throw new Error(`curve integration sample was not prepared at ${x},${y}`);
+    }
+    return sample;
+  };
+  const project = options.project ?? ((x, y) => ({
+    x: x * VERIFIER_VIEWPORT.pixelsPerCell,
+    y: y * VERIFIER_VIEWPORT.pixelsPerCell,
+  }));
+  let analyticRefinedCells = 0;
+  for (let y = 0; y + 1 < spec.height; y += 1) {
+    for (let x = 0; x + 1 < spec.width; x += 1) {
+      const topLeft = y * spec.width + x;
+      const periods = [
+        cells.periods[topLeft],
+        cells.periods[topLeft + 1],
+        cells.periods[topLeft + spec.width],
+        cells.periods[topLeft + spec.width + 1],
+      ];
+      const sampledBoundary = periods.some((period) => period > 0) &&
+        periods.some((period) => period !== periods[0]);
+      const curveBoundary = surface.orbitSurfaceCurveIntersectsRect(
+        fixture.boundaryCurves,
+        x,
+        y,
+        x + 1,
+        y + 1,
+      );
+      if (!sampledBoundary && !curveBoundary) continue;
+      const globalRemaining = REFINEMENT_CELL_BUDGET - refinedCells.length;
+      const remaining = curveBoundary
+        ? Math.min(
+            globalRemaining,
+            ANALYTIC_REFINEMENT_CELL_BUDGET - analyticRefinedCells,
+          )
+        : globalRemaining;
+      if (remaining <= 0) continue;
+      const plan = surface.planOrbitSurfaceCellRefinement(
+        x,
+        y,
+        preparingSample,
+        SAMPLE_COUNT,
+        project,
+        curveBoundary ? ANALYTIC_EDGE_ERROR_PX : EDGE_ERROR_PX,
+        curveBoundary ? ANALYTIC_MAX_REFINEMENT_DEPTH : MAX_REFINEMENT_DEPTH,
+        remaining,
+        curveBoundary ? fixture.boundaryCurves : [],
+      );
+      refinedCells.push(...plan.cells);
+      if (curveBoundary) analyticRefinedCells += plan.cells.length;
+    }
+  }
+  prepareCategoricalTransitionSamples(
+    cells,
+    refinedCells,
+    preparingSample,
+  );
+  const mesh = surface.buildOrbitSurface(
+    cells,
+    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+    {
+      sampler: preparedSample,
+      refinedCells,
+      boundaryCurves: fixture.boundaryCurves,
+    },
+  );
+  const chord = options.measureSilhouette === false
+    ? {
+        maxErrorPx: 0,
+        boundaryVertexErrorPx: 0,
+        meshChordErrorPx: 0,
+        tracedCurveChordErrorPx: 0,
+        componentChordErrorsPx: [],
+      }
+    : measureIntegratedSilhouette(
+        spec,
+        extractCurveTrimmedSilhouette(
+          mesh,
+          fixture.boundaryCurves,
+          spec.width,
+          spec.height,
+        ).segments,
+        fixture.boundaryCurves,
+        fixture.traced,
+      );
+  const meshGeometryBytes = orbitSurfaceMeshBytes(mesh);
+  return {
+    window: spec.name,
+    curveTrimmedComponents: fixture.traced.map((entry) =>
+      `p${entry.period}@${entry.firstCell}`),
+    fallbackComponents: fixture.fallback.map((entry) =>
+      `p${entry.period}@${entry.firstCell} (${entry.reason})`),
+    silhouetteChordErrorPx: rounded(chord.maxErrorPx),
+    boundaryVertexErrorPx: rounded(chord.boundaryVertexErrorPx),
+    meshChordErrorPx: rounded(chord.meshChordErrorPx),
+    tracedCurveChordErrorPx: rounded(chord.tracedCurveChordErrorPx),
+    componentChordErrorsPx: chord.componentChordErrorsPx,
+    curveDistanceDissolve: true,
+    preparedSampleInvariant: true,
+    refinedCells: refinedCells.length,
+    analyticRefinedCells,
+    fallbackRefinedCells: refinedCells.length - analyticRefinedCells,
+    triangleCount: mesh.indices.length / 3,
+    meshGeometryBytes,
+    peakGeometryBytes: meshGeometryBytes + (options.pointCount ?? 0) * 28,
+  };
+}
+
+function prepareCategoricalTransitionSamples(cells, refinedCells, sample) {
+  const leavesByCell = new Map();
+  for (const leaf of refinedCells) {
+    const coarseX = Math.floor(leaf.coarseX ?? leaf.x);
+    const coarseY = Math.floor(leaf.coarseY ?? leaf.y);
+    const key = `${coarseX},${coarseY}`;
+    const leaves = leavesByCell.get(key) ?? [];
+    leaves.push(leaf);
+    leavesByCell.set(key, leaves);
+  }
+  const preparedEdges = new Set();
+  for (let y = 0; y + 1 < cells.height; y += 1) {
+    for (let x = 0; x + 1 < cells.width; x += 1) {
+      const leaves = leavesByCell.get(`${x},${y}`);
+      if (leaves?.length > 0) {
+        for (const leaf of leaves) {
+          const size = leaf.size ?? 1 / 2 ** leaf.depth;
+          prepareQuad(leaf.x, leaf.y, leaf.x + size, leaf.y + size);
+        }
+      } else {
+        prepareQuad(x, y, x + 1, y + 1);
+      }
+    }
+  }
+
+  function prepareQuad(x0, y0, x1, y1) {
+    prepareEdge(x0, y0, x0, y1);
+    prepareEdge(x0, y1, x1, y0);
+    prepareEdge(x1, y0, x0, y0);
+    prepareEdge(x0, y1, x1, y1);
+    prepareEdge(x1, y1, x1, y0);
+  }
+
+  function prepareEdge(x0, y0, x1, y1) {
+    const firstKey = `${coordinateKey(x0)},${coordinateKey(y0)}`;
+    const secondKey = `${coordinateKey(x1)},${coordinateKey(y1)}`;
+    const key = firstKey < secondKey
+      ? `${firstKey}|${secondKey}`
+      : `${secondKey}|${firstKey}`;
+    if (preparedEdges.has(key)) return;
+    preparedEdges.add(key);
+    const firstPeriod = periodAt(x0, y0);
+    const secondPeriod = periodAt(x1, y1);
+    if (firstPeriod === secondPeriod || (firstPeriod <= 0 && secondPeriod <= 0)) {
+      return;
+    }
+    const firstIsLow = x0 < x1 || (x0 === x1 && y0 <= y1);
+    let lowX = firstIsLow ? x0 : x1;
+    let lowY = firstIsLow ? y0 : y1;
+    let highX = firstIsLow ? x1 : x0;
+    let highY = firstIsLow ? y1 : y0;
+    const lowPeriod = periodAt(lowX, lowY);
+    for (let step = 0;
+      step < surface.ORBIT_SURFACE_CONTOUR_BISECTION_STEPS;
+      step += 1) {
+      const x = (lowX + highX) * 0.5;
+      const y = (lowY + highY) * 0.5;
+      if (periodAt(x, y) === lowPeriod) {
+        lowX = x;
+        lowY = y;
+      } else {
+        highX = x;
+        highY = y;
+      }
+    }
+  }
+
+  function periodAt(x, y) {
+    if (
+      Number.isInteger(x) && Number.isInteger(y) &&
+      x >= 0 && x < cells.width && y >= 0 && y < cells.height
+    ) {
+      const index = y * cells.width + x;
+      return cells.escaped[index] === 0 ? cells.periods[index] : 0;
+    }
+    const sampled = sample(x, y);
+    return sampled.escaped ? 0 : sampled.period;
+  }
+}
+
+function extractCurveTrimmedSilhouette(mesh, boundaryCurves, width, height) {
+  const edges = new Map();
+  for (let offset = 0; offset < mesh.indices.length; offset += 3) {
+    add(mesh.indices[offset], mesh.indices[offset + 1]);
+    add(mesh.indices[offset + 1], mesh.indices[offset + 2]);
+    add(mesh.indices[offset + 2], mesh.indices[offset]);
+  }
+  const segments = [];
+  for (const edge of edges.values()) {
+    if (edge.count !== 1) continue;
+    const first = meshPoint(mesh, edge.first);
+    const second = meshPoint(mesh, edge.second);
+    if (
+      first.rank !== 0 || second.rank !== 0 ||
+      first.period <= 0 || first.period !== second.period ||
+      isWindowEdge(first, width, height) || isWindowEdge(second, width, height)
+    ) {
+      continue;
+    }
+    const firstCurve = surface.nearestOrbitSurfaceBoundary(
+      boundaryCurves,
+      first.x,
+      first.y,
+      first.period,
+    );
+    const secondCurve = surface.nearestOrbitSurfaceBoundary(
+      boundaryCurves,
+      second.x,
+      second.y,
+      second.period,
+    );
+    if (
+      !firstCurve || !secondCurve ||
+      firstCurve.distance > 1e-4 || secondCurve.distance > 1e-4
+    ) {
+      continue;
+    }
+    segments.push({ first, second, period: first.period });
+  }
+  return { segments };
+
+  function add(left, right) {
+    const first = Math.min(left, right);
+    const second = Math.max(left, right);
+    const key = `${first}:${second}`;
+    const edge = edges.get(key);
+    if (edge) edge.count += 1;
+    else edges.set(key, { first, second, count: 1 });
+  }
+}
+
+function buildCurveIntegrationFixture(spec) {
+  const classified = createSampler(spec, true);
+  const count = spec.width * spec.height;
+  const periods = new Int16Array(count);
+  const seeds = new Array(count).fill(null);
+  for (let y = 0; y < spec.height; y += 1) {
+    for (let x = 0; x < spec.width; x += 1) {
+      const index = y * spec.width + x;
+      const sampled = classified.sample(x, y);
+      if (!sampled.cycle || sampled.period <= 0) continue;
+      periods[index] = sampled.period;
+      seeds[index] = {
+        period: sampled.period,
+        c: sampled.c,
+        cycle: sampled.cycle,
+        multiplier: sampled.multiplier,
+        multiplierAngle: sampled.multiplierAngle,
+      };
+    }
+  }
+  const catalogue = components.buildOrbitSurfaceComponentCatalogue(
+    periods,
+    spec.width,
+    spec.height,
+    (index) => seeds[index],
+  );
+  const tracedResult = curves.traceOrbitSurfaceComponentCatalogue(
+    catalogue,
+    ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
+    128,
+  );
+  const xScale = spec.width / (spec.reMax - spec.reMin);
+  const yScale = spec.height / (spec.imMax - spec.imMin);
+  const boundaryCurves = tracedResult.traced.map((entry) => ({
+    componentId: entry.componentId,
+    period: entry.period,
+    points: entry.curve.points.map((pointValue) => ({
+      x: (pointValue.c.re - spec.reMin) * xScale - 0.5,
+      y: (pointValue.c.im - spec.imMin) * yScale - 0.5,
+    })),
+  }));
+  const cache = new Map();
+  const sample = (x, y) => {
+    const key = `${coordinateKey(x)},${coordinateKey(y)}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const base = classified.sample(x, y);
+    let period = base.period;
+    let containing = null;
+    for (const curve of boundaryCurves) {
+      if (surface.orbitSurfaceCurveContains(curve, x, y)) {
+        containing = curve;
+        period = curve.period;
+        break;
+      }
+    }
+    if (!containing && period > 0) {
+      const nearest = surface.nearestOrbitSurfaceBoundary(
+        boundaryCurves,
+        x,
+        y,
+        period,
+      );
+      if (
+        nearest &&
+        (period <= 2 || nearest.distance <= ANALYTIC_TRIM_INFLUENCE_CELLS)
+      ) {
+        period = 0;
+      }
+    }
+    const values = Float32Array.from(base.samples);
+    let interior = base.interior;
+    if (containing && period !== base.period) {
+      const exact = components.classifyOrbitSurfaceComponent(base.c.re, base.c.im, {
+        multiplierMargin: 0,
+      });
+      if (
+        exact.period === period &&
+        components.writeOrbitSurfaceCycleSamples(
+          exact,
+          base.c.re,
+          base.c.im,
+          values,
+          0,
+          SAMPLE_COUNT,
+        )
+      ) {
+        interior = exact.multiplier;
+      }
+    }
+    const curve = period > 0
+      ? surface.nearestOrbitSurfaceBoundary(boundaryCurves, x, y, period)
+      : null;
+    const result = {
+      ...base,
+      samples: values,
+      period,
+      interior,
+      dissolve: curve?.inside
+        ? surface.orbitSurfaceDissolveCoverage(curve.distance, DISSOLVE_BAND_CELLS)
+        : period > 0 ? 1 : 0,
+      escaped: containing ? false : base.escaped,
+    };
+    cache.set(key, result);
+    return result;
+  };
+  return {
+    sample,
+    boundaryCurves,
+    traced: tracedResult.traced,
+    fallback: tracedResult.fallback,
+  };
+}
+
+function measureIntegratedSilhouette(spec, candidateSegments, boundaryCurves, traced) {
+  let boundaryVertexError = 0;
+  let meshChordError = 0;
+  const componentErrors = new Map(boundaryCurves.map((curve) => [curve.componentId, 0]));
+  for (const segment of candidateSegments) {
+    const midpoint = {
+      x: (segment.first.x + segment.second.x) * 0.5,
+      y: (segment.first.y + segment.second.y) * 0.5,
+    };
+    const associated = surface.nearestOrbitSurfaceBoundary(
+      boundaryCurves,
+      midpoint.x,
+      midpoint.y,
+      segment.period,
+    );
+    if (!associated) continue;
+    const curve = boundaryCurves.find((candidate) =>
+      candidate.componentId === associated.componentId);
+    if (!curve) continue;
+    const points = [segment.first, midpoint, segment.second];
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      const pointValue = points[pointIndex];
+      const nearest = surface.nearestOrbitSurfaceBoundary(
+        [curve],
+        pointValue.x,
+        pointValue.y,
+        segment.period,
+      );
+      if (!nearest) continue;
+      meshChordError = Math.max(meshChordError, nearest.distance);
+      if (pointIndex !== 1) {
+        boundaryVertexError = Math.max(boundaryVertexError, nearest.distance);
+      }
+      componentErrors.set(
+        curve.componentId,
+        Math.max(componentErrors.get(curve.componentId) ?? 0, nearest.distance),
+      );
+    }
+  }
+  const xScale = spec.width / (spec.reMax - spec.reMin);
+  const yScale = spec.height / (spec.imMax - spec.imMin);
+  const tracedCurveChordErrorPx = traced.reduce((maximum, entry) => Math.max(
+    maximum,
+    entry.curve.maxChordError * Math.max(xScale, yScale) *
+      VERIFIER_VIEWPORT.pixelsPerCell,
+  ), 0);
+  const componentChordErrorsPx = traced.map((entry) => {
+    const meshChord = (componentErrors.get(entry.componentId) ?? 0) *
+      VERIFIER_VIEWPORT.pixelsPerCell;
+    const traceChord = entry.curve.maxChordError * Math.max(xScale, yScale) *
+      VERIFIER_VIEWPORT.pixelsPerCell;
+    return {
+      componentId: entry.componentId,
+      period: entry.period,
+      errorPx: rounded(Math.max(meshChord, traceChord)),
+    };
+  });
+  const boundaryVertexErrorPx = boundaryVertexError * VERIFIER_VIEWPORT.pixelsPerCell;
+  const meshChordErrorPx = meshChordError * VERIFIER_VIEWPORT.pixelsPerCell;
+  return {
+    boundaryVertexErrorPx,
+    meshChordErrorPx,
+    tracedCurveChordErrorPx,
+    componentChordErrorsPx,
+    maxErrorPx: Math.max(
+      boundaryVertexErrorPx,
+      meshChordErrorPx,
+      tracedCurveChordErrorPx,
+    ),
   };
 }
 
@@ -1195,6 +1743,7 @@ function createSampler(spec, classify = false, margin = COMPONENT_MULTIPLIER_MAR
       c: { re: cRe, im: cIm },
       cycle: null,
       multiplier: escaped ? 1 : measure.interior,
+      multiplierAngle: 0,
     };
     if (!escaped && classify) {
       const classification = components.classifyOrbitSurfaceComponent(cRe, cIm, {
@@ -1216,6 +1765,7 @@ function createSampler(spec, classify = false, margin = COMPONENT_MULTIPLIER_MAR
         result.interior = Math.max(0, Math.min(1, classification.multiplier));
         result.cycle = classification.cycle;
         result.multiplier = classification.multiplier;
+        result.multiplierAngle = classification.multiplierAngle;
       }
     }
     cache.set(key, result);
