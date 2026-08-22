@@ -21,6 +21,7 @@ import {
 import {
   buildOrbitSurface,
   isOrbitSurfaceCloudBandSample,
+  orbitSurfaceCloudRefinementOffsets,
   orbitSurfaceDissolveCoverage,
   planOrbitSurfaceCellRefinement,
   orbitSurfaceDiagnosticMode,
@@ -567,6 +568,9 @@ const SURVIVING_CELL_ESTIMATE = 0.22;
 const REFINE_BUDGET_FRACTION = 0.3;
 const REFINE_PERIOD_THRESHOLD = 8;
 const REFINE_SUBDIVISION = 3;
+const HYBRID_CLOUD_REFINEMENT_OFFSETS = orbitSurfaceCloudRefinementOffsets(
+  REFINE_SUBDIVISION,
+);
 const REFINE_WARMUP_MULTIPLIER = 4;
 // Slightly above 1/subdivision² energy parity so the resolved tails read a
 // touch brighter than the fuzz they replace without blowing out under
@@ -761,6 +765,8 @@ export interface Orbit3DStats {
   buildMaxSliceMs: number;
   finalisationMs: number;
   bandPointCount: number;
+  hybridCloudPointCountBefore: number;
+  hybridCloudPointCount: number;
   peakGeometryBytes: number;
   /** Share of bounded cells carrying a sheet period after classification. */
   sheetCoverageShare: number;
@@ -910,6 +916,8 @@ export class Orbit3DPointCloud {
   private buildMaxSliceMs = 0;
   private finalisationMs = 0;
   private bandPointCount = 0;
+  private hybridCloudPointCountBefore = 0;
+  private hybridCloudPointCount = 0;
   private peakGeometryBytes = 0;
   private sheetCoverageShare = 0;
   private samplerCoverageShare = 0;
@@ -1128,6 +1136,8 @@ export class Orbit3DPointCloud {
       buildMaxSliceMs: this.buildMaxSliceMs,
       finalisationMs: this.finalisationMs,
       bandPointCount: this.bandPointCount,
+      hybridCloudPointCountBefore: this.hybridCloudPointCountBefore,
+      hybridCloudPointCount: this.hybridCloudPointCount,
       peakGeometryBytes: this.peakGeometryBytes,
       sheetCoverageShare: this.sheetCoverageShare,
       samplerCoverageShare: this.samplerCoverageShare,
@@ -1405,6 +1415,8 @@ export class Orbit3DPointCloud {
     this.buildMaxSliceMs = 0;
     this.finalisationMs = 0;
     this.bandPointCount = 0;
+    this.hybridCloudPointCountBefore = 0;
+    this.hybridCloudPointCount = 0;
     this.peakGeometryBytes = 0;
     this.sheetCoverageShare = 0;
     this.samplerCoverageShare = 0;
@@ -1432,6 +1444,8 @@ export class Orbit3DPointCloud {
             generation,
             viewportWidth,
             viewportHeight,
+            params.tailRefinement,
+            params.boundaryDetail,
           );
           return;
         } catch (error) {
@@ -1468,80 +1482,35 @@ export class Orbit3DPointCloud {
     }
     // Density no longer scales the build: the full budget is always built and
     // the slider culls cells in the vertex shader, so moving it is instant.
-    const pointBudget = Math.max(
+    const cloudPlan = orbitCloudBuildPlan(
+      inputWidth,
+      inputHeight,
       sampleCount,
-      pointBudgetFor(inputWidth * inputHeight),
+      warmupIterations,
+      realSliceOnly,
+      params.tailRefinement,
+      params.boundaryDetail,
+      bakedFile !== null,
+      this.orbitSampler !== null,
     );
-    const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
-    const refineFraction =
-      typeof params.tailRefinement === "number" &&
-      Number.isFinite(params.tailRefinement)
-        ? Math.max(0, Math.min(0.6, params.tailRefinement))
-        : REFINE_BUDGET_FRACTION;
-    // The real-axis slice already resolves the cascade at full budget width,
-    // so refinement applies only to the 2D cloud.
-    const refineActive = !realSliceOnly && refineFraction > 0;
-    const baseSlotCap = refineActive
-      ? Math.max(1, Math.floor(maxSurvivingCells * (1 - refineFraction)))
-      : maxSurvivingCells;
-    const desiredCells = Math.ceil(baseSlotCap / SURVIVING_CELL_ESTIMATE);
-    const candidateCells = Math.min(inputWidth * inputHeight, desiredCells);
-    const aspect = inputWidth / inputHeight;
-    const sampleWidth = realSliceOnly
-      ? maxSurvivingCells
-      : Math.max(1, Math.min(inputWidth, Math.round(Math.sqrt(candidateCells * aspect))));
-    const sampleHeight = realSliceOnly
-      ? 1
-      : Math.max(1, Math.min(inputHeight, Math.ceil(candidateCells / sampleWidth)));
-    const refineSubCells = REFINE_SUBDIVISION * REFINE_SUBDIVISION;
-    // Sized so the reserved slots fill even if roughly half the sub-cells
-    // escape; a reservoir keeps the pick spatially uniform beyond the cap.
-    const refineCandidateCap = refineActive
-      ? Math.max(
-          64,
-          Math.ceil(((maxSurvivingCells - baseSlotCap) * 2) / refineSubCells),
-        )
-      : 0;
-    const refineWarmup = Math.min(
-      MAX_WARMUP,
-      warmupIterations * REFINE_WARMUP_MULTIPLIER,
-    );
-    const boundaryDetailLevel =
-      typeof params.boundaryDetail === "number" &&
-      Number.isFinite(params.boundaryDetail)
-        ? Math.max(0, Math.min(1, params.boundaryDetail))
-        : 0;
-    // A requested bake owns the cloud once it arrives, so boundary detail is
-    // limited to explicit live builds rather than inflating the temporary
-    // cloud underneath a prebake.
-    const boundaryDetailRequested =
-      bakedFile === null && !realSliceOnly && boundaryDetailLevel > 0;
-    const boundaryDetailActive =
-      boundaryDetailRequested && this.orbitSampler !== null;
-    const gpuPointBudget = boundaryDetailActive
-      ? Math.floor(
-          pointBudget +
-            (POINT_BUDGETS.boundaryDetail - pointBudget) * boundaryDetailLevel,
-        )
-      : pointBudget;
-    const gpuMaxSurvivingCells = Math.max(
-      1,
-      Math.floor(gpuPointBudget / sampleCount),
-    );
-    const gpuRefineActive = refineActive || boundaryDetailActive;
-    const gpuRefineSubdivision = boundaryDetailActive
-      ? BOUNDARY_DETAIL_SUBDIVISION
-      : REFINE_SUBDIVISION;
-    const gpuRefineSubCells = gpuRefineSubdivision * gpuRefineSubdivision;
-    const gpuRefineCandidateCap = gpuRefineActive
-      ? Math.max(
-          64,
-          Math.ceil(
-            ((gpuMaxSurvivingCells - baseSlotCap) * 2) /
-              gpuRefineSubCells,
-          ),
-        )
-      : 0;
+    const {
+      pointBudget,
+      maxSurvivingCells,
+      refineActive,
+      baseSlotCap,
+      sampleWidth,
+      sampleHeight,
+      refineSubCells,
+      refineCandidateCap,
+      refineWarmup,
+      boundaryDetailRequested,
+      boundaryDetailActive,
+      gpuPointBudget,
+      gpuMaxSurvivingCells,
+      gpuRefineActive,
+      gpuRefineSubdivision,
+      gpuRefineCandidateCap,
+    } = cloudPlan;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -1838,6 +1807,8 @@ export class Orbit3DPointCloud {
     generation: number,
     viewportWidth: number,
     viewportHeight: number,
+    tailRefinement: number | boolean | string | undefined,
+    boundaryDetail: number | boolean | string | undefined,
   ): void {
     const gridSize = surfaceGridSizeFor(inputWidth * inputHeight);
     const sampleWidth = gridSize;
@@ -1845,6 +1816,17 @@ export class Orbit3DPointCloud {
     const cellCount = sampleWidth * sampleHeight;
     const coarseQuadCount = Math.max(0, (sampleWidth - 1) * (sampleHeight - 1));
     const pointBudget = Math.max(sampleCount, pointBudgetFor(inputWidth * inputHeight));
+    const cloudPlan = orbitCloudBuildPlan(
+      inputWidth,
+      inputHeight,
+      sampleCount,
+      warmupIterations,
+      false,
+      tailRefinement,
+      boundaryDetail,
+      false,
+      this.orbitSampler !== null,
+    );
     const samples = new Float32Array(cellCount * sampleCount);
     const periods = new Int16Array(cellCount);
     const interiors = new Float32Array(cellCount);
@@ -1857,8 +1839,10 @@ export class Orbit3DPointCloud {
     const refinedLeavesByCell = new Map<number, OrbitSurfaceRefinedCell[]>();
     const adaptiveSamples = new Map<number, OrbitSurfaceSample>();
     const bandSamples: Array<{ x: number; y: number; sample: OrbitSurfaceSample }> = [];
+    const cloudSamples: Array<{ x: number; y: number; sample: OrbitSurfaceSample }> = [];
     const bandBaseCells: number[] = [];
-    const bandSampleKeys = new Set<number>();
+    const chaoticBaseCells: number[] = [];
+    const pointSampleKeys = new Set<number>();
     const bandAcceptedCounts = new Uint8Array(cellCount);
     let contourSampleValues = new Float32Array(0);
     let contourPeriods = new Int16Array(0);
@@ -1881,9 +1865,10 @@ export class Orbit3DPointCloud {
       Math.max(0.25, viewportWidth / Math.max(1, viewportHeight)),
       this.camera,
     );
-    let phase: "coarse" | "band-scan" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
+    let phase: "coarse" | "band-scan" | "cloud-scan" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
     let cell = 0;
     let bandScan = 0;
+    let cloudScan = 0;
     let refinementScan = 0;
     let edgeScan = 0;
     let transitionEdge = 0;
@@ -1940,7 +1925,7 @@ export class Orbit3DPointCloud {
         } else if (phase === "band-scan") {
           const candidatesPerCell = ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION ** 2;
           if (bandScan >= bandBaseCells.length * candidatesPerCell) {
-            phase = "refinement-scan";
+            phase = "cloud-scan";
             continue;
           }
           const sourceCell = bandBaseCells[Math.floor(bandScan / candidatesPerCell)];
@@ -1964,10 +1949,10 @@ export class Orbit3DPointCloud {
               y >= 0 && y <= sampleHeight - 1
             ) {
               const key = surfacePointId(x, y);
-              if (!bandSampleKeys.has(key)) {
+              if (!pointSampleKeys.has(key)) {
                 const sample = sampleSurfacePoint(x, y);
                 if (sample.period === 0 && !sample.escaped) {
-                  bandSampleKeys.add(key);
+                  pointSampleKeys.add(key);
                   bandSamples.push({ x, y, sample });
                   bandAcceptedCounts[sourceCell] += 1;
                 }
@@ -1975,6 +1960,32 @@ export class Orbit3DPointCloud {
             }
           }
           bandScan += 1;
+        } else if (phase === "cloud-scan") {
+          if (cloudScan >= chaoticBaseCells.length * HYBRID_CLOUD_REFINEMENT_OFFSETS.length) {
+            phase = "refinement-scan";
+            continue;
+          }
+          const sourceCell = chaoticBaseCells[
+            Math.floor(cloudScan / HYBRID_CLOUD_REFINEMENT_OFFSETS.length)
+          ];
+          const offset = HYBRID_CLOUD_REFINEMENT_OFFSETS[
+            cloudScan % HYBRID_CLOUD_REFINEMENT_OFFSETS.length
+          ];
+          const sourceX = sourceCell % sampleWidth;
+          const sourceY = (sourceCell - sourceX) / sampleWidth;
+          const x = sourceX + offset.x;
+          const y = sourceY + offset.y;
+          if (x >= 0 && x <= sampleWidth - 1 && y >= 0 && y <= sampleHeight - 1) {
+            const key = surfacePointId(x, y);
+            if (!pointSampleKeys.has(key)) {
+              const sample = sampleSurfacePoint(x, y);
+              if (sample.period === 0 && !sample.escaped) {
+                pointSampleKeys.add(key);
+                cloudSamples.push({ x, y, sample });
+              }
+            }
+          }
+          cloudScan += 1;
         } else if (phase === "refinement-scan") {
           if (refinementScan >= coarseQuadCount) {
             phase = "edge-scan";
@@ -2322,6 +2333,7 @@ export class Orbit3DPointCloud {
         const period = coarsePeriod(index);
         chaosMask[index] = escaped[index] === 0 && period === 0 ? 1 : 0;
         periodicMask[index] = period > 0 ? 1 : 0;
+        if (chaosMask[index] !== 0) chaoticBaseCells.push(index);
       }
       const chaosDistances = boundaryDistanceField(chaosMask, sampleWidth, sampleHeight);
       periodicDistances = boundaryDistanceField(periodicMask, sampleWidth, sampleHeight);
@@ -2426,7 +2438,7 @@ export class Orbit3DPointCloud {
       const pointSampleCount = boundedCount === 0
         ? sampleCount
         : Math.max(1, Math.min(sampleCount, Math.floor(pointBudget / boundedCount)));
-      const pointSiteCount = boundedCount + bandSamples.length;
+      const pointSiteCount = boundedCount + bandSamples.length + cloudSamples.length;
       const fullPointCount = pointSiteCount * pointSampleCount;
       const positions = new Float32Array(fullPointCount * 3);
       const pointPeriods = new Float32Array(fullPointCount);
@@ -2455,6 +2467,17 @@ export class Orbit3DPointCloud {
           band.sample,
           interpolateGrid(periodicDistances, band.x, band.y),
           ORBIT_SURFACE_BAND_SAMPLE_WEIGHT,
+        );
+      }
+      for (let index = 0; index < cloudSamples.length; index += 1) {
+        const cloud = cloudSamples[index];
+        writePointSite(
+          boundedCount + bandSamples.length + index,
+          cloud.x,
+          cloud.y,
+          cloud.sample,
+          interpolateGrid(periodicDistances, cloud.x, cloud.y),
+          REFINE_POINT_WEIGHT,
         );
       }
 
@@ -2486,22 +2509,181 @@ export class Orbit3DPointCloud {
         }
       }
 
+      let submittedPositions: Float32Array = positions;
+      let submittedPeriods: Float32Array = pointPeriods;
+      let submittedInteriors: Float32Array = pointInteriors;
+      let submittedBoundaries: Float32Array = pointBoundaries;
+      let submittedWeights: Float32Array = pointWeights;
+      let submittedSiteCount = pointSiteCount;
+      let submittedSampleCount = pointSampleCount;
+      let submittedPointBudget = pointBudget
+        + (bandSamples.length + cloudSamples.length) * pointSampleCount;
+      let submittedBoundaryDetailBaseCells = pointSiteCount;
+      let submittedBoundaryDetailActive = false;
+      let submittedBandPointCount =
+        (bandBaseCellCount + bandSamples.length) * pointSampleCount;
+      let submittedHybridCloudPointCount =
+        (chaoticBaseCells.length + bandSamples.length + cloudSamples.length)
+        * pointSampleCount;
+
+      if (this.orbitSampler) {
+        try {
+          const liveCloud = buildGpuOrbitCloud(this.orbitSampler, {
+            sampleWidth: cloudPlan.sampleWidth,
+            sampleHeight: cloudPlan.sampleHeight,
+            sampleCount,
+            warmupIterations,
+            realSliceOnly: false,
+            maxSurvivingCells: cloudPlan.gpuMaxSurvivingCells,
+            baseSlotCap: cloudPlan.baseSlotCap,
+            baselineMaxSurvivingCells: cloudPlan.maxSurvivingCells,
+            baselineRefineActive: cloudPlan.refineActive,
+            baselineRefineCandidateCap: cloudPlan.refineCandidateCap,
+            baselineRefineWarmup: cloudPlan.refineWarmup,
+            baselineRefineSubdivision: REFINE_SUBDIVISION,
+            baselineRefinePointWeight: REFINE_POINT_WEIGHT,
+            refineActive: cloudPlan.gpuRefineActive,
+            refineCandidateCap: cloudPlan.gpuRefineCandidateCap,
+            refineWarmup: cloudPlan.boundaryDetailActive
+              ? BOUNDARY_DETAIL_WARMUP
+              : cloudPlan.refineWarmup,
+            refineSubdivision: cloudPlan.gpuRefineSubdivision,
+            refinePeriodThreshold: REFINE_PERIOD_THRESHOLD,
+            refinePointWeight: cloudPlan.boundaryDetailActive
+              ? BOUNDARY_DETAIL_POINT_WEIGHT
+              : REFINE_POINT_WEIGHT,
+            boundaryDetailActive: cloudPlan.boundaryDetailActive,
+          });
+          if (liveCloud) {
+            const resolvedCloud = liveCloud;
+            const replaceableSlots: number[] = [];
+            let chaoticSites = 0;
+            for (let slot = 0; slot < resolvedCloud.survivingCells; slot += 1) {
+              const positionOffset = slot * 3;
+              const gridX = Math.max(
+                0,
+                Math.min(
+                  sampleWidth - 1,
+                  Math.floor(
+                    ((resolvedCloud.positions[positionOffset] - RE_MIN) / (RE_MAX - RE_MIN))
+                      * sampleWidth,
+                  ),
+                ),
+              );
+              const gridY = Math.max(
+                0,
+                Math.min(
+                  sampleHeight - 1,
+                  Math.floor(
+                    ((resolvedCloud.positions[positionOffset + 1] - IM_MIN) / (IM_MAX - IM_MIN))
+                      * sampleHeight,
+                  ),
+                ),
+              );
+              const period = coarsePeriod(gridY * sampleWidth + gridX);
+              if (period > 0) {
+                replaceableSlots.push(slot);
+                for (let sample = 0; sample < sampleCount; sample += 1) {
+                  resolvedCloud.periods[sample * resolvedCloud.survivingCells + slot] = period;
+                }
+              } else if (resolvedCloud.periods[slot] <= 0) {
+                chaoticSites += 1;
+              }
+            }
+
+            let replacedBandSites = 0;
+            let replacedCloudSites = 0;
+            let replacement = 0;
+            for (const [samplesToInsert, siteWeight, isBand] of [
+              [bandSamples, ORBIT_SURFACE_BAND_SAMPLE_WEIGHT, true],
+              [cloudSamples, REFINE_POINT_WEIGHT, false],
+            ] as const) {
+              for (const item of samplesToInsert) {
+                const slot = replaceableSlots[replacement];
+                if (slot === undefined) break;
+                replacement += 1;
+                overwriteLiveCloudSlot(slot, item, siteWeight);
+                if (isBand) replacedBandSites += 1;
+                else replacedCloudSites += 1;
+              }
+            }
+
+            submittedPositions = resolvedCloud.positions;
+            submittedPeriods = resolvedCloud.periods;
+            submittedInteriors = resolvedCloud.interiors;
+            submittedBoundaries = resolvedCloud.boundaries;
+            submittedWeights = resolvedCloud.weights;
+            submittedSiteCount = resolvedCloud.survivingCells;
+            submittedSampleCount = sampleCount;
+            submittedPointBudget = cloudPlan.gpuPointBudget;
+            submittedBoundaryDetailBaseCells = resolvedCloud.boundaryDetailBaseCells;
+            submittedBoundaryDetailActive = cloudPlan.boundaryDetailActive;
+            submittedBandPointCount =
+              (bandBaseCellCount + replacedBandSites) * sampleCount;
+            submittedHybridCloudPointCount =
+              (chaoticSites + replacedBandSites + replacedCloudSites)
+              * sampleCount;
+            this.samplingPath = "gpu-sampled";
+
+            function overwriteLiveCloudSlot(
+              slot: number,
+              item: { x: number; y: number; sample: OrbitSurfaceSample },
+              siteWeight: number,
+            ): void {
+              const cRe = cellCoordinate(RE_MIN, RE_MAX, item.x, sampleWidth);
+              const cIm = item.y === Math.floor(sampleHeight / 2)
+                ? 0
+                : cellCoordinate(IM_MIN, IM_MAX, item.y, sampleHeight);
+              const sampleOffset = Math.max(
+                0,
+                Math.floor(item.sample.sampleOffset ?? 0),
+              );
+              const coverage = cloudBandCoverage(
+                interpolateGrid(periodicDistances, item.x, item.y),
+              );
+              for (let sample = 0; sample < sampleCount; sample += 1) {
+                const point = sample * resolvedCloud.survivingCells + slot;
+                const positionOffset = point * 3;
+                resolvedCloud.positions[positionOffset] = cRe;
+                resolvedCloud.positions[positionOffset + 1] = cIm;
+                resolvedCloud.positions[positionOffset + 2] =
+                  item.sample.samples[sampleOffset + sample];
+                resolvedCloud.periods[point] = 0;
+                resolvedCloud.interiors[point] = item.sample.interior;
+                resolvedCloud.boundaries[point] = item.sample.boundary;
+                resolvedCloud.weights[point] = coverage * siteWeight;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(
+            "logistic-mandelbrot: live cloud parity unavailable; using hybrid fallback",
+            error,
+          );
+        }
+      }
+
       const gl = this.gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.pointBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedPositions, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, pointPeriods, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedPeriods, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, pointInteriors, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedInteriors, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, pointBoundaries, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedBoundaries, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, pointWeights, gl.STATIC_DRAW);
-      this.fullPointCount = fullPointCount;
-      this.bandPointCount = (bandBaseCellCount + bandSamples.length) * pointSampleCount;
-      this.pointBudget = pointBudget + bandSamples.length * pointSampleCount;
-      this.sampleCount = pointSampleCount;
-      this.visibleIterations = Math.min(plottedIterations, pointSampleCount);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedWeights, gl.STATIC_DRAW);
+      this.fullPointCount = submittedSiteCount * submittedSampleCount;
+      this.bandPointCount = submittedBandPointCount;
+      this.hybridCloudPointCountBefore =
+        (chaoticBaseCells.length + bandSamples.length) * pointSampleCount;
+      this.hybridCloudPointCount = submittedHybridCloudPointCount;
+      this.pointBudget = submittedPointBudget;
+      this.sampleCount = submittedSampleCount;
+      this.visibleIterations = Math.min(plottedIterations, submittedSampleCount);
+      this.boundaryDetailBaseCellCount = submittedBoundaryDetailBaseCells;
+      this.boundaryDetail = submittedBoundaryDetailActive ? "active" : "off";
       this.refreshPointCount();
 
       const orderedSlices = [...sliceDurations].sort((left, right) => left - right);
@@ -2513,11 +2695,11 @@ export class Orbit3DPointCloud {
           : orderedSlices[middle];
       this.buildMaxSliceMs = orderedSlices.at(-1) ?? 0;
       this.finalisationMs = performance.now() - finalisationStart;
-      this.peakGeometryBytes = positions.byteLength
-        + pointPeriods.byteLength
-        + pointInteriors.byteLength
-        + pointBoundaries.byteLength
-        + pointWeights.byteLength
+      this.peakGeometryBytes = submittedPositions.byteLength
+        + submittedPeriods.byteLength
+        + submittedInteriors.byteLength
+        + submittedBoundaries.byteLength
+        + submittedWeights.byteLength
         + (mesh ? orbitSurfaceMeshBytes(mesh) : 0);
       this.buildTimer = null;
       this.building = false;
@@ -3065,6 +3247,100 @@ function pointBudgetFor(cellCount: number): number {
   if (cellCount <= HIGH_CELL_CEILING) return POINT_BUDGETS.high;
   if (cellCount <= ULTRA_CELL_CEILING) return POINT_BUDGETS.ultra;
   return POINT_BUDGETS.extreme;
+}
+
+function orbitCloudBuildPlan(
+  inputWidth: number,
+  inputHeight: number,
+  sampleCount: number,
+  warmupIterations: number,
+  realSliceOnly: boolean,
+  tailRefinement: number | boolean | string | undefined,
+  boundaryDetail: number | boolean | string | undefined,
+  bakedRequested: boolean,
+  gpuSamplerAvailable: boolean,
+) {
+  const pointBudget = Math.max(
+    sampleCount,
+    pointBudgetFor(inputWidth * inputHeight),
+  );
+  const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
+  const refineFraction =
+    typeof tailRefinement === "number" && Number.isFinite(tailRefinement)
+      ? Math.max(0, Math.min(0.6, tailRefinement))
+      : REFINE_BUDGET_FRACTION;
+  const refineActive = !realSliceOnly && refineFraction > 0;
+  const baseSlotCap = refineActive
+    ? Math.max(1, Math.floor(maxSurvivingCells * (1 - refineFraction)))
+    : maxSurvivingCells;
+  const desiredCells = Math.ceil(baseSlotCap / SURVIVING_CELL_ESTIMATE);
+  const candidateCells = Math.min(inputWidth * inputHeight, desiredCells);
+  const aspect = inputWidth / inputHeight;
+  const sampleWidth = realSliceOnly
+    ? maxSurvivingCells
+    : Math.max(1, Math.min(inputWidth, Math.round(Math.sqrt(candidateCells * aspect))));
+  const sampleHeight = realSliceOnly
+    ? 1
+    : Math.max(1, Math.min(inputHeight, Math.ceil(candidateCells / sampleWidth)));
+  const refineSubCells = REFINE_SUBDIVISION * REFINE_SUBDIVISION;
+  const refineCandidateCap = refineActive
+    ? Math.max(
+        64,
+        Math.ceil(((maxSurvivingCells - baseSlotCap) * 2) / refineSubCells),
+      )
+    : 0;
+  const refineWarmup = Math.min(
+    MAX_WARMUP,
+    warmupIterations * REFINE_WARMUP_MULTIPLIER,
+  );
+  const boundaryDetailLevel =
+    typeof boundaryDetail === "number" && Number.isFinite(boundaryDetail)
+      ? Math.max(0, Math.min(1, boundaryDetail))
+      : 0;
+  const boundaryDetailRequested =
+    !bakedRequested && !realSliceOnly && boundaryDetailLevel > 0;
+  const boundaryDetailActive = boundaryDetailRequested && gpuSamplerAvailable;
+  const gpuPointBudget = boundaryDetailActive
+    ? Math.floor(
+        pointBudget
+          + (POINT_BUDGETS.boundaryDetail - pointBudget) * boundaryDetailLevel,
+      )
+    : pointBudget;
+  const gpuMaxSurvivingCells = Math.max(
+    1,
+    Math.floor(gpuPointBudget / sampleCount),
+  );
+  const gpuRefineActive = refineActive || boundaryDetailActive;
+  const gpuRefineSubdivision = boundaryDetailActive
+    ? BOUNDARY_DETAIL_SUBDIVISION
+    : REFINE_SUBDIVISION;
+  const gpuRefineSubCells = gpuRefineSubdivision * gpuRefineSubdivision;
+  const gpuRefineCandidateCap = gpuRefineActive
+    ? Math.max(
+        64,
+        Math.ceil(
+          ((gpuMaxSurvivingCells - baseSlotCap) * 2) / gpuRefineSubCells,
+        ),
+      )
+    : 0;
+  return {
+    pointBudget,
+    maxSurvivingCells,
+    refineActive,
+    baseSlotCap,
+    sampleWidth,
+    sampleHeight,
+    refineSubCells,
+    refineCandidateCap,
+    refineWarmup,
+    boundaryDetailRequested,
+    boundaryDetailActive,
+    gpuPointBudget,
+    gpuMaxSurvivingCells,
+    gpuRefineActive,
+    gpuRefineSubdivision,
+    gpuRefineCandidateCap,
+  };
 }
 
 function orbitSurfaceMeshBytes(mesh: OrbitSurfaceMesh): number {
