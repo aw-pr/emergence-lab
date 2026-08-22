@@ -129,3 +129,35 @@ numbers, the slice and memory figures, and the files touched.
   launch a browser. The harness and pure fixtures are your feedback loop.
 - **Claude (verifier):** run the browser pass fully headless; never
   attach to the operator's Chrome or open a headed window.
+
+## Re-brief (2026-08-22, attempt 2)
+
+Attempt 1 (committed for reference as `wip/55-attempt-1`, 2135ab4) was
+verified FAIL on the density clause only. Keep its good parts, close the
+real gap:
+
+- **What stands from attempt 1:** the seam diagnosis and fix (the 0.16
+  exposed-edge fade darkening period-transition vertices; verifier
+  confirmed every strong pixel change is a brightening and no shimmer),
+  the restored 3 by 3 refinement lattice, and the harness seam metric.
+  Start from that WIP commit rather than re-deriving it.
+- **The defect:** parity was proven against the harness's synthetic 3 by 3
+  resample of 3, 10 and 35 chaotic coarse sites, not the live cloud path.
+  Live figures at identical framing: hybrid 1,903,136 points total
+  (749,544 chaotic-cloud) against cloud mode's 13,254,080; lit-pixel share
+  in chaotic regions is about 60 per cent of cloud mode at every luminance
+  threshold. The rendered hybrid is visibly thinner, which is exactly what
+  the operator reported.
+- **The target:** hybrid chaotic regions reach at least 90 per cent of
+  cloud mode's lit-pixel share at the same framing, measured the
+  verifier's way (fractional-rect luminance share at matched camera
+  state), or the findings note documents the binding budget that prevents
+  it with the closest achievable figure. Match the live cloud path's
+  per-cell orbit sample density inside hybrid chaotic cells; the point
+  budget, not a synthetic resample, is the lever.
+- **Harness honesty:** the harness's cloud reference must be derived from
+  the live cloud path's actual density so its parity figures carry to the
+  rendered view; the findings note must not claim parity the live view
+  does not show.
+- All other constraints, criteria and figures from the original card and
+  the stage-54 baselines stand unchanged.
