@@ -16,6 +16,13 @@ const curves = require(path.join(
   "app",
   "orbitSurfaceCurves.ts",
 ));
+const components = require(path.join(
+  __dirname,
+  "..",
+  "src",
+  "app",
+  "orbitSurfaceComponents.ts",
+));
 const model = require(path.join(
   __dirname,
   "..",
@@ -33,10 +40,53 @@ const DEPTHS = [1, 2, 3, 4, 5];
 const EDGE_ERROR_PX = 0.5;
 const MAX_REFINEMENT_DEPTH = 5;
 const REFINEMENT_CELL_BUDGET = 32768;
+// Sheet-side fade width, unchanged from stage 52.
 const DISSOLVE_BAND_CELLS = 8;
-const BAND_CANDIDATE_SUBDIVISION = 5;
-const BAND_SAMPLES_PER_CELL = 4;
-const BAND_SAMPLE_SPAN_CELLS = 0.25;
+// Cloud-side band, re-tuned by this stage.
+const CLOUD_BAND_CELLS = 12;
+const BAND_CANDIDATE_SUBDIVISION = 7;
+const BAND_SAMPLES_PER_CELL = 16;
+const BAND_SAMPLE_SPAN_CELLS = 0.75;
+const BAND_SAMPLE_WEIGHT = 0.5;
+// The stage-52 landing point, kept as the before column of every table.
+const BASELINE_BAND = {
+  label: "stage 52",
+  bandCells: 8,
+  subdivision: 5,
+  samplesPerCell: 4,
+  span: 0.25,
+  weight: 1,
+  classify: false,
+};
+const TUNED_BAND = {
+  label: "stage 54",
+  bandCells: CLOUD_BAND_CELLS,
+  subdivision: BAND_CANDIDATE_SUBDIVISION,
+  samplesPerCell: BAND_SAMPLES_PER_CELL,
+  span: BAND_SAMPLE_SPAN_CELLS,
+  weight: BAND_SAMPLE_WEIGHT,
+  classify: true,
+};
+// The stage-52 constants re-measured under classification. Every tuning row
+// below holds classification fixed, so the energy column compares band
+// constants against band constants rather than against a different sheet set.
+const BASELINE_BAND_CLASSIFIED = { ...BASELINE_BAND, label: "52 sheets54", classify: true };
+// Alternatives measured to justify the landing point above.
+const BAND_TUNING_CANDIDATES = [
+  BASELINE_BAND,
+  BASELINE_BAND_CLASSIFIED,
+  { ...TUNED_BAND, label: "sites only", bandCells: 8 },
+  { ...TUNED_BAND, label: "width only", subdivision: 5, samplesPerCell: 4, span: 0.25, weight: 1 },
+  { ...TUNED_BAND, label: "weight 0.35", weight: 0.35 },
+  { ...TUNED_BAND, label: "weight 0.50", weight: 0.5 },
+  { ...TUNED_BAND, label: "weight 0.70", weight: 0.7 },
+  { ...TUNED_BAND, label: "weight 1.00", weight: 1 },
+  { ...TUNED_BAND, label: "band 16", bandCells: 16 },
+];
+const COMPONENT_MULTIPLIER_MARGIN =
+  components.ORBIT_SURFACE_COMPONENT_MULTIPLIER_MARGIN;
+const COMPONENT_MARGIN_SWEEP = [0, 0.005, 0.02, 0.05, 0.15];
+const MAX_COMPONENT_PERIOD = components.ORBIT_SURFACE_MAX_COMPONENT_PERIOD;
 const VERIFIER_VIEWPORT = { width: 1280, height: 720, pixelsPerCell: 8 };
 const ANALYTIC_CURVE_MAX_CHORD_ERROR_C = 0.00075;
 const WINDOWS = [
@@ -48,6 +98,7 @@ const WINDOWS = [
     reMax: 1,
     imMin: -1,
     imMax: 1,
+    modelsPrimaryCurves: true,
   },
   {
     name: "period-2-bulb",
@@ -57,36 +108,67 @@ const WINDOWS = [
     reMax: -0.68,
     imMin: -0.34,
     imMax: 0.34,
+    modelsPrimaryCurves: true,
+  },
+  // The period-4 to period-8 stretch of the real-axis cascade. Every period-8
+  // component here is invisible to an eight-sample repeat test, so this window
+  // is where extended classification has to earn its keep.
+  {
+    name: "period-8-cascade",
+    width: 21,
+    height: 21,
+    reMin: -1.4,
+    reMax: -1.36,
+    imMin: -0.02,
+    imMax: 0.02,
   },
 ];
 
-const results = WINDOWS.flatMap(analyseWindow);
-const bandDensityResults = WINDOWS.map(analyseBandDensity);
+const coverageResults = WINDOWS.map(analyseCoverageWindow);
+const results = WINDOWS.flatMap((spec) => analyseWindow(spec, false));
+const baselineBandDensityResults = WINDOWS.map((spec) =>
+  analyseBandDensity(spec, BASELINE_BAND));
+const baselineClassifiedBandResults = WINDOWS.map((spec) =>
+  analyseBandDensity(spec, BASELINE_BAND_CLASSIFIED));
+const bandDensityResults = WINDOWS.map((spec) =>
+  analyseBandDensity(spec, TUNED_BAND));
+const bandTuningResults = WINDOWS.flatMap((spec) =>
+  BAND_TUNING_CANDIDATES.map((candidate) => analyseBandDensity(spec, candidate)));
 const baselineAdaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
   edgeErrorPx: 0.75,
   maxRefinementDepth: 4,
+  classify: false,
+}));
+const unclassifiedAdaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
+  edgeErrorPx: EDGE_ERROR_PX,
+  maxRefinementDepth: MAX_REFINEMENT_DEPTH,
+  classify: false,
 }));
 const adaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
   edgeErrorPx: EDGE_ERROR_PX,
   maxRefinementDepth: MAX_REFINEMENT_DEPTH,
+  classify: true,
 }));
-const analyticCurveResults = WINDOWS.map(analyseAnalyticCurveWindow);
+const analyticCurveResults = WINDOWS
+  .filter((spec) => spec.modelsPrimaryCurves === true)
+  .map(analyseAnalyticCurveWindow);
 const costResults = WINDOWS.map((spec, index) => {
   const baseline = baselineAdaptiveResults[index];
   const adaptive = adaptiveResults[index];
-  const density = bandDensityResults[index];
+  const before = baselineBandDensityResults[index];
+  const after = bandDensityResults[index];
   const pointBytes = SAMPLE_COUNT * 28;
   return {
     window: spec.name,
     beforeRefinedCells: baseline.refinedCells,
     afterRefinedCells: adaptive.refinedCells,
-    beforeBandPointCount: density.baseBandSites * SAMPLE_COUNT,
-    afterBandPointCount: density.bandPointCount,
+    beforeBandPointCount: before.bandPointCount,
+    afterBandPointCount: after.bandPointCount,
     beforePeakGeometryBytes:
-      baseline.meshGeometryBytes + density.boundedSites * pointBytes,
+      baseline.meshGeometryBytes + (before.boundedSites + before.addedBandSites) * pointBytes,
     afterPeakGeometryBytes:
       adaptive.meshGeometryBytes
-        + (density.boundedSites + density.addedBandSites) * pointBytes,
+        + (after.boundedSites + after.addedBandSites) * pointBytes,
   };
 });
 
@@ -120,6 +202,72 @@ for (const row of results) {
   );
 }
 console.log("");
+console.log("Surface coverage share of bounded cells");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Bounded".padStart(9),
+    "Sampler sheets".padStart(15),
+    "Classified sheets".padStart(18),
+    "Share before".padStart(13),
+    "Share after".padStart(12),
+    "Uplift".padStart(9),
+  ].join("  "),
+);
+for (const row of coverageResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      String(row.boundedCells).padStart(9),
+      String(row.samplerPeriodicCells).padStart(15),
+      String(row.classifiedPeriodicCells).padStart(18),
+      row.coverageShareBefore.toFixed(6).padStart(13),
+      row.coverageShareAfter.toFixed(6).padStart(12),
+      `${row.coverageUplift.toFixed(3)}x`.padStart(9),
+    ].join("  "),
+  );
+}
+console.log("");
+console.log("Coverage share against the accepted multiplier margin");
+console.log(
+  ["Window".padEnd(20), ...COMPONENT_MARGIN_SWEEP.map((margin) =>
+    `margin ${margin}`.padStart(13))].join("  "),
+);
+for (const row of coverageResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      ...row.marginSweep.map((entry) => entry.coverageShare.toFixed(6).padStart(13)),
+    ].join("  "),
+  );
+}
+console.log("");
+console.log("Component catalogue through period 8");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Period".padStart(7),
+    "Regions".padStart(8),
+    "Cells".padStart(7),
+    "Seed c".padStart(26),
+    "Seed |mu|".padStart(10),
+  ].join("  "),
+);
+for (const row of coverageResults) {
+  for (const entry of row.componentCatalogue) {
+    console.log(
+      [
+        row.window.padEnd(20),
+        String(entry.period).padStart(7),
+        String(entry.regions).padStart(8),
+        String(entry.cellCount).padStart(7),
+        `${entry.seed.re.toFixed(6)}, ${entry.seed.im.toFixed(6)}`.padStart(26),
+        entry.seed.multiplier.toFixed(6).padStart(10),
+      ].join("  "),
+    );
+  }
+}
+console.log("");
 console.log("Adaptive projected-error result");
 console.log(
   [
@@ -132,6 +280,30 @@ console.log(
   ].join("  "),
 );
 for (const row of adaptiveResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      String(row.acceptedContourSegments).padStart(10),
+      String(row.refinedCells).padStart(12),
+      row.maxChordErrorPx.toFixed(6).padStart(13),
+      row.alternation.toFixed(6).padStart(12),
+      (row.budgetExhausted ? "exhausted" : "within").padStart(9),
+    ].join("  "),
+  );
+}
+console.log("");
+console.log("Adaptive result without component classification, same settings");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Segments".padStart(10),
+    "Leaf cells".padStart(12),
+    "Max chord px".padStart(13),
+    "Alternation".padStart(12),
+    "Budget".padStart(9),
+  ].join("  "),
+);
+for (const row of unclassifiedAdaptiveResults) {
   console.log(
     [
       row.window.padEnd(20),
@@ -170,20 +342,62 @@ console.log("Chaotic cloud density in the sheet-edge band");
 console.log(
   [
     "Window".padEnd(20),
+    "Setting".padEnd(12),
     "Base sites".padStart(11),
     "Added sites".padStart(12),
     "Band points".padStart(12),
     "Uplift".padStart(9),
+    "Energy".padStart(11),
   ].join("  "),
 );
-for (const row of bandDensityResults) {
+for (let index = 0; index < WINDOWS.length; index += 1) {
+  for (const row of [
+    baselineBandDensityResults[index],
+    baselineClassifiedBandResults[index],
+    bandDensityResults[index],
+  ]) {
+    console.log(
+      [
+        row.window.padEnd(20),
+        row.setting.padEnd(12),
+        String(row.baseBandSites).padStart(11),
+        String(row.addedBandSites).padStart(12),
+        String(row.bandPointCount).padStart(12),
+        `${row.bandDensityUplift.toFixed(3)}x`.padStart(9),
+        row.bandEnergy.toFixed(3).padStart(11),
+      ].join("  "),
+    );
+  }
+}
+console.log("");
+console.log("Band saturation tuning sweep");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Setting".padEnd(12),
+    "Cells".padStart(6),
+    "Sub".padStart(4),
+    "Sites".padStart(6),
+    "Span".padStart(6),
+    "Weight".padStart(7),
+    "Band points".padStart(12),
+    "Uplift".padStart(9),
+    "Energy".padStart(11),
+  ].join("  "),
+);
+for (const row of bandTuningResults) {
   console.log(
     [
       row.window.padEnd(20),
-      String(row.baseBandSites).padStart(11),
-      String(row.addedBandSites).padStart(12),
+      row.setting.padEnd(12),
+      String(row.bandCells).padStart(6),
+      String(row.subdivision).padStart(4),
+      String(row.samplesPerCell).padStart(6),
+      row.span.toFixed(2).padStart(6),
+      row.weight.toFixed(2).padStart(7),
       String(row.bandPointCount).padStart(12),
       `${row.bandDensityUplift.toFixed(3)}x`.padStart(9),
+      row.bandEnergy.toFixed(3).padStart(11),
     ].join("  "),
   );
 }
@@ -219,24 +433,34 @@ console.log(JSON.stringify({
     maxRefinementDepth: MAX_REFINEMENT_DEPTH,
     refinementCellBudget: REFINEMENT_CELL_BUDGET,
     dissolveBandCells: DISSOLVE_BAND_CELLS,
+    cloudBandCells: CLOUD_BAND_CELLS,
     bandCandidateSubdivision: BAND_CANDIDATE_SUBDIVISION,
     bandSamplesPerCell: BAND_SAMPLES_PER_CELL,
     bandSampleSpanCells: BAND_SAMPLE_SPAN_CELLS,
+    bandSampleWeight: BAND_SAMPLE_WEIGHT,
+    componentMultiplierMargin: COMPONENT_MULTIPLIER_MARGIN,
+    componentMarginSweep: COMPONENT_MARGIN_SWEEP,
+    maxComponentPeriod: MAX_COMPONENT_PERIOD,
     verifierViewport: VERIFIER_VIEWPORT,
     analyticCurveMaxChordErrorC: ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
     windows: WINDOWS,
   },
+  coverageResults,
   results,
   baselineAdaptiveResults,
+  unclassifiedAdaptiveResults,
   adaptiveResults,
   analyticCurveResults,
+  baselineBandDensityResults,
+  baselineClassifiedBandResults,
   bandDensityResults,
+  bandTuningResults,
   costResults,
 }, null, 2));
 console.log("JSON_END");
 
-function analyseWindow(spec) {
-  const context = createSampler(spec);
+function analyseWindow(spec, classify) {
+  const context = createSampler(spec, classify);
   const cells = buildCoarseCells(spec, context.sample);
   const boundaryCells = findBoundaryCells(cells);
   const coarseQuadCount = (spec.width - 1) * (spec.height - 1);
@@ -269,7 +493,7 @@ function analyseWindow(spec) {
 }
 
 function analyseAdaptiveWindow(spec, configuration) {
-  const context = createSampler(spec);
+  const context = createSampler(spec, configuration.classify === true);
   const cells = buildCoarseCells(spec, context.sample);
   const boundaryCells = findBoundaryCells(cells);
   const coarseQuadCount = (spec.width - 1) * (spec.height - 1);
@@ -332,7 +556,7 @@ function analyseAdaptiveWindow(spec, configuration) {
 }
 
 function analyseAnalyticCurveWindow(spec) {
-  const context = createSampler(spec);
+  const context = createSampler(spec, true);
   const cells = buildCoarseCells(spec, context.sample);
   const boundaryCells = findBoundaryCells(cells);
   const sampledReference = buildReferenceContour(spec, boundaryCells, context.sample);
@@ -456,8 +680,8 @@ function measureSegmentsAgainstReference(candidateSegments, reference) {
   };
 }
 
-function analyseBandDensity(spec) {
-  const context = createSampler(spec);
+function analyseBandDensity(spec, configuration) {
+  const context = createSampler(spec, configuration.classify === true);
   const cells = buildCoarseCells(spec, context.sample);
   const periodicSites = [];
   for (let index = 0; index < cells.periods.length; index += 1) {
@@ -468,6 +692,7 @@ function analyseBandDensity(spec) {
   let baseBandSites = 0;
   let addedBandSites = 0;
   let boundedSites = 0;
+  let bandEnergy = 0;
   for (let index = 0; index < cells.periods.length; index += 1) {
     if (cells.escaped[index] === 0) boundedSites += 1;
     if (cells.escaped[index] !== 0 || cells.periods[index] !== 0) continue;
@@ -478,21 +703,24 @@ function analyseBandDensity(spec) {
       0,
       false,
       periodicDistance,
-      DISSOLVE_BAND_CELLS,
+      configuration.bandCells,
     )) {
       continue;
     }
     baseBandSites += 1;
+    const coverage = surface.orbitSurfaceDissolveCoverage(
+      periodicDistance,
+      configuration.bandCells,
+    );
+    bandEnergy += coverage;
     let accepted = 0;
-    for (let subY = 0; subY < BAND_CANDIDATE_SUBDIVISION; subY += 1) {
-      for (let subX = 0; subX < BAND_CANDIDATE_SUBDIVISION; subX += 1) {
-        if (accepted >= BAND_SAMPLES_PER_CELL) break;
+    for (let subY = 0; subY < configuration.subdivision; subY += 1) {
+      for (let subX = 0; subX < configuration.subdivision; subX += 1) {
+        if (accepted >= configuration.samplesPerCell) break;
         const sampleX = x
-          + ((subX + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
-            * BAND_SAMPLE_SPAN_CELLS;
+          + ((subX + 0.5) / configuration.subdivision - 0.5) * configuration.span;
         const sampleY = y
-          + ((subY + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
-            * BAND_SAMPLE_SPAN_CELLS;
+          + ((subY + 0.5) / configuration.subdivision - 0.5) * configuration.span;
         if (
           (sampleX === x && sampleY === y) ||
           sampleX < 0 || sampleX > cells.width - 1 ||
@@ -504,6 +732,10 @@ function analyseBandDensity(spec) {
         if (!sampled.escaped && sampled.period === 0) {
           addedBandSites += 1;
           accepted += 1;
+          bandEnergy += surface.orbitSurfaceDissolveCoverage(
+            nearestSiteDistance(sampleX, sampleY, periodicSites),
+            configuration.bandCells,
+          ) * configuration.weight;
         }
       }
     }
@@ -511,11 +743,122 @@ function analyseBandDensity(spec) {
   const totalBandSites = baseBandSites + addedBandSites;
   return {
     window: spec.name,
+    setting: configuration.label,
+    bandCells: configuration.bandCells,
+    subdivision: configuration.subdivision,
+    samplesPerCell: configuration.samplesPerCell,
+    span: configuration.span,
+    weight: configuration.weight,
+    classified: configuration.classify === true,
     boundedSites,
     baseBandSites,
     addedBandSites,
     bandPointCount: totalBandSites * SAMPLE_COUNT,
     bandDensityUplift: rounded(baseBandSites === 0 ? 1 : totalBandSites / baseBandSites),
+    bandEnergy: rounded(bandEnergy),
+  };
+}
+
+/**
+ * Coverage share is the share of bounded cells that carry a sheet. The before
+ * column is the empirical sampler alone; the after column adds the exact
+ * component classifier. The margin sweep shows how much of the gain survives
+ * as the accepted multiplier margin tightens, which is the lever that keeps
+ * sheet off chaotic parameter space.
+ */
+function analyseCoverageWindow(spec) {
+  const cellCount = spec.width * spec.height;
+  const periods = new Int16Array(cellCount);
+  const seeds = new Array(cellCount).fill(null);
+  const sampler = createSampler(spec, true).sample;
+  let boundedCells = 0;
+  let samplerPeriodicCells = 0;
+  let classifiedPeriodicCells = 0;
+  const periodHistogram = new Map();
+  for (let y = 0; y < spec.height; y += 1) {
+    for (let x = 0; x < spec.width; x += 1) {
+      const cell = y * spec.width + x;
+      const sampled = sampler(x, y);
+      if (sampled.escaped) continue;
+      boundedCells += 1;
+      if (sampled.samplerPeriod > 0) samplerPeriodicCells += 1;
+      if (sampled.period > 0) {
+        classifiedPeriodicCells += 1;
+        periods[cell] = sampled.period;
+        periodHistogram.set(
+          sampled.period,
+          (periodHistogram.get(sampled.period) ?? 0) + 1,
+        );
+      }
+      if (sampled.cycle) {
+        seeds[cell] = {
+          period: sampled.period,
+          c: sampled.c,
+          cycle: sampled.cycle,
+          multiplier: sampled.multiplier,
+        };
+      }
+    }
+  }
+
+  const regions = components.buildOrbitSurfaceComponentCatalogue(
+    periods,
+    spec.width,
+    spec.height,
+    (cell) => seeds[cell],
+  );
+  const catalogue = [];
+  for (const period of [...new Set(regions.map((region) => region.period))].sort(
+    (left, right) => left - right,
+  )) {
+    const matching = regions.filter((region) => region.period === period);
+    const best = matching.reduce((chosen, region) =>
+      region.seed.multiplier < chosen.seed.multiplier ? region : chosen);
+    catalogue.push({
+      period,
+      regions: matching.length,
+      cellCount: matching.reduce((sum, region) => sum + region.cellCount, 0),
+      seed: {
+        re: rounded(best.seed.c.re),
+        im: rounded(best.seed.c.im),
+        cycleRe: rounded(best.seed.cycle.re),
+        cycleIm: rounded(best.seed.cycle.im),
+        multiplier: rounded(best.seed.multiplier),
+      },
+    });
+  }
+
+  const marginSweep = COMPONENT_MARGIN_SWEEP.map((margin) => {
+    const marginSampler = createSampler(spec, true, margin).sample;
+    let periodic = 0;
+    for (let y = 0; y < spec.height; y += 1) {
+      for (let x = 0; x < spec.width; x += 1) {
+        const sampled = marginSampler(x, y);
+        if (!sampled.escaped && sampled.period > 0) periodic += 1;
+      }
+    }
+    return {
+      margin,
+      periodicCells: periodic,
+      coverageShare: rounded(boundedCells === 0 ? 0 : periodic / boundedCells),
+    };
+  });
+
+  const before = boundedCells === 0 ? 0 : samplerPeriodicCells / boundedCells;
+  const after = boundedCells === 0 ? 0 : classifiedPeriodicCells / boundedCells;
+  return {
+    window: spec.name,
+    boundedCells,
+    samplerPeriodicCells,
+    classifiedPeriodicCells,
+    coverageShareBefore: rounded(before),
+    coverageShareAfter: rounded(after),
+    coverageUplift: rounded(before === 0 ? 1 : after / before),
+    periodHistogram: Object.fromEntries(
+      [...periodHistogram.entries()].sort((left, right) => left[0] - right[0]),
+    ),
+    componentCatalogue: catalogue,
+    marginSweep,
   };
 }
 
@@ -539,7 +882,12 @@ function nearestSiteDistance(x, y, sites) {
   return nearest;
 }
 
-function createSampler(spec) {
+/**
+ * The fixture sampler. `classify` mirrors the renderer's hybrid path: the
+ * empirical window first, then the exact component classifier, which only ever
+ * replaces a label it can prove.
+ */
+function createSampler(spec, classify = false, margin = COMPONENT_MULTIPLIER_MARGIN) {
   const cache = new Map();
   const sample = (x, y) => {
     const key = `${coordinateKey(x)},${coordinateKey(y)}`;
@@ -567,7 +915,33 @@ function createSampler(spec) {
       interior: escaped ? 1 : measure.interior,
       boundary: 0,
       escaped,
+      samplerPeriod: escaped ? 0 : detected,
+      c: { re: cRe, im: cIm },
+      cycle: null,
+      multiplier: escaped ? 1 : measure.interior,
     };
+    if (!escaped && classify) {
+      const classification = components.classifyOrbitSurfaceComponent(cRe, cIm, {
+        multiplierMargin: margin,
+      });
+      if (
+        classification.period > 0 &&
+        classification.period <= SAMPLE_COUNT &&
+        components.writeOrbitSurfaceCycleSamples(
+          classification,
+          cRe,
+          cIm,
+          values,
+          0,
+          SAMPLE_COUNT,
+        )
+      ) {
+        result.period = classification.period;
+        result.interior = Math.max(0, Math.min(1, classification.multiplier));
+        result.cycle = classification.cycle;
+        result.multiplier = classification.multiplier;
+      }
+    }
     cache.set(key, result);
     return result;
   };

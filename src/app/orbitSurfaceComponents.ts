@@ -67,8 +67,6 @@ export interface OrbitSurfaceComponentClassification {
   multiplier: number;
   /** 1 - |mu|: zero on the bifurcation locus, one at the component centre. */
   confidence: number;
-  /** Argument of the accepted cycle multiplier, used to seed continuation. */
-  multiplierAngle: number;
   /** A point of the accepted cycle, exact to `rootTolerance`. */
   cycle: OrbitSurfaceComplex;
   /** |f_c^q(z) - z| at the accepted root. */
@@ -81,8 +79,6 @@ export interface OrbitSurfaceComponentSeed {
   c: OrbitSurfaceComplex;
   cycle: OrbitSurfaceComplex;
   multiplier: number;
-  /** Argument of the cycle multiplier. Older fixture seeds may omit it. */
-  multiplierAngle?: number;
 }
 
 export interface OrbitSurfaceComponentRegion {
@@ -99,7 +95,6 @@ const UNCLASSIFIED: OrbitSurfaceComponentClassification = {
   period: 0,
   multiplier: 1,
   confidence: 0,
-  multiplierAngle: 0,
   cycle: { re: 0, im: 0 },
   residual: Number.POSITIVE_INFINITY,
   escaped: false,
@@ -170,7 +165,6 @@ export function classifyOrbitSurfaceComponent(
       period,
       multiplier,
       confidence: 1 - multiplier,
-      multiplierAngle: Math.atan2(root.multiplierIm, root.multiplierRe),
       cycle: { re: root.re, im: root.im },
       residual: root.residual,
       escaped: false,

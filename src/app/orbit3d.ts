@@ -31,6 +31,10 @@ import {
   type OrbitSurfaceRefinedCell,
   type OrbitSurfaceSample,
 } from "./orbitSurface.ts";
+import {
+  classifyOrbitSurfaceComponent,
+  writeOrbitSurfaceCycleSamples,
+} from "./orbitSurfaceComponents.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -581,10 +585,25 @@ export const ORBIT_SURFACE_EDGE_ERROR_PX = 0.5;
 export const ORBIT_SURFACE_MAX_REFINEMENT_DEPTH = 5;
 /** Deterministic ceiling on adaptive boundary leaf cells. */
 export const ORBIT_SURFACE_REFINEMENT_CELL_BUDGET = 32_768;
+/** Sheet-side fade width. Unchanged from stage 52 so the sheets read as reviewed. */
 export const ORBIT_SURFACE_DISSOLVE_BAND_CELLS = 8;
-export const ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION = 5;
-export const ORBIT_SURFACE_BAND_SAMPLES_PER_CELL = 4;
-export const ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS = 0.25;
+/**
+ * Cloud-side band width. Wider than the sheet fade so the mist reaches further
+ * out from every silhouette; both ramps still come from the one shared
+ * coverage function, only the width differs.
+ */
+export const ORBIT_SURFACE_CLOUD_BAND_CELLS = 12;
+export const ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION = 7;
+export const ORBIT_SURFACE_BAND_SAMPLES_PER_CELL = 16;
+export const ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS = 0.75;
+/**
+ * Energy carried by one added sub-cell site relative to the coarse site it
+ * surrounds. Chosen from the harness sweep so total band energy stays within a
+ * quarter of the stage-52 figure while the site count more than trebles: the
+ * review asked for a denser mist, not a brighter band, so the extra budget is
+ * spent on density rather than on brightness.
+ */
+export const ORBIT_SURFACE_BAND_SAMPLE_WEIGHT = 0.5;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
@@ -743,6 +762,10 @@ export interface Orbit3DStats {
   finalisationMs: number;
   bandPointCount: number;
   peakGeometryBytes: number;
+  /** Share of bounded cells carrying a sheet period after classification. */
+  sheetCoverageShare: number;
+  /** The same share from the empirical sampler alone, for the before figure. */
+  samplerCoverageShare: number;
   surfaceAvailable: boolean;
   surfaceFallback: string | null;
 }
@@ -888,6 +911,8 @@ export class Orbit3DPointCloud {
   private finalisationMs = 0;
   private bandPointCount = 0;
   private peakGeometryBytes = 0;
+  private sheetCoverageShare = 0;
+  private samplerCoverageShare = 0;
   private surfaceGridWidth = 1;
   private surfaceGridHeight = 1;
   private surfaceVisibleIterations = DEFAULT_SAMPLE_COUNT;
@@ -1104,6 +1129,8 @@ export class Orbit3DPointCloud {
       finalisationMs: this.finalisationMs,
       bandPointCount: this.bandPointCount,
       peakGeometryBytes: this.peakGeometryBytes,
+      sheetCoverageShare: this.sheetCoverageShare,
+      samplerCoverageShare: this.samplerCoverageShare,
       surfaceAvailable,
       surfaceFallback: this.surfaceFallback,
     };
@@ -1379,6 +1406,8 @@ export class Orbit3DPointCloud {
     this.finalisationMs = 0;
     this.bandPointCount = 0;
     this.peakGeometryBytes = 0;
+    this.sheetCoverageShare = 0;
+    this.samplerCoverageShare = 0;
     this.surfaceVisibleIterations = plottedIterations;
     this.pointHybridCull = false;
     this.surfaceFallback = null;
@@ -1860,6 +1889,10 @@ export class Orbit3DPointCloud {
     let transitionEdge = 0;
     let bandBaseCellCount = 0;
     let periodicDistances: Float32Array = new Float32Array(cellCount);
+    let boundedCellCount = 0;
+    let samplerPeriodicCellCount = 0;
+    let sheetPeriodicCellCount = 0;
+    let lastSamplerPeriod = 0;
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -1886,19 +1919,20 @@ export class Orbit3DPointCloud {
           const x = cell % sampleWidth;
           const y = (cell - x) / sampleWidth;
           measure.interior = 1;
-          const result = sampleAttractorCell(
+          const result = sampleClassifiedCell(
             gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
             y === Math.floor(sampleHeight / 2)
               ? 0
               : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
-            warmupIterations,
-            sampleCount,
             samples,
             cell * sampleCount,
             measure,
           );
           if (result === ESCAPED) escaped[cell] = 1;
           else {
+            boundedCellCount += 1;
+            if (lastSamplerPeriod > 0) samplerPeriodicCellCount += 1;
+            if (result > 0) sheetPeriodicCellCount += 1;
             periods[cell] = result;
             interiors[cell] = measure.interior;
           }
@@ -2029,6 +2063,55 @@ export class Orbit3DPointCloud {
       }
     };
 
+    /**
+     * The one place the hybrid build decides what period a parameter has.
+     * The empirical window comes first, because it also produces the orbit
+     * heights the sheet needs. Every bounded cell is then offered to the exact
+     * component classifier, which answers where the window cannot: components
+     * whose period does not fit the window at all, and components whose
+     * multiplier leaves the warmup short of the cycle. An accepted
+     * classification replaces the window with its exact cycle, so the sheet
+     * sits on the true attractor rather than on a partly converged orbit.
+     * Where the classifier declines, the empirical label stands, so coverage
+     * can only grow.
+     */
+    const sampleClassifiedCell = (
+      cRe: number,
+      cIm: number,
+      values: Float32Array,
+      offset: number,
+      measure: { interior: number },
+    ): number => {
+      const result = sampleAttractorCell(
+        cRe,
+        cIm,
+        warmupIterations,
+        sampleCount,
+        values,
+        offset,
+        measure,
+      );
+      lastSamplerPeriod = result === ESCAPED ? 0 : result;
+      if (result === ESCAPED) return ESCAPED;
+      const classification = classifyOrbitSurfaceComponent(cRe, cIm);
+      if (
+        classification.period > 0 &&
+        classification.period <= sampleCount &&
+        writeOrbitSurfaceCycleSamples(
+          classification,
+          cRe,
+          cIm,
+          values,
+          offset,
+          sampleCount,
+        )
+      ) {
+        measure.interior = Math.max(0, Math.min(1, classification.multiplier));
+        return classification.period;
+      }
+      return result;
+    };
+
     const coarsePeriod = (index: number): number =>
       escaped[index] === 0 && periods[index] > 0 ? periods[index] : 0;
 
@@ -2106,13 +2189,11 @@ export class Orbit3DPointCloud {
       if (prepared) return prepared;
       const values = new Float32Array(sampleCount);
       measure.interior = 1;
-      const result = sampleAttractorCell(
+      const result = sampleClassifiedCell(
         gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
         y === Math.floor(sampleHeight / 2)
           ? 0
           : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
-        warmupIterations,
-        sampleCount,
         values,
         0,
         measure,
@@ -2150,13 +2231,11 @@ export class Orbit3DPointCloud {
       const prepared = lookupPreparedPeriod(x, y);
       if (prepared !== undefined) return prepared;
       measure.interior = 1;
-      const result = sampleAttractorCell(
+      const result = sampleClassifiedCell(
         gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
         y === Math.floor(sampleHeight / 2)
           ? 0
           : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
-        warmupIterations,
-        sampleCount,
         contourSampleValues,
         contourSampleCount * sampleCount,
         measure,
@@ -2252,7 +2331,7 @@ export class Orbit3DPointCloud {
           coarsePeriod(index),
           escaped[index] !== 0,
           periodicDistances[index],
-          ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
+          ORBIT_SURFACE_CLOUD_BAND_CELLS,
         )) {
           bandBaseCellCount += 1;
           bandBaseCells.push(index);
@@ -2282,6 +2361,9 @@ export class Orbit3DPointCloud {
 
     const dissolveCoverage = (distance: number): number =>
       orbitSurfaceDissolveCoverage(distance, ORBIT_SURFACE_DISSOLVE_BAND_CELLS);
+
+    const cloudBandCoverage = (distance: number): number =>
+      orbitSurfaceDissolveCoverage(distance, ORBIT_SURFACE_CLOUD_BAND_CELLS);
 
     const recordSlice = (startedAt: number, budgetMs: number): void => {
       if (Number.isFinite(budgetMs)) {
@@ -2326,6 +2408,12 @@ export class Orbit3DPointCloud {
       this.refinedCellShare = coarseQuadCount > 0
         ? refinedCellIndices.size / coarseQuadCount
         : 0;
+      this.sheetCoverageShare = boundedCellCount > 0
+        ? sheetPeriodicCellCount / boundedCellCount
+        : 0;
+      this.samplerCoverageShare = boundedCellCount > 0
+        ? samplerPeriodicCellCount / boundedCellCount
+        : 0;
 
       const boundedCells = new Int32Array(cellCount);
       let boundedCount = 0;
@@ -2356,7 +2444,7 @@ export class Orbit3DPointCloud {
           interior: interiors[sourceCell],
           boundary: boundaries[sourceCell],
           escaped: false,
-        }, periodicDistances[sourceCell]);
+        }, periodicDistances[sourceCell], 1);
       }
       for (let index = 0; index < bandSamples.length; index += 1) {
         const band = bandSamples[index];
@@ -2366,6 +2454,7 @@ export class Orbit3DPointCloud {
           band.y,
           band.sample,
           interpolateGrid(periodicDistances, band.x, band.y),
+          ORBIT_SURFACE_BAND_SAMPLE_WEIGHT,
         );
       }
 
@@ -2375,6 +2464,7 @@ export class Orbit3DPointCloud {
         y: number,
         sampled: OrbitSurfaceSample,
         periodicDistance: number,
+        siteWeight: number,
       ): void {
         const cRe = cellCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
         const cIm = y === Math.floor(sampleHeight / 2)
@@ -2391,7 +2481,7 @@ export class Orbit3DPointCloud {
           pointInteriors[point] = sampled.interior;
           pointBoundaries[point] = sampled.boundary;
           if (sampled.period === 0) {
-            pointWeights[point] = dissolveCoverage(periodicDistance);
+            pointWeights[point] = cloudBandCoverage(periodicDistance) * siteWeight;
           }
         }
       }

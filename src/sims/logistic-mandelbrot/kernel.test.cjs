@@ -9,6 +9,7 @@ const {
 const model = require("../../../.test-build/sims/logistic-mandelbrot/model.js");
 const surface = require("../../app/orbitSurface.ts");
 const curves = require("../../app/orbitSurfaceCurves.ts");
+const components = require("../../app/orbitSurfaceComponents.ts");
 
 // Logistic conjugacy: x <- r*x*(1 - x) maps to z <- z^2 + c under
 // z = r/2 - r*x with c = (r/2)*(1 - r/2); inverting, r = 1 + sqrt(1 - 4c).
@@ -206,6 +207,121 @@ test("cloud-band classification shares the sheet dissolve coverage", () => {
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.5, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(1, false, 1, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, true, 1, 4), false);
+});
+
+test("exact component classification reaches periods the sample window cannot", () => {
+  const classify = (re, im) =>
+    components.classifyOrbitSurfaceComponent(re, im);
+  const sampled = (re, im) => {
+    const out = new Float32Array(8);
+    return model.sampleAttractorCell(re, im, 1500, 8, out, 0, { interior: 1 });
+  };
+
+  // An eight-sample window needs a lag pair to see a repeat, so period 8 is
+  // outside its reach; the exact classifier answers where it cannot.
+  assert.equal(sampled(-1.3815474, 0), 0);
+  assert.equal(classify(-1.3815474, 0).period, 8);
+
+  assert.equal(classify(-0.5, 0).period, 1);
+  assert.equal(classify(-1, 0).period, 2);
+  assert.equal(classify(-1.7548777, 0).period, 3);
+  assert.equal(classify(-1.3107026, 0).period, 4);
+  assert.equal(classify(-0.5043, 0.5629).period, 5);
+
+  // Chaotic and escaping parameters stay cloud, which is what keeps sheet off
+  // chaotic parameter space.
+  assert.equal(classify(-1.8, 0).period, 0);
+  assert.equal(classify(0.6, 0).period, 0);
+  assert.equal(classify(0.6, 0).escaped, true);
+  assert.equal(classify(-1.8, 0).escaped, false);
+
+  // Above period 8 the module declines rather than guessing.
+  assert.equal(classify(-1.3969, 0).period, 0);
+});
+
+test("component classification is bounded by the accepted multiplier margin", () => {
+  const centre = components.classifyOrbitSurfaceComponent(-1, 0);
+  assert.equal(centre.period, 2);
+  assert.ok(centre.multiplier < 1e-9);
+  assert.ok(Math.abs(centre.confidence - 1) < 1e-9);
+  assert.ok(centre.residual <= 1e-12);
+
+  // c = -0.749 sits just inside the cardioid, where the multiplier is close to
+  // one and the classification is deliberately withheld.
+  const nearCusp = components.classifyOrbitSurfaceComponent(-0.749, 0);
+  assert.equal(nearCusp.period, 0);
+  const permissive = components.classifyOrbitSurfaceComponent(-0.749, 0, {
+    multiplierMargin: 0,
+  });
+  assert.equal(permissive.period, 1);
+  assert.ok(permissive.multiplier > 1 - components.ORBIT_SURFACE_COMPONENT_MULTIPLIER_MARGIN);
+  assert.ok(permissive.multiplier < 1);
+
+  // Repeated calls are byte-for-byte identical.
+  assert.deepEqual(
+    components.classifyOrbitSurfaceComponent(-1.3815474, 0),
+    components.classifyOrbitSurfaceComponent(-1.3815474, 0),
+  );
+});
+
+test("classified cycles fill the sample window with an exact repeating orbit", () => {
+  const classification = components.classifyOrbitSurfaceComponent(-1.3815474, 0);
+  const window = new Float32Array(8);
+  assert.equal(
+    components.writeOrbitSurfaceCycleSamples(classification, -1.3815474, 0, window, 0, 8),
+    true,
+  );
+  // The window holds one full cycle and no lag pair, so the empirical estimator
+  // still reports nothing; the classified label is what carries period 8.
+  assert.equal(model.estimatePeriod(window, 0, 8), 0);
+  assert.equal(new Set(window).size, 8);
+  assert.equal(surface.orbitSurfaceSamplePeriod({
+    samples: window,
+    period: classification.period,
+    interior: classification.multiplier,
+    boundary: 0,
+    escaped: false,
+  }, 8), 8);
+
+  // A period wider than the window is refused rather than truncated.
+  const short = new Float32Array(4);
+  assert.equal(
+    components.writeOrbitSurfaceCycleSamples(classification, -1.3815474, 0, short, 0, 4),
+    false,
+  );
+
+  const periodTwo = components.classifyOrbitSurfaceComponent(-1, 0);
+  const pair = new Float32Array(8);
+  components.writeOrbitSurfaceCycleSamples(periodTwo, -1, 0, pair, 0, 8);
+  for (let index = 0; index + 2 < 8; index += 1) {
+    assert.equal(pair[index], pair[index + 2]);
+  }
+});
+
+test("component catalogue groups classified cells into per-component seeds", () => {
+  // Two period-2 regions and one period-4 region on a four by two grid.
+  const periods = Int16Array.from([2, 2, 0, 4, 2, 0, 0, 4]);
+  const seedAt = (cell) => ({
+    period: periods[cell],
+    c: { re: cell, im: 0 },
+    cycle: { re: -cell, im: 0 },
+    multiplier: cell === 4 ? 0.1 : 0.9,
+  });
+  const regions = components.buildOrbitSurfaceComponentCatalogue(periods, 4, 2, seedAt);
+
+  assert.deepEqual(
+    regions.map((region) => [region.period, region.cellCount, region.firstCell]),
+    [[2, 3, 0], [4, 2, 3]],
+  );
+  // The representative is the best-conditioned interior point in the region.
+  assert.equal(regions[0].seed.c.re, 4);
+  assert.equal(regions[0].seed.multiplier, 0.1);
+
+  // A component seed carries exactly the fields the boundary corrector takes.
+  const seed = regions[0].seed;
+  assert.equal(typeof seed.period, "number");
+  assert.equal(typeof seed.c.re, "number");
+  assert.equal(typeof seed.cycle.im, "number");
 });
 
 test("analytic primary boundaries recover the known cardioid and period-2 extrema", () => {
