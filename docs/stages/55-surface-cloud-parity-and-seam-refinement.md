@@ -7,11 +7,12 @@
 - **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
 - **Verifier:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier panel:** false
-- **Requires GUI:** true
 - **Pairing rationale:** quota is being spread across pools this window
   (stage 54 worker was Opus), so Terra takes the worker seat; Opus flips
   to the verifier seat for the cross-family check and runs the browser
-  pass headless.
+  pass headless. No Requires GUI declaration: the Claude verifier is
+  unsandboxed by nature, and the Codex worker needs no browser, so it
+  keeps its sandbox.
 
 ## Objective
 
