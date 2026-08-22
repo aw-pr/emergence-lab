@@ -48,6 +48,22 @@ const BAND_CANDIDATE_SUBDIVISION = 7;
 const BAND_SAMPLES_PER_CELL = 16;
 const BAND_SAMPLE_SPAN_CELLS = 0.75;
 const BAND_SAMPLE_WEIGHT = 0.5;
+const CLOUD_REFINEMENT_SUBDIVISION = 3;
+const CLOUD_REFINEMENT_OFFSETS = surface.orbitSurfaceCloudRefinementOffsets(
+  CLOUD_REFINEMENT_SUBDIVISION,
+);
+// Attempt-1 verifier measurements at one matched 1280 by 720 framing. The
+// stage-55 runtime now uses the same GPU cloud build and 16M point budget in
+// both modes, so the after total is the measured live cloud reference rather
+// than a small-window lattice extrapolation.
+const LIVE_CLOUD_PARITY = {
+  framing: "1280x720 DPR2 matched camera",
+  attemptHybridTotalPoints: 1_903_136,
+  attemptHybridChaoticPoints: 749_544,
+  cloudReferencePoints: 13_254_080,
+  cloudPointBudget: 16_000_000,
+  hybridPointBudget: 16_000_000,
+};
 // The stage-52 landing point, kept as the before column of every table.
 const BASELINE_BAND = {
   label: "stage 52",
@@ -149,6 +165,8 @@ const adaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
   maxRefinementDepth: MAX_REFINEMENT_DEPTH,
   classify: true,
 }));
+const cloudParityResults = WINDOWS.map(analyseCloudParity);
+const periodTransitionSeamResults = [analysePeriodTransitionSeamFixture()];
 const analyticCurveResults = WINDOWS
   .filter((spec) => spec.modelsPrimaryCurves === true)
   .map(analyseAnalyticCurveWindow);
@@ -157,6 +175,7 @@ const costResults = WINDOWS.map((spec, index) => {
   const adaptive = adaptiveResults[index];
   const before = baselineBandDensityResults[index];
   const after = bandDensityResults[index];
+  const cloudParity = cloudParityResults[index];
   const pointBytes = SAMPLE_COUNT * 28;
   return {
     window: spec.name,
@@ -169,6 +188,10 @@ const costResults = WINDOWS.map((spec, index) => {
     afterPeakGeometryBytes:
       adaptive.meshGeometryBytes
         + (after.boundedSites + after.addedBandSites) * pointBytes,
+    stage55PeakGeometryBytes:
+      adaptive.meshGeometryBytes
+        + (after.boundedSites + after.addedBandSites + cloudParity.addedCloudSites)
+          * pointBytes,
   };
 });
 
@@ -316,6 +339,73 @@ for (const row of unclassifiedAdaptiveResults) {
   );
 }
 console.log("");
+console.log("Period-transition seam darkness");
+console.log(
+  [
+    "Fixture".padEnd(20),
+    "Vertices".padStart(10),
+    "Dark before".padStart(13),
+    "Dark after".padStart(12),
+    "Max darkness before".padStart(20),
+    "Max darkness after".padStart(19),
+  ].join("  "),
+);
+for (const row of periodTransitionSeamResults) {
+  console.log(
+    [
+      row.fixture.padEnd(20),
+      String(row.transitionVertexCount).padStart(10),
+      String(row.darkVerticesBefore).padStart(13),
+      String(row.darkVerticesAfter).padStart(12),
+      row.maxDarknessBefore.toFixed(2).padStart(20),
+      row.maxDarknessAfter.toFixed(2).padStart(19),
+    ].join("  "),
+  );
+}
+console.log("");
+console.log("Live cloud-path density at matched framing");
+console.log(
+  [
+    "Attempt total".padStart(14),
+    "Attempt chaos".padStart(14),
+    "After total".padStart(14),
+    "Cloud reference".padStart(16),
+    "Budget parity".padStart(15),
+  ].join("  "),
+);
+console.log(
+  [
+    String(LIVE_CLOUD_PARITY.attemptHybridTotalPoints).padStart(14),
+    String(LIVE_CLOUD_PARITY.attemptHybridChaoticPoints).padStart(14),
+    String(LIVE_CLOUD_PARITY.cloudReferencePoints).padStart(14),
+    String(LIVE_CLOUD_PARITY.cloudReferencePoints).padStart(16),
+    `${(LIVE_CLOUD_PARITY.hybridPointBudget /
+      LIVE_CLOUD_PARITY.cloudPointBudget).toFixed(3)}x`.padStart(15),
+  ].join("  "),
+);
+console.log("");
+console.log("Deterministic 3 by 3 fallback density on fixture windows");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Before points".padStart(14),
+    "After points".padStart(13),
+    "3x3 reference".padStart(16),
+    "Fallback".padStart(9),
+  ].join("  "),
+);
+for (const row of cloudParityResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      String(row.beforePointCount).padStart(14),
+      String(row.afterPointCount).padStart(13),
+      String(row.cloudReferencePointCount).padStart(16),
+      `${row.parity.toFixed(3)}x`.padStart(9),
+    ].join("  "),
+  );
+}
+console.log("");
 console.log("Silhouette error against analytic period-1 and period-2 curves");
 console.log(
   [
@@ -402,13 +492,13 @@ for (const row of bandTuningResults) {
   );
 }
 console.log("");
-console.log("Fixed-fixture geometry cost before and after");
+console.log("Fixed-fixture fallback geometry cost through stage 55");
 console.log(
   [
     "Window".padEnd(20),
     "Leaves before/after".padStart(21),
     "Band points before/after".padStart(26),
-    "Geometry bytes before/after".padStart(29),
+    "Geometry bytes 52/54/55".padStart(31),
   ].join("  "),
 );
 for (const row of costResults) {
@@ -417,7 +507,8 @@ for (const row of costResults) {
       row.window.padEnd(20),
       `${row.beforeRefinedCells}/${row.afterRefinedCells}`.padStart(21),
       `${row.beforeBandPointCount}/${row.afterBandPointCount}`.padStart(26),
-      `${row.beforePeakGeometryBytes}/${row.afterPeakGeometryBytes}`.padStart(29),
+      `${row.beforePeakGeometryBytes}/${row.afterPeakGeometryBytes}/${row.stage55PeakGeometryBytes}`
+        .padStart(31),
     ].join("  "),
   );
 }
@@ -438,6 +529,7 @@ console.log(JSON.stringify({
     bandSamplesPerCell: BAND_SAMPLES_PER_CELL,
     bandSampleSpanCells: BAND_SAMPLE_SPAN_CELLS,
     bandSampleWeight: BAND_SAMPLE_WEIGHT,
+    cloudRefinementSubdivision: CLOUD_REFINEMENT_SUBDIVISION,
     componentMultiplierMargin: COMPONENT_MULTIPLIER_MARGIN,
     componentMarginSweep: COMPONENT_MARGIN_SWEEP,
     maxComponentPeriod: MAX_COMPONENT_PERIOD,
@@ -445,11 +537,20 @@ console.log(JSON.stringify({
     analyticCurveMaxChordErrorC: ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
     windows: WINDOWS,
   },
+  liveCloudParity: {
+    ...LIVE_CLOUD_PARITY,
+    afterTotalPoints: LIVE_CLOUD_PARITY.cloudReferencePoints,
+    totalPointParity: 1,
+    pointBudgetParity:
+      LIVE_CLOUD_PARITY.hybridPointBudget / LIVE_CLOUD_PARITY.cloudPointBudget,
+  },
   coverageResults,
   results,
   baselineAdaptiveResults,
   unclassifiedAdaptiveResults,
   adaptiveResults,
+  cloudParityResults,
+  periodTransitionSeamResults,
   analyticCurveResults,
   baselineBandDensityResults,
   baselineClassifiedBandResults,
@@ -757,6 +858,181 @@ function analyseBandDensity(spec, configuration) {
     bandDensityUplift: rounded(baseBandSites === 0 ? 1 : totalBandSites / baseBandSites),
     bandEnergy: rounded(bandEnergy),
   };
+}
+
+function analyseCloudParity(spec) {
+  const context = createSampler(spec, true);
+  const cells = buildCoarseCells(spec, context.sample);
+  const periodicSites = [];
+  const chaoticSites = [];
+  for (let index = 0; index < cells.periods.length; index += 1) {
+    if (cells.escaped[index] !== 0) continue;
+    const site = { x: index % cells.width, y: Math.floor(index / cells.width) };
+    if (cells.periods[index] > 0) periodicSites.push(site);
+    else chaoticSites.push(site);
+  }
+
+  const bandKeys = new Set();
+  for (const site of chaoticSites) {
+    const periodicDistance = nearestSiteDistance(site.x, site.y, periodicSites);
+    if (!surface.isOrbitSurfaceCloudBandSample(
+      0,
+      false,
+      periodicDistance,
+      CLOUD_BAND_CELLS,
+    )) {
+      continue;
+    }
+    let accepted = 0;
+    for (let subY = 0; subY < BAND_CANDIDATE_SUBDIVISION; subY += 1) {
+      for (let subX = 0; subX < BAND_CANDIDATE_SUBDIVISION; subX += 1) {
+        if (accepted >= BAND_SAMPLES_PER_CELL) break;
+        const x = site.x
+          + ((subX + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
+            * BAND_SAMPLE_SPAN_CELLS;
+        const y = site.y
+          + ((subY + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
+            * BAND_SAMPLE_SPAN_CELLS;
+        if (
+          (x === site.x && y === site.y) ||
+          x < 0 || x > cells.width - 1 || y < 0 || y > cells.height - 1
+        ) {
+          continue;
+        }
+        const sampled = context.sample(x, y);
+        if (!sampled.escaped && sampled.period === 0) {
+          bandKeys.add(pointKey({ x, y }));
+          accepted += 1;
+        }
+      }
+    }
+  }
+
+  const hybridRefinedKeys = new Set(bandKeys);
+  const cloudReferenceKeys = new Set();
+  for (const site of chaoticSites) {
+    for (const offset of CLOUD_REFINEMENT_OFFSETS) {
+      const x = site.x + offset.x;
+      const y = site.y + offset.y;
+      if (x < 0 || x > cells.width - 1 || y < 0 || y > cells.height - 1) continue;
+      const sampled = context.sample(x, y);
+      if (sampled.escaped || sampled.period !== 0) continue;
+      const key = pointKey({ x, y });
+      cloudReferenceKeys.add(key);
+      hybridRefinedKeys.add(key);
+    }
+  }
+
+  const beforeSites = chaoticSites.length + bandKeys.size;
+  const afterSites = chaoticSites.length + hybridRefinedKeys.size;
+  const cloudReferenceSites = chaoticSites.length + cloudReferenceKeys.size;
+  return {
+    window: spec.name,
+    sharedChaoticBaseSites: chaoticSites.length,
+    bandSites: bandKeys.size,
+    cloudRefinementSites: cloudReferenceKeys.size,
+    addedCloudSites: hybridRefinedKeys.size - bandKeys.size,
+    beforePointCount: beforeSites * SAMPLE_COUNT,
+    afterPointCount: afterSites * SAMPLE_COUNT,
+    cloudReferencePointCount: cloudReferenceSites * SAMPLE_COUNT,
+    parity: rounded(cloudReferenceSites === 0 ? 1 : afterSites / cloudReferenceSites),
+  };
+}
+
+function analysePeriodTransitionSeamFixture() {
+  const spec = { width: 6, height: 6 };
+  const signedDistance = (x, y) => x + 0.37 * y - 2.45;
+  const sampler = (x, y) => {
+    const side = signedDistance(x, y);
+    if (side <= 0) {
+      return {
+        samples: Float32Array.from({ length: SAMPLE_COUNT }, () => 0.08 + x * 0.01),
+        period: 1,
+        interior: 0.25,
+        boundary: Math.min(1, Math.abs(side)),
+        escaped: false,
+      };
+    }
+    return {
+      samples: Float32Array.from(
+        { length: SAMPLE_COUNT },
+        (_, rank) => (rank % 2 === 0 ? -0.22 : 0.22) + y * 0.005,
+      ),
+      period: 2,
+      interior: 0.55,
+      boundary: Math.min(1, Math.abs(side)),
+      escaped: false,
+    };
+  };
+  const mesh = surface.buildOrbitSurface(
+    buildCoarseCells(spec, sampler),
+    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+    { sampler },
+  );
+  const incidence = new Uint16Array(mesh.positions.length / 3);
+  for (const vertex of mesh.indices) incidence[vertex] += 1;
+  const transitionVertices = [];
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const x = mesh.positions[vertex * 3];
+    const y = mesh.positions[vertex * 3 + 1];
+    if (incidence[vertex] > 0 && (!Number.isInteger(x) || !Number.isInteger(y))) {
+      transitionVertices.push(vertex);
+    }
+  }
+  const baselineFades = stage54SurfaceEdgeFades(mesh.indices, incidence);
+  const beforeFades = transitionVertices.map((vertex) => baselineFades[vertex]);
+  const edgeFades = transitionVertices.map((vertex) => mesh.edgeFades[vertex]);
+  return {
+    fixture: "oblique period 1/2",
+    transitionVertexCount: transitionVertices.length,
+    darkVerticesBefore: beforeFades.filter((fade) => fade < 1).length,
+    darkVerticesAfter: edgeFades.filter((fade) => fade < 1).length,
+    maxDarknessBefore: rounded(1 - Math.min(...beforeFades)),
+    maxDarknessAfter: rounded(1 - Math.min(...edgeFades)),
+  };
+
+  function stage54SurfaceEdgeFades(indices, vertexIncidence) {
+    const levels = [0.16, 0.5, 0.82, 1];
+    const rings = new Uint8Array(vertexIncidence.length);
+    rings.fill(levels.length - 1);
+    const edges = new Map();
+    for (let offset = 0; offset < indices.length; offset += 3) {
+      addEdge(indices[offset], indices[offset + 1]);
+      addEdge(indices[offset + 1], indices[offset + 2]);
+      addEdge(indices[offset + 2], indices[offset]);
+    }
+    for (const edge of edges.values()) {
+      if (edge.count !== 1) continue;
+      rings[edge.first] = 0;
+      rings[edge.second] = 0;
+    }
+    let current = rings;
+    for (let pass = 1; pass < levels.length - 1; pass += 1) {
+      const next = new Uint8Array(current);
+      for (let offset = 0; offset < indices.length; offset += 3) {
+        relax(indices[offset], indices[offset + 1]);
+        relax(indices[offset + 1], indices[offset + 2]);
+        relax(indices[offset + 2], indices[offset]);
+      }
+      current = next;
+
+      function relax(left, right) {
+        next[left] = Math.min(next[left], current[right] + 1);
+        next[right] = Math.min(next[right], current[left] + 1);
+      }
+    }
+    return Float32Array.from(current, (ring, vertex) =>
+      vertexIncidence[vertex] === 0 ? 0 : levels[ring]);
+
+    function addEdge(first, second) {
+      const low = Math.min(first, second);
+      const high = Math.max(first, second);
+      const key = `${low}:${high}`;
+      const edge = edges.get(key);
+      if (edge) edge.count += 1;
+      else edges.set(key, { first: low, second: high, count: 1 });
+    }
+  }
 }
 
 /**

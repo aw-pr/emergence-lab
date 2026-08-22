@@ -197,6 +197,7 @@ function assertAnalyticContour({ sampler, distanceToBoundary, expectedPeriods })
     new Set(Array.from(first.periods).filter((period) => period > 0)),
     new Set(expectedPeriods),
   );
+  return first;
 }
 
 test("cloud-band classification shares the sheet dissolve coverage", () => {
@@ -207,6 +208,15 @@ test("cloud-band classification shares the sheet dissolve coverage", () => {
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.5, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(1, false, 1, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, true, 1, 4), false);
+});
+
+test("hybrid cloud refinement uses the cloud path's deterministic 3 by 3 lattice", () => {
+  const offsets = surface.orbitSurfaceCloudRefinementOffsets(3);
+  assert.equal(offsets.length, 8);
+  assert.deepEqual(offsets, surface.orbitSurfaceCloudRefinementOffsets(3));
+  assert.ok(offsets.every(({ x, y }) =>
+    Math.abs(x) <= 1 / 3 + 1e-12 && Math.abs(y) <= 1 / 3 + 1e-12));
+  assert.ok(offsets.every(({ x, y }) => x !== 0 || y !== 0));
 });
 
 test("exact component classification reaches periods the sample window cannot", () => {
@@ -624,7 +634,7 @@ test("diagnostics-off hybrid geometry matches the regularised byte snapshot", ()
   assert.equal(mesh.indices.length / 3, 249);
   assert.equal(
     digest.digest("hex"),
-    "d835238eecadbd53ca4769074a65884bf42db07e07346a15e4ec4c41f2e381a0",
+    "63c1b8bfbd88c339bfb5477745a6bfa8f1bddb885206bdede56fd781221139f1",
   );
 });
 
@@ -781,12 +791,25 @@ test("surface contour follows an oblique period-1 to period-2 split", () => {
       escaped: false,
     };
   };
-  assertAnalyticContour({
+  const mesh = assertAnalyticContour({
     sampler,
     distanceToBoundary: (x, y) =>
       Math.abs(signedDistance(x, y)) / Math.hypot(1, 0.37),
     expectedPeriods: [1, 2],
   });
+  const transitionVertices = [];
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const x = mesh.positions[vertex * 3];
+    const y = mesh.positions[vertex * 3 + 1];
+    if (Number.isInteger(x) && Number.isInteger(y)) continue;
+    transitionVertices.push(vertex);
+  }
+  assert.ok(transitionVertices.length > 0);
+  const incidence = new Uint16Array(mesh.positions.length / 3);
+  for (const vertex of mesh.indices) incidence[vertex] += 1;
+  assert.ok(transitionVertices
+    .filter((vertex) => incidence[vertex] > 0)
+    .every((vertex) => mesh.edgeFades[vertex] === 1));
 });
 
 test("surface contour follows an oblique period-1 to escaped split", () => {

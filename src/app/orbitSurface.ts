@@ -123,6 +123,29 @@ export function isOrbitSurfaceCloudBandSample(
 }
 
 /**
+ * Deterministic sub-cell sites matching the cloud path's square refinement
+ * lattice. The parent centre is omitted because its coarse sample is already
+ * present.
+ */
+export function orbitSurfaceCloudRefinementOffsets(
+  subdivision: number,
+): ReadonlyArray<OrbitSurfaceProjectedPoint> {
+  const divisions = Math.max(1, Math.floor(subdivision));
+  const offsets: OrbitSurfaceProjectedPoint[] = [];
+  for (let y = 0; y < divisions; y += 1) {
+    for (let x = 0; x < divisions; x += 1) {
+      const offsetX = (x + 0.5) / divisions - 0.5;
+      const offsetY = (y + 0.5) / divisions - 0.5;
+      if (Math.abs(offsetX) <= Number.EPSILON && Math.abs(offsetY) <= Number.EPSILON) {
+        continue;
+      }
+      offsets.push({ x: offsetX, y: offsetY });
+    }
+  }
+  return offsets;
+}
+
+/**
  * Refine one coarse boundary quad against the projected contour chord error.
  * Each accepted leaf is compared with one further bisection level, including
  * depth-four leaves, so the reported maximum is the actual acceptance error.
@@ -493,6 +516,7 @@ export function buildOrbitSurface(
   const transitions = new Map<string, OrbitSurfaceTransition>();
   const transitionVertices = new Map<string, number>();
   const chaosTransitionVertices = new Set<number>();
+  const periodTransitionVertices = new Set<number>();
 
   for (let y = 0; y + 1 < height; y += 1) {
     for (let x = 0; x + 1 < width; x += 1) {
@@ -523,7 +547,12 @@ export function buildOrbitSurface(
     interiors: new Float32Array(interiorValues),
     boundaries: new Float32Array(boundaryValues),
     ranks: new Float32Array(rankValues),
-    edgeFades: surfaceEdgeFades(periodValues.length, indices, chaosTransitionVertices),
+    edgeFades: surfaceEdgeFades(
+      periodValues.length,
+      indices,
+      chaosTransitionVertices,
+      periodTransitionVertices,
+    ),
     dissolves: new Float32Array(dissolveValues),
     indices: new Uint32Array(indices),
   };
@@ -772,6 +801,7 @@ export function buildOrbitSurface(
     );
     transitionVertices.set(vertexKey, vertex);
     if (chaosTransition) chaosTransitionVertices.add(vertex);
+    else periodTransitionVertices.add(vertex);
     return vertex;
   }
 
@@ -985,6 +1015,7 @@ function surfaceEdgeFades(
   vertexCount: number,
   indices: number[],
   chaosTransitionVertices: ReadonlySet<number>,
+  periodTransitionVertices: ReadonlySet<number>,
 ): Float32Array {
   const incidence = new Uint8Array(vertexCount);
   for (const index of indices) incidence[index] += 1;
@@ -994,8 +1025,10 @@ function surfaceEdgeFades(
   for (const edge of surfaceEdges(indices).values()) {
     if (edge.count !== 1) continue;
     if (
-      chaosTransitionVertices.has(edge.first) &&
-      chaosTransitionVertices.has(edge.second)
+      (chaosTransitionVertices.has(edge.first) &&
+        chaosTransitionVertices.has(edge.second)) ||
+      (periodTransitionVertices.has(edge.first) &&
+        periodTransitionVertices.has(edge.second))
     ) {
       continue;
     }
@@ -1019,7 +1052,11 @@ function surfaceEdgeFades(
   }
 
   return Float32Array.from(rings, (ring, vertex) =>
-    incidence[vertex] === 0 ? 0 : EDGE_FEATHER_LEVELS[ring]);
+    incidence[vertex] === 0
+      ? 0
+      : periodTransitionVertices.has(vertex)
+        ? 1
+        : EDGE_FEATHER_LEVELS[ring]);
 }
 
 interface SurfaceEdge {
