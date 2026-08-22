@@ -203,3 +203,48 @@ persists identically and the worker seat moves to Terra for fresh eyes.
   columns (slice, finalisation) may be marked for verifier measurement.
 - Start from `wip/56-attempt-2`; the slicing work and the analytic chord
   figures stand. All original criteria and baselines stand unchanged.
+
+## Re-brief (2026-08-22, attempt 5, orchestrator fix)
+
+Attempt 4 (the orchestrator's total-sampler fix at `ebf5f6c`) removed
+the throw but exposed the underlying geometry defect the crash had
+masked: two proximity-trim mechanisms let traced curves overrule the
+sampled orbit, cutting straight facets into the period-1 and period-2
+silhouettes and collapsing the edge cloud band by forty per cent. The
+orchestrator has now fixed the root cause directly (commit `9494820`);
+this round is a verifier pass over that fix, no worker dispatch.
+
+- **Membership rule (the fix under test):** the sampled orbit is the
+  sole membership authority. Traced curves never change a cell's period
+  in either direction: no demotion of sampled periodic cells (formerly
+  `curveAwarePeriod` zeroing within 12 cells of a curve, which cut the
+  straight chords), and no containment rescue of chaotic cells
+  (formerly relabelling the slow-converging ring inside each component
+  into sheet, which collapsed the band). Curves retain exactly three
+  refining roles: refinement allocation near curve crossings, analytic
+  transition-vertex snapping in the bisection, and curve distances
+  applied only within 2 cells of agreement with the sampled field.
+- **Revised acceptance for criterion 3:** cardioid and period-2
+  silhouettes read as smooth curves with no stepping and no straight
+  chords, at least as smooth as stage 55; the sheet-edge cloud band and
+  the chaotic cloud match the stage-55 figures (`orbit3dBandPoints`
+  553,216, `orbit3dHybridCloudPoints` 3,661,272, exactly, since
+  membership is now bit-identical to stage 55).
+- **Revised refinement envelope:** rescue-free integration keeps the
+  whole stage-55 sampled boundary and adds analytic refinement on top,
+  so `orbit3dRefinedCells` lands above 6,214; the envelope is at most
+  6,836 (ten per cent over the stage-55 figure). Pure model measures
+  6,797 and the live build must match it.
+- **Harness honesty (replaces the attempt-3 reproduce-first ask):** the
+  harness now models the same total sampler and membership rule as the
+  live path, gates on zero demoted cells across every window including
+  the live 768 by 768 row, and measures the live-grid silhouette chord
+  (pure model: max 0.43 cells, snapped boundary vertices 4e-5 cells).
+  The hard-coded-coordinate fixture is replaced by a genuine property
+  test: an under-covering traced curve (an arc closed by a chord) must
+  not bite the sampled silhouette.
+- Pure-model measurements at the live configuration: triangles 436,275,
+  refined leaves 6,797, mesh bytes 16,818,660, peak geometry
+  387,932,900. Browser rows (slice median and maximum, finalisation)
+  remain verifier-measured; slice discipline and stage-54/55 baseline
+  figures stand unchanged.
