@@ -9,6 +9,13 @@ const surface = require(path.join(
   "app",
   "orbitSurface.ts",
 ));
+const curves = require(path.join(
+  __dirname,
+  "..",
+  "src",
+  "app",
+  "orbitSurfaceCurves.ts",
+));
 const model = require(path.join(
   __dirname,
   "..",
@@ -31,6 +38,7 @@ const BAND_CANDIDATE_SUBDIVISION = 5;
 const BAND_SAMPLES_PER_CELL = 4;
 const BAND_SAMPLE_SPAN_CELLS = 0.25;
 const VERIFIER_VIEWPORT = { width: 1280, height: 720, pixelsPerCell: 8 };
+const ANALYTIC_CURVE_MAX_CHORD_ERROR_C = 0.00075;
 const WINDOWS = [
   {
     name: "full-default",
@@ -62,6 +70,7 @@ const adaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
   edgeErrorPx: EDGE_ERROR_PX,
   maxRefinementDepth: MAX_REFINEMENT_DEPTH,
 }));
+const analyticCurveResults = WINDOWS.map(analyseAnalyticCurveWindow);
 const costResults = WINDOWS.map((spec, index) => {
   const baseline = baselineAdaptiveResults[index];
   const adaptive = adaptiveResults[index];
@@ -135,6 +144,28 @@ for (const row of adaptiveResults) {
   );
 }
 console.log("");
+console.log("Silhouette error against analytic period-1 and period-2 curves");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Sampled ref px".padStart(15),
+    "Adaptive mesh px".padStart(17),
+    "Trace chord px".padStart(15),
+    "Curve points".padStart(14),
+  ].join("  "),
+);
+for (const row of analyticCurveResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      row.sampledReferenceMaxErrorPx.toFixed(6).padStart(15),
+      row.adaptiveMeshMaxErrorPx.toFixed(6).padStart(17),
+      row.tracedCurveMaxChordErrorPx.toFixed(6).padStart(15),
+      String(row.tracedCurvePoints).padStart(14),
+    ].join("  "),
+  );
+}
+console.log("");
 console.log("Chaotic cloud density in the sheet-edge band");
 console.log(
   [
@@ -192,11 +223,13 @@ console.log(JSON.stringify({
     bandSamplesPerCell: BAND_SAMPLES_PER_CELL,
     bandSampleSpanCells: BAND_SAMPLE_SPAN_CELLS,
     verifierViewport: VERIFIER_VIEWPORT,
+    analyticCurveMaxChordErrorC: ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
     windows: WINDOWS,
   },
   results,
   baselineAdaptiveResults,
   adaptiveResults,
+  analyticCurveResults,
   bandDensityResults,
   costResults,
 }, null, 2));
@@ -295,6 +328,131 @@ function analyseAdaptiveWindow(spec, configuration) {
     residualPairs: metrics.residualPairs,
     budgetExhausted,
     meshGeometryBytes: orbitSurfaceMeshBytes(mesh),
+  };
+}
+
+function analyseAnalyticCurveWindow(spec) {
+  const context = createSampler(spec);
+  const cells = buildCoarseCells(spec, context.sample);
+  const boundaryCells = findBoundaryCells(cells);
+  const sampledReference = buildReferenceContour(spec, boundaryCells, context.sample);
+  const analytic = buildAnalyticReference(spec);
+  const sampledMetrics = measureSegmentsAgainstReference(sampledReference, analytic.segments);
+
+  const refinedCells = [];
+  const project = (x, y, height) => ({
+    x: x * VERIFIER_VIEWPORT.pixelsPerCell,
+    y: y * VERIFIER_VIEWPORT.pixelsPerCell - height * 3,
+  });
+  for (const cell of boundaryCells) {
+    const remaining = REFINEMENT_CELL_BUDGET - refinedCells.length;
+    if (remaining <= 0) break;
+    const plan = surface.planOrbitSurfaceCellRefinement(
+      cell.x,
+      cell.y,
+      context.sample,
+      SAMPLE_COUNT,
+      project,
+      EDGE_ERROR_PX,
+      MAX_REFINEMENT_DEPTH,
+      remaining,
+    );
+    refinedCells.push(...plan.cells);
+  }
+  const mesh = surface.buildOrbitSurface(
+    cells,
+    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+    { sampler: context.sample, refinedCells },
+  );
+  const contour = extractSilhouette(
+    mesh,
+    MAX_REFINEMENT_DEPTH,
+    spec.width,
+    spec.height,
+  );
+  const adaptiveMetrics = measureSegmentsAgainstReference(contour.segments, analytic.segments);
+  return {
+    window: spec.name,
+    modelledPeriods: [1, 2],
+    sampledReferenceVertices: sampledMetrics.vertexCount,
+    sampledReferenceMeanErrorPx: rounded(
+      sampledMetrics.meanDeviation * VERIFIER_VIEWPORT.pixelsPerCell,
+    ),
+    sampledReferenceMaxErrorPx: rounded(
+      sampledMetrics.maxDeviation * VERIFIER_VIEWPORT.pixelsPerCell,
+    ),
+    adaptiveMeshVertices: adaptiveMetrics.vertexCount,
+    adaptiveMeshMeanErrorPx: rounded(
+      adaptiveMetrics.meanDeviation * VERIFIER_VIEWPORT.pixelsPerCell,
+    ),
+    adaptiveMeshMaxErrorPx: rounded(
+      adaptiveMetrics.maxDeviation * VERIFIER_VIEWPORT.pixelsPerCell,
+    ),
+    tracedCurveMaxChordErrorPx: rounded(analytic.maxChordErrorPx),
+    tracedCurvePoints: analytic.pointCount,
+  };
+}
+
+function buildAnalyticReference(spec) {
+  const xScale = spec.width / (spec.reMax - spec.reMin);
+  const yScale = spec.height / (spec.imMax - spec.imMin);
+  const segments = [];
+  let maxChordErrorPx = 0;
+  let pointCount = 0;
+  for (const period of [1, 2]) {
+    const curve = curves.tracePrimaryOrbitSurfaceBoundary(
+      period,
+      ANALYTIC_CURVE_MAX_CHORD_ERROR_C,
+    );
+    const points = curve.points.map((pointValue) => ({
+      x: (pointValue.c.re - spec.reMin) * xScale - 0.5,
+      y: (pointValue.c.im - spec.imMin) * yScale - 0.5,
+    }));
+    pointCount += points.length;
+    maxChordErrorPx = Math.max(
+      maxChordErrorPx,
+      curve.maxChordError * Math.max(xScale, yScale) * VERIFIER_VIEWPORT.pixelsPerCell,
+    );
+    for (let index = 1; index < points.length; index += 1) {
+      segments.push({ first: points[index - 1], second: points[index], period });
+    }
+  }
+  return { segments, maxChordErrorPx, pointCount };
+}
+
+function measureSegmentsAgainstReference(candidateSegments, reference) {
+  const referenceByPeriod = new Map();
+  for (const segment of reference) {
+    const list = referenceByPeriod.get(segment.period) ?? [];
+    list.push(segment);
+    referenceByPeriod.set(segment.period, list);
+  }
+  const vertices = new Map();
+  for (const segment of candidateSegments) {
+    if (!referenceByPeriod.has(segment.period)) continue;
+    vertices.set(`${segment.period}|${pointKey(segment.first)}`, {
+      ...segment.first,
+      period: segment.period,
+    });
+    vertices.set(`${segment.period}|${pointKey(segment.second)}`, {
+      ...segment.second,
+      period: segment.period,
+    });
+  }
+  const deviations = [];
+  let maxDeviation = 0;
+  for (const vertex of vertices.values()) {
+    const nearest = nearestReference(vertex, referenceByPeriod.get(vertex.period) ?? []);
+    if (!nearest) continue;
+    deviations.push(nearest.distance);
+    maxDeviation = Math.max(maxDeviation, nearest.distance);
+  }
+  return {
+    vertexCount: deviations.length,
+    meanDeviation: deviations.length === 0
+      ? 0
+      : deviations.reduce((sum, value) => sum + value, 0) / deviations.length,
+    maxDeviation,
   };
 }
 

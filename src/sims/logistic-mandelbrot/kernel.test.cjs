@@ -8,6 +8,7 @@ const {
 } = require("../../../.test-build/sims/logistic-mandelbrot/kernel.js");
 const model = require("../../../.test-build/sims/logistic-mandelbrot/model.js");
 const surface = require("../../app/orbitSurface.ts");
+const curves = require("../../app/orbitSurfaceCurves.ts");
 
 // Logistic conjugacy: x <- r*x*(1 - x) maps to z <- z^2 + c under
 // z = r/2 - r*x with c = (r/2)*(1 - r/2); inverting, r = 1 + sqrt(1 - 4c).
@@ -205,6 +206,77 @@ test("cloud-band classification shares the sheet dissolve coverage", () => {
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.5, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(1, false, 1, 4), false);
   assert.equal(surface.isOrbitSurfaceCloudBandSample(0, true, 1, 4), false);
+});
+
+test("analytic primary boundaries recover the known cardioid and period-2 extrema", () => {
+  const periodOne = curves.tracePrimaryOrbitSurfaceBoundary(1, 1e-4);
+  const periodTwo = curves.tracePrimaryOrbitSurfaceBoundary(2, 1e-4);
+  const nearest = (curve, re, im) => Math.min(...curve.points.map((point) =>
+    Math.hypot(point.c.re - re, point.c.im - im)));
+
+  assert.ok(nearest(periodOne, 0.25, 0) < 1e-12);
+  assert.ok(nearest(periodOne, -0.75, 0) < 1e-12);
+  assert.ok(nearest(periodTwo, -0.75, 0) < 1e-12);
+  assert.ok(nearest(periodTwo, -1.25, 0) < 1e-12);
+  assert.ok(periodOne.maxChordError <= 1e-4);
+  assert.ok(periodTwo.maxChordError <= 1e-4);
+  assert.equal(periodOne.closed, true);
+  assert.equal(periodTwo.closed, true);
+});
+
+test("cycle-multiplier corrector recovers a known period-1 boundary point", () => {
+  const corrected = curves.correctOrbitSurfaceBoundaryPoint(
+    1,
+    Math.PI / 2,
+    { re: 0.1, im: 0.45 },
+    { re: 0.2, im: 0.45 },
+  );
+  assert.ok(Math.abs(corrected.cycle.re) < 1e-11);
+  assert.ok(Math.abs(corrected.cycle.im - 0.5) < 1e-11);
+  assert.ok(Math.abs(corrected.c.re - 0.25) < 1e-11);
+  assert.ok(Math.abs(corrected.c.im - 0.5) < 1e-11);
+  assert.ok(corrected.residual <= 1e-12);
+});
+
+test("cycle-multiplier corrector recovers the real period-3 component root", () => {
+  const corrected = curves.correctOrbitSurfaceBoundaryPoint(
+    3,
+    0,
+    { re: -1.74698, im: 0 },
+    { re: -1.75, im: 0 },
+    1e-11,
+    40,
+  );
+  assert.ok(Math.abs(corrected.c.re + 1.75) < 1e-11);
+  assert.ok(Math.abs(corrected.c.im) < 1e-11);
+  assert.ok(Math.abs(corrected.cycle.re + 1.7469796037174672) < 1e-11);
+  assert.ok(Math.abs(corrected.cycle.im) < 1e-11);
+  assert.ok(corrected.residual <= 1e-11);
+});
+
+test("predictor-corrector tracing is deterministic and adapts to curvature", () => {
+  const seed = {
+    angle: 0,
+    c: { re: 0.25, im: 0 },
+    cycle: { re: 0.5, im: 0 },
+  };
+  const loose = curves.traceOrbitSurfaceBoundary(1, seed, {
+    maxChordError: 2e-3,
+  });
+  const tight = curves.traceOrbitSurfaceBoundary(1, seed, {
+    maxChordError: 2e-4,
+  });
+  const repeated = curves.traceOrbitSurfaceBoundary(1, seed, {
+    maxChordError: 2e-4,
+  });
+
+  assert.ok(loose.points.length > 8);
+  assert.ok(tight.points.length > loose.points.length);
+  assert.ok(loose.maxChordError <= 2e-3);
+  assert.ok(tight.maxChordError <= 2e-4);
+  assert.equal(tight.closed, true);
+  assert.deepEqual(tight, repeated);
+  assert.ok(tight.points.every((point) => point.residual <= 1e-12));
 });
 
 test("metadata matches the renderer contract", () => {
