@@ -101,6 +101,27 @@ export const ORBIT_SURFACE_TRIANGLE_LIMIT = 1_199_999;
 /** Fixed sampling work for every disagreeing contour edge. */
 export const ORBIT_SURFACE_CONTOUR_BISECTION_STEPS = 6;
 
+/** Coverage shared by sheet fading and chaotic cloud-band selection. */
+export function orbitSurfaceDissolveCoverage(
+  distanceCells: number,
+  bandCells: number,
+): number {
+  const width = Number.isFinite(bandCells) ? Math.max(0, bandCells) : 0;
+  if (width === 0) return distanceCells > 0.5 ? 1 : 0;
+  return Math.min(1, Math.max(0, distanceCells - 0.5) / width);
+}
+
+/** True only for bounded chaotic samples inside the sheet dissolve band. */
+export function isOrbitSurfaceCloudBandSample(
+  period: number,
+  escaped: boolean,
+  periodicDistanceCells: number,
+  bandCells: number,
+): boolean {
+  return !escaped && period === 0 &&
+    orbitSurfaceDissolveCoverage(periodicDistanceCells, bandCells) < 1;
+}
+
 /**
  * Refine one coarse boundary quad against the projected contour chord error.
  * Each accepted leaf is compared with one further bisection level, including

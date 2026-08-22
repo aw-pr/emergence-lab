@@ -5,9 +5,9 @@ const path = require("node:path");
 const surface = require(path.join(
   __dirname,
   "..",
-  ".test-build",
+  "src",
   "app",
-  "orbitSurface.js",
+  "orbitSurface.ts",
 ));
 const model = require(path.join(
   __dirname,
@@ -22,10 +22,14 @@ const WARMUP_ITERATIONS = 1500;
 const SAMPLE_COUNT = 8;
 const REFERENCE_DEPTH = 5;
 const REFERENCE_BISECTION_STEPS = 12;
-const DEPTHS = [1, 2, 3, 4];
-const EDGE_ERROR_PX = 0.75;
-const MAX_REFINEMENT_DEPTH = 4;
+const DEPTHS = [1, 2, 3, 4, 5];
+const EDGE_ERROR_PX = 0.5;
+const MAX_REFINEMENT_DEPTH = 5;
 const REFINEMENT_CELL_BUDGET = 32768;
+const DISSOLVE_BAND_CELLS = 8;
+const BAND_CANDIDATE_SUBDIVISION = 5;
+const BAND_SAMPLES_PER_CELL = 4;
+const BAND_SAMPLE_SPAN_CELLS = 0.25;
 const VERIFIER_VIEWPORT = { width: 1280, height: 720, pixelsPerCell: 8 };
 const WINDOWS = [
   {
@@ -49,7 +53,33 @@ const WINDOWS = [
 ];
 
 const results = WINDOWS.flatMap(analyseWindow);
-const adaptiveResults = WINDOWS.map(analyseAdaptiveWindow);
+const bandDensityResults = WINDOWS.map(analyseBandDensity);
+const baselineAdaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
+  edgeErrorPx: 0.75,
+  maxRefinementDepth: 4,
+}));
+const adaptiveResults = WINDOWS.map((spec) => analyseAdaptiveWindow(spec, {
+  edgeErrorPx: EDGE_ERROR_PX,
+  maxRefinementDepth: MAX_REFINEMENT_DEPTH,
+}));
+const costResults = WINDOWS.map((spec, index) => {
+  const baseline = baselineAdaptiveResults[index];
+  const adaptive = adaptiveResults[index];
+  const density = bandDensityResults[index];
+  const pointBytes = SAMPLE_COUNT * 28;
+  return {
+    window: spec.name,
+    beforeRefinedCells: baseline.refinedCells,
+    afterRefinedCells: adaptive.refinedCells,
+    beforeBandPointCount: density.baseBandSites * SAMPLE_COUNT,
+    afterBandPointCount: density.bandPointCount,
+    beforePeakGeometryBytes:
+      baseline.meshGeometryBytes + density.boundedSites * pointBytes,
+    afterPeakGeometryBytes:
+      adaptive.meshGeometryBytes
+        + (density.boundedSites + density.addedBandSites) * pointBytes,
+  };
+});
 
 console.log("Logistic Mandelbrot sheet-edge analysis");
 console.log(
@@ -105,6 +135,48 @@ for (const row of adaptiveResults) {
   );
 }
 console.log("");
+console.log("Chaotic cloud density in the sheet-edge band");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Base sites".padStart(11),
+    "Added sites".padStart(12),
+    "Band points".padStart(12),
+    "Uplift".padStart(9),
+  ].join("  "),
+);
+for (const row of bandDensityResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      String(row.baseBandSites).padStart(11),
+      String(row.addedBandSites).padStart(12),
+      String(row.bandPointCount).padStart(12),
+      `${row.bandDensityUplift.toFixed(3)}x`.padStart(9),
+    ].join("  "),
+  );
+}
+console.log("");
+console.log("Fixed-fixture geometry cost before and after");
+console.log(
+  [
+    "Window".padEnd(20),
+    "Leaves before/after".padStart(21),
+    "Band points before/after".padStart(26),
+    "Geometry bytes before/after".padStart(29),
+  ].join("  "),
+);
+for (const row of costResults) {
+  console.log(
+    [
+      row.window.padEnd(20),
+      `${row.beforeRefinedCells}/${row.afterRefinedCells}`.padStart(21),
+      `${row.beforeBandPointCount}/${row.afterBandPointCount}`.padStart(26),
+      `${row.beforePeakGeometryBytes}/${row.afterPeakGeometryBytes}`.padStart(29),
+    ].join("  "),
+  );
+}
+console.log("");
 console.log("JSON_BEGIN");
 console.log(JSON.stringify({
   configuration: {
@@ -115,11 +187,18 @@ console.log(JSON.stringify({
     edgeErrorPx: EDGE_ERROR_PX,
     maxRefinementDepth: MAX_REFINEMENT_DEPTH,
     refinementCellBudget: REFINEMENT_CELL_BUDGET,
+    dissolveBandCells: DISSOLVE_BAND_CELLS,
+    bandCandidateSubdivision: BAND_CANDIDATE_SUBDIVISION,
+    bandSamplesPerCell: BAND_SAMPLES_PER_CELL,
+    bandSampleSpanCells: BAND_SAMPLE_SPAN_CELLS,
     verifierViewport: VERIFIER_VIEWPORT,
     windows: WINDOWS,
   },
   results,
+  baselineAdaptiveResults,
   adaptiveResults,
+  bandDensityResults,
+  costResults,
 }, null, 2));
 console.log("JSON_END");
 
@@ -156,7 +235,7 @@ function analyseWindow(spec) {
   });
 }
 
-function analyseAdaptiveWindow(spec) {
+function analyseAdaptiveWindow(spec, configuration) {
   const context = createSampler(spec);
   const cells = buildCoarseCells(spec, context.sample);
   const boundaryCells = findBoundaryCells(cells);
@@ -182,8 +261,8 @@ function analyseAdaptiveWindow(spec) {
       context.sample,
       SAMPLE_COUNT,
       project,
-      EDGE_ERROR_PX,
-      MAX_REFINEMENT_DEPTH,
+      configuration.edgeErrorPx,
+      configuration.maxRefinementDepth,
       remaining,
     );
     refinedCells.push(...plan.cells);
@@ -198,7 +277,7 @@ function analyseAdaptiveWindow(spec) {
   );
   const contour = extractSilhouette(
     mesh,
-    MAX_REFINEMENT_DEPTH,
+    configuration.maxRefinementDepth,
     spec.width,
     spec.height,
   );
@@ -208,13 +287,98 @@ function analyseAdaptiveWindow(spec) {
     acceptedContourSegments,
     boundarySegments: contour.segments.length,
     refinedCells: refinedCells.length,
+    maxUsedDepth: refinedCells.reduce((deepest, cell) => Math.max(deepest, cell.depth), 0),
     boundaryCoarseCells: boundaryCells.length,
     refinedCellShare: rounded(boundaryCells.length / coarseQuadCount),
     maxChordErrorPx: rounded(maxChordErrorPx),
     alternation: rounded(metrics.alternation),
     residualPairs: metrics.residualPairs,
     budgetExhausted,
+    meshGeometryBytes: orbitSurfaceMeshBytes(mesh),
   };
+}
+
+function analyseBandDensity(spec) {
+  const context = createSampler(spec);
+  const cells = buildCoarseCells(spec, context.sample);
+  const periodicSites = [];
+  for (let index = 0; index < cells.periods.length; index += 1) {
+    if (cells.escaped[index] === 0 && cells.periods[index] > 0) {
+      periodicSites.push({ x: index % cells.width, y: Math.floor(index / cells.width) });
+    }
+  }
+  let baseBandSites = 0;
+  let addedBandSites = 0;
+  let boundedSites = 0;
+  for (let index = 0; index < cells.periods.length; index += 1) {
+    if (cells.escaped[index] === 0) boundedSites += 1;
+    if (cells.escaped[index] !== 0 || cells.periods[index] !== 0) continue;
+    const x = index % cells.width;
+    const y = Math.floor(index / cells.width);
+    const periodicDistance = nearestSiteDistance(x, y, periodicSites);
+    if (!surface.isOrbitSurfaceCloudBandSample(
+      0,
+      false,
+      periodicDistance,
+      DISSOLVE_BAND_CELLS,
+    )) {
+      continue;
+    }
+    baseBandSites += 1;
+    let accepted = 0;
+    for (let subY = 0; subY < BAND_CANDIDATE_SUBDIVISION; subY += 1) {
+      for (let subX = 0; subX < BAND_CANDIDATE_SUBDIVISION; subX += 1) {
+        if (accepted >= BAND_SAMPLES_PER_CELL) break;
+        const sampleX = x
+          + ((subX + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
+            * BAND_SAMPLE_SPAN_CELLS;
+        const sampleY = y
+          + ((subY + 0.5) / BAND_CANDIDATE_SUBDIVISION - 0.5)
+            * BAND_SAMPLE_SPAN_CELLS;
+        if (
+          (sampleX === x && sampleY === y) ||
+          sampleX < 0 || sampleX > cells.width - 1 ||
+          sampleY < 0 || sampleY > cells.height - 1
+        ) {
+          continue;
+        }
+        const sampled = context.sample(sampleX, sampleY);
+        if (!sampled.escaped && sampled.period === 0) {
+          addedBandSites += 1;
+          accepted += 1;
+        }
+      }
+    }
+  }
+  const totalBandSites = baseBandSites + addedBandSites;
+  return {
+    window: spec.name,
+    boundedSites,
+    baseBandSites,
+    addedBandSites,
+    bandPointCount: totalBandSites * SAMPLE_COUNT,
+    bandDensityUplift: rounded(baseBandSites === 0 ? 1 : totalBandSites / baseBandSites),
+  };
+}
+
+function orbitSurfaceMeshBytes(mesh) {
+  return [
+    mesh.positions,
+    mesh.normals,
+    mesh.periods,
+    mesh.interiors,
+    mesh.boundaries,
+    mesh.ranks,
+    mesh.edgeFades,
+    mesh.dissolves,
+    mesh.indices,
+  ].reduce((sum, values) => sum + values.byteLength, 0);
+}
+
+function nearestSiteDistance(x, y, sites) {
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const site of sites) nearest = Math.min(nearest, Math.hypot(x - site.x, y - site.y));
+  return nearest;
 }
 
 function createSampler(spec) {

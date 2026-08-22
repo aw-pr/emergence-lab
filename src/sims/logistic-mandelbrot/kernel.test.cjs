@@ -197,6 +197,16 @@ function assertAnalyticContour({ sampler, distanceToBoundary, expectedPeriods })
   );
 }
 
+test("cloud-band classification shares the sheet dissolve coverage", () => {
+  assert.equal(surface.orbitSurfaceDissolveCoverage(0.5, 4), 0);
+  assert.equal(surface.orbitSurfaceDissolveCoverage(2.5, 4), 0.5);
+  assert.equal(surface.orbitSurfaceDissolveCoverage(4.5, 4), 1);
+  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.49, 4), true);
+  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.5, 4), false);
+  assert.equal(surface.isOrbitSurfaceCloudBandSample(1, false, 1, 4), false);
+  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, true, 1, 4), false);
+});
+
 test("metadata matches the renderer contract", () => {
   const kernel = new LogisticMandelbrotKernel();
 

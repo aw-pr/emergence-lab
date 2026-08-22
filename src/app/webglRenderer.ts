@@ -1519,6 +1519,8 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dSliceMedianMs;
     delete canvas.dataset.orbit3dSliceMaxMs;
     delete canvas.dataset.orbit3dFinalisationMs;
+    delete canvas.dataset.orbit3dBandPoints;
+    delete canvas.dataset.orbit3dPeakGeometryBytes;
     delete canvas.dataset.orbit3dSurface;
     delete canvas.dataset.orbit3dSurfaceFallback;
     delete canvas.dataset.orbit3dSurfaceDiagnostic;
@@ -1617,6 +1619,13 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dSliceMedianMs = stats.buildMedianSliceMs.toFixed(3);
     canvas.dataset.orbit3dSliceMaxMs = stats.buildMaxSliceMs.toFixed(3);
     canvas.dataset.orbit3dFinalisationMs = stats.finalisationMs.toFixed(3);
+    if (stats.geometryMode === "hybrid") {
+      canvas.dataset.orbit3dBandPoints = String(stats.bandPointCount);
+      canvas.dataset.orbit3dPeakGeometryBytes = String(stats.peakGeometryBytes);
+    } else {
+      delete canvas.dataset.orbit3dBandPoints;
+      delete canvas.dataset.orbit3dPeakGeometryBytes;
+    }
     canvas.dataset.orbit3dSurfaceDiagnostic = surfaceDiagnosticMode;
     canvas.dataset.orbit3dDissolveBandCells = String(
       ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
