@@ -1521,6 +1521,8 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dSliceMaxMs;
     delete canvas.dataset.orbit3dFinalisationMs;
     delete canvas.dataset.orbit3dBandPoints;
+    delete canvas.dataset.orbit3dHybridCloudPointsBefore;
+    delete canvas.dataset.orbit3dHybridCloudPoints;
     delete canvas.dataset.orbit3dPeakGeometryBytes;
     delete canvas.dataset.orbit3dSurface;
     delete canvas.dataset.orbit3dSurfaceFallback;
@@ -1622,12 +1624,18 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dFinalisationMs = stats.finalisationMs.toFixed(3);
     if (stats.geometryMode === "hybrid") {
       canvas.dataset.orbit3dBandPoints = String(stats.bandPointCount);
+      canvas.dataset.orbit3dHybridCloudPointsBefore = String(
+        stats.hybridCloudPointCountBefore,
+      );
+      canvas.dataset.orbit3dHybridCloudPoints = String(stats.hybridCloudPointCount);
       canvas.dataset.orbit3dPeakGeometryBytes = String(stats.peakGeometryBytes);
       canvas.dataset.orbit3dSheetCoverage = stats.sheetCoverageShare.toFixed(6);
       canvas.dataset.orbit3dSamplerCoverage = stats.samplerCoverageShare.toFixed(6);
       canvas.dataset.orbit3dCloudBandCells = String(ORBIT_SURFACE_CLOUD_BAND_CELLS);
     } else {
       delete canvas.dataset.orbit3dBandPoints;
+      delete canvas.dataset.orbit3dHybridCloudPointsBefore;
+      delete canvas.dataset.orbit3dHybridCloudPoints;
       delete canvas.dataset.orbit3dPeakGeometryBytes;
       delete canvas.dataset.orbit3dSheetCoverage;
       delete canvas.dataset.orbit3dSamplerCoverage;
