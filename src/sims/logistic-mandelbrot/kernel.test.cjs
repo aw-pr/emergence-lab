@@ -405,6 +405,225 @@ test("predictor-corrector tracing is deterministic and adapts to curvature", () 
   assert.ok(tight.points.every((point) => point.residual <= 1e-12));
 });
 
+test("component catalogue tracing reports covered and fallback components", () => {
+  const regions = [
+    {
+      period: 1,
+      cellCount: 8,
+      firstCell: 3,
+      seed: {
+        period: 1,
+        c: { re: 0, im: 0 },
+        cycle: { re: 0, im: 0 },
+        multiplier: 0,
+        multiplierAngle: 0,
+      },
+    },
+    {
+      period: 4,
+      cellCount: 1,
+      firstCell: 9,
+      seed: {
+        period: 4,
+        c: { re: 20, im: 20 },
+        cycle: { re: 20, im: 20 },
+        multiplier: 0.5,
+        multiplierAngle: 0,
+      },
+    },
+  ];
+  const result = curves.traceOrbitSurfaceComponentCatalogue(regions, 1e-4);
+  assert.deepEqual(
+    result.traced.map(({ componentId, period }) => [componentId, period]),
+    [["period-1-cell-3", 1]],
+  );
+  assert.deepEqual(
+    result.fallback.map(({ componentId, period }) => [componentId, period]),
+    [["period-4-cell-9", 4]],
+  );
+  assert.deepEqual(
+    curves.traceOrbitSurfaceComponentCatalogue(regions, 1e-4),
+    result,
+  );
+});
+
+test("analytic curve geometry supplies membership, distance, and exact crossings", () => {
+  const points = Array.from({ length: 65 }, (_value, index) => {
+    const angle = index / 64 * Math.PI * 2;
+    return { x: 4 + Math.cos(angle) * 2, y: 4 + Math.sin(angle) * 2 };
+  });
+  const curve = { componentId: "circle", period: 2, points };
+  assert.equal(surface.orbitSurfaceCurveContains(curve, 4, 4), true);
+  assert.equal(surface.orbitSurfaceCurveContains(curve, 0, 0), false);
+  const proximity = surface.nearestOrbitSurfaceBoundary([curve], 4, 4);
+  assert.ok(Math.abs(proximity.distance - 2 * Math.cos(Math.PI / 64)) < 1e-12);
+  assert.equal(proximity.inside, true);
+  const crossing = surface.locateOrbitSurfaceCurveTransition(
+    { x: 4, y: 4 },
+    { x: 7, y: 4 },
+    2,
+    [curve],
+  );
+  assert.equal(crossing.componentId, "circle");
+  assert.ok(Math.abs(crossing.x - 6) < 1e-12);
+  assert.ok(Math.abs(crossing.y - 4) < 1e-12);
+  assert.equal(surface.orbitSurfaceCurveIntersectsRect([curve], 5, 3, 7, 5), true);
+  assert.equal(surface.orbitSurfaceCurveIntersectsRect([curve], 0, 0, 1, 1), false);
+});
+
+test("curve-trimmed mesh vertices land on the curve and dissolve at true zero distance", () => {
+  const width = 9;
+  const height = 9;
+  const points = Array.from({ length: 129 }, (_value, index) => {
+    const angle = index / 128 * Math.PI * 2;
+    return { x: 4 + Math.cos(angle) * 2.5, y: 4 + Math.sin(angle) * 2.5 };
+  });
+  const boundaryCurves = [{ componentId: "period-1-circle", period: 1, points }];
+  const sampler = (x, y) => {
+    const distance = Math.hypot(x - 4, y - 4);
+    const inside = distance <= 2.5;
+    return {
+      samples: new Float32Array([0.1 + x * 0.002]),
+      period: inside ? 1 : 0,
+      interior: 0.4,
+      boundary: 0.2,
+      dissolve: inside
+        ? surface.orbitSurfaceDissolveCoverage(2.5 - distance, 8)
+        : 0,
+      escaped: false,
+    };
+  };
+  const preparedSamples = new Map();
+  const preparingSampler = (x, y) => {
+    const sample = sampler(x, y);
+    preparedSamples.set(`${x},${y}`, sample);
+    return sample;
+  };
+  const preparedSampler = (x, y) => {
+    const sample = preparedSamples.get(`${x},${y}`);
+    if (!sample) throw new Error(`sample was not prepared at ${x},${y}`);
+    return sample;
+  };
+  const cells = analyticSurfaceCells(width, height, 1, sampler);
+  const refinedCells = [];
+  for (let y = 0; y + 1 < height; y += 1) {
+    for (let x = 0; x + 1 < width; x += 1) {
+      if (!surface.orbitSurfaceCurveIntersectsRect(
+        boundaryCurves,
+        x,
+        y,
+        x + 1,
+        y + 1,
+      )) {
+        continue;
+      }
+      const plan = surface.planOrbitSurfaceCellRefinement(
+        x,
+        y,
+        preparingSampler,
+        1,
+        (gridX, gridY) => ({ x: gridX * 8, y: gridY * 8 }),
+        0.25,
+        5,
+        4096 - refinedCells.length,
+        boundaryCurves,
+      );
+      refinedCells.push(...plan.cells);
+    }
+  }
+  const mesh = surface.buildOrbitSurface(
+    cells,
+    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+    { sampler: preparedSampler, refinedCells, boundaryCurves },
+  );
+  let trimmedVertices = 0;
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const x = mesh.positions[vertex * 3];
+    const y = mesh.positions[vertex * 3 + 1];
+    const nearest = surface.nearestOrbitSurfaceBoundary(boundaryCurves, x, y, 1);
+    if (!nearest || nearest.distance > 1e-5) continue;
+    assert.equal(mesh.dissolves[vertex], 0);
+    trimmedVertices += 1;
+  }
+  assert.ok(trimmedVertices > 16);
+  assertMeshSound(mesh);
+});
+
+test("live-grid analytic trimming does not require unprepared categorical midpoints", () => {
+  const width = 768;
+  const height = 768;
+  const count = width * height;
+  const samples = new Float32Array(count);
+  const periods = new Int16Array(count);
+  const interiors = new Float32Array(count);
+  const boundaries = new Float32Array(count);
+  const dissolves = new Float32Array(count).fill(1);
+  const escaped = new Uint8Array(count);
+  const sheetCell = 610 * width + 414;
+  samples[sheetCell] = 0.1;
+  periods[sheetCell] = 1;
+  interiors[sheetCell] = 0.4;
+  boundaries[sheetCell] = 0.2;
+
+  const boundaryCurves = [{
+    componentId: "live-period-1",
+    period: 1,
+    points: [
+      { x: 413.75, y: 609.75 },
+      { x: 414.25, y: 609.75 },
+      { x: 414.25, y: 610.25 },
+      { x: 413.75, y: 610.25 },
+      { x: 413.75, y: 609.75 },
+    ],
+  }];
+  const preparedSampler = (x, y) => {
+    if (x === 414 && y === 610.5) {
+      throw new Error(`Orbit surface sample was not prepared at ${x},${y}.`);
+    }
+    if (!Number.isInteger(x) || !Number.isInteger(y)) {
+      const inside = surface.orbitSurfaceCurveContains(boundaryCurves[0], x, y);
+      return {
+        samples: new Float32Array([inside ? 0.1 : 0]),
+        period: inside ? 1 : 0,
+        interior: inside ? 0.4 : 0,
+        boundary: inside ? 0.2 : 0,
+        dissolve: inside ? 1 : 0,
+        escaped: false,
+      };
+    }
+    const cell = y * width + x;
+    return {
+      samples,
+      sampleOffset: cell,
+      period: periods[cell],
+      interior: interiors[cell],
+      boundary: boundaries[cell],
+      dissolve: dissolves[cell],
+      escaped: escaped[cell] !== 0,
+    };
+  };
+
+  let mesh;
+  assert.doesNotThrow(() => {
+    mesh = surface.buildOrbitSurface(
+      {
+        width,
+        height,
+        sampleCount: 1,
+        samples,
+        periods,
+        interiors,
+        boundaries,
+        dissolves,
+        escaped,
+      },
+      surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
+      { sampler: preparedSampler, boundaryCurves },
+    );
+  });
+  assert.ok(mesh.indices.length > 0);
+});
+
 test("metadata matches the renderer contract", () => {
   const kernel = new LogisticMandelbrotKernel();
 

@@ -21,6 +21,8 @@ import {
 import {
   buildOrbitSurface,
   isOrbitSurfaceCloudBandSample,
+  orbitSurfaceCurveContains,
+  orbitSurfaceCurveIntersectsRect,
   orbitSurfaceCloudRefinementOffsets,
   orbitSurfaceDissolveCoverage,
   planOrbitSurfaceCellRefinement,
@@ -28,14 +30,19 @@ import {
   ORBIT_SURFACE_CONTOUR_BISECTION_STEPS,
   ORBIT_SURFACE_MAX_HEIGHT_JUMP,
   type OrbitSurfaceDiagnosticMode,
+  type OrbitSurfaceBoundaryPolyline,
+  type OrbitSurfaceCurveProximity,
   type OrbitSurfaceMesh,
   type OrbitSurfaceRefinedCell,
   type OrbitSurfaceSample,
 } from "./orbitSurface.ts";
 import {
+  buildOrbitSurfaceComponentCatalogue,
   classifyOrbitSurfaceComponent,
   writeOrbitSurfaceCycleSamples,
+  type OrbitSurfaceComponentClassification,
 } from "./orbitSurfaceComponents.ts";
+import { traceOrbitSurfaceComponentCatalogue } from "./orbitSurfaceCurves.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -586,7 +593,11 @@ const BOUNDARY_DETAIL_POINT_WEIGHT = 0.05;
 
 const BUILD_SLICE_MS = 8;
 export const ORBIT_SURFACE_EDGE_ERROR_PX = 0.5;
+export const ORBIT_SURFACE_ANALYTIC_EDGE_ERROR_PX = 0.25;
 export const ORBIT_SURFACE_MAX_REFINEMENT_DEPTH = 5;
+export const ORBIT_SURFACE_ANALYTIC_MAX_REFINEMENT_DEPTH = 4;
+/** Leaves 622 sampled-fallback leaves inside the stage-55 total of 6,214. */
+export const ORBIT_SURFACE_ANALYTIC_REFINEMENT_CELL_BUDGET = 5_592;
 /** Deterministic ceiling on adaptive boundary leaf cells. */
 export const ORBIT_SURFACE_REFINEMENT_CELL_BUDGET = 32_768;
 /** Sheet-side fade width. Unchanged from stage 52 so the sheets read as reviewed. */
@@ -608,6 +619,8 @@ export const ORBIT_SURFACE_BAND_SAMPLE_SPAN_CELLS = 0.75;
  * spent on density rather than on brightness.
  */
 export const ORBIT_SURFACE_BAND_SAMPLE_WEIGHT = 0.5;
+export const ORBIT_SURFACE_ANALYTIC_CHORD_ERROR_C = 0.00075;
+const ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS = 12;
 const CAMERA_FIELD_OF_VIEW = Math.PI / 4.8;
 const CAMERA_NEAR_PLANE = 0.05;
 const CAMERA_FAR_PLANE = 20;
@@ -744,6 +757,35 @@ export type Orbit3DGeometryMode = "cloud" | "hybrid";
 export type Orbit3DSurfaceDiagnosticMode = OrbitSurfaceDiagnosticMode;
 export const orbit3dSurfaceDiagnosticMode = orbitSurfaceDiagnosticMode;
 
+/** Default-camera projector shared by the live hybrid builder and pure harness. */
+export function orbit3dDefaultSurfaceProjector(
+  sampleWidth: number,
+  sampleHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): (gridX: number, gridY: number, height: number) => Orbit3DProjectedPoint {
+  const matrix = cameraMatrix(
+    Math.max(0.25, viewportWidth / Math.max(1, viewportHeight)),
+    defaultCameraState(),
+  );
+  return (gridX, gridY, height) => {
+    const cRe = gridCoordinate(RE_MIN, RE_MAX, gridX, sampleWidth);
+    const cIm = gridY === Math.floor(sampleHeight / 2)
+      ? 0
+      : gridCoordinate(IM_MIN, IM_MAX, gridY, sampleHeight);
+    const clip = transformPoint(matrix, [
+      (cRe + 0.5) * WORLD_RE_SCALE,
+      height * WORLD_ORBIT_SCALE,
+      cIm * WORLD_IM_SCALE,
+    ]);
+    const reciprocalW = clip[3] > Number.EPSILON ? 1 / clip[3] : 0;
+    return {
+      x: (clip[0] * reciprocalW * 0.5 + 0.5) * Math.max(1, viewportWidth),
+      y: (0.5 - clip[1] * reciprocalW * 0.5) * Math.max(1, viewportHeight),
+    };
+  };
+}
+
 const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
   period: 0,
   "inside-out": 1,
@@ -774,6 +816,8 @@ export interface Orbit3DStats {
   samplerCoverageShare: number;
   surfaceAvailable: boolean;
   surfaceFallback: string | null;
+  curveTrimmedComponentCount: number;
+  curveFallbackComponentCount: number;
 }
 
 interface SurfaceResources {
@@ -926,6 +970,8 @@ export class Orbit3DPointCloud {
   private surfaceVisibleIterations = DEFAULT_SAMPLE_COUNT;
   private pointHybridCull = false;
   private surfaceFallback: string | null = null;
+  private curveTrimmedComponentCount = 0;
+  private curveFallbackComponentCount = 0;
   private surfaceResourceFailed = false;
 
   constructor(gl: WebGL2RenderingContext) {
@@ -1143,6 +1189,8 @@ export class Orbit3DPointCloud {
       samplerCoverageShare: this.samplerCoverageShare,
       surfaceAvailable,
       surfaceFallback: this.surfaceFallback,
+      curveTrimmedComponentCount: this.curveTrimmedComponentCount,
+      curveFallbackComponentCount: this.curveFallbackComponentCount,
     };
   }
 
@@ -1423,6 +1471,8 @@ export class Orbit3DPointCloud {
     this.surfaceVisibleIterations = plottedIterations;
     this.pointHybridCull = false;
     this.surfaceFallback = null;
+    this.curveTrimmedComponentCount = 0;
+    this.curveFallbackComponentCount = 0;
     if (this.geometryMode === "hybrid") {
       if (realSliceOnly) {
         this.surfaceFallback = "real-slice-only";
@@ -1829,6 +1879,10 @@ export class Orbit3DPointCloud {
     );
     const samples = new Float32Array(cellCount * sampleCount);
     const periods = new Int16Array(cellCount);
+    const classifiedPeriods = new Int16Array(cellCount);
+    const classifiedCycleRe = new Float64Array(cellCount);
+    const classifiedCycleIm = new Float64Array(cellCount);
+    const classifiedMultiplierAngles = new Float64Array(cellCount);
     const interiors = new Float32Array(cellCount);
     const boundaries = new Float32Array(cellCount);
     const dissolves = new Float32Array(cellCount).fill(1);
@@ -1865,19 +1919,50 @@ export class Orbit3DPointCloud {
       Math.max(0.25, viewportWidth / Math.max(1, viewportHeight)),
       this.camera,
     );
-    let phase: "coarse" | "band-scan" | "cloud-scan" | "refinement-scan" | "edge-scan" | "contour-sample" = "coarse";
+    let phase:
+      | "coarse"
+      | "analytic-trace"
+      | "analytic-relabel"
+      | "analytic-dissolve"
+      | "band-scan"
+      | "cloud-scan"
+      | "refinement-scan"
+      | "edge-scan"
+      | "contour-sample" = "coarse";
     let cell = 0;
     let bandScan = 0;
     let cloudScan = 0;
     let refinementScan = 0;
     let edgeScan = 0;
     let transitionEdge = 0;
+    let analyticTraceRegion = 0;
+    let analyticRelabelCell = 0;
+    let analyticDissolveCell = 0;
+    let analyticRefinedCellCount = 0;
     let bandBaseCellCount = 0;
     let periodicDistances: Float32Array = new Float32Array(cellCount);
+    let chaosDistances: Float32Array = new Float32Array(cellCount);
     let boundedCellCount = 0;
     let samplerPeriodicCellCount = 0;
     let sheetPeriodicCellCount = 0;
     let lastSamplerPeriod = 0;
+    let lastClassification: OrbitSurfaceComponentClassification | null = null;
+    let boundaryCurves: OrbitSurfaceBoundaryPolyline[] = [];
+    let boundaryCurveBounds: Array<{
+      curve: OrbitSurfaceBoundaryPolyline;
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    }> = [];
+    const tracedPeriods = new Set<number>();
+    let componentRegions: ReturnType<typeof buildOrbitSurfaceComponentCatalogue> = [];
+    const tracedComponents: ReturnType<
+      typeof traceOrbitSurfaceComponentCatalogue
+    >["traced"] = [];
+    const fallbackComponents: ReturnType<
+      typeof traceOrbitSurfaceComponentCatalogue
+    >["fallback"] = [];
 
     this.pointCount = 0;
     this.fullPointCount = 0;
@@ -1897,8 +1982,8 @@ export class Orbit3DPointCloud {
       while (true) {
         if (phase === "coarse") {
           if (cell >= cellCount) {
-            prepareDissolveCoverages();
-            phase = "band-scan";
+            componentRegions = prepareAnalyticCatalogue();
+            phase = "analytic-trace";
             continue;
           }
           const x = cell % sampleWidth;
@@ -1920,8 +2005,43 @@ export class Orbit3DPointCloud {
             if (result > 0) sheetPeriodicCellCount += 1;
             periods[cell] = result;
             interiors[cell] = measure.interior;
+            if (lastClassification) {
+              classifiedPeriods[cell] = lastClassification.period;
+              classifiedCycleRe[cell] = lastClassification.cycle.re;
+              classifiedCycleIm[cell] = lastClassification.cycle.im;
+              classifiedMultiplierAngles[cell] = lastClassification.multiplierAngle;
+            }
           }
           cell += 1;
+        } else if (phase === "analytic-trace") {
+          if (analyticTraceRegion >= componentRegions.length) {
+            prepareAnalyticCurves();
+            phase = "analytic-relabel";
+            continue;
+          }
+          const traced = traceOrbitSurfaceComponentCatalogue(
+            [componentRegions[analyticTraceRegion]],
+            ORBIT_SURFACE_ANALYTIC_CHORD_ERROR_C,
+            128,
+          );
+          tracedComponents.push(...traced.traced);
+          fallbackComponents.push(...traced.fallback);
+          analyticTraceRegion += 1;
+        } else if (phase === "analytic-relabel") {
+          if (analyticRelabelCell >= cellCount) {
+            prepareDissolveDistanceFields();
+            phase = "analytic-dissolve";
+            continue;
+          }
+          relabelAnalyticCell(analyticRelabelCell);
+          analyticRelabelCell += 1;
+        } else if (phase === "analytic-dissolve") {
+          if (analyticDissolveCell >= cellCount) {
+            phase = "band-scan";
+            continue;
+          }
+          prepareDissolveCell(analyticDissolveCell);
+          analyticDissolveCell += 1;
         } else if (phase === "band-scan") {
           const candidatesPerCell = ORBIT_SURFACE_BAND_CANDIDATE_SUBDIVISION ** 2;
           if (bandScan >= bandBaseCells.length * candidatesPerCell) {
@@ -1998,7 +2118,7 @@ export class Orbit3DPointCloud {
           const topRightPeriod = coarsePeriod(topLeft + 1);
           const bottomLeftPeriod = coarsePeriod(topLeft + sampleWidth);
           const bottomRightPeriod = coarsePeriod(topLeft + sampleWidth + 1);
-          const boundary =
+          const sampledBoundary =
             (
               topLeftPeriod > 0 ||
               topRightPeriod > 0 ||
@@ -2010,8 +2130,23 @@ export class Orbit3DPointCloud {
               bottomLeftPeriod !== topLeftPeriod ||
               bottomRightPeriod !== topLeftPeriod
             );
-          if (boundary) {
-            const remaining = ORBIT_SURFACE_REFINEMENT_CELL_BUDGET - refinedCells.length;
+          const curveBoundary = orbitSurfaceCurveIntersectsRect(
+              boundaryCurves,
+              x,
+              y,
+              x + 1,
+              y + 1,
+            );
+          if (sampledBoundary || curveBoundary) {
+            const globalRemaining =
+              ORBIT_SURFACE_REFINEMENT_CELL_BUDGET - refinedCells.length;
+            const remaining = curveBoundary
+              ? Math.min(
+                  globalRemaining,
+                  ORBIT_SURFACE_ANALYTIC_REFINEMENT_CELL_BUDGET
+                    - analyticRefinedCellCount,
+                )
+              : globalRemaining;
             if (remaining > 0) {
               const plan = planOrbitSurfaceCellRefinement(
                 x,
@@ -2019,11 +2154,17 @@ export class Orbit3DPointCloud {
                 sampleSurfacePoint,
                 sampleCount,
                 projectSurfacePoint,
-                ORBIT_SURFACE_EDGE_ERROR_PX,
-                ORBIT_SURFACE_MAX_REFINEMENT_DEPTH,
+                curveBoundary
+                  ? ORBIT_SURFACE_ANALYTIC_EDGE_ERROR_PX
+                  : ORBIT_SURFACE_EDGE_ERROR_PX,
+                curveBoundary
+                  ? ORBIT_SURFACE_ANALYTIC_MAX_REFINEMENT_DEPTH
+                  : ORBIT_SURFACE_MAX_REFINEMENT_DEPTH,
                 remaining,
+                curveBoundary ? boundaryCurves : [],
               );
               refinedCells.push(...plan.cells);
+              if (curveBoundary) analyticRefinedCellCount += plan.cells.length;
               refinedCellIndices.add(refinementScan);
               refinedLeavesByCell.set(refinementScan, plan.cells);
             }
@@ -2103,6 +2244,7 @@ export class Orbit3DPointCloud {
         measure,
       );
       lastSamplerPeriod = result === ESCAPED ? 0 : result;
+      lastClassification = null;
       if (result === ESCAPED) return ESCAPED;
       const classification = classifyOrbitSurfaceComponent(cRe, cIm);
       if (
@@ -2117,10 +2259,220 @@ export class Orbit3DPointCloud {
           sampleCount,
         )
       ) {
+        lastClassification = classification;
         measure.interior = Math.max(0, Math.min(1, classification.multiplier));
         return classification.period;
       }
       return result;
+    };
+
+    const curveAwarePeriod = (
+      x: number,
+      y: number,
+      sampledPeriod: number,
+    ): number => {
+      for (const entry of boundaryCurveBounds) {
+        const { curve } = entry;
+        if (
+          curve.period <= sampleCount &&
+          x >= entry.minX && x <= entry.maxX &&
+          y >= entry.minY && y <= entry.maxY &&
+          orbitSurfaceCurveContains(curve, x, y)
+        ) {
+          return curve.period;
+        }
+      }
+      if (sampledPeriod <= 0) return 0;
+      if (sampledPeriod <= 2 && tracedPeriods.has(sampledPeriod)) return 0;
+      const nearest = nearestBoundaryAt(
+        x,
+        y,
+        sampledPeriod,
+        ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS,
+      );
+      if (!nearest) return sampledPeriod;
+      return nearest.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS
+        ? 0
+        : sampledPeriod;
+    };
+
+    const sampleCurveAwareCell = (
+      cRe: number,
+      cIm: number,
+      x: number,
+      y: number,
+      values: Float32Array,
+      offset: number,
+      measure: { interior: number },
+    ): number => {
+      const sampled = sampleClassifiedCell(cRe, cIm, values, offset, measure);
+      const sampledPeriod = sampled === ESCAPED ? 0 : sampled;
+      const analyticPeriod = curveAwarePeriod(x, y, sampledPeriod);
+      if (analyticPeriod === sampledPeriod) return sampled;
+      if (analyticPeriod <= 0) return sampled === ESCAPED ? ESCAPED : 0;
+      const classification = classifyOrbitSurfaceComponent(cRe, cIm, {
+        multiplierMargin: 0,
+      });
+      if (
+        classification.period === analyticPeriod &&
+        writeOrbitSurfaceCycleSamples(
+          classification,
+          cRe,
+          cIm,
+          values,
+          offset,
+          sampleCount,
+        )
+      ) {
+        measure.interior = Math.max(0, Math.min(1, classification.multiplier));
+      }
+      return analyticPeriod;
+    };
+
+    const prepareAnalyticCatalogue = () =>
+      buildOrbitSurfaceComponentCatalogue(
+        classifiedPeriods,
+        sampleWidth,
+        sampleHeight,
+        (index) => {
+          const period = classifiedPeriods[index];
+          if (period <= 0) return null;
+          const x = index % sampleWidth;
+          const y = (index - x) / sampleWidth;
+          return {
+            period,
+            c: {
+              re: gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
+              im: y === Math.floor(sampleHeight / 2)
+                ? 0
+                : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+            },
+            cycle: {
+              re: classifiedCycleRe[index],
+              im: classifiedCycleIm[index],
+            },
+            multiplier: interiors[index],
+            multiplierAngle: classifiedMultiplierAngles[index],
+          };
+        },
+      );
+
+    const prepareAnalyticCurves = (): void => {
+      boundaryCurves = tracedComponents.map((entry) => ({
+        componentId: entry.componentId,
+        period: entry.period,
+        points: entry.curve.points.map((point) => ({
+          x: (point.c.re - RE_MIN) / (RE_MAX - RE_MIN) * sampleWidth - 0.5,
+          y: (point.c.im - IM_MIN) / (IM_MAX - IM_MIN) * sampleHeight - 0.5,
+        })),
+      }));
+      boundaryCurveBounds = boundaryCurves.map((curve) => ({
+        curve,
+        minX: Math.min(...curve.points.map((point) => point.x)),
+        maxX: Math.max(...curve.points.map((point) => point.x)),
+        minY: Math.min(...curve.points.map((point) => point.y)),
+        maxY: Math.max(...curve.points.map((point) => point.y)),
+      }));
+      tracedPeriods.clear();
+      for (const curve of boundaryCurves) tracedPeriods.add(curve.period);
+      this.curveTrimmedComponentCount = tracedComponents.length;
+      this.curveFallbackComponentCount = fallbackComponents.length;
+
+      sheetPeriodicCellCount = 0;
+    };
+
+    const relabelAnalyticCell = (index: number): void => {
+      const x = index % sampleWidth;
+      const y = (index - x) / sampleWidth;
+      const currentPeriod = escaped[index] === 0 ? periods[index] : 0;
+      const analyticPeriod = curveAwarePeriod(x, y, currentPeriod);
+      if (analyticPeriod > 0) {
+        if (analyticPeriod !== currentPeriod) {
+          const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
+          const cIm = y === Math.floor(sampleHeight / 2)
+            ? 0
+            : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+          const classification = classifyOrbitSurfaceComponent(cRe, cIm, {
+            multiplierMargin: 0,
+          });
+          if (
+            classification.period === analyticPeriod &&
+            writeOrbitSurfaceCycleSamples(
+              classification,
+              cRe,
+              cIm,
+              samples,
+              index * sampleCount,
+              sampleCount,
+            )
+          ) {
+            interiors[index] = Math.max(
+              0,
+              Math.min(1, classification.multiplier),
+            );
+          }
+        }
+        periods[index] = analyticPeriod;
+        escaped[index] = 0;
+        sheetPeriodicCellCount += 1;
+      } else if (currentPeriod > 0) {
+        periods[index] = 0;
+      }
+    };
+
+    const nearestBoundaryAt = (
+      x: number,
+      y: number,
+      period?: number,
+      maximumDistance = Number.POSITIVE_INFINITY,
+    ): OrbitSurfaceCurveProximity | null => {
+      let nearest: OrbitSurfaceCurveProximity | null = null;
+      let limit = maximumDistance;
+      for (const entry of boundaryCurveBounds) {
+        if (period !== undefined && entry.curve.period !== period) continue;
+        const dx = x < entry.minX
+          ? entry.minX - x
+          : x > entry.maxX ? x - entry.maxX : 0;
+        const dy = y < entry.minY
+          ? entry.minY - y
+          : y > entry.maxY ? y - entry.maxY : 0;
+        if (Math.hypot(dx, dy) > limit) continue;
+        const candidate = nearestOrbitBoundaryOnCurve(entry.curve, x, y);
+        if (candidate.distance <= limit) {
+          nearest = candidate;
+          limit = candidate.distance;
+        }
+      }
+      return nearest;
+    };
+
+    const nearestOrbitBoundaryOnCurve = (
+      curve: OrbitSurfaceBoundaryPolyline,
+      x: number,
+      y: number,
+    ): OrbitSurfaceCurveProximity => {
+      let distance = Number.POSITIVE_INFINITY;
+      for (let index = 1; index < curve.points.length; index += 1) {
+        const first = curve.points[index - 1];
+        const second = curve.points[index];
+        const dx = second.x - first.x;
+        const dy = second.y - first.y;
+        const lengthSquared = dx * dx + dy * dy;
+        const amount = lengthSquared <= Number.EPSILON
+          ? 0
+          : Math.max(0, Math.min(1,
+              ((x - first.x) * dx + (y - first.y) * dy) / lengthSquared));
+        distance = Math.min(distance, Math.hypot(
+          x - (first.x + amount * dx),
+          y - (first.y + amount * dy),
+        ));
+      }
+      return {
+        componentId: curve.componentId,
+        period: curve.period,
+        distance,
+        inside: orbitSurfaceCurveContains(curve, x, y),
+      };
     };
 
     const coarsePeriod = (index: number): number =>
@@ -2152,7 +2504,7 @@ export class Orbit3DPointCloud {
         return {
           ...adaptive,
           boundary: boundaryAtGrid(x, y),
-          dissolve: dissolveAtGrid(x, y),
+          dissolve: dissolveAtGrid(x, y, adaptive.period),
         };
       }
       const contourIndex = contourSamples.get(key);
@@ -2163,7 +2515,7 @@ export class Orbit3DPointCloud {
         period: contourPeriods[contourIndex],
         interior: contourInteriors[contourIndex],
         boundary: boundaryAtGrid(x, y),
-        dissolve: dissolveAtGrid(x, y),
+        dissolve: dissolveAtGrid(x, y, contourPeriods[contourIndex]),
         escaped: contourEscaped[contourIndex] !== 0,
       };
     };
@@ -2200,11 +2552,15 @@ export class Orbit3DPointCloud {
       if (prepared) return prepared;
       const values = new Float32Array(sampleCount);
       measure.interior = 1;
-      const result = sampleClassifiedCell(
-        gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
-        y === Math.floor(sampleHeight / 2)
-          ? 0
-          : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+      const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
+      const cIm = y === Math.floor(sampleHeight / 2)
+        ? 0
+        : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+      const result = sampleCurveAwareCell(
+        cRe,
+        cIm,
+        x,
+        y,
         values,
         0,
         measure,
@@ -2214,7 +2570,7 @@ export class Orbit3DPointCloud {
         period: result === ESCAPED ? 0 : result,
         interior: result === ESCAPED ? 1 : measure.interior,
         boundary: boundaryAtGrid(x, y),
-        dissolve: dissolveAtGrid(x, y),
+        dissolve: dissolveAtGrid(x, y, result === ESCAPED ? 0 : result),
         escaped: result === ESCAPED,
       };
       adaptiveSamples.set(surfacePointId(x, y), sample);
@@ -2242,11 +2598,15 @@ export class Orbit3DPointCloud {
       const prepared = lookupPreparedPeriod(x, y);
       if (prepared !== undefined) return prepared;
       measure.interior = 1;
-      const result = sampleClassifiedCell(
-        gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth),
-        y === Math.floor(sampleHeight / 2)
-          ? 0
-          : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight),
+      const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
+      const cIm = y === Math.floor(sampleHeight / 2)
+        ? 0
+        : gridCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
+      const result = sampleCurveAwareCell(
+        cRe,
+        cIm,
+        x,
+        y,
         contourSampleValues,
         contourSampleCount * sampleCount,
         measure,
@@ -2326,36 +2686,80 @@ export class Orbit3DPointCloud {
       Math.round(y * refinementDivisions) * edgeCoordinateWidth
       + Math.round(x * refinementDivisions);
 
-    const prepareDissolveCoverages = (): void => {
+    const prepareDissolveDistanceFields = (): void => {
       const chaosMask = new Uint8Array(cellCount);
       const periodicMask = new Uint8Array(cellCount);
       for (let index = 0; index < cellCount; index += 1) {
         const period = coarsePeriod(index);
         chaosMask[index] = escaped[index] === 0 && period === 0 ? 1 : 0;
         periodicMask[index] = period > 0 ? 1 : 0;
-        if (chaosMask[index] !== 0) chaoticBaseCells.push(index);
       }
-      const chaosDistances = boundaryDistanceField(chaosMask, sampleWidth, sampleHeight);
+      chaosDistances = boundaryDistanceField(chaosMask, sampleWidth, sampleHeight);
       periodicDistances = boundaryDistanceField(periodicMask, sampleWidth, sampleHeight);
-      for (let index = 0; index < cellCount; index += 1) {
-        dissolves[index] = dissolveCoverage(chaosDistances[index]);
-        if (isOrbitSurfaceCloudBandSample(
-          coarsePeriod(index),
-          escaped[index] !== 0,
-          periodicDistances[index],
-          ORBIT_SURFACE_CLOUD_BAND_CELLS,
-        )) {
-          bandBaseCellCount += 1;
-          bandBaseCells.push(index);
-        }
+    };
+
+    const prepareDissolveCell = (index: number): void => {
+      const x = index % sampleWidth;
+      const y = (index - x) / sampleWidth;
+      const period = coarsePeriod(index);
+      if (escaped[index] === 0 && period === 0) chaoticBaseCells.push(index);
+      const sheetCurve = period > 0
+        ? nearestBoundaryAt(x, y, period)
+        : null;
+      dissolves[index] = sheetCurve?.inside
+        ? dissolveCoverage(sheetCurve.distance)
+        : dissolveCoverage(chaosDistances[index]);
+      const periodicCurve = nearestBoundaryAt(
+        x,
+        y,
+        undefined,
+        ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS,
+      );
+      if (
+        periodicCurve &&
+        (periodicCurve.inside ||
+          periodicCurve.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS)
+      ) {
+        periodicDistances[index] = periodicCurve.distance;
+      }
+      if (isOrbitSurfaceCloudBandSample(
+        period,
+        escaped[index] !== 0,
+        periodicDistances[index],
+        ORBIT_SURFACE_CLOUD_BAND_CELLS,
+      )) {
+        bandBaseCellCount += 1;
+        bandBaseCells.push(index);
       }
     };
 
     const boundaryAtGrid = (x: number, y: number): number =>
       interpolateGrid(boundaries, x, y);
 
-    const dissolveAtGrid = (x: number, y: number): number =>
-      interpolateGrid(dissolves, x, y);
+    const dissolveAtGrid = (x: number, y: number, period: number): number => {
+      if (period > 0) {
+        const curve = nearestBoundaryAt(x, y, period);
+        if (curve?.inside) return dissolveCoverage(curve.distance);
+      }
+      return interpolateGrid(dissolves, x, y);
+    };
+
+    const periodicDistanceAtGrid = (x: number, y: number): number => {
+      const curve = nearestBoundaryAt(
+        x,
+        y,
+        undefined,
+        ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS,
+      );
+      if (
+        curve &&
+        (curve.inside ||
+          curve.distance <= ORBIT_SURFACE_ANALYTIC_TRIM_INFLUENCE_CELLS)
+      ) {
+        return curve.distance;
+      }
+      return interpolateGrid(periodicDistances, x, y);
+    };
 
     const interpolateGrid = (values: Float32Array, x: number, y: number): number => {
       const left = Math.max(0, Math.min(sampleWidth - 1, Math.floor(x)));
@@ -2407,7 +2811,7 @@ export class Orbit3DPointCloud {
             escaped,
           },
           ORBIT_SURFACE_MAX_HEIGHT_JUMP,
-          { sampler: preparedSample, refinedCells },
+          { sampler: preparedSample, refinedCells, boundaryCurves },
         );
       } catch {
         this.surfaceResourceFailed = true;
@@ -2465,7 +2869,7 @@ export class Orbit3DPointCloud {
           band.x,
           band.y,
           band.sample,
-          interpolateGrid(periodicDistances, band.x, band.y),
+          periodicDistanceAtGrid(band.x, band.y),
           ORBIT_SURFACE_BAND_SAMPLE_WEIGHT,
         );
       }
@@ -2476,7 +2880,7 @@ export class Orbit3DPointCloud {
           cloud.x,
           cloud.y,
           cloud.sample,
-          interpolateGrid(periodicDistances, cloud.x, cloud.y),
+          periodicDistanceAtGrid(cloud.x, cloud.y),
           REFINE_POINT_WEIGHT,
         );
       }
@@ -2639,7 +3043,7 @@ export class Orbit3DPointCloud {
                 Math.floor(item.sample.sampleOffset ?? 0),
               );
               const coverage = cloudBandCoverage(
-                interpolateGrid(periodicDistances, item.x, item.y),
+                periodicDistanceAtGrid(item.x, item.y),
               );
               for (let sample = 0; sample < sampleCount; sample += 1) {
                 const point = sample * resolvedCloud.survivingCells + slot;
