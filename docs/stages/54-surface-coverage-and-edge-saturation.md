@@ -4,12 +4,12 @@
 
 - **Authored:** 2026-08-22
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
-- **Worker:** Claude Fable 5 <claude-fable-5@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Verifier panel:** false
 - **Requires GUI:** true
-- **Pairing rationale:** the operator wants Claude-side quota carrying more
-  of the worker load this window; Sol knows the surface line (stages 26 to
+- **Pairing rationale:** the operator is spreading quota away from Fable,
+  so Opus takes the worker seat; Sol knows the surface line (stages 26 to
   28, 40, 41, 43, 52, 53) and flips to the verifier seat for the
   cross-family check. The verifier browser pass runs headless Chromium via
   Playwright, which needs the unsandboxed dispatch this card declares.
