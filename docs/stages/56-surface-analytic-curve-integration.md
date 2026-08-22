@@ -231,10 +231,12 @@ this round is a verifier pass over that fix, no worker dispatch.
   553,216, `orbit3dHybridCloudPoints` 3,661,272, exactly, since
   membership is now bit-identical to stage 55).
 - **Revised refinement envelope:** rescue-free integration keeps the
-  whole stage-55 sampled boundary and adds analytic refinement on top,
-  so `orbit3dRefinedCells` lands above 6,214; the envelope is at most
-  6,836 (ten per cent over the stage-55 figure). Pure model measures
-  6,797 and the live build must match it.
+  whole stage-55 sampled boundary (6,214 leaves at the verifier rig's
+  DPR2 viewport) and adds analytic refinement on top, so
+  `orbit3dRefinedCells` lands above 6,214; the measured addition is 769
+  leaves and the envelope is at most 7,000. The pure model projects
+  through the device-pixel viewport (1280 by 720 at devicePixelRatio 2)
+  and must match the live build exactly.
 - **Harness honesty (replaces the attempt-3 reproduce-first ask):** the
   harness now models the same total sampler and membership rule as the
   live path, gates on zero demoted cells across every window including
@@ -243,8 +245,8 @@ this round is a verifier pass over that fix, no worker dispatch.
   The hard-coded-coordinate fixture is replaced by a genuine property
   test: an under-covering traced curve (an arc closed by a chord) must
   not bite the sampled silhouette.
-- Pure-model measurements at the live configuration: triangles 436,275,
-  refined leaves 6,797, mesh bytes 16,818,660, peak geometry
-  387,932,900. Browser rows (slice median and maximum, finalisation)
-  remain verifier-measured; slice discipline and stage-54/55 baseline
-  figures stand unchanged.
+- Pure-model measurements at the live configuration, which the live
+  build matches exactly: triangles 436,766, refined leaves 6,983, mesh
+  bytes 16,833,624, peak geometry 387,947,864. Browser rows (slice
+  median and maximum, finalisation) remain verifier-measured; slice
+  discipline and stage-54/55 baseline figures stand unchanged.
