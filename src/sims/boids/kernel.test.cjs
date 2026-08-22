@@ -398,6 +398,20 @@ test("obstacle rasterisation is deterministic for identical layout params", () =
       Array.from(second.obstacleNormalY),
       `${layout} crest normals are deterministic`,
     );
+    for (const field of [
+      "obstacleOwner",
+      "obstacleTexture",
+      "obstacleFleck",
+      "obstacleWashRing",
+      "obstacleFamily",
+      "obstacleTextureSeeds",
+    ]) {
+      assert.deepEqual(
+        Array.from(first[field]),
+        Array.from(second[field]),
+        `${layout} ${field} is deterministic`,
+      );
+    }
     assert.deepEqual(
       Array.from(first.readState()),
       Array.from(second.readState()),
@@ -473,6 +487,37 @@ function rockSilhouetteSignature(kernel, obstacle, width, height) {
   return radialSamples.join(",");
 }
 
+function rockTextureSignature(kernel, obstacle, owner, width, height) {
+  const textureIndexByCell = new Map(
+    Array.from(kernel.obstacleCells, (cell, index) => [cell, index]),
+  );
+  const samples = [];
+  for (let angleIndex = 0; angleIndex < 36; angleIndex += 1) {
+    const angle = (angleIndex / 36) * Math.PI * 2;
+    for (const radiusRatio of [0.28, 0.5, 0.72]) {
+      const x = Math.floor(
+        ((obstacle.x + Math.cos(angle) * obstacle.radius * radiusRatio) % width +
+          width) %
+          width,
+      );
+      const y = Math.floor(
+        ((obstacle.y + Math.sin(angle) * obstacle.radius * radiusRatio) % height +
+          height) %
+          height,
+      );
+      const textureIndex = textureIndexByCell.get(y * width + x);
+      if (textureIndex === undefined || kernel.obstacleOwner[textureIndex] !== owner) {
+        samples.push("x");
+      } else {
+        samples.push(
+          `${kernel.obstacleTexture[textureIndex]}:${kernel.obstacleFleck[textureIndex] > 0 ? 1 : 0}`,
+        );
+      }
+    }
+  }
+  return samples.join(",");
+}
+
 test("default rocks have individually varied silhouettes", () => {
   const width = 640;
   const height = 480;
@@ -493,6 +538,35 @@ test("default rocks have individually varied silhouettes", () => {
     new Set(signatures).size,
     signatures.length,
     "no two default rocks share an identical normalised silhouette",
+  );
+
+  const textureSignatures = kernel.obstacles.map((obstacle, owner) =>
+    rockTextureSignature(kernel, obstacle, owner, width, height)
+  );
+  assert.equal(
+    new Set(textureSignatures).size,
+    textureSignatures.length,
+    "no two default rocks share an identical texture pattern",
+  );
+  assert.equal(
+    new Set(kernel.obstacleTextureSeeds).size,
+    kernel.obstacles.length,
+    "every default rock has its own texture seed",
+  );
+  for (let owner = 0; owner < kernel.obstacles.length; owner += 1) {
+    const levels = new Set();
+    for (let index = 0; index < kernel.obstacleOwner.length; index += 1) {
+      if (kernel.obstacleOwner[index] === owner) {
+        levels.add(kernel.obstacleTexture[index]);
+      }
+    }
+    assert.ok(levels.size >= 6, `rock ${owner} has multi-level interior texture`);
+  }
+  const fleckCount = Array.from(kernel.obstacleFleck).filter((value) => value > 0).length;
+  assert.ok(fleckCount > 0, "rock field contains mineral flecks");
+  assert.ok(
+    fleckCount / kernel.obstacleFleck.length < 0.12,
+    "mineral flecks remain sparse",
   );
 });
 
@@ -532,6 +606,43 @@ test("obstacle depth tones preserve channel ranges and stay below flock brightne
   }
 });
 
+test("reef cells use a distinct shared coral family with local variation", () => {
+  const reef = new BoidsKernel();
+  reef.init(320, 240, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "reef",
+    obstacleAmount: 0.7,
+  });
+  const rocks = new BoidsKernel();
+  rocks.init(320, 240, {
+    boidCount: 24,
+    initialFlocks: 0,
+    obstacleLayout: "rocks",
+    obstacleAmount: 0.7,
+  });
+
+  assert.ok(Array.from(reef.obstacleFamily).every((family) => family === 1));
+  assert.ok(Array.from(rocks.obstacleFamily).every((family) => family === 0));
+  assert.equal(
+    new Set(reef.obstacleTextureSeeds).size,
+    reef.obstacles.length,
+    "reef pieces vary locally within the shared family",
+  );
+  const reefVerticalTone = Array.from(reef.obstacleCells).reduce(
+    (sum, cell) => sum + reef.readState()[cell * reef.channelCount + 3],
+    0,
+  ) / reef.obstacleCells.length;
+  const rockVerticalTone = Array.from(rocks.obstacleCells).reduce(
+    (sum, cell) => sum + rocks.readState()[cell * rocks.channelCount + 3],
+    0,
+  ) / rocks.obstacleCells.length;
+  assert.ok(
+    reefVerticalTone > rockVerticalTone + 0.025,
+    "reef publishes a visibly distinct coral-biased tone",
+  );
+});
+
 test("crest bias responds more strongly to incoming than departing flow", () => {
   const width = 160;
   const height = 120;
@@ -556,6 +667,9 @@ test("crest bias responds more strongly to incoming than departing flow", () => 
   const sampleY = Math.floor(((cellY + normalY * 6) % height + height) % height);
   const offset = (sampleY * width + sampleX) * kernel.channelCount;
 
+  assert.ok(Math.max(...kernel.obstacleWashRing) > 240);
+  assert.equal(Math.min(...kernel.obstacleWashRing), 0);
+
   kernel.state.fill(0);
   kernel.state[offset] = 1;
   kernel.state[offset + 2] = -normalX;
@@ -567,7 +681,7 @@ test("crest bias responds more strongly to incoming than departing flow", () => 
   const departing = kernel.sampleObstacleArrival(obstacleCellIndex);
 
   assert.ok(incoming > 0.95);
-  assert.equal(departing, 0.3);
+  assert.equal(departing, 0.08);
 });
 
 for (const layout of ["breakwaters", "rocks", "reef"]) {
@@ -669,6 +783,22 @@ test("custom edit API places deterministic rocks and drag capsules", () => {
     Array.from(first.obstacleRaster),
     Array.from(second.obstacleRaster),
   );
+  for (const field of [
+    "obstacleTexture",
+    "obstacleFleck",
+    "obstacleWashRing",
+    "obstacleFamily",
+    "obstacleTextureSeeds",
+  ]) {
+    assert.deepEqual(
+      Array.from(first[field]),
+      Array.from(second[field]),
+      `custom ${field} is deterministic`,
+    );
+  }
+  assert.equal(new Set(first.obstacleTextureSeeds).size, 2);
+  assert.ok(Array.from(first.obstacleTexture).some((value) => value !== 0));
+  assert.ok(Array.from(first.obstacleFamily).every((family) => family === 0));
 
   const small = customKernel({ obstacleAmount: 0.1 });
   const large = customKernel({ obstacleAmount: 1 });
@@ -778,6 +908,7 @@ test("the dropped-obstacle overlay survives layout and flock resets", () => {
   kernel.placeCustomRock(25, 35);
   kernel.placeCustomCapsule(60, 20, 100, 50);
   const overlay = kernel.getCustomObstacles();
+  const overlaySeeds = Array.from(kernel.obstacleTextureSeeds.slice(-overlay.length));
 
   kernel.init(160, 120, {
     boidCount: 48,
@@ -787,6 +918,10 @@ test("the dropped-obstacle overlay survives layout and flock resets", () => {
   });
   assert.deepEqual(kernel.getCustomObstacles(), overlay);
   assert.deepEqual(kernel.obstacles.slice(-overlay.length), overlay);
+  assert.deepEqual(
+    Array.from(kernel.obstacleTextureSeeds.slice(-overlay.length)),
+    overlaySeeds,
+  );
 
   kernel.init(160, 120, {
     boidCount: 30,
@@ -796,6 +931,10 @@ test("the dropped-obstacle overlay survives layout and flock resets", () => {
   });
   assert.deepEqual(kernel.getCustomObstacles(), overlay);
   assert.deepEqual(kernel.obstacles.slice(-overlay.length), overlay);
+  assert.deepEqual(
+    Array.from(kernel.obstacleTextureSeeds.slice(-overlay.length)),
+    overlaySeeds,
+  );
 });
 
 test("preset generation stays deterministic beneath a non-empty overlay", () => {

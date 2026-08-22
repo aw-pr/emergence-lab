@@ -58,6 +58,9 @@ const OBSTACLE_CELL_GUARD = Math.SQRT1_2;
 const OBSTACLE_DEPTH_LEVELS = 8;
 const OBSTACLE_CORE = [0.82, 0.04, -0.5, 0] as const;
 const OBSTACLE_CREST = [0.89, 0.42, -0.36, 0] as const;
+const REEF_CORE = [0.8, 0.08, -0.43, 0.04] as const;
+const REEF_CREST = [0.88, 0.39, -0.24, 0.11] as const;
+const OBSTACLE_WASH = [0.94, 0.48, -0.2, 0.1] as const;
 const OBSTACLE_ARRIVAL_DISTANCES = [6, 16, 28] as const;
 const OBSTACLE_ARRIVAL_LATERAL = [-4, 0, 4] as const;
 const OBSTACLE_LAYOUTS = ["none", "breakwaters", "rocks", "reef", "custom"] as const;
@@ -278,6 +281,16 @@ function valueNoiseHash(x: number, y: number, seed: number): number {
   hash = Math.imul(hash, 0x846ca68b);
   hash ^= hash >>> 16;
   return (hash >>> 0) / 0x100000000;
+}
+
+function mixSeed(seed: number, value: number): number {
+  let mixed = seed ^ Math.imul(value | 0, 0x9e3779b1);
+  mixed ^= mixed >>> 16;
+  mixed = Math.imul(mixed, 0x7feb352d);
+  mixed ^= mixed >>> 15;
+  mixed = Math.imul(mixed, 0x846ca68b);
+  mixed ^= mixed >>> 16;
+  return mixed >>> 0;
 }
 
 function smoothNoiseStep(value: number): number {
@@ -511,6 +524,12 @@ export class BoidsKernel implements SimKernel {
   private obstacleNormalX = new Int8Array(0);
   private obstacleNormalY = new Int8Array(0);
   private obstacleArrival = new Float32Array(0);
+  private obstacleOwner = new Uint16Array(0);
+  private obstacleTexture = new Int8Array(0);
+  private obstacleFleck = new Uint8Array(0);
+  private obstacleWashRing = new Uint8Array(0);
+  private obstacleFamily = new Uint8Array(0);
+  private obstacleTextureSeeds = new Uint32Array(0);
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -1010,6 +1029,12 @@ export class BoidsKernel implements SimKernel {
     this.obstacleNormalX = new Int8Array(0);
     this.obstacleNormalY = new Int8Array(0);
     this.obstacleArrival = new Float32Array(0);
+    this.obstacleOwner = new Uint16Array(0);
+    this.obstacleTexture = new Int8Array(0);
+    this.obstacleFleck = new Uint8Array(0);
+    this.obstacleWashRing = new Uint8Array(0);
+    this.obstacleFamily = new Uint8Array(0);
+    this.obstacleTextureSeeds = new Uint32Array(0);
   }
 
   private createObstacles(layout: ObstacleLayout, amount: number): Obstacle[] {
@@ -1150,6 +1175,12 @@ export class BoidsKernel implements SimKernel {
       this.obstacleNormalX = new Int8Array(0);
       this.obstacleNormalY = new Int8Array(0);
       this.obstacleArrival = new Float32Array(0);
+      this.obstacleOwner = new Uint16Array(0);
+      this.obstacleTexture = new Int8Array(0);
+      this.obstacleFleck = new Uint8Array(0);
+      this.obstacleWashRing = new Uint8Array(0);
+      this.obstacleFamily = new Uint8Array(0);
+      this.obstacleTextureSeeds = new Uint32Array(0);
       return;
     }
 
@@ -1157,12 +1188,22 @@ export class BoidsKernel implements SimKernel {
     const cells: number[] = [];
     const normalX: number[] = [];
     const normalY: number[] = [];
+    const owners: number[] = [];
+    const textures: number[] = [];
+    const flecks: number[] = [];
+    const washRings: number[] = [];
+    const families: number[] = [];
     const layoutCode = OBSTACLE_LAYOUTS.indexOf(layout);
     const baseSeed =
       Math.imul(this.width, 0x45d9f3b) ^
       Math.imul(this.height, 0x119de1f3) ^
       Math.imul(Math.round(amount * 1000), 0x3449f5) ^
       Math.imul(layoutCode + 1, 0x27d4eb2d);
+    const textureSeeds = Uint32Array.from(
+      this.obstacles.map((obstacle, index) =>
+        this.obstacleTextureSeed(obstacle, index, baseSeed)
+      ),
+    );
 
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
@@ -1219,10 +1260,28 @@ export class BoidsKernel implements SimKernel {
           1,
         );
         const tone = 1 + Math.round((1 - depth) * (OBSTACLE_DEPTH_LEVELS - 1));
+        const depthCrest = (tone - 1) / (OBSTACLE_DEPTH_LEVELS - 1);
+        const texture = this.obstacleTextureAt(
+          layout,
+          obstacle,
+          nearestIndex,
+          pointX,
+          pointY,
+          depthCrest,
+          textureSeeds[nearestIndex],
+          baseSeed,
+        );
         raster[cell] = tone;
         cells.push(cell);
         normalX.push(Math.round(nearestNormalX * 127));
         normalY.push(Math.round(nearestNormalY * 127));
+        owners.push(nearestIndex);
+        textures.push(texture[0]);
+        flecks.push(texture[1]);
+        washRings.push(texture[2]);
+        families.push(
+          layout === "reef" && nearestIndex < this.presetObstacles.length ? 1 : 0,
+        );
       }
     }
 
@@ -1231,6 +1290,128 @@ export class BoidsKernel implements SimKernel {
     this.obstacleNormalX = Int8Array.from(normalX);
     this.obstacleNormalY = Int8Array.from(normalY);
     this.obstacleArrival = new Float32Array(cells.length);
+    this.obstacleOwner = Uint16Array.from(owners);
+    this.obstacleTexture = Int8Array.from(textures);
+    this.obstacleFleck = Uint8Array.from(flecks);
+    this.obstacleWashRing = Uint8Array.from(washRings);
+    this.obstacleFamily = Uint8Array.from(families);
+    this.obstacleTextureSeeds = textureSeeds;
+  }
+
+  private obstacleTextureSeed(
+    obstacle: Obstacle,
+    obstacleIndex: number,
+    baseSeed: number,
+  ): number {
+    const preset = obstacleIndex < this.presetObstacles.length;
+    const localIndex = preset
+      ? obstacleIndex
+      : obstacleIndex - this.presetObstacles.length;
+    let seed = preset
+      ? mixSeed(baseSeed, localIndex + 1)
+      : mixSeed(
+          mixSeed(Math.imul(this.width, 0x45d9f3b), this.height),
+          0x6a09e667 ^ (localIndex + 1),
+        );
+    seed = mixSeed(seed, obstacle.kind === "circle" ? 1 : 2);
+    seed = mixSeed(seed, Math.round(obstacle.x * 256));
+    seed = mixSeed(seed, Math.round(obstacle.y * 256));
+    seed = mixSeed(seed, Math.round(obstacle.radius * 256));
+    if (obstacle.kind === "capsule") {
+      seed = mixSeed(seed, Math.round(obstacle.halfX * 256));
+      seed = mixSeed(seed, Math.round(obstacle.halfY * 256));
+    }
+    return seed;
+  }
+
+  private obstacleTextureAt(
+    layout: ObstacleLayout,
+    obstacle: Obstacle,
+    obstacleIndex: number,
+    pointX: number,
+    pointY: number,
+    depthCrest: number,
+    seed: number,
+    baseSeed: number,
+  ): readonly [number, number, number] {
+    const relativeX = torusDelta(obstacle.x, pointX, this.width);
+    const relativeY = torusDelta(obstacle.y, pointY, this.height);
+    let tangentX: number;
+    let tangentY: number;
+    if (obstacle.kind === "capsule") {
+      const halfLength = Math.hypot(obstacle.halfX, obstacle.halfY);
+      tangentX = obstacle.halfX / halfLength;
+      tangentY = obstacle.halfY / halfLength;
+    } else {
+      const axis = hashAngle(seed, 0x243f6a88);
+      tangentX = Math.cos(axis);
+      tangentY = Math.sin(axis);
+    }
+    const along = relativeX * tangentX + relativeY * tangentY;
+    const across = -relativeX * tangentY + relativeY * tangentX;
+    const scale = Math.max(2.5, obstacle.radius);
+    const grain = fractalValueNoise(
+      pointX,
+      pointY,
+      Math.max(1.8, scale * 0.34),
+      seed ^ 0x13198a2e,
+    );
+    const bandCount = 2.8 + ((seed >>> 4) & 7) * 0.34;
+    const bandPhase = hashAngle(seed, 0x9e3779b9);
+    const striation = Math.sin(
+      (across / scale) * Math.PI * bandCount +
+        bandPhase +
+        (grain - 0.5) * 1.7 +
+        Math.sin((along / scale) * Math.PI * 0.7 + bandPhase) * 0.3,
+    );
+    const pitNoise = fractalValueNoise(
+      pointX,
+      pointY,
+      Math.max(1.25, scale * 0.18),
+      seed ^ 0xa4093822,
+    );
+    const pit = pitNoise > 0.67
+      ? -0.52 * clamp((pitNoise - 0.67) / 0.23, 0, 1)
+      : 0;
+    const reefPreset = layout === "reef" && obstacleIndex < this.presetObstacles.length;
+    const shared = reefPreset
+      ? fractalValueNoise(
+          pointX,
+          pointY,
+          Math.max(9, Math.min(this.width, this.height) * 0.065),
+          baseSeed ^ 0x517cc1b7,
+        ) - 0.5
+      : 0;
+    const texture = clamp(
+      striation * (reefPreset ? 0.34 : 0.44) +
+        (grain - 0.5) * 0.72 +
+        shared * 0.58 +
+        pit,
+      -1,
+      1,
+    );
+    const fleckCellX = Math.floor(pointX * 0.5);
+    const fleckCellY = Math.floor(pointY * 0.5);
+    const fleckNoise = valueNoiseHash(
+      fleckCellX,
+      fleckCellY,
+      seed ^ 0x082efa98,
+    );
+    const fleckCluster = fractalValueNoise(
+      pointX,
+      pointY,
+      Math.max(2, scale * 0.3),
+      seed ^ 0xec4e6c89,
+    );
+    const fleck = fleckNoise > (reefPreset ? 0.9 : 0.935) && fleckCluster > 0.48
+      ? Math.round(clamp(0.35 + fleckNoise * 0.65, 0, 1) * 255)
+      : 0;
+    const ring = smoothNoiseStep(clamp((depthCrest - 0.58) / 0.42, 0, 1));
+    return [
+      Math.round(texture * 127),
+      fleck,
+      Math.round(ring * 255),
+    ];
   }
 
   private obstacleRenderInset(
@@ -1516,15 +1697,44 @@ export class BoidsKernel implements SimKernel {
       const offset = cell * CHANNEL_COUNT;
       const depthCrest =
         (this.obstacleRaster[cell] - 1) / (OBSTACLE_DEPTH_LEVELS - 1);
+      const arrival = this.obstacleArrival[index];
+      const texture = this.obstacleTexture[index] / 127;
+      const fleck = this.obstacleFleck[index] / 255;
+      const reef = this.obstacleFamily[index] === 1;
+      const textureSeed = this.obstacleTextureSeeds[this.obstacleOwner[index]];
+      const mineralVariation = ((textureSeed >>> 24) / 255 - 0.5) * 0.025;
+      const core = reef ? REEF_CORE : OBSTACLE_CORE;
+      const crestTone = reef ? REEF_CREST : OBSTACLE_CREST;
       const crest = clamp(
-        depthCrest * (0.54 + this.obstacleArrival[index] * 0.46),
+        depthCrest * (0.5 + arrival * 0.34) +
+          texture * (0.08 + depthCrest * 0.13) +
+          fleck * 0.12,
         0,
         1,
       );
-      this.state[offset] = lerp(OBSTACLE_CORE[0], OBSTACLE_CREST[0], crest);
-      this.state[offset + 1] = lerp(OBSTACLE_CORE[1], OBSTACLE_CREST[1], crest);
-      this.state[offset + 2] = lerp(OBSTACLE_CORE[2], OBSTACLE_CREST[2], crest);
-      this.state[offset + 3] = lerp(OBSTACLE_CORE[3], OBSTACLE_CREST[3], crest);
+      const wash = (this.obstacleWashRing[index] / 255) * arrival * 0.38;
+      const accentSpeed = fleck * (reef ? 0.075 : 0.045);
+      const accentWarmth = fleck * ((reef ? 0.09 : 0.04) + mineralVariation);
+      const bodyDensity = lerp(core[0], crestTone[0], crest);
+      const bodySpeed = clamp(
+        lerp(core[1], crestTone[1], crest) + accentSpeed,
+        0,
+        1,
+      );
+      const bodyVelocityX = clamp(
+        lerp(core[2], crestTone[2], crest) + accentWarmth,
+        -1,
+        1,
+      );
+      const bodyVelocityY = clamp(
+        lerp(core[3], crestTone[3], crest) + accentWarmth * 0.45,
+        -1,
+        1,
+      );
+      this.state[offset] = lerp(bodyDensity, OBSTACLE_WASH[0], wash);
+      this.state[offset + 1] = lerp(bodySpeed, OBSTACLE_WASH[1], wash);
+      this.state[offset + 2] = lerp(bodyVelocityX, OBSTACLE_WASH[2], wash);
+      this.state[offset + 3] = lerp(bodyVelocityY, OBSTACLE_WASH[3], wash);
     }
   }
 
@@ -1558,7 +1768,7 @@ export class BoidsKernel implements SimKernel {
           0,
           1,
         );
-        arrival = Math.max(arrival, density * (0.3 + inwardHeading * 0.7));
+        arrival = Math.max(arrival, density * (0.08 + inwardHeading * 0.92));
       }
     }
 
