@@ -5,22 +5,28 @@
 - **Authored:** 2026-08-23
 - **Base branch:** `dev`
 - **Run branch:** `autometta/57-interestingness-sweep-harness`
-- **Revised:** 2026-08-23 (rescoped: the harness this card asked for already exists)
+- **Revised:** 2026-08-23 (rescoped: the harness this card asked for already
+  exists; widened to all 12 dynamic kernels; reseated onto the Claude
+  subscription)
 - **Orchestrator:** Claude Opus 5 <claude-opus-5@local>
-- **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Worker effort:** high
 - **Verifier effort:** medium
 - **Verifier panel:** false
-- **Pairing rationale:** the sweep configs and their metric deltas are
-  well-specified TypeScript, which is Terra's strength and bills the Codex pool
-  rather than the Claude subscription. The verifier is Sonnet 5 rather than the
-  usual Fable: Fable quota is the scarce one this week (~20% remaining against
-  ~45% on the general pool), and the gate here is numeric — metric deltas and a
-  green `npm run verify` — so it does not need the aesthetic tier. The one
-  genuinely aesthetic judgement, whether a promoted preset is *actually* more
-  interesting, is escalated to the operator rather than decided by the
-  verifier. See "Escalation" below.
+- **Pairing rationale:** both seats run on the Claude subscription this window.
+  The operator is conserving OpenAI credit, so the worker seat moves off Codex
+  Terra onto Opus 5 at high effort: twelve sweep configs is well-specified
+  TypeScript work that rewards a strong worker, and it bills the general Claude
+  pool rather than the scarce Fable quota (~20% remaining against ~45%
+  general). Sonnet 5 verifies — the gate here is numeric, metric deltas and a
+  green `npm run verify`, so it does not need the aesthetic tier. The tradeoff
+  accepted: worker and verifier are the same family tonight, so this run loses
+  the cross-family check the repo usually gets. The numeric gate is what
+  contains that — every acceptance criterion is a reproducible number rather
+  than a judgement. The one genuinely aesthetic judgement, whether a promoted
+  preset is *actually* more interesting, is escalated to the operator rather
+  than decided by the verifier. See "Escalation" below.
 
 ## Objective
 
@@ -43,9 +49,12 @@ available here. What exists:
 - `e2e/sweep.spec.ts` — one opt-in `sweepTest` per config, gated on `SWEEP=1`.
 
 Six configs exist: `gray-scott`, `boids`, `lorenz-attractor`, and the three
-`clifford-dejong-*` variants. Their artefacts are under `e2e/artifacts/<slug>/`
-and their write-ups under `docs/sweeps/`. Nineteen kernel directories have no
-sweep config at all. That gap is this stage.
+`clifford-dejong-*` variants, covering four of the 23 kernel directories. Their
+artefacts are under `e2e/artifacts/<slug>/` and their write-ups under
+`docs/sweeps/`. Nineteen directories have no sweep config: twelve dynamic
+kernels and seven static-render ones. This stage covers all twelve dynamic
+kernels, closing sweep coverage for every sim the current metric set can rank.
+The seven static kernels need a different metric set and are out of scope.
 
 ## Inputs (read these in your own context)
 
@@ -64,14 +73,28 @@ sweep config at all. That gap is this stage.
 - `src/sims/belousov-zhabotinsky/kernel.ts`
 - `src/sims/physarum/kernel.ts`
 - `src/sims/swarmalators/kernel.ts`
+- `src/sims/abelian-sandpile/kernel.ts`
+- `src/sims/brians-brain/kernel.ts`
+- `src/sims/cyclic-ca/kernel.ts`
+- `src/sims/game-of-life/kernel.ts`
+- `src/sims/ising-model/kernel.ts`
+- `src/sims/diffusion-limited-aggregation/kernel.ts`
+- `src/sims/kuramoto-oscillators/kernel.ts`
+- `src/sims/particle-life/kernel.ts`
 
 ## Deliverables
 
-1. Four new `SimSweepConfig` entries in `e2e/harness/sims.ts` — `lenia`,
-   `belousov-zhabotinsky`, `physarum`, `swarmalators` — each with its
-   `primaryChannel`, grid, warmup, `fluxGap`, `coverageThreshold`, swept axes,
-   and a `references` list mirroring that sim's shipped presets so a re-run
-   reproduces their scores. Follow the `GRAY_SCOTT` entry as the pattern.
+1. Twelve new `SimSweepConfig` entries in `e2e/harness/sims.ts`, one per
+   uncovered dynamic kernel — `lenia`, `belousov-zhabotinsky`, `physarum`,
+   `swarmalators`, `abelian-sandpile`, `brians-brain`, `cyclic-ca`,
+   `game-of-life`, `ising-model`, `diffusion-limited-aggregation`,
+   `kuramoto-oscillators`, `particle-life`. Each needs its `primaryChannel`,
+   grid, warmup, `fluxGap`, `coverageThreshold`, swept axes, and a `references`
+   list mirroring that sim's shipped presets so a re-run reproduces their
+   scores. Follow the `GRAY_SCOTT` entry as the pattern.
+   Budget the axes accordingly: twelve sims inside one window means a coarser
+   grid per sim than gray-scott's 8x7. Prefer fewer sets per sim over dropping
+   a sim, and record the choice in each write-up.
 2. One `sweepTest` per new config in `e2e/sweep.spec.ts`, matching the existing
    form and staying behind the `SWEEP` env gate.
 3. Sweep artefacts under `e2e/artifacts/<slug>/` for each new sim: the frame
@@ -134,17 +157,12 @@ sweep config at all. That gap is this stage.
   `elementary-cellular-automata`. They converge to a fixed image, so temporal
   flux is meaningless and the composite metric does not rank them meaningfully.
   Scoring them needs a different metric set, which is its own stage.
-- The remaining dynamic kernels not named in Deliverables
-  (`abelian-sandpile`, `brians-brain`, `cyclic-ca`, `game-of-life`,
-  `ising-model`, `diffusion-limited-aggregation`, `kuramoto-oscillators`,
-  `particle-life`). They are the natural next stage; leave them uncovered here
-  rather than exceeding the budget.
 - Changing the composite metric or its weights.
 - Merging to `dev` or `main`; deploys; thumbnails.
 
 ## Budget
 
-- **Worker wall-clock:** 180 minutes
+- **Worker wall-clock:** 300 minutes
 - **Verifier wall-clock:** 60 minutes
 
 ## Escalation
