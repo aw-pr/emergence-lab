@@ -215,3 +215,16 @@ Codex/GPT verifier seat. `8099310` keeps its authorship and is not rewritten.
 The Metadata block above now names the roles the next run uses: the browser
 pass moves to the Claude seat because that is the seat that can run one, and
 Claude Opus 4.7 is superseded by Claude Opus 5.
+
+## Superseded 2026-08-23
+
+Retired without running. Criterion 3 asks for a default pace about 5x slower
+than the version published when the card was authored on 2026-05-27. That
+change landed as `8099310` and was deliberately reversed ten days later by
+`417776b` ("default simulation speed back to 1") and `f44c65d` ("fill the
+screen fast"), then retuned again by `42960a0` (2026-07-06, "larger default
+pile, lighter per-frame topples").
+
+`speedProfileFor` returns `initial: 1` for abelian-sandpile at retirement,
+matching the revert. Running the card could only fail, or invite a worker to
+undo the June and July tuning decisions.

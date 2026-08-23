@@ -177,3 +177,19 @@ Codex/GPT verifier seat. The commits already on `dev` keep that authorship and
 are not rewritten. The Metadata block above now names the roles the next run
 uses: the browser pass moves to the Claude seat because that is the seat that
 can run one, and Claude Opus 4.7 is superseded by Claude Opus 5.
+
+## Superseded 2026-08-23
+
+Retired without completing. The card asks (criterion 4) that all three fractals
+cycle more slowly than the version published when it was authored on
+2026-05-27. Later work reopened that question and answered it the other way:
+`75fdb8c` (2026-07-16) seated the colour-cycle multiplier default at 1.8, and
+`e2e/smoke.spec.ts` now pins that value as expected behaviour.
+
+On the tree at retirement only julia-set is slower than the 2026-05-27
+baseline (-35%); mandelbrot is 44% faster and burning-ship 75% faster. The
+verifier recorded this as an evidenced FAIL rather than a sandbox limitation.
+
+The 2026-08-23 re-brief repeated each criterion verbatim by design, which
+preserved the stale baseline along with the wording. Re-briefing the criterion
+against current intent is a fresh decision, not a re-run of this card.

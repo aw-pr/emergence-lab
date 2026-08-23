@@ -199,3 +199,18 @@ Codex/GPT verifier seat. The commits already on `dev` keep that authorship and
 are not rewritten. The Metadata block above now names the roles the next run
 uses: the browser pass moves to the Claude seat because that is the seat that
 can run one, and Claude Opus 4.7 is superseded by Claude Opus 5.
+
+## Superseded 2026-08-23
+
+Retired without completing. The card's tuning (`38b5e6d`, 2026-05-27) set
+`boidCount` 800, `maxSpeed` 20, `pointSize` 16. The tree at retirement carries
+17777 / 36 / 4.
+
+Density and speed moved further in the direction the card wanted, but
+criterion 3 requires the visible glyph to be materially larger and the default
+point size is now a quarter of what this card set, because 17,777 boids need
+small glyphs to read as a flock. Criterion 2, that the defaults reflect the
+chosen tuning, no longer describes the tree either.
+
+The stage had already gone stalled when this was decided; no worker output was
+discarded.
