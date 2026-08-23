@@ -15,8 +15,11 @@ cross-checking (stage cards under `docs/stages/`, see
 
 The logistic-Mandelbrot bifurcation reveal is landed and validated, including
 free camera navigation and the machine-local prebaked point cloud (see
-"Baking a local point cloud" in `README.md`). No required implementation work
-remains. Gray-Scott stays the priority kernel for future refinement.
+"Baking a local point cloud" in `README.md`). The analytic surface arc
+(stages 52-56) is landed, deployed and mirrored publicly as of 2026-08-23.
+Stage 57, an interestingness sweep harness scoring frames on entropy, spatial
+autocorrelation, temporal flux and coverage, is queued and unstarted.
+Gray-Scott stays the priority kernel for future refinement.
 
 ## Worktrees and branches
 
