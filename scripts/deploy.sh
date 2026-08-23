@@ -11,7 +11,10 @@
 #   --promo          + commit & push promo-flow so its CI deploys. Requires the
 #                    promo-flow tree to be clean *before* the rsync.
 #   --site           + git ff-dev-main — ff main onto dev, push (Netlify deploy).
-#   --mirror         + git publish — push the curated public mirror (last, gated).
+#   --mirror         + git publish — back up the curated head, push it to the
+#                    public remote as a PR source and open the publish PR. The
+#                    public default branch is NOT advanced here: you merge the
+#                    PR on the forge after reading the diff.
 #   --all            --build --promo --site --mirror
 #   -n | --dry-run   print the resolved plan and exit; touch nothing.
 #   -y | --yes       skip the confirmation pause before the mirror push.
@@ -43,7 +46,7 @@ echo "Deploy plan:"
 [ "$do_build"  -eq 1 ] && echo "  build   npm run publish:site  -> artifacts into $PROMO"
 [ "$do_promo"  -eq 1 ] && echo "  promo   commit & push $PROMO   -> its CI deploys"
 [ "$do_site"   -eq 1 ] && echo "  site    git ff-dev-main        -> push origin main (Netlify)"
-[ "$do_mirror" -eq 1 ] && echo "  mirror  git publish            -> public mirror"
+[ "$do_mirror" -eq 1 ] && echo "  mirror  git publish            -> opens the publish PR (you merge it)"
 [ "$any" -eq 0 ] && echo "  (nothing selected — pass --build/--promo/--site/--mirror/--all)"
 echo
 
@@ -102,7 +105,7 @@ fi
 
 if [ "$do_mirror" -eq 1 ]; then
   if [ "$assume_yes" -ne 1 ]; then
-    printf "==> mirror: push curated public mirror via git publish? [y/N] "
+    printf "==> mirror: open the publish PR via git publish? [y/N] "
     read -r reply
     case "$reply" in [yY]|[yY][eE][sS]) ;; *) echo "mirror: skipped"; exit 0 ;; esac
   fi
@@ -110,6 +113,9 @@ if [ "$do_mirror" -eq 1 ]; then
   scripts/check-publish-parity.sh
   echo "==> git publish"
   git publish
+  echo
+  echo "mirror: PR opened. Nothing is public until you read the diff and merge"
+  echo "        it on the forge — this script cannot and must not do that step."
 fi
 
 echo "Done."

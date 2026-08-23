@@ -99,17 +99,23 @@ The `git publish` alias (push the curated public mirror):
    `PUBLISH_GUARD_OK=1` sentinel the pre-push hook requires.
 7. Returns to `dev` on exit.
 
-Do **not** hand-type `git push public main` to publish. Route through
-`git publish` so the backup push and the public push happen together.
+Do **not** hand-type `git push public main` to publish — it is refused, and
+the forge refuses it too.
 
-The publish boundary is PR-by-default and the pre-push hook enforces it:
-the push to `public/main` is rejected unless `PUBLISH_PR_REVIEWED=1` is
-set, the attestation that a `publish → main` PR was opened and its diff
-reviewed (private-tier paths absent). Sequence: `git push public publish`
-(the hook allows the PR source, private-file-scanned), `gh pr create
---base main --head publish`, review the diff, then
-`PUBLISH_PR_REVIEWED=1 git publish` — the fast-forward push completes the
-PR, which GitHub marks merged once the base holds the head commits.
+The publish boundary is PR-by-default. `public/main` advances only by a
+merge performed on GitHub, where the diff is visible first. `git publish`
+does three things and then stops: back up `publish` to `origin`, push
+`publish` to the public remote as a PR source (private-file-scanned), and
+open the `publish → main` PR. **Reviewing and merging that PR is yours.**
+No agent completes it, and there is no environment variable that lets one.
+
+Two gates hold this, deliberately duplicated: the pre-push hook refuses the
+push to the public default branch, and GitHub branch protection on
+`aw-pr/emergence-lab` requires a PR (0 approvals, since GitHub forbids
+self-approval) with `enforce_admins` on, so the owner cannot bypass it
+either. The local hook binds this machine; the protection binds every
+machine.
+
 Repo-level opt-out: `git config publishguard.boundary direct`.
 
 ## What never goes public
