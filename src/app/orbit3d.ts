@@ -3121,7 +3121,7 @@ export class Orbit3DPointCloud {
     paletteReverse = false,
     drawDensity = 1,
     surfaceOpacity = 0.4,
-    edgeGlow = 0.6,
+    edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
