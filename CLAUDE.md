@@ -27,24 +27,36 @@ Gray-Scott stays the priority kernel for future refinement.
 advances from it and `publish` is the mirror boundary. A worktree branched from
 anywhere else inherits a history the rest of the fleet is not working against.
 
-Two long-lived branches are not `dev` and should not be treated as a base:
+One long-lived branch is not `dev` and must not be treated as a base:
 
 - `feat/logistic-mandelbrot-hybrid-surface` (worktree `../emergence-lab-surface`)
   is **an experiment whose fate is undecided.** It rewrites `orbit3d.ts`
-  internals and adds `src/app/orbitSurface.ts`; operator visual review rejected
-  its output on 2026-07-20 (sawtooth silhouette, no sheet-to-cloud dissolve) and
-  it has been parked since. Do not branch from it, import from it, reconcile
-  against it, or treat its approach as precedent. Do not delete it or propose
-  deleting it either — the decision is the operator's and has not been made.
-  Follow-up notes live at
-  `docs/plans/2026-07-20-logistic-mandelbrot-edge-transition-next-steps.md`.
-- `feat/logistic-mandelbrot-gpu-sampler` (worktree `../emergence-lab-gpu`) is the
-  active autometta run for stages 34-36, moving orbit sampling to a WebGL2
-  fragment shader. Branched from `dev`.
+  internals and adds `src/app/orbitSurface.ts`. Operator visual review rejected
+  its output on 2026-07-20 (sawtooth silhouette, no sheet-to-cloud dissolve);
+  stages 40 and 41 reopened it on 2026-08-19 to attack exactly those two
+  defects, and it has been untouched since. It is 23 commits off a 2026-07-27
+  merge base and touches 28 files. Do not branch from it, import from it,
+  reconcile against it, or treat its approach as precedent. Do not delete it or
+  propose deleting it either — the decision is the operator's and has not been
+  made. Notes:
+  `docs/plans/2026-07-20-logistic-mandelbrot-edge-transition-next-steps.md` and
+  `docs/plans/2026-08-19-edge-analysis-findings.md`.
 
-Both touch the same `orbit3d.ts` internals, and a rebase between them has
-already failed once with eight structural conflicts. They are deliberately
-allowed to diverge.
+The surface problem it was cut to solve has since been solved another way. The
+analytic edge-curve arc (stages 52-56, `docs/plans/2026-08-22-analytic-edge-curves.md`)
+landed on `dev` on 2026-08-23 from `feat/logistic-mandelbrot-surface-v2`, whose
+branch and worktree are retired. That makes the hybrid-surface branch superseded
+in practice, which is context for the operator's decision, not the decision
+itself.
+
+Two earlier lines are closed and should not be looked for on disk:
+
+- `feat/logistic-mandelbrot-gpu-sampler` (stages 34-36, WebGL2 fragment-shader
+  orbit sampling) merged to `dev` at `636315c` on 2026-08-16; branch, worktree
+  `../emergence-lab-gpu` and origin ref are gone. Background survives in
+  `docs/plans/2026-08-15-logistic-mandelbrot-gpu-sampler-next-steps.md`.
+- `feat/logistic-mandelbrot-surface-v2` (stages 52-56) merged and was deleted on
+  2026-08-23.
 
 ## Interface contract
 
