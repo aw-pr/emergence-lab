@@ -1,9 +1,18 @@
+import {
+  removeObstacleLayoutSlot,
+  upsertObstacleLayoutSlot,
+  type CustomObstacleLayoutSlot,
+} from "../sims/boids/layoutStore.ts";
+export type { CustomObstacleLayoutSlot } from "../sims/boids/layoutStore.ts";
+
 export type SliderBounds = { min: number; max: number };
 
 const BOUNDS_PREFIX = "el:bounds";
 const VALUES_PREFIX = "el:values";
 const RESOLUTION_PREFIX = "el:resolution";
 const SECTIONS_PREFIX = "el:sections";
+const CUSTOM_OBSTACLES_PREFIX = "el:custom-obstacles";
+const CUSTOM_OBSTACLE_LAYOUTS_PREFIX = "el:custom-obstacle-layouts";
 
 function readStorage(key: string): string | null {
   try {
@@ -13,11 +22,13 @@ function readStorage(key: string): string | null {
   }
 }
 
-function writeStorage(key: string, value: string): void {
+function writeStorage(key: string, value: string): boolean {
   try {
     window.localStorage.setItem(key, value);
+    return true;
   } catch {
     // Ignore storage failures (private mode, disabled storage, quota).
+    return false;
   }
 }
 
@@ -122,6 +133,94 @@ export function saveValues(
 
 export function clearValues(slug: string): void {
   removeStorage(valuesKey(slug));
+}
+
+function customObstaclesKey(slug: string): string {
+  return `${CUSTOM_OBSTACLES_PREFIX}:${slug}`;
+}
+
+export function loadCustomObstacleField(
+  slug: string,
+): string | readonly unknown[] | null {
+  const raw = readStorage(customObstaclesKey(slug));
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    return parsed && typeof parsed === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCustomObstacleField(
+  slug: string,
+  serialised: string,
+): void {
+  writeStorage(customObstaclesKey(slug), serialised);
+}
+
+function customObstacleLayoutsKey(slug: string): string {
+  return `${CUSTOM_OBSTACLE_LAYOUTS_PREFIX}:${slug}`;
+}
+
+export function loadCustomObstacleLayouts(
+  slug: string,
+): CustomObstacleLayoutSlot[] {
+  const raw = readStorage(customObstacleLayoutsKey(slug));
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((candidate) => {
+      if (
+        !candidate ||
+        typeof candidate !== "object" ||
+        !("name" in candidate) ||
+        !("layout" in candidate) ||
+        typeof candidate.name !== "string" ||
+        typeof candidate.layout !== "string"
+      ) {
+        return [];
+      }
+      const name = candidate.name.trim();
+      return name ? [{ name, layout: candidate.layout }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomObstacleLayout(
+  slug: string,
+  name: string,
+  layout: string,
+): boolean {
+  const trimmed = name.trim().slice(0, 64);
+  if (!trimmed || !layout) return false;
+  const slots = upsertObstacleLayoutSlot(
+    loadCustomObstacleLayouts(slug),
+    trimmed,
+    layout,
+  );
+  return writeStorage(customObstacleLayoutsKey(slug), JSON.stringify(slots));
+}
+
+export function deleteCustomObstacleLayout(
+  slug: string,
+  name: string,
+): boolean {
+  const slots = loadCustomObstacleLayouts(slug);
+  const remaining = removeObstacleLayoutSlot(slots, name);
+  if (remaining.length === slots.length) return false;
+  return writeStorage(
+    customObstacleLayoutsKey(slug),
+    JSON.stringify(remaining),
+  );
 }
 
 /**

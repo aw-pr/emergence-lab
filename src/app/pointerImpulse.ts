@@ -1,15 +1,25 @@
 /** The slice of the renderer the pointer-impulse handler needs. */
 export interface PointerImpulseTarget {
-  supportsImpulse(): boolean;
-  applyPointerImpulse(clientX: number, clientY: number, strength?: number): boolean;
+  applyPointerImpulse?(clientX: number, clientY: number, strength?: number): boolean;
+  editsObstacles?(): boolean;
+  beginCustomTrail?(): void;
+  placeCustomTrailPoint?(clientX: number, clientY: number): boolean;
+  endCustomTrail?(clientX: number, clientY: number): boolean;
+  placeCustomRock?(clientX: number, clientY: number): boolean;
+  removeCustomObstacleAt?(clientX: number, clientY: number): boolean;
 }
 
+const OBSTACLE_DRAG_THRESHOLD = 4;
+
 /**
- * Click / drag on a non-fractal sim canvas perturbs the simulation under the
- * pointer via the kernel's optional applyImpulse. Left button only; the primary
- * pointer is captured for the duration of the drag so a poke keeps tracking off
- * the canvas edge. Fractal sims own their own pointer gestures (pan/zoom) and
- * never use this. Returns a detach function.
+ * Click / drag on a non-fractal sim canvas either edits obstacles or perturbs
+ * the simulation through its optional impulse path. Left button only; the
+ * primary pointer is captured for the duration of the drag. Fractal sims own
+ * their own pointer gestures and never use this. Returns a detach function.
+ *
+ * Obstacle gestures: a tap removes the dropped obstacle under the pointer or
+ * drops a boulder; holding and dragging lays a solid breakwater that follows
+ * the pointer, built live from capsule segments sampled along the path.
  */
 export function attachPointerImpulse(
   canvas: HTMLCanvasElement,
@@ -18,14 +28,24 @@ export function attachPointerImpulse(
   const abort = new AbortController();
   const { signal } = abort;
   let activePointerId: number | null = null;
+  let obstacleGesture = false;
+  let trailActive = false;
+  let startClientX = 0;
+  let startClientY = 0;
 
   canvas.addEventListener(
     "pointerdown",
     (ev) => {
       if (ev.button !== 0) return;
       activePointerId = ev.pointerId;
+      obstacleGesture = target.editsObstacles?.() === true;
+      trailActive = false;
+      startClientX = ev.clientX;
+      startClientY = ev.clientY;
       canvas.setPointerCapture(ev.pointerId);
-      target.applyPointerImpulse(ev.clientX, ev.clientY, 1);
+      if (!obstacleGesture) {
+        target.applyPointerImpulse?.(ev.clientX, ev.clientY, 1);
+      }
     },
     { signal },
   );
@@ -34,23 +54,49 @@ export function attachPointerImpulse(
     "pointermove",
     (ev) => {
       if (activePointerId === null || ev.pointerId !== activePointerId) return;
-      target.applyPointerImpulse(ev.clientX, ev.clientY, 1);
+      if (!obstacleGesture) {
+        target.applyPointerImpulse?.(ev.clientX, ev.clientY, 1);
+        return;
+      }
+      if (!trailActive) {
+        const dragDistance = Math.hypot(
+          ev.clientX - startClientX,
+          ev.clientY - startClientY,
+        );
+        if (dragDistance < OBSTACLE_DRAG_THRESHOLD) return;
+        trailActive = true;
+        target.beginCustomTrail?.();
+        target.placeCustomTrailPoint?.(startClientX, startClientY);
+      }
+      target.placeCustomTrailPoint?.(ev.clientX, ev.clientY);
     },
     { signal },
   );
 
-  const end = (ev: PointerEvent): void => {
+  const end = (ev: PointerEvent, commitObstacleGesture: boolean): void => {
     if (activePointerId === null || ev.pointerId !== activePointerId) return;
+    if (obstacleGesture && commitObstacleGesture) {
+      if (trailActive) {
+        (target.endCustomTrail ?? target.placeCustomTrailPoint)?.(
+          ev.clientX,
+          ev.clientY,
+        );
+      } else if (!target.removeCustomObstacleAt?.(ev.clientX, ev.clientY)) {
+        target.placeCustomRock?.(ev.clientX, ev.clientY);
+      }
+    }
     try {
       canvas.releasePointerCapture(ev.pointerId);
     } catch {
       /* ignore */
     }
     activePointerId = null;
+    obstacleGesture = false;
+    trailActive = false;
   };
 
-  canvas.addEventListener("pointerup", end, { signal });
-  canvas.addEventListener("pointercancel", end, { signal });
+  canvas.addEventListener("pointerup", (ev) => end(ev, true), { signal });
+  canvas.addEventListener("pointercancel", (ev) => end(ev, false), { signal });
 
   return () => abort.abort();
 }

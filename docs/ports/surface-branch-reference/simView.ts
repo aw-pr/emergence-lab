@@ -20,46 +20,10 @@ import {
   restorePersistedParams,
   type StepsControlOptions,
 } from "./controls.ts";
-import {
-  deleteCustomObstacleLayout,
-  loadCustomObstacleField,
-  loadCustomObstacleLayouts,
-  loadRenderOptions,
-  loadResolution,
-  saveCustomObstacleLayout,
-  saveCustomObstacleField,
-  type CustomObstacleLayoutSlot,
-} from "./persistence.ts";
+import { loadRenderOptions, loadResolution } from "./persistence.ts";
 
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
 const LIVE_MODEL_SOURCE = "live";
-const dismissedCustomObstacleHints = new Set<string>();
-
-interface BoidsObstacleEditor {
-  placeCustomRock(x: number, y: number): boolean;
-  placeCustomCapsule(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-  ): boolean;
-  customWallSegmentSpacing(): number;
-  removeCustomObstacleAt(x: number, y: number): boolean;
-  clearCustomObstacles(): boolean;
-  getCustomObstacles(): readonly unknown[];
-  restoreCustomObstacles(snapshot: readonly unknown[]): boolean;
-  exportCustomObstacleLayout(): string;
-  importCustomObstacleLayout(serialised: string):
-    | { ok: true; obstacles: readonly unknown[] }
-    | { ok: false; error: string };
-}
-
-interface PointerCellMapper {
-  pointerToCell(
-    clientX: number,
-    clientY: number,
-  ): { x: number; y: number } | null;
-}
 
 /**
  * Kernel params hoisted into the View section, per sim: everything about how
@@ -74,7 +38,6 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "exposure",
     "edgeGlow",
     "tailRefinement",
-    "boundaryDetail",
     "pointDensity",
     "autoRotate",
     "continuousSpin",
@@ -89,7 +52,6 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
   "diffusion-limited-aggregation": ["colourByAge"],
   "game-of-life": ["ageShading"],
   "lorenz-attractor": ["fade", "ribbonWidth", "colourByHeight", "cycleSpeed"],
-  "clifford-dejong": ["exposure", "fade", "colourMode", "cycleSpeed"],
   mandelbrot: ["palettePhase", "cycleSpeed"],
   "julia-set": ["palettePhase", "cycleSpeed"],
   "burning-ship": ["palettePhase", "cycleSpeed"],
@@ -104,12 +66,15 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
 const PARAM_GROUPS: Readonly<
   Record<string, readonly { label: string; keys: readonly string[] }[]>
 > = {
-  // logistic-mandelbrot's "Light beam" and "Sampling" groups come from its
-  // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
-  // this per-sim table — see ControlsPanel's schema-native grouping.
+  "logistic-mandelbrot": [
+    { label: "Light beam", keys: ["realAxisSweep", "sweepSpeed"] },
+    {
+      label: "Sampling",
+      keys: ["warmupIterations", "sampleCount", "plottedIterations"],
+    },
+  ],
   boids: [
-    { label: "Obstacles", keys: ["obstacleLayout", "obstacleAmount"] },
-    { label: "Flock", keys: ["boidCount", "initialFlocks", "maxSpeed"] },
+    { label: "Flock", keys: ["boidCount", "maxSpeed"] },
     { label: "Perception", keys: ["visualRadius", "separationRadius"] },
     { label: "Steering", keys: ["alignment", "cohesion", "separation"] },
   ],
@@ -187,10 +152,7 @@ import {
   isFractalSlug,
   type Orbit3DMarkerClientSnapshot,
 } from "./fractalCanvas.ts";
-import {
-  attachPointerImpulse,
-  type PointerImpulseTarget,
-} from "./pointerImpulse.ts";
+import { attachPointerImpulse } from "./pointerImpulse.ts";
 import {
   getRenderMode,
   shouldUseSmoothCanvasPresentation,
@@ -216,10 +178,6 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
     "\\dot{x} = \\sigma(y-x)",
     "\\dot{y} = x(\\rho-z)-y",
     "\\dot{z} = xy-\\beta z",
-  ],
-  "clifford-dejong": [
-    "x_{n+1} = \\sin(a y_n) + c\\cos(a x_n)",
-    "y_{n+1} = \\sin(b x_n) + d\\cos(b y_n)",
   ],
   "belousov-zhabotinsky": [
     "\\dot{A} = D_a\\nabla^2A + f(1-A) + CA - AB",
@@ -536,87 +494,6 @@ export async function renderSimView(
     qualityProfile,
   });
 
-  const obstacleEditor = slug === "boids"
-    ? kernel as SimKernel & BoidsObstacleEditor
-    : undefined;
-  let initialObstacleMessage = "";
-  if (obstacleEditor) {
-    const persisted = loadCustomObstacleField(slug);
-    if (typeof persisted === "string") {
-      const restoredField = obstacleEditor.importCustomObstacleLayout(persisted);
-      if (!restoredField.ok) {
-        initialObstacleMessage = `Saved field was ignored: ${restoredField.error}`;
-      }
-    } else if (persisted) {
-      if (obstacleEditor.restoreCustomObstacles(persisted)) {
-        saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
-      } else {
-        initialObstacleMessage = "The older saved field could not be restored.";
-      }
-    }
-  }
-
-  let obstacleTools: BoidsObstacleTools | undefined;
-  const persistObstacleField = (): void => {
-    if (!obstacleEditor) return;
-    saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
-  };
-  const finishObstacleEdit = (edited: boolean): boolean => {
-    if (!edited) return false;
-    persistObstacleField();
-    dismissedCustomObstacleHints.add(slug);
-    obstacleTools?.hideHint();
-    return true;
-  };
-  if (obstacleEditor) {
-    const applyObstacleLayout = (serialised: string): LayoutActionResult => {
-      const imported = obstacleEditor.importCustomObstacleLayout(serialised);
-      if (!imported.ok) {
-        return { ok: false, message: imported.error };
-      }
-      persistObstacleField();
-      dismissedCustomObstacleHints.add(slug);
-      obstacleTools?.hideHint();
-      return { ok: true, message: "Layout loaded." };
-    };
-    obstacleTools = buildBoidsObstacleTools({
-      initialMessage: initialObstacleMessage,
-      hintDismissed: () => dismissedCustomObstacleHints.has(slug),
-      onDismissHint: () => {
-        dismissedCustomObstacleHints.add(slug);
-        obstacleTools?.hideHint();
-      },
-      onClear: () => {
-        const hadObstacles = obstacleEditor.getCustomObstacles().length > 0;
-        if (obstacleEditor.clearCustomObstacles()) {
-          persistObstacleField();
-          if (hadObstacles) {
-            dismissedCustomObstacleHints.add(slug);
-            obstacleTools?.hideHint();
-          }
-        }
-      },
-      loadSlots: () => loadCustomObstacleLayouts(slug),
-      onSaveSlot: (name) => {
-        const saved = saveCustomObstacleLayout(
-          slug,
-          name,
-          obstacleEditor.exportCustomObstacleLayout(),
-        );
-        return saved
-          ? { ok: true, message: `Saved “${name.trim().slice(0, 64)}”.` }
-          : { ok: false, message: "Enter a name and check local storage is available." };
-      },
-      onLoadSlot: (serialised) => applyObstacleLayout(serialised),
-      onDeleteSlot: (name) =>
-        deleteCustomObstacleLayout(slug, name)
-          ? { ok: true, message: `Deleted “${name}”.` }
-          : { ok: false, message: "That saved layout could not be deleted." },
-      onImport: (serialised) => applyObstacleLayout(serialised),
-    });
-    layout.stage.insertBefore(obstacleTools.root, layout.legend);
-  }
-
   const controls = new ControlsPanel({
     slug,
     container: layout.sidebar,
@@ -708,90 +585,11 @@ export async function renderSimView(
   let detachFractalViewKeys: (() => void) | undefined;
   let detachOrbit3dInteractions: (() => void) | undefined;
   let detachPointerImpulse: (() => void) | undefined;
-  if (!fractal && (obstacleEditor || renderer.supportsImpulse())) {
-    // Non-fractal sims either edit boids obstacles or poke kernels that expose
-    // applyImpulse. Fractals reserve pointer gestures for pan and zoom.
+  if (!fractal && renderer.supportsImpulse()) {
+    // Non-fractal sims whose kernel exposes applyImpulse: click/drag pokes the
+    // field under the pointer. Fractals reserve pointer gestures for pan/zoom.
     layout.canvas.classList.add("sim-view__canvas--interactive");
-    let pointerTarget: PointerImpulseTarget = renderer;
-    if (obstacleEditor) {
-      // Renderer owns the canvas-to-grid contract, including letterboxing and
-      // the WebGL Y flip. Delegate to it so dropped obstacles land at the
-      // pointer in every layout.
-      const pointerMapper = renderer as unknown as PointerCellMapper;
-      const obstaclePoint = (
-        clientX: number,
-        clientY: number,
-      ): readonly [number, number] | undefined => {
-        const point = pointerMapper.pointerToCell(clientX, clientY);
-        return point ? [point.x, point.y] : undefined;
-      };
-      let lastTrailPoint: readonly [number, number] | undefined;
-      pointerTarget = {
-        editsObstacles: () => true,
-        placeCustomRock: (clientX, clientY) => {
-          const point = obstaclePoint(clientX, clientY);
-          return finishObstacleEdit(
-            point
-              ? obstacleEditor.placeCustomRock(point[0], point[1])
-              : false,
-          );
-        },
-        beginCustomTrail: () => {
-          lastTrailPoint = undefined;
-        },
-        placeCustomTrailPoint: (clientX, clientY) => {
-          const point = obstaclePoint(clientX, clientY);
-          if (!point) return false;
-          if (!lastTrailPoint) {
-            lastTrailPoint = point;
-            return false;
-          }
-          const spacing = obstacleEditor.customWallSegmentSpacing();
-          const travelled = Math.hypot(
-            point[0] - lastTrailPoint[0],
-            point[1] - lastTrailPoint[1],
-          );
-          if (travelled < spacing) return false;
-          const placed = obstacleEditor.placeCustomCapsule(
-            lastTrailPoint[0],
-            lastTrailPoint[1],
-            point[0],
-            point[1],
-          );
-          if (placed) lastTrailPoint = point;
-          return finishObstacleEdit(placed);
-        },
-        endCustomTrail: (clientX, clientY) => {
-          const point = obstaclePoint(clientX, clientY);
-          const from = lastTrailPoint;
-          lastTrailPoint = undefined;
-          if (!point || !from) return false;
-          // Below a third of the sampling length the capsule would collapse
-          // to its rock fallback and leave a bulb on the wall end.
-          const travelled = Math.hypot(point[0] - from[0], point[1] - from[1]);
-          if (travelled < obstacleEditor.customWallSegmentSpacing() / 3) {
-            return false;
-          }
-          return finishObstacleEdit(
-            obstacleEditor.placeCustomCapsule(
-              from[0],
-              from[1],
-              point[0],
-              point[1],
-            ),
-          );
-        },
-        removeCustomObstacleAt: (clientX, clientY) => {
-          const point = obstaclePoint(clientX, clientY);
-          return finishObstacleEdit(
-            point
-              ? obstacleEditor.removeCustomObstacleAt(point[0], point[1])
-              : false,
-          );
-        },
-      };
-    }
-    detachPointerImpulse = attachPointerImpulse(layout.canvas, pointerTarget);
+    detachPointerImpulse = attachPointerImpulse(layout.canvas, renderer);
     // The note lives on the same condition as the handler, so it can never
     // advertise a poke the sim would ignore. It reads between the model's
     // origin and its equations, so insert it rather than append.
@@ -930,231 +728,8 @@ export async function renderSimView(
       detachOrbit3dInteractions?.();
       detachPointerImpulse?.();
       renderer.destroy();
-      controls.dispose();
     },
     toggleImmersive,
-  };
-}
-
-interface BoidsObstacleTools {
-  root: HTMLElement;
-  hideHint(): void;
-}
-
-interface LayoutActionResult {
-  ok: boolean;
-  message: string;
-}
-
-function buildBoidsObstacleTools(options: {
-  initialMessage: string;
-  hintDismissed(): boolean;
-  onDismissHint(): void;
-  onClear(): void;
-  loadSlots(): CustomObstacleLayoutSlot[];
-  onSaveSlot(name: string): LayoutActionResult;
-  onLoadSlot(serialised: string): LayoutActionResult;
-  onDeleteSlot(name: string): LayoutActionResult;
-  onImport(serialised: string): LayoutActionResult;
-}): BoidsObstacleTools {
-  const root = document.createElement("div");
-  root.className = "fractal-hud boids-obstacle-tools";
-  root.setAttribute("aria-label", "Dropped boulder tools");
-
-  const hint = document.createElement("output");
-  hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
-  hint.value = "Click to drop a boulder · Hold and drag to lay a breakwater · Click a dropped obstacle to remove";
-  root.appendChild(hint);
-
-  const controls = document.createElement("div");
-  controls.className = "fractal-hud__controls";
-
-  const layouts = document.createElement("details");
-  layouts.className = "boids-obstacle-layouts";
-  const layoutsToggle = document.createElement("summary");
-  layoutsToggle.className = "fractal-hud__button";
-  layoutsToggle.textContent = "Layouts";
-  layouts.appendChild(layoutsToggle);
-
-  const popup = document.createElement("div");
-  popup.className = "controls__params boids-obstacle-layouts__popup";
-  popup.setAttribute("aria-label", "Saved obstacle layouts");
-
-  const nameRow = document.createElement("label");
-  nameRow.className = "control control--enum";
-  const nameLabel = document.createElement("span");
-  nameLabel.className = "control__label";
-  nameLabel.textContent = "Layout name";
-  const nameInput = document.createElement("input");
-  nameInput.className = "control__value";
-  nameInput.type = "text";
-  nameInput.maxLength = 64;
-  nameInput.placeholder = "My layout";
-  nameRow.append(nameLabel, nameInput);
-  popup.appendChild(nameRow);
-
-  const makeButton = (label: string): HTMLButtonElement => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "fractal-hud__button";
-    button.textContent = label;
-    return button;
-  };
-
-  const save = makeButton("Save current");
-  popup.appendChild(save);
-
-  const slotRow = document.createElement("label");
-  slotRow.className = "control control--enum";
-  const slotLabel = document.createElement("span");
-  slotLabel.className = "control__label";
-  slotLabel.textContent = "Saved layouts";
-  const slotSelect = document.createElement("select");
-  slotSelect.className = "control__value";
-  slotRow.append(slotLabel, slotSelect);
-  popup.appendChild(slotRow);
-
-  const slotActions = document.createElement("div");
-  slotActions.className = "fractal-hud__controls";
-  const load = makeButton("Load");
-  const remove = makeButton("Delete");
-  const exportLayout = makeButton("Export");
-  slotActions.append(load, remove, exportLayout);
-  popup.appendChild(slotActions);
-
-  const transferRow = document.createElement("label");
-  transferRow.className = "control control--enum";
-  const transferLabel = document.createElement("span");
-  transferLabel.className = "control__label";
-  transferLabel.textContent = "Layout JSON";
-  const transfer = document.createElement("textarea");
-  transfer.className = "control__value";
-  transfer.rows = 3;
-  transfer.spellcheck = false;
-  transfer.placeholder = "Paste an exported layout";
-  transferRow.append(transferLabel, transfer);
-  popup.appendChild(transferRow);
-
-  const importLayout = makeButton("Import and load");
-  popup.appendChild(importLayout);
-
-  const status = document.createElement("output");
-  status.className = "control__value boids-obstacle-layouts__status";
-  status.setAttribute("aria-live", "polite");
-  popup.appendChild(status);
-  layouts.appendChild(popup);
-  controls.appendChild(layouts);
-
-  let slots: CustomObstacleLayoutSlot[] = [];
-  const setStatus = (result: LayoutActionResult): void => {
-    status.value = result.message;
-    status.dataset.state = result.ok ? "ok" : "error";
-  };
-  const refreshSlots = (selectedName?: string): void => {
-    slots = options.loadSlots();
-    slotSelect.replaceChildren();
-    if (slots.length === 0) {
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = "No saved layouts";
-      slotSelect.appendChild(empty);
-      slotSelect.disabled = true;
-      return;
-    }
-    slotSelect.disabled = false;
-    for (const slot of slots) {
-      const option = document.createElement("option");
-      option.value = slot.name;
-      option.textContent = slot.name;
-      slotSelect.appendChild(option);
-    }
-    if (selectedName && slots.some((slot) => slot.name === selectedName)) {
-      slotSelect.value = selectedName;
-    }
-  };
-  const selectedSlot = (): CustomObstacleLayoutSlot | undefined =>
-    slots.find((slot) => slot.name === slotSelect.value);
-
-  save.addEventListener("click", () => {
-    const result = options.onSaveSlot(nameInput.value);
-    setStatus(result);
-    if (result.ok) refreshSlots(nameInput.value.trim().slice(0, 64));
-  });
-  load.addEventListener("click", () => {
-    const slot = selectedSlot();
-    setStatus(
-      slot
-        ? options.onLoadSlot(slot.layout)
-        : { ok: false, message: "Choose a saved layout first." },
-    );
-  });
-  remove.addEventListener("click", () => {
-    const slot = selectedSlot();
-    if (!slot) {
-      setStatus({ ok: false, message: "Choose a saved layout first." });
-      return;
-    }
-    const result = options.onDeleteSlot(slot.name);
-    setStatus(result);
-    if (result.ok) refreshSlots();
-  });
-  exportLayout.addEventListener("click", () => {
-    const slot = selectedSlot();
-    if (!slot) {
-      setStatus({ ok: false, message: "Choose a saved layout first." });
-      return;
-    }
-    transfer.value = slot.layout;
-    transfer.select();
-    setStatus({ ok: true, message: "Export ready to copy." });
-    if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(slot.layout).then(
-        () => setStatus({ ok: true, message: "Export copied." }),
-        () => {},
-      );
-    }
-  });
-  importLayout.addEventListener("click", () => {
-    const serialised = transfer.value.trim();
-    setStatus(
-      serialised
-        ? options.onImport(serialised)
-        : { ok: false, message: "Paste a layout string first." },
-    );
-  });
-  refreshSlots();
-  if (options.initialMessage) {
-    setStatus({ ok: false, message: options.initialMessage });
-    layouts.open = true;
-  }
-
-  const dismiss = document.createElement("button");
-  dismiss.type = "button";
-  dismiss.className = "fractal-hud__button";
-  dismiss.textContent = "×";
-  dismiss.setAttribute("aria-label", "Dismiss obstacle drawing hint");
-  dismiss.addEventListener("click", options.onDismissHint);
-  controls.appendChild(dismiss);
-
-  const clear = document.createElement("button");
-  clear.type = "button";
-  clear.className = "fractal-hud__button boids-obstacle-tools__clear";
-  clear.textContent = "Clear dropped boulders";
-  clear.addEventListener("click", options.onClear);
-  controls.appendChild(clear);
-  root.appendChild(controls);
-
-  const hideHint = (): void => {
-    hint.hidden = true;
-    dismiss.hidden = true;
-  };
-  if (options.hintDismissed()) {
-    hideHint();
-  }
-
-  return {
-    root,
-    hideHint,
   };
 }
 
@@ -1567,16 +1142,8 @@ function speedProfileFor(slug: string): SpeedProfile {
       // substeps per frame); this slider multiplies on top of it, and starting
       // it anywhere but 1 makes "reset to defaults" look like a speed change.
       return { initial: 1, control: careful };
-    case "clifford-dejong":
-      // The felt speed is pointsPerFrame; the slider multiplies whole step()
-      // calls (fade sweeps included), so it stays at 1x like the attractors.
-      return { initial: 1, control: careful };
     case "boids":
-      // 1x, not faster: the renderer samples positions once per rendered
-      // frame, so at Nx the trail accumulator sees every Nth position and the
-      // streaks bead into dotted chains. At 1x they draw as the continuous
-      // comet-tails the native viewer shows.
-      return { initial: 1, control: swarm };
+      return { initial: 5, control: swarm };
     case "particle-life":
       return { initial: 1, control: swarm };
     case "mandelbrot":
@@ -1634,18 +1201,13 @@ function defaultDisplayOptionsFor(slug: string): DisplayOptions {
     return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
   }
   if (slug === "particle-life") {
-    // Matched to the native viewer's starfield look: crisp grains on black,
-    // no trail smear, just enough bloom to let dense clusters glow.
+    // Bloom carries the species colour a little past each sphere's rim, so
+    // clusters read as one glowing membrane while the bodies stay distinct.
     // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0, bloom: 0.15 };
+    return { dotSize: 2, trailFade: 0.66, bloom: 0.35 };
   }
   if (slug === "lorenz-attractor") {
     return { dotSize: 1, trailFade: 0, bloom: 0.4 };
-  }
-  if (slug === "clifford-dejong") {
-    // Fading is kernel-side (its fade param); renderer trails would smear the
-    // histogram. A touch of bloom lifts the saturated filament cores.
-    return { dotSize: 1, trailFade: 0, bloom: 0.35 };
   }
   switch (slug) {
     // Modest glow on the bright-trace and fractal sims; off elsewhere.

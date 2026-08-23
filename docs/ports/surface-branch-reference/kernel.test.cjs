@@ -7,9 +7,7 @@ const {
   selfTest,
 } = require("../../../.test-build/sims/logistic-mandelbrot/kernel.js");
 const model = require("../../../.test-build/sims/logistic-mandelbrot/model.js");
-const surface = require("../../app/orbitSurface.ts");
-const curves = require("../../app/orbitSurfaceCurves.ts");
-const components = require("../../app/orbitSurfaceComponents.ts");
+const surface = require("../../../.test-build/app/orbitSurface.js");
 
 // Logistic conjugacy: x <- r*x*(1 - x) maps to z <- z^2 + c under
 // z = r/2 - r*x with c = (r/2)*(1 - r/2); inverting, r = 1 + sqrt(1 - 4c).
@@ -197,424 +195,7 @@ function assertAnalyticContour({ sampler, distanceToBoundary, expectedPeriods })
     new Set(Array.from(first.periods).filter((period) => period > 0)),
     new Set(expectedPeriods),
   );
-  return first;
 }
-
-test("cloud-band classification shares the sheet dissolve coverage", () => {
-  assert.equal(surface.orbitSurfaceDissolveCoverage(0.5, 4), 0);
-  assert.equal(surface.orbitSurfaceDissolveCoverage(2.5, 4), 0.5);
-  assert.equal(surface.orbitSurfaceDissolveCoverage(4.5, 4), 1);
-  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.49, 4), true);
-  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, false, 4.5, 4), false);
-  assert.equal(surface.isOrbitSurfaceCloudBandSample(1, false, 1, 4), false);
-  assert.equal(surface.isOrbitSurfaceCloudBandSample(0, true, 1, 4), false);
-});
-
-test("hybrid cloud refinement uses the cloud path's deterministic 3 by 3 lattice", () => {
-  const offsets = surface.orbitSurfaceCloudRefinementOffsets(3);
-  assert.equal(offsets.length, 8);
-  assert.deepEqual(offsets, surface.orbitSurfaceCloudRefinementOffsets(3));
-  assert.ok(offsets.every(({ x, y }) =>
-    Math.abs(x) <= 1 / 3 + 1e-12 && Math.abs(y) <= 1 / 3 + 1e-12));
-  assert.ok(offsets.every(({ x, y }) => x !== 0 || y !== 0));
-});
-
-test("exact component classification reaches periods the sample window cannot", () => {
-  const classify = (re, im) =>
-    components.classifyOrbitSurfaceComponent(re, im);
-  const sampled = (re, im) => {
-    const out = new Float32Array(8);
-    return model.sampleAttractorCell(re, im, 1500, 8, out, 0, { interior: 1 });
-  };
-
-  // An eight-sample window needs a lag pair to see a repeat, so period 8 is
-  // outside its reach; the exact classifier answers where it cannot.
-  assert.equal(sampled(-1.3815474, 0), 0);
-  assert.equal(classify(-1.3815474, 0).period, 8);
-
-  assert.equal(classify(-0.5, 0).period, 1);
-  assert.equal(classify(-1, 0).period, 2);
-  assert.equal(classify(-1.7548777, 0).period, 3);
-  assert.equal(classify(-1.3107026, 0).period, 4);
-  assert.equal(classify(-0.5043, 0.5629).period, 5);
-
-  // Chaotic and escaping parameters stay cloud, which is what keeps sheet off
-  // chaotic parameter space.
-  assert.equal(classify(-1.8, 0).period, 0);
-  assert.equal(classify(0.6, 0).period, 0);
-  assert.equal(classify(0.6, 0).escaped, true);
-  assert.equal(classify(-1.8, 0).escaped, false);
-
-  // Above period 8 the module declines rather than guessing.
-  assert.equal(classify(-1.3969, 0).period, 0);
-});
-
-test("component classification is bounded by the accepted multiplier margin", () => {
-  const centre = components.classifyOrbitSurfaceComponent(-1, 0);
-  assert.equal(centre.period, 2);
-  assert.ok(centre.multiplier < 1e-9);
-  assert.ok(Math.abs(centre.confidence - 1) < 1e-9);
-  assert.ok(centre.residual <= 1e-12);
-
-  // c = -0.749 sits just inside the cardioid, where the multiplier is close to
-  // one and the classification is deliberately withheld.
-  const nearCusp = components.classifyOrbitSurfaceComponent(-0.749, 0);
-  assert.equal(nearCusp.period, 0);
-  const permissive = components.classifyOrbitSurfaceComponent(-0.749, 0, {
-    multiplierMargin: 0,
-  });
-  assert.equal(permissive.period, 1);
-  assert.ok(permissive.multiplier > 1 - components.ORBIT_SURFACE_COMPONENT_MULTIPLIER_MARGIN);
-  assert.ok(permissive.multiplier < 1);
-
-  // Repeated calls are byte-for-byte identical.
-  assert.deepEqual(
-    components.classifyOrbitSurfaceComponent(-1.3815474, 0),
-    components.classifyOrbitSurfaceComponent(-1.3815474, 0),
-  );
-});
-
-test("classified cycles fill the sample window with an exact repeating orbit", () => {
-  const classification = components.classifyOrbitSurfaceComponent(-1.3815474, 0);
-  const window = new Float32Array(8);
-  assert.equal(
-    components.writeOrbitSurfaceCycleSamples(classification, -1.3815474, 0, window, 0, 8),
-    true,
-  );
-  // The window holds one full cycle and no lag pair, so the empirical estimator
-  // still reports nothing; the classified label is what carries period 8.
-  assert.equal(model.estimatePeriod(window, 0, 8), 0);
-  assert.equal(new Set(window).size, 8);
-  assert.equal(surface.orbitSurfaceSamplePeriod({
-    samples: window,
-    period: classification.period,
-    interior: classification.multiplier,
-    boundary: 0,
-    escaped: false,
-  }, 8), 8);
-
-  // A period wider than the window is refused rather than truncated.
-  const short = new Float32Array(4);
-  assert.equal(
-    components.writeOrbitSurfaceCycleSamples(classification, -1.3815474, 0, short, 0, 4),
-    false,
-  );
-
-  const periodTwo = components.classifyOrbitSurfaceComponent(-1, 0);
-  const pair = new Float32Array(8);
-  components.writeOrbitSurfaceCycleSamples(periodTwo, -1, 0, pair, 0, 8);
-  for (let index = 0; index + 2 < 8; index += 1) {
-    assert.equal(pair[index], pair[index + 2]);
-  }
-});
-
-test("component catalogue groups classified cells into per-component seeds", () => {
-  // Two period-2 regions and one period-4 region on a four by two grid.
-  const periods = Int16Array.from([2, 2, 0, 4, 2, 0, 0, 4]);
-  const seedAt = (cell) => ({
-    period: periods[cell],
-    c: { re: cell, im: 0 },
-    cycle: { re: -cell, im: 0 },
-    multiplier: cell === 4 ? 0.1 : 0.9,
-  });
-  const regions = components.buildOrbitSurfaceComponentCatalogue(periods, 4, 2, seedAt);
-
-  assert.deepEqual(
-    regions.map((region) => [region.period, region.cellCount, region.firstCell]),
-    [[2, 3, 0], [4, 2, 3]],
-  );
-  // The representative is the best-conditioned interior point in the region.
-  assert.equal(regions[0].seed.c.re, 4);
-  assert.equal(regions[0].seed.multiplier, 0.1);
-
-  // A component seed carries exactly the fields the boundary corrector takes.
-  const seed = regions[0].seed;
-  assert.equal(typeof seed.period, "number");
-  assert.equal(typeof seed.c.re, "number");
-  assert.equal(typeof seed.cycle.im, "number");
-});
-
-test("analytic primary boundaries recover the known cardioid and period-2 extrema", () => {
-  const periodOne = curves.tracePrimaryOrbitSurfaceBoundary(1, 1e-4);
-  const periodTwo = curves.tracePrimaryOrbitSurfaceBoundary(2, 1e-4);
-  const nearest = (curve, re, im) => Math.min(...curve.points.map((point) =>
-    Math.hypot(point.c.re - re, point.c.im - im)));
-
-  assert.ok(nearest(periodOne, 0.25, 0) < 1e-12);
-  assert.ok(nearest(periodOne, -0.75, 0) < 1e-12);
-  assert.ok(nearest(periodTwo, -0.75, 0) < 1e-12);
-  assert.ok(nearest(periodTwo, -1.25, 0) < 1e-12);
-  assert.ok(periodOne.maxChordError <= 1e-4);
-  assert.ok(periodTwo.maxChordError <= 1e-4);
-  assert.equal(periodOne.closed, true);
-  assert.equal(periodTwo.closed, true);
-});
-
-test("cycle-multiplier corrector recovers a known period-1 boundary point", () => {
-  const corrected = curves.correctOrbitSurfaceBoundaryPoint(
-    1,
-    Math.PI / 2,
-    { re: 0.1, im: 0.45 },
-    { re: 0.2, im: 0.45 },
-  );
-  assert.ok(Math.abs(corrected.cycle.re) < 1e-11);
-  assert.ok(Math.abs(corrected.cycle.im - 0.5) < 1e-11);
-  assert.ok(Math.abs(corrected.c.re - 0.25) < 1e-11);
-  assert.ok(Math.abs(corrected.c.im - 0.5) < 1e-11);
-  assert.ok(corrected.residual <= 1e-12);
-});
-
-test("cycle-multiplier corrector recovers the real period-3 component root", () => {
-  const corrected = curves.correctOrbitSurfaceBoundaryPoint(
-    3,
-    0,
-    { re: -1.74698, im: 0 },
-    { re: -1.75, im: 0 },
-    1e-11,
-    40,
-  );
-  assert.ok(Math.abs(corrected.c.re + 1.75) < 1e-11);
-  assert.ok(Math.abs(corrected.c.im) < 1e-11);
-  assert.ok(Math.abs(corrected.cycle.re + 1.7469796037174672) < 1e-11);
-  assert.ok(Math.abs(corrected.cycle.im) < 1e-11);
-  assert.ok(corrected.residual <= 1e-11);
-});
-
-test("predictor-corrector tracing is deterministic and adapts to curvature", () => {
-  const seed = {
-    angle: 0,
-    c: { re: 0.25, im: 0 },
-    cycle: { re: 0.5, im: 0 },
-  };
-  const loose = curves.traceOrbitSurfaceBoundary(1, seed, {
-    maxChordError: 2e-3,
-  });
-  const tight = curves.traceOrbitSurfaceBoundary(1, seed, {
-    maxChordError: 2e-4,
-  });
-  const repeated = curves.traceOrbitSurfaceBoundary(1, seed, {
-    maxChordError: 2e-4,
-  });
-
-  assert.ok(loose.points.length > 8);
-  assert.ok(tight.points.length > loose.points.length);
-  assert.ok(loose.maxChordError <= 2e-3);
-  assert.ok(tight.maxChordError <= 2e-4);
-  assert.equal(tight.closed, true);
-  assert.deepEqual(tight, repeated);
-  assert.ok(tight.points.every((point) => point.residual <= 1e-12));
-});
-
-test("component catalogue tracing reports covered and fallback components", () => {
-  const regions = [
-    {
-      period: 1,
-      cellCount: 8,
-      firstCell: 3,
-      seed: {
-        period: 1,
-        c: { re: 0, im: 0 },
-        cycle: { re: 0, im: 0 },
-        multiplier: 0,
-        multiplierAngle: 0,
-      },
-    },
-    {
-      period: 4,
-      cellCount: 1,
-      firstCell: 9,
-      seed: {
-        period: 4,
-        c: { re: 20, im: 20 },
-        cycle: { re: 20, im: 20 },
-        multiplier: 0.5,
-        multiplierAngle: 0,
-      },
-    },
-  ];
-  const result = curves.traceOrbitSurfaceComponentCatalogue(regions, 1e-4);
-  assert.deepEqual(
-    result.traced.map(({ componentId, period }) => [componentId, period]),
-    [["period-1-cell-3", 1]],
-  );
-  assert.deepEqual(
-    result.fallback.map(({ componentId, period }) => [componentId, period]),
-    [["period-4-cell-9", 4]],
-  );
-  assert.deepEqual(
-    curves.traceOrbitSurfaceComponentCatalogue(regions, 1e-4),
-    result,
-  );
-});
-
-test("analytic curve geometry supplies membership, distance, and exact crossings", () => {
-  const points = Array.from({ length: 65 }, (_value, index) => {
-    const angle = index / 64 * Math.PI * 2;
-    return { x: 4 + Math.cos(angle) * 2, y: 4 + Math.sin(angle) * 2 };
-  });
-  const curve = { componentId: "circle", period: 2, points };
-  assert.equal(surface.orbitSurfaceCurveContains(curve, 4, 4), true);
-  assert.equal(surface.orbitSurfaceCurveContains(curve, 0, 0), false);
-  const proximity = surface.nearestOrbitSurfaceBoundary([curve], 4, 4);
-  assert.ok(Math.abs(proximity.distance - 2 * Math.cos(Math.PI / 64)) < 1e-12);
-  assert.equal(proximity.inside, true);
-  const crossing = surface.locateOrbitSurfaceCurveTransition(
-    { x: 4, y: 4 },
-    { x: 7, y: 4 },
-    2,
-    [curve],
-  );
-  assert.equal(crossing.componentId, "circle");
-  assert.ok(Math.abs(crossing.x - 6) < 1e-12);
-  assert.ok(Math.abs(crossing.y - 4) < 1e-12);
-  assert.equal(surface.orbitSurfaceCurveIntersectsRect([curve], 5, 3, 7, 5), true);
-  assert.equal(surface.orbitSurfaceCurveIntersectsRect([curve], 0, 0, 1, 1), false);
-});
-
-test("curve-trimmed mesh vertices land on the curve and dissolve at true zero distance", () => {
-  const width = 9;
-  const height = 9;
-  const points = Array.from({ length: 129 }, (_value, index) => {
-    const angle = index / 128 * Math.PI * 2;
-    return { x: 4 + Math.cos(angle) * 2.5, y: 4 + Math.sin(angle) * 2.5 };
-  });
-  const boundaryCurves = [{ componentId: "period-1-circle", period: 1, points }];
-  const sampler = (x, y) => {
-    const distance = Math.hypot(x - 4, y - 4);
-    const inside = distance <= 2.5;
-    return {
-      samples: new Float32Array([0.1 + x * 0.002]),
-      period: inside ? 1 : 0,
-      interior: 0.4,
-      boundary: 0.2,
-      dissolve: inside
-        ? surface.orbitSurfaceDissolveCoverage(2.5 - distance, 8)
-        : 0,
-      escaped: false,
-    };
-  };
-  const preparedSamples = new Map();
-  const preparingSampler = (x, y) => {
-    const sample = sampler(x, y);
-    preparedSamples.set(`${x},${y}`, sample);
-    return sample;
-  };
-  const preparedSampler = (x, y) => {
-    const sample = preparedSamples.get(`${x},${y}`);
-    if (!sample) throw new Error(`sample was not prepared at ${x},${y}`);
-    return sample;
-  };
-  const cells = analyticSurfaceCells(width, height, 1, sampler);
-  const refinedCells = [];
-  for (let y = 0; y + 1 < height; y += 1) {
-    for (let x = 0; x + 1 < width; x += 1) {
-      if (!surface.orbitSurfaceCurveIntersectsRect(
-        boundaryCurves,
-        x,
-        y,
-        x + 1,
-        y + 1,
-      )) {
-        continue;
-      }
-      const plan = surface.planOrbitSurfaceCellRefinement(
-        x,
-        y,
-        preparingSampler,
-        1,
-        (gridX, gridY) => ({ x: gridX * 8, y: gridY * 8 }),
-        0.25,
-        5,
-        4096 - refinedCells.length,
-        boundaryCurves,
-      );
-      refinedCells.push(...plan.cells);
-    }
-  }
-  const mesh = surface.buildOrbitSurface(
-    cells,
-    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
-    { sampler: preparedSampler, refinedCells, boundaryCurves },
-  );
-  let trimmedVertices = 0;
-  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
-    const x = mesh.positions[vertex * 3];
-    const y = mesh.positions[vertex * 3 + 1];
-    const nearest = surface.nearestOrbitSurfaceBoundary(boundaryCurves, x, y, 1);
-    if (!nearest || nearest.distance > 1e-5) continue;
-    assert.equal(mesh.dissolves[vertex], 0);
-    trimmedVertices += 1;
-  }
-  assert.ok(trimmedVertices > 16);
-  assertMeshSound(mesh);
-});
-
-test("an under-covering traced curve never bites the sampled silhouette", () => {
-  // A sparse or partial trace can close an arc with one long chord. The
-  // sampled orbit is the membership authority, so the built mesh must still
-  // span the full sampled disc rather than being cut back to the chord.
-  const width = 33;
-  const height = 33;
-  const centre = 16;
-  const radius = 10;
-  const sampler = (x, y) => {
-    const inside = Math.hypot(x - centre, y - centre) <= radius;
-    return {
-      samples: new Float32Array([inside ? 0.1 + x * 0.002 : 0]),
-      period: inside ? 1 : 0,
-      interior: 0.4,
-      boundary: 0.2,
-      dissolve: inside ? 1 : 0,
-      escaped: false,
-    };
-  };
-  // A circle whose upper-left quadrant is replaced by a straight chord, so
-  // the polygon under-covers the sampled disc in exactly that quadrant.
-  const points = [];
-  for (let index = 0; index <= 96; index += 1) {
-    const angle = (Math.PI / 2) + (index / 96) * ((Math.PI * 2) * 0.75);
-    points.push({
-      x: centre + Math.cos(angle) * radius,
-      y: centre + Math.sin(angle) * radius,
-    });
-  }
-  points.push(points[0]);
-  const boundaryCurves = [{ componentId: "under-cover", period: 1, points }];
-  const cells = analyticSurfaceCells(width, height, 1, sampler);
-  const cache = new Map();
-  const totalSampler = (x, y) => {
-    const key = `${x},${y}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
-    const sample = sampler(x, y);
-    cache.set(key, sample);
-    return sample;
-  };
-  const mesh = surface.buildOrbitSurface(
-    cells,
-    surface.ORBIT_SURFACE_MAX_HEIGHT_JUMP,
-    { sampler: totalSampler, boundaryCurves },
-  );
-  assert.ok(mesh.indices.length > 0);
-  // Max radial extent of mesh vertices in the missing quadrant: the chord
-  // sits at radius * cos(45 deg) = 7.07, the sampled disc reaches 10.
-  let quadrantExtent = 0;
-  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
-    const x = mesh.positions[vertex * 3];
-    const y = mesh.positions[vertex * 3 + 1];
-    if (x <= centre && y <= centre) {
-      quadrantExtent = Math.max(
-        quadrantExtent,
-        Math.hypot(x - centre, y - centre),
-      );
-    }
-  }
-  assert.ok(
-    quadrantExtent >= radius - 1.5,
-    `sampled silhouette was bitten back to ${quadrantExtent} cells`,
-  );
-  assertMeshSound(mesh);
-});
 
 test("metadata matches the renderer contract", () => {
   const kernel = new LogisticMandelbrotKernel();
@@ -639,7 +220,6 @@ test("metadata matches the renderer contract", () => {
       "exposure",
       "edgeGlow",
       "tailRefinement",
-      "boundaryDetail",
       "pointDensity",
       "autoRotate",
       "continuousSpin",
@@ -702,11 +282,6 @@ test("metadata matches the renderer contract", () => {
   );
   assert.equal(continuousSpin?.type, "boolean");
   assert.equal(continuousSpin?.default, true);
-
-  const boundaryDetail = kernel.paramSchema.find((d) => d.key === "boundaryDetail");
-  assert.equal(boundaryDetail?.default, 1);
-  assert.equal(boundaryDetail?.min, 0);
-  assert.equal(boundaryDetail?.max, 1);
 
   const warmup = kernel.paramSchema.find((d) => d.key === "warmupIterations");
   assert.equal(warmup?.default, 1500);
@@ -845,7 +420,7 @@ test("diagnostics-off hybrid geometry matches the regularised byte snapshot", ()
   assert.equal(mesh.indices.length / 3, 249);
   assert.equal(
     digest.digest("hex"),
-    "63c1b8bfbd88c339bfb5477745a6bfa8f1bddb885206bdede56fd781221139f1",
+    "d835238eecadbd53ca4769074a65884bf42db07e07346a15e4ec4c41f2e381a0",
   );
 });
 
@@ -1002,25 +577,12 @@ test("surface contour follows an oblique period-1 to period-2 split", () => {
       escaped: false,
     };
   };
-  const mesh = assertAnalyticContour({
+  assertAnalyticContour({
     sampler,
     distanceToBoundary: (x, y) =>
       Math.abs(signedDistance(x, y)) / Math.hypot(1, 0.37),
     expectedPeriods: [1, 2],
   });
-  const transitionVertices = [];
-  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
-    const x = mesh.positions[vertex * 3];
-    const y = mesh.positions[vertex * 3 + 1];
-    if (Number.isInteger(x) && Number.isInteger(y)) continue;
-    transitionVertices.push(vertex);
-  }
-  assert.ok(transitionVertices.length > 0);
-  const incidence = new Uint16Array(mesh.positions.length / 3);
-  for (const vertex of mesh.indices) incidence[vertex] += 1;
-  assert.ok(transitionVertices
-    .filter((vertex) => incidence[vertex] > 0)
-    .every((vertex) => mesh.edgeFades[vertex] === 1));
 });
 
 test("surface contour follows an oblique period-1 to escaped split", () => {
