@@ -144,6 +144,10 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.374 → 0.411):
+      // this preset was a byte-for-byte duplicate of "conway" and scored
+      // identically. Raising the seed density is what the label already
+      // claimed, and it was the sweep's top-scoring B3/S23 set.
       id: "dense-ash",
       label: "Dense ash",
       params: {
@@ -151,7 +155,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         birthMax: 3,
         surviveMin: 2,
         surviveMax: 3,
-        seedDensity: 0.28,
+        seedDensity: 0.4,
       },
     },
   ],
@@ -495,14 +499,21 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.397 → 0.542):
+      // low stickiness lets walkers work their way into the fjords instead of
+      // freezing on the first tip they touch, which is what actually produces
+      // a dense cluster. Every metric improves, not just fill — coverage
+      // 0.397 → 0.430, entropy 0.351 → 0.610, autocorrelation 0.519 → 0.660.
+      // walkersPerStep moves 80 → 64 because the sweep held it fixed there; it
+      // sets growth rate, not the morphology of the finished cluster.
       id: "dense-coral",
       label: "Dense coral",
       params: {
-        walkersPerStep: 80,
+        walkersPerStep: 64,
         maxWalkSteps: 400,
-        spawnRadius: 0.03,
-        stickiness: 0.4,
-        seedCount: 3,
+        spawnRadius: 0.06,
+        stickiness: 0.15,
+        seedCount: 4,
       },
     },
     {
@@ -744,9 +755,13 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { states: 14, threshold: 1, neighbourhood: "moore" },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.250 → 0.719):
+      // at threshold 3 the medium froze into static noise within ~150 steps
+      // (temporal flux 0.0000, autocorrelation 0.04). Threshold 2 keeps the
+      // same eight states rotating — flux 0.1036, autocorrelation 0.82.
       id: "turbulence",
       label: "Turbulence",
-      params: { states: 8, threshold: 3, neighbourhood: "moore" },
+      params: { states: 8, threshold: 2, neighbourhood: "moore" },
     },
     {
       id: "crystal-lattice",

@@ -191,3 +191,53 @@ sweepTest("sweep dejong coefficients", async ({ page }) => {
 sweepTest("sweep svensson coefficients", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["clifford-dejong-svensson"]);
 });
+
+// Stage 57: the twelve remaining dynamic kernels. Same shape as above — one
+// test per config, all behind the SWEEP gate.
+sweepTest("sweep lenia growth plane", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["lenia"]);
+});
+
+sweepTest("sweep belousov-zhabotinsky feed/kill", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["belousov-zhabotinsky"]);
+});
+
+sweepTest("sweep physarum sensing geometry", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["physarum"]);
+});
+
+sweepTest("sweep swarmalators J/K plane", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["swarmalators"]);
+});
+
+sweepTest("sweep abelian sandpile", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["abelian-sandpile"]);
+});
+
+sweepTest("sweep brians brain", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["brians-brain"]);
+});
+
+sweepTest("sweep cyclic ca", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["cyclic-ca"]);
+});
+
+sweepTest("sweep game of life rules", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["game-of-life"]);
+});
+
+sweepTest("sweep ising temperature/coupling", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["ising-model"]);
+});
+
+sweepTest("sweep diffusion-limited aggregation", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["diffusion-limited-aggregation"]);
+});
+
+sweepTest("sweep kuramoto coupling", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["kuramoto-oscillators"]);
+});
+
+sweepTest("sweep particle life", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["particle-life"]);
+});

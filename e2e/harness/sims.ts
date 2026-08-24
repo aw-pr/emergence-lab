@@ -11,7 +11,9 @@ export type Params = Record<string, number | boolean | string>;
 
 export interface SweepAxis {
   key: string;
-  values: number[];
+  /** Enum-valued params (neighbourhood, couplingMode, initialPattern) are swept
+   * as strings, so an axis is not restricted to numbers. */
+  values: (number | string | boolean)[];
 }
 
 export interface ReferenceSet {
@@ -220,6 +222,355 @@ const SVENSSON: SimSweepConfig = {
   ],
 };
 
+/*
+ * ---------------------------------------------------------------------------
+ * Stage 57 (2026-08-23): the twelve remaining dynamic kernels.
+ *
+ * Three conventions run through the configs below; each write-up under
+ * docs/sweeps/ restates the ones that bind its sim.
+ *
+ * 1. coverageThreshold is per-sim because "background" is not a fixed level.
+ *    A reaction-diffusion medium is nonzero nearly everywhere, so a low
+ *    threshold reports coverage ≈0.97, which the composite's coverageFactor
+ *    reads as a saturated field and drives the score to near zero. The
+ *    threshold is set where each sim's field actually separates figure from
+ *    ground (0.5 for a dense or two-state field, 0.05-0.25 for a sparse one).
+ *    Same convention as gray-scott's 0.1 and boids' 0.001 — it is a per-sim
+ *    lens setting, not a change to the metric.
+ * 2. Population parameters (agentCount, particleCount) are pinned at a
+ *    sweep-scale value in baseParams AND in the references, because the sweep
+ *    grid is smaller than the app's compute grid and agents-per-cell is what
+ *    the dynamics respond to. The consequence is stated plainly in each
+ *    write-up: presets that differ only in population are not distinguished
+ *    by this sweep and cannot be promoted on its evidence.
+ * 3. Every set pins any RNG seed the kernel accepts. DLA is the only one of
+ *    the twelve that reaches for Math.random when no seed is supplied, so its
+ *    configs would not reproduce without it.
+ * ---------------------------------------------------------------------------
+ */
+
+// Continuous CA. mu/sigma set which blob sizes are stable, so they are the
+// axes; muDrift stays at the shipped 0.015 (it keeps spots splitting and
+// travelling rather than freezing, which is what the flux term reads) and
+// radius stays at 8 so swept sets and references share one organism scale.
+const LENIA: SimSweepConfig = {
+  slug: "lenia",
+  primaryChannel: 0, // Mass
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 260, // blobs condense out of the seeded soup by ~200 at dt 0.1
+  fluxGap: 8,
+  dt: 1,
+  coverageThreshold: 0.1,
+  baseParams: { muDrift: 0.015, dt: 0.1, radius: 8, stepsPerFrame: 1, seed: 0 },
+  axes: [
+    { key: "mu", values: linspace(0.1, 0.24, 6, 3) },
+    { key: "sigma", values: [0.01, 0.016, 0.022, 0.028] },
+  ],
+  references: [
+    { id: "orbium-soup", label: "Drifting soup", params: { mu: 0.15, sigma: 0.017, muDrift: 0.015, dt: 0.1, radius: 8, stepsPerFrame: 1, seed: 0 } },
+    { id: "coral-growth", label: "Still spots", params: { mu: 0.15, sigma: 0.017, muDrift: 0, dt: 0.1, radius: 8, stepsPerFrame: 1, seed: 0 } },
+    { id: "geminium-storm", label: "Geminium storm", params: { mu: 0.15, sigma: 0.017, muDrift: 0.02, dt: 0.1, radius: 10, stepsPerFrame: 1, seed: 0 } },
+  ],
+};
+
+// Excitable medium. feed/kill is the Pearson-style control plane here too: the
+// kernel's own note says damping above ~0.04 collapses the medium to a fixed
+// point, so the kill axis brackets that cliff rather than ranging to the
+// slider maximum.
+const BELOUSOV_ZHABOTINSKY: SimSweepConfig = {
+  slug: "belousov-zhabotinsky",
+  primaryChannel: 0, // Activator
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 400, // spirals need ~300 steps to organise out of the seed
+  fluxGap: 8,
+  dt: 1,
+  // The activator is nonzero across nearly the whole medium; 0.5 splits
+  // wavefront from trough instead of reporting "everything is covered".
+  coverageThreshold: 0.5,
+  baseParams: { diffusionA: 0.18, diffusionB: 0.08, diffusionC: 0.035, stepsPerFrame: 1 },
+  axes: [
+    { key: "feed", values: linspace(0.008, 0.05, 8, 4) },
+    { key: "kill", values: [0.008, 0.016, 0.024, 0.032, 0.044] },
+  ],
+  references: [
+    { id: "spiral-waves", label: "Spiral waves", params: { diffusionA: 0.18, diffusionB: 0.08, diffusionC: 0.035, feed: 0.02, kill: 0.02, stepsPerFrame: 1 } },
+    { id: "soft-rings", label: "Soft rings", params: { diffusionA: 0.14, diffusionB: 0.06, diffusionC: 0.055, feed: 0.012, kill: 0.03, stepsPerFrame: 1 } },
+    { id: "fast-catalyst", label: "Fast catalyst", params: { diffusionA: 0.24, diffusionB: 0.11, diffusionC: 0.08, feed: 0.03, kill: 0.03, stepsPerFrame: 3 } },
+  ],
+};
+
+// Stigmergy. Swept on the sensing geometry, which is what decides whether the
+// network comes out as filaments, fans, or a fine web. 256² with agent counts
+// scaled by (256/384)² ≈ 0.44 keeps agents-per-cell at the app's ratio — the
+// app pins physarum to its own compute scale, so density, not raw count, is
+// the transferable quantity.
+const PHYSARUM: SimSweepConfig = {
+  slug: "physarum",
+  primaryChannel: 0, // Trail
+  gridWidth: 256,
+  gridHeight: 256,
+  warmupSteps: 300,
+  fluxGap: 6,
+  dt: 1,
+  coverageThreshold: 0.1,
+  baseParams: { agentCount: 14000, moveSpeed: 1, depositAmount: 0.22, evaporation: 0.9, stepsPerFrame: 1, seed: 0 },
+  axes: [
+    { key: "sensorAngle", values: [12, 22.5, 38, 60] },
+    { key: "sensorDistance", values: [5, 9, 17] },
+    { key: "turnSpeed", values: [12, 22.5, 40] },
+  ],
+  references: [
+    { id: "veins", label: "Veins", params: { agentCount: 14000, sensorAngle: 22.5, sensorDistance: 9, turnSpeed: 22.5, moveSpeed: 1, depositAmount: 0.24, evaporation: 0.9, stepsPerFrame: 1, seed: 0 } },
+    { id: "coral-fans", label: "Coral fans", params: { agentCount: 11500, sensorAngle: 15, sensorDistance: 17, turnSpeed: 14, moveSpeed: 1.35, depositAmount: 0.2, evaporation: 0.94, stepsPerFrame: 1, seed: 0 } },
+    { id: "filigree-web", label: "Filigree web", params: { agentCount: 26500, sensorAngle: 38, sensorDistance: 5, turnSpeed: 34, moveSpeed: 0.8, depositAmount: 0.12, evaporation: 0.96, stepsPerFrame: 1, seed: 0 } },
+  ],
+};
+
+// Shelved from the gallery (registry.ts SHELVED_SLUGS) but the kernel is live,
+// so the driver reaches it through its module path. J/K are the classifying
+// pair in the Swarmalators literature — the five named regimes are corners of
+// that plane — so they are the axes and everything else holds at the default.
+const SWARMALATORS: SimSweepConfig = {
+  slug: "swarmalators",
+  primaryChannel: 0, // Density
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 250,
+  fluxGap: 6,
+  dt: 1,
+  coverageThreshold: 0.05, // a rasterised 384-particle swarm is sparse
+  baseParams: { particleCount: 384, A: 1, B: 18, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 },
+  axes: [
+    { key: "J", values: [-1, -0.5, 0.1, 0.5, 1] },
+    { key: "K", values: [-1.5, -0.75, -0.1, 0.5, 1] },
+  ],
+  references: [
+    { id: "static-sync", label: "Static sync", params: { particleCount: 384, A: 1, B: 18, J: 0.1, K: 1, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 } },
+    { id: "static-async", label: "Static async", params: { particleCount: 384, A: 1, B: 18, J: 0.1, K: -1, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 } },
+    { id: "static-phase-wave", label: "Static phase wave", params: { particleCount: 384, A: 1, B: 18, J: 1, K: 0, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 } },
+    { id: "splintered-phase-wave", label: "Splintered phase wave", params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.1, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 } },
+    { id: "active-phase-wave", label: "Active phase wave", params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1 } },
+    { id: "restless-mix", label: "Restless mix", params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.6, frequencySpread: 0.6, noise: 0.35, timestep: 0.05, seed: 1 } },
+  ],
+};
+
+// Self-organised criticality. 256² so the relaxed pile still fits inside the
+// grid at the shipped grain counts (the pile radius grows as √N; at 128² the
+// larger presets would topple grains off the edge and the fractal terraces
+// would be clipped rather than ranked).
+const ABELIAN_SANDPILE: SimSweepConfig = {
+  slug: "abelian-sandpile",
+  primaryChannel: 0, // Stable height
+  gridWidth: 256,
+  gridHeight: 256,
+  warmupSteps: 200,
+  fluxGap: 4,
+  dt: 1,
+  coverageThreshold: 0.25, // above the lowest of the four stable heights
+  baseParams: { topplesPerStep: 120000 },
+  axes: [
+    { key: "initialPile", values: [25000, 60000, 120000, 250000] },
+    { key: "toppleThreshold", values: [4, 5, 6, 8] },
+    { key: "grainsPerStep", values: [1, 32] },
+  ],
+  references: [
+    { id: "classic-critical", label: "Classic critical", params: { initialPile: 100000, toppleThreshold: 4, grainsPerStep: 1, topplesPerStep: 50000 } },
+    { id: "fast-avalanches", label: "Fast avalanches", params: { initialPile: 250000, toppleThreshold: 4, grainsPerStep: 16, topplesPerStep: 150000 } },
+    { id: "high-threshold", label: "High threshold", params: { initialPile: 350000, toppleThreshold: 8, grainsPerStep: 8, topplesPerStep: 120000 } },
+  ],
+};
+
+// Three-state CA. dyingValue stays fixed at 0.5: it only sets the brightness of
+// the refractory state, and moving it under a fixed coverage threshold would
+// change what "covered" counts rather than changing the dynamics.
+const BRIANS_BRAIN: SimSweepConfig = {
+  slug: "brians-brain",
+  primaryChannel: 0, // State
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 120, // the transient burns off by ~80 steps and settles to waves
+  fluxGap: 4,
+  dt: 1,
+  coverageThreshold: 0.25, // counts firing + refractory, excludes dead
+  baseParams: { dyingValue: 0.5 },
+  axes: [
+    { key: "birthCount", values: [1, 2, 3, 4] },
+    { key: "seedDensity", values: [0.06, 0.12, 0.18, 0.22, 0.28, 0.36, 0.45] },
+  ],
+  references: [
+    { id: "classic", label: "Classic waves", params: { birthCount: 2, seedDensity: 0.22, dyingValue: 0.5 } },
+    { id: "sparse-spirals", label: "Sparse spirals", params: { birthCount: 2, seedDensity: 0.12, dyingValue: 0.62 } },
+    { id: "storm", label: "Storm", params: { birthCount: 2, seedDensity: 0.36, dyingValue: 0.42 } },
+  ],
+};
+
+// Cyclic CA. The state channel is a cycle index normalised to [0, 1], so
+// coverage at 0.5 reads as "cells in the upper half of the cycle" — a phase
+// balance, not a fill fraction. It stays near 0.5 for any live regime, which
+// is the point: it keeps coverageFactor out of the way so structure and
+// entropy do the ranking.
+const CYCLIC_CA: SimSweepConfig = {
+  slug: "cyclic-ca",
+  primaryChannel: 0, // State
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 200, // droplets have resolved into spirals or demons by ~150
+  fluxGap: 4,
+  dt: 1,
+  coverageThreshold: 0.5,
+  baseParams: { stepsPerFrame: 1, seed: 0 },
+  axes: [
+    { key: "states", values: [4, 6, 8, 10, 14, 20] },
+    { key: "threshold", values: [1, 2, 3, 4] },
+    { key: "neighbourhood", values: ["moore", "vonNeumann"] },
+  ],
+  references: [
+    { id: "demons", label: "Demons", params: { states: 14, threshold: 1, neighbourhood: "moore", stepsPerFrame: 1, seed: 0 } },
+    { id: "turbulence", label: "Turbulence (promoted: unfrozen)", params: { states: 8, threshold: 2, neighbourhood: "moore", stepsPerFrame: 1, seed: 0 } },
+    { id: "crystal-lattice", label: "Crystal lattice", params: { states: 12, threshold: 2, neighbourhood: "vonNeumann", stepsPerFrame: 1, seed: 0 } },
+  ],
+};
+
+// Life-like CA. Birth stays at B3 (moving it leaves the Life-like family
+// altogether and the shipped presets are all B3); the survival window and the
+// seed density are what separate Conway from the maze and dense-ash regimes.
+const GAME_OF_LIFE: SimSweepConfig = {
+  slug: "game-of-life",
+  primaryChannel: 0, // Alive
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 200, // long enough for the soup to burn down to its ash
+  fluxGap: 4,
+  dt: 1,
+  coverageThreshold: 0.1,
+  baseParams: { birthMin: 3, birthMax: 3, sparkRate: 0.1, ageShading: true },
+  axes: [
+    { key: "surviveMin", values: [1, 2, 3] },
+    { key: "surviveMax", values: [3, 4, 5] },
+    { key: "seedDensity", values: [0.05, 0.12, 0.2, 0.28, 0.4] },
+  ],
+  references: [
+    { id: "conway", label: "Conway", params: { birthMin: 3, birthMax: 3, surviveMin: 2, surviveMax: 3, seedDensity: 0.28, sparkRate: 0.1, ageShading: true } },
+    { id: "maze", label: "Maze-like", params: { birthMin: 3, birthMax: 3, surviveMin: 1, surviveMax: 5, seedDensity: 0.05, sparkRate: 0.1, ageShading: true } },
+    { id: "dense-ash", label: "Dense ash (promoted: denser seed)", params: { birthMin: 3, birthMax: 3, surviveMin: 2, surviveMax: 3, seedDensity: 0.4, sparkRate: 0.1, ageShading: true } },
+  ],
+};
+
+// Statistical physics. The spin field is two-valued, so its histogram can only
+// fill 2 of the 32 entropy bins and the detail term is pinned near 0.2 for
+// every set — the ranking here is carried almost entirely by structure and
+// flux, which is the correct reading for a domain-coarsening model.
+const ISING_MODEL: SimSweepConfig = {
+  slug: "ising-model",
+  primaryChannel: 0, // Spin
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 300,
+  fluxGap: 4,
+  dt: 1,
+  coverageThreshold: 0.5, // fraction of up spins on a binary field
+  baseParams: { externalField: 0, sweepsPerStep: 0.5, initialState: "random", seed: 7 },
+  axes: [
+    { key: "temperature", values: linspace(0.8, 4, 8, 2) },
+    { key: "coupling", values: [0.6, 0.8, 1, 1.4] },
+  ],
+  references: [
+    { id: "critical", label: "Critical domains", params: { temperature: 2.269, coupling: 1, externalField: 0, sweepsPerStep: 0.5, initialState: "random", seed: 7 } },
+    { id: "cold-quench", label: "Cold quench", params: { temperature: 0.7, coupling: 1, externalField: 0, sweepsPerStep: 0.8, initialState: "random", seed: 7 } },
+    { id: "hot-noise", label: "Hot noise", params: { temperature: 4.5, coupling: 1, externalField: 0, sweepsPerStep: 1, initialState: "random", seed: 7 } },
+    { id: "field-sweep", label: "Positive field", params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random", seed: 7 } },
+  ],
+};
+
+// Growth model with a terminal state: once the cluster reaches the spawn ring's
+// grid limit, walkers spawn on top of it and nothing more sticks. warmup 500
+// puts every set past that point, including the slow low-stickiness ones, so
+// temporal flux is 0 across the board and liveliness is a constant 0.85. That is
+// deliberate — the ranking is of final cluster morphology, and a flux term would
+// otherwise just measure which sets had not finished growing yet.
+const DIFFUSION_LIMITED_AGGREGATION: SimSweepConfig = {
+  slug: "diffusion-limited-aggregation",
+  primaryChannel: 0, // Cluster
+  gridWidth: 192,
+  gridHeight: 192,
+  warmupSteps: 500,
+  fluxGap: 6,
+  dt: 1,
+  coverageThreshold: 0.05,
+  // seed is mandatory here: this is the only one of the twelve that falls back
+  // to Math.random when none is supplied, which would break reproducibility.
+  baseParams: { walkersPerStep: 64, maxWalkSteps: 400, seed: 7 },
+  axes: [
+    { key: "stickiness", values: [0.15, 0.3, 0.5, 0.75, 1] },
+    { key: "spawnRadius", values: [0.03, 0.06, 0.12] },
+    { key: "seedCount", values: [1, 4, 12] },
+  ],
+  references: [
+    { id: "branching", label: "Branching", params: { walkersPerStep: 64, maxWalkSteps: 400, spawnRadius: 0.06, stickiness: 1, seedCount: 1, seed: 7 } },
+    { id: "dense-coral", label: "Dense coral (promoted: low stickiness)", params: { walkersPerStep: 64, maxWalkSteps: 400, spawnRadius: 0.06, stickiness: 0.15, seedCount: 4, seed: 7 } },
+    { id: "multi-seed", label: "Multi-seed", params: { walkersPerStep: 64, maxWalkSteps: 400, spawnRadius: 0.06, stickiness: 0.8, seedCount: 8, seed: 7 } },
+  ],
+};
+
+// Synchronisation. The single channel is a phase, which wraps: a cell at 0.99
+// and one at 0.01 are neighbours on the circle but maximally distant to the
+// linear metrics. Autocorrelation and flux therefore read a wrap-around
+// boundary as a discontinuity, which flatters regimes that happen to park their
+// wavefronts away from 0. Scores rank within this sim only; a circular-statistics
+// metric is the right instrument and is not in this stage's scope.
+const KURAMOTO_OSCILLATORS: SimSweepConfig = {
+  slug: "kuramoto-oscillators",
+  primaryChannel: 0, // Phase
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 400,
+  fluxGap: 6,
+  dt: 1,
+  coverageThreshold: 0.5,
+  baseParams: { noise: 0.015, timestep: 0.045, initialPattern: "vortices", seed: 1 },
+  axes: [
+    { key: "coupling", values: [0.6, 1.2, 1.8, 3.2, 4.6] },
+    { key: "frequencySpread", values: [0.1, 0.3, 0.45, 0.8] },
+    { key: "couplingMode", values: ["local", "global"] },
+  ],
+  references: [
+    { id: "local-waves", label: "Local phase waves", params: { coupling: 1.8, frequencySpread: 0.45, timestep: 0.045, couplingMode: "local", initialPattern: "waves", noise: 0.015, seed: 1 } },
+    { id: "vortex-field", label: "Vortex field", params: { coupling: 3.2, frequencySpread: 0.18, timestep: 0.04, couplingMode: "local", initialPattern: "vortices", noise: 0.005, seed: 1 } },
+    { id: "global-threshold", label: "Global threshold", params: { coupling: 1.1, frequencySpread: 0.55, timestep: 0.055, couplingMode: "global", initialPattern: "random", noise: 0.01, seed: 1 } },
+    { id: "global-lock", label: "Global lock", params: { coupling: 4.2, frequencySpread: 0.3, timestep: 0.05, couplingMode: "global", initialPattern: "random", noise: 0, seed: 1 } },
+  ],
+};
+
+// Particle sim, and the same instrument problem the 2026-07-16 write-up
+// recorded for boids: a rasterised point cloud carries almost no lag-1 spatial
+// autocorrelation, so the structure term — 55% of the composite — reads ~0 for
+// every set and the ranking collapses onto coverage. particleCount is pinned at
+// 3000 (the shipped presets run 5000-12000 on a 640² grid; 3000 on 128² is the
+// matching order of density) so the axes are compared at one population.
+const PARTICLE_LIFE: SimSweepConfig = {
+  slug: "particle-life",
+  primaryChannel: 0, // Red species density
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 150,
+  fluxGap: 6,
+  dt: 1,
+  coverageThreshold: 0.05,
+  baseParams: { particleCount: 3000, species: 5, rmin: 12, friction: 0.7, seed: 0 },
+  axes: [
+    { key: "rmax", values: [16, 24, 32] },
+    { key: "forceScale", values: [25, 60, 110] },
+    { key: "matrixBias", values: [-0.15, 0.05, 0.25] },
+  ],
+  references: [
+    { id: "cells", label: "Cells", params: { particleCount: 3000, species: 5, rmax: 40, rmin: 12, forceScale: 45, friction: 0.7, matrixBias: 0.08, seed: 0 } },
+    { id: "chasers", label: "Chasers", params: { particleCount: 3000, species: 6, rmax: 48, rmin: 14, forceScale: 85, friction: 0.2, matrixBias: 0, seed: 0 } },
+    { id: "gas-clouds", label: "Gas clouds", params: { particleCount: 3000, species: 4, rmax: 30, rmin: 8, forceScale: 22, friction: 0.45, matrixBias: -0.05, seed: 0 } },
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
@@ -227,4 +578,16 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "clifford-dejong-clifford": CLIFFORD,
   "clifford-dejong-dejong": DEJONG,
   "clifford-dejong-svensson": SVENSSON,
+  lenia: LENIA,
+  "belousov-zhabotinsky": BELOUSOV_ZHABOTINSKY,
+  physarum: PHYSARUM,
+  swarmalators: SWARMALATORS,
+  "abelian-sandpile": ABELIAN_SANDPILE,
+  "brians-brain": BRIANS_BRAIN,
+  "cyclic-ca": CYCLIC_CA,
+  "game-of-life": GAME_OF_LIFE,
+  "ising-model": ISING_MODEL,
+  "diffusion-limited-aggregation": DIFFUSION_LIMITED_AGGREGATION,
+  "kuramoto-oscillators": KURAMOTO_OSCILLATORS,
+  "particle-life": PARTICLE_LIFE,
 };
