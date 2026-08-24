@@ -5,14 +5,16 @@
 - **Authored:** 2026-08-23
 - **Orchestrator:** Claude Opus 5 <claude-opus-5@local>
 - **Worker:** Claude Opus 5 <claude-opus-5@local>
-- **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
+- **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Base branch:** dev
 - **Run branch:** autometta/58-kernel-preset-not-reset
 - **Worker effort:** medium
 - **Verifier effort:** medium
+- **Requires GUI:** true
 - **Pairing rationale:** the fix is a few lines; the evidence is a browser pass
-  across three slugs, so the verifier seat is the one that can drive headless
-  Chromium.
+  across three slugs. Verifier moved to the Codex family (2026-08-24, operator
+  decision) to restore cross-family verification; the codex seat drives
+  headless Chromium, hence Requires GUI.
 
 ## Objective
 

@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-08-24
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
-- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Worker:** Claude Fable 5 <claude-fable-5@local>
 - **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Base branch:** dev
 - **Run branch:** autometta/59-sandpile-topple-conservation
@@ -12,10 +12,11 @@
 - **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
-- **Pairing rationale:** the fix is kernel physics with a numeric sweep gate, so
-  the strong Claude tier takes the worker seat and the Codex family verifies —
-  restoring the cross-family check stage 57 had to forgo. The verifier re-runs
-  the Playwright sweep, hence Requires GUI for the codex seat.
+- **Pairing rationale:** the fix is kernel physics with a numeric sweep gate —
+  the heaviest reasoning in tonight's slate — so the Fable tier takes the
+  worker seat (operator opened the Fable quota for heavy stages, 2026-08-24)
+  and the Codex family verifies, cross-family. The verifier re-runs the
+  Playwright sweep, hence Requires GUI for the codex seat.
 
 ## Objective
 

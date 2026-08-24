@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-08-24
 - **Orchestrator:** Claude Fable 5 <claude-fable-5@local>
-- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Worker:** Claude Fable 5 <claude-fable-5@local>
 - **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Base branch:** dev
 - **Run branch:** autometta/63-point-cloud-metrics
@@ -13,9 +13,10 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Pairing rationale:** this touches the metric stack — the most
-  design-sensitive work in tonight's slate — so the strong Claude tier takes
-  the worker seat and the Codex family verifies, cross-family. The verifier
-  re-runs sweeps, hence Requires GUI.
+  design-sensitive work in tonight's slate — so the Fable tier takes the
+  worker seat (operator opened the Fable quota for heavy stages, 2026-08-24)
+  and the Codex family verifies, cross-family. The verifier re-runs sweeps,
+  hence Requires GUI.
 
 ## Objective
 
