@@ -105,3 +105,52 @@ fraction of an Ultra grid: 100 000 grains relax into a pile of radius ≈ 120 ce
 inside a 360² frame, so most of the frame is still empty at 120 steps. That is
 the pile's actual size at that grain count rather than a fault — the sim keeps
 growing as `grainsPerStep` feeds it.
+
+## Appendix — re-sweep after the conservation fix (2026-08-25, stage 59)
+
+The kernel defect above is fixed. A topple now ships `bulk * threshold` grains
+with each in-grid neighbour taking an equal quarter (`floor(bulk * threshold / 4)`)
+and the integer remainder of the four-way split returning to the toppling cell,
+so no grain is created or destroyed at any threshold; grains still leave through
+the open boundary. At threshold 4 the remainder is always 0 and the arithmetic
+reduces to the old rule bit for bit.
+
+One deviation from that scheme as literally specified: below threshold 4 a cell
+at the bare threshold would ship nothing (`floor(2/4) = floor(3/4) = 0`), take
+the whole shipment back and requeue forever. A cell therefore only counts as
+unstable once its shipment reaches 4 grains (`threshold * ceil(4 / threshold)`
+— which is just `threshold` for every threshold ≥ 4, so nothing changes there).
+Thresholds 2 and 3, which the slider offers, now conserve and settle instead of
+livelocking; unit tests cover conservation at {4, 5, 6, 8, 12} and the
+low-threshold guard at {2, 3}.
+
+Same harness, same 32-set grid, same metric stack as the 2026-08-23 run above.
+
+### Shipped presets, before → after
+
+| reference | score | entropy | autocorr | flux | coverage |
+|---|---|---|---|---|---|
+| Classic critical | 0.416 → **0.416** | 0.21 | 0.59 | 0.1106 | 0.201 |
+| Fast avalanches | 0.417 → **0.417** | 0.31 | 0.51 | 0.2084 | 0.374 |
+| **High threshold** | 0.004 → **0.421** | 0.00 → 0.28 | 0.78 → 0.54 | 0.0000 → 0.1517 | 0.001 → 0.317 |
+
+Both threshold-4 presets reproduce their 2026-08-23 metrics exactly, all five
+columns — the required bit-identity check. "High threshold" comes alive: from a
+blank field to a score on par with the other two presets, so its shipped params
+(`pile 350 000, thr 8, grains 8`) stand and `presets.ts` is untouched.
+
+### The upper half of the slider is no longer a blank screen
+
+| toppleThreshold | sets | best score (was) | worst score (was) |
+|---|---|---|---|
+| 4 | 8 | 0.516 (0.516) | 0.416 (0.416) |
+| 5 | 8 | 0.551 (0.010) | 0.428 (0.005) |
+| 6 | 8 | 0.563 (0.006) | 0.371 (0.003) |
+| 8 | 8 | 0.479 (0.004) | 0.282 (0.001) |
+
+The threshold-4 rows reproduce exactly, as they must. Thresholds 5 and 6 now
+out-score threshold 4 at the top of the table — the sweep's new best set is
+`pile 60 000, thr 6, grains 32` at 0.563, ahead of the 2026-08-23 winner's
+0.516. No promotion is taken here: this stage's scope is the conservation fix
+and its evidence, and the shipped presets are all healthy. Left as candidates
+for a future preset-tuning card.
