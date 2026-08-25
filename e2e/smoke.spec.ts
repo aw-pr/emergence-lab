@@ -417,3 +417,65 @@ test("boids behaviour presets preserve the full flock population", async ({ page
   expect(counts).toHaveLength(3);
   expect(new Set(counts)).toEqual(new Set([17777]));
 });
+
+/** Every `[data-param-key]` control's displayed value, keyed by param. */
+function paramSnapshot(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      Array.from(
+        document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+          "[data-param-key]",
+        ),
+      ).map((el) => [
+        el.dataset.paramKey ?? "",
+        el instanceof HTMLInputElement && el.type === "checkbox"
+          ? String(el.checked)
+          : el.value,
+      ]),
+    ),
+  );
+}
+
+for (const slug of ["mandelbrot", "boids", "abelian-sandpile"]) {
+  test(`reset restores the kernel preset select: ${slug}`, async ({ page }) => {
+    await page.goto(`/#/${slug}`);
+
+    // Headless Chromium reports viewport == screen, so every route loads
+    // immersive with the settings drawer parked off-screen behind its handle.
+    await page.locator(".sim-view__drawer-handle").click();
+
+    const select = page.getByLabel("Kernel preset");
+    const reset = page.getByRole("button", { name: "Reset to defaults" });
+
+    // Reset first, so the baseline is the factory default rather than whatever
+    // an earlier test in this worker persisted for the slug.
+    await reset.dispatchEvent("click");
+    await expect(select).toHaveValue("__default__");
+    const defaults = await paramSnapshot(page);
+
+    const presetIds = await select.evaluate((el) =>
+      Array.from((el as HTMLSelectElement).options)
+        .map((option) => option.value)
+        .filter((value) => value !== "__default__"),
+    );
+    let chosen = "";
+    for (const id of presetIds) {
+      await select.selectOption(id);
+      if (JSON.stringify(await paramSnapshot(page)) !== JSON.stringify(defaults)) {
+        chosen = id;
+        break;
+      }
+    }
+    expect(chosen, `no kernel preset on ${slug} changes a parameter`).not.toBe("");
+    await expect(select).toHaveValue(chosen);
+
+    await reset.dispatchEvent("click");
+    await expect(select).toHaveValue("__default__");
+    expect(await paramSnapshot(page)).toEqual(defaults);
+
+    // The neutral option must name the parameters reset actually loaded.
+    await select.selectOption(chosen);
+    await select.selectOption("__default__");
+    expect(await paramSnapshot(page)).toEqual(defaults);
+  });
+}
