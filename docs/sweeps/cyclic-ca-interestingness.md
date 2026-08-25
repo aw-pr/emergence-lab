@@ -98,3 +98,48 @@ the crystalline one. The sweep also never sampled `states: 12` itself.
 
 The operator picks: accept a Demons-like replacement, drop the preset, or
 commission a finer von Neumann pass around states 10–16 at threshold 1–2.
+
+## Fine von Neumann pass — 2026-08-25
+
+The follow-up pinned `neighbourhood: "vonNeumann"` and swept states 10–16 ×
+threshold {1, 2}, with the same 128×128 grid, seed 0, 200-step warmup, flux gap
+4, channel, coverage threshold, and metric stack as the 2026-08-23 run. All 14
+sets completed headless.
+
+| rank | states | threshold | score | entropy | autocorr | flux | coverage | verdict |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 14 | 1 | **0.788** | 0.75 | 0.82 | 0.2448 | 0.501 | alive |
+| 2 | 15 | 1 | 0.760 | 0.75 | 0.77 | 0.1360 | 0.352 | alive |
+| 3 | 13 | 1 | 0.664 | 0.74 | 0.60 | 0.4352 | 0.486 | alive |
+| 4 | 12 | 1 | 0.626 | 0.72 | 0.55 | 0.4625 | 0.477 | alive |
+| 5 | 11 | 1 | 0.600 | 0.69 | 0.52 | 0.4847 | 0.468 | alive |
+| 6 | 10 | 1 | 0.547 | 0.66 | 0.45 | 0.5326 | 0.496 | alive |
+| 7 | 16 | 1 | 0.489 | 0.80 | 0.27 | 0.0251 | 0.494 | alive |
+| 8 | 16 | 2 | 0.306 | 0.80 | 0.00 | 0.0000 | 0.500 | frozen |
+| 9 | 15 | 2 | 0.306 | 0.78 | 0.01 | 0.0000 | 0.468 | frozen |
+| 10 | 14 | 2 | 0.298 | 0.76 | 0.01 | 0.0000 | 0.498 | frozen |
+| 11 | 13 | 2 | 0.291 | 0.74 | 0.02 | 0.0000 | 0.461 | frozen |
+| 12 | 12 | 2 | 0.283 | 0.72 | 0.02 | 0.0000 | 0.506 | frozen |
+| 13 | 11 | 2 | 0.277 | 0.69 | 0.03 | 0.0000 | 0.455 | frozen |
+| 14 | 10 | 2 | 0.271 | 0.66 | 0.04 | 0.0000 | 0.500 | frozen |
+
+### Promotion: Crystal lattice, 0.283 → 0.626
+
+```
+{ states: 12, threshold: 2, neighbourhood: "vonNeumann" }   →
+{ states: 12, threshold: 1, neighbourhood: "vonNeumann" }
+```
+
+The same-state candidate clears the gate: temporal flux 0.4625 > 0.01 and
+spatial autocorrelation 0.55 > 0.5. Its headless thumbnail forms regular,
+nested diamond waves, visually distinct from Demons' irregular Moore spirals;
+unlike the higher-scoring states-14 set, it is not the Demons parameter twin.
+Keeping 12 states also preserves the preset's identity while changing only the
+threshold that caused it to jam.
+
+Reproduction check: a second complete headless run reproduced the results file
+byte-for-byte (SHA-256
+`8032b327af28f1ee9d41ff3e3c94d419d7354b582a2ae76c06d58cbd146e7209`). In
+particular, states 12 / threshold 1 reproduced score 0.626241960108358,
+entropy 0.715982101662593, autocorrelation 0.5528182079276203, temporal flux
+0.4624744805532828, and coverage 0.4765625 exactly.

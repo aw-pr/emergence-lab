@@ -420,11 +420,10 @@ const CYCLIC_CA: SimSweepConfig = {
   fluxGap: 4,
   dt: 1,
   coverageThreshold: 0.5,
-  baseParams: { stepsPerFrame: 1, seed: 0 },
+  baseParams: { neighbourhood: "vonNeumann", stepsPerFrame: 1, seed: 0 },
   axes: [
-    { key: "states", values: [4, 6, 8, 10, 14, 20] },
-    { key: "threshold", values: [1, 2, 3, 4] },
-    { key: "neighbourhood", values: ["moore", "vonNeumann"] },
+    { key: "states", values: [10, 11, 12, 13, 14, 15, 16] },
+    { key: "threshold", values: [1, 2] },
   ],
   references: [
     { id: "demons", label: "Demons", params: { states: 14, threshold: 1, neighbourhood: "moore", stepsPerFrame: 1, seed: 0 } },

@@ -767,9 +767,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { states: 8, threshold: 2, neighbourhood: "moore" },
     },
     {
+      // Promoted by the 2026-08-25 fine von Neumann sweep (0.283 → 0.626):
+      // threshold 2 froze completely (flux 0.0000, autocorrelation 0.02), while
+      // threshold 1 sustains distinct diamond waves (flux 0.4625, autocorrelation 0.55).
       id: "crystal-lattice",
       label: "Crystal lattice",
-      params: { states: 12, threshold: 2, neighbourhood: "vonNeumann" },
+      params: { states: 12, threshold: 1, neighbourhood: "vonNeumann" },
     },
   ],
   // muDrift keeps the field reorganising; muDrift 0 is classic static-growth
