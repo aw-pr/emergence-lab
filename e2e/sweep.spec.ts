@@ -226,7 +226,7 @@ sweepTest("sweep game of life rules", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["game-of-life"]);
 });
 
-sweepTest("sweep ising temperature/coupling", async ({ page }) => {
+sweepTest("sweep ising external field/temperature", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["ising-model"]);
 });
 

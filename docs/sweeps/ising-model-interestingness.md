@@ -109,3 +109,48 @@ Recommended follow-up, not acted on here: a one-axis pass over
 `externalField ∈ [0.02, 0.2]` at T 1.8–2.4 to find the largest bias that still
 leaves visible domain structure at 300 steps. That is a narrow, cheap sweep and
 the honest way to fix this preset with evidence.
+
+## Appendix: external-field sweep — 2026-08-25
+
+The follow-up evaluated all 21 requested sets at J 1, 0.5 sweeps per step,
+random initial state, and seed 7. Grid, warmup, flux gap, threshold, and metric
+stack were unchanged, so these scores are directly comparable with the
+2026-08-23 run.
+
+| rank | field | T | score | entropy | autocorr | flux | coverage |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.02 | 1.8 | **0.519** | 0.16 | 0.82 | 0.0585 | 0.768 |
+| 2 | 0.02 | 2.1 | 0.456 | 0.15 | 0.70 | 0.1048 | 0.777 |
+| 3 | 0.02 | 2.4 | 0.355 | 0.16 | 0.51 | 0.2055 | 0.744 |
+| 4 | 0.05 | 2.4 | 0.224 | 0.12 | 0.35 | 0.1606 | 0.863 |
+| 5 | 0.08 | 2.4 | 0.169 | 0.10 | 0.33 | 0.1456 | 0.888 |
+| 6 | 0.11 | 2.4 | 0.126 | 0.09 | 0.28 | 0.1290 | 0.903 |
+| 7 | 0.14 | 2.4 | 0.115 | 0.09 | 0.27 | 0.1238 | 0.908 |
+| 8 | 0.20 | 2.4 | 0.092 | 0.08 | 0.24 | 0.1180 | 0.920 |
+| 9 | 0.17 | 2.4 | 0.082 | 0.08 | 0.23 | 0.1085 | 0.925 |
+| 10 | 0.05 | 2.1 | 0.065 | 0.06 | 0.27 | 0.0770 | 0.945 |
+| 11 | 0.05 | 1.8 | 0.060 | 0.04 | 0.48 | 0.0349 | 0.967 |
+| 12 | 0.11 | 2.1 | 0.049 | 0.06 | 0.24 | 0.0694 | 0.952 |
+| 13 | 0.08 | 2.1 | 0.045 | 0.05 | 0.22 | 0.0671 | 0.954 |
+| 14 | 0.17 | 2.1 | 0.032 | 0.05 | 0.20 | 0.0566 | 0.963 |
+| 15 | 0.20 | 2.1 | 0.029 | 0.05 | 0.18 | 0.0567 | 0.963 |
+| 16 | 0.14 | 2.1 | 0.028 | 0.05 | 0.17 | 0.0620 | 0.963 |
+| 17 | 0.08 | 1.8 | 0.012 | 0.03 | 0.17 | 0.0292 | 0.982 |
+| 18 | 0.11 | 1.8 | 0.008 | 0.02 | 0.12 | 0.0268 | 0.984 |
+| 19 | 0.14 | 1.8 | 0.008 | 0.02 | 0.11 | 0.0266 | 0.983 |
+| 20 | 0.20 | 1.8 | 0.007 | 0.02 | 0.11 | 0.0246 | 0.986 |
+| 21 | 0.17 | 1.8 | 0.006 | 0.02 | 0.10 | 0.0221 | 0.986 |
+
+The coverage 0.9 saturation boundary depends strongly on temperature. At T 1.8
+and 2.1 the lattice tips between field 0.02 and 0.05; at T 2.4 it tips between
+field 0.08 and 0.11. Only field 0.02 clears both promotion gates at any swept
+temperature. T 1.8 is the strongest qualifying set (score 0.519, coverage
+0.768), so **Positive field is promoted from T 1.8 / field 0.35 / 0.6 sweeps to
+T 1.8 / field 0.02 / 0.5 sweeps**. The bias remains strictly positive while
+visible domains replace the incumbent's 99% flat lattice.
+
+The unchanged references reproduced their 2026-08-23 values: Critical domains
+0.457, Cold quench 0.564, and Hot noise 0.222. The promoted set's exact raw
+metrics are entropy 0.15635766186989672, autocorrelation
+0.8183746199900425, flux 0.05853271484375, and coverage 0.767822265625
+(composite score 0.5190352004615919).

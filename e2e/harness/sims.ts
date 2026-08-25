@@ -471,16 +471,16 @@ const ISING_MODEL: SimSweepConfig = {
   fluxGap: 4,
   dt: 1,
   coverageThreshold: 0.5, // fraction of up spins on a binary field
-  baseParams: { externalField: 0, sweepsPerStep: 0.5, initialState: "random", seed: 7 },
+  baseParams: { coupling: 1, sweepsPerStep: 0.5, initialState: "random", seed: 7 },
   axes: [
-    { key: "temperature", values: linspace(0.8, 4, 8, 2) },
-    { key: "coupling", values: [0.6, 0.8, 1, 1.4] },
+    { key: "externalField", values: [0.02, 0.05, 0.08, 0.11, 0.14, 0.17, 0.2] },
+    { key: "temperature", values: [1.8, 2.1, 2.4] },
   ],
   references: [
     { id: "critical", label: "Critical domains", params: { temperature: 2.269, coupling: 1, externalField: 0, sweepsPerStep: 0.5, initialState: "random", seed: 7 } },
     { id: "cold-quench", label: "Cold quench", params: { temperature: 0.7, coupling: 1, externalField: 0, sweepsPerStep: 0.8, initialState: "random", seed: 7 } },
     { id: "hot-noise", label: "Hot noise", params: { temperature: 4.5, coupling: 1, externalField: 0, sweepsPerStep: 1, initialState: "random", seed: 7 } },
-    { id: "field-sweep", label: "Positive field", params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random", seed: 7 } },
+    { id: "field-sweep", label: "Positive field", params: { temperature: 1.8, coupling: 1, externalField: 0.02, sweepsPerStep: 0.5, initialState: "random", seed: 7 } },
   ],
 };
 

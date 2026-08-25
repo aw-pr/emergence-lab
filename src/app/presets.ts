@@ -93,9 +93,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { temperature: 4.5, coupling: 1, externalField: 0, sweepsPerStep: 1, initialState: "random" },
     },
     {
+      // Promoted by the 2026-08-25 external-field sweep (0.003 → 0.519):
+      // field 0.02 is the largest tested bias with score >= 0.3 and coverage
+      // <= 0.9; stronger fields saturate the lattice at this temperature.
       id: "field-sweep",
       label: "Positive field",
-      params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random" },
+      params: { temperature: 1.8, coupling: 1, externalField: 0.02, sweepsPerStep: 0.5, initialState: "random" },
     },
   ],
   "kuramoto-oscillators": [
