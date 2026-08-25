@@ -78,3 +78,68 @@ confirms the harness detects a dead field rather than scoring it as "calm".
 
 None. The best incumbent wins outright on the metric, so there is nothing to
 promote and nothing to escalate.
+
+## Radius follow-up — 2026-08-25
+
+The follow-up held the 2026-08-23 metric stack and harness settings fixed and
+crossed `radius ∈ {6, 8, 10, 12, 14}` with its two strongest swept μ/σ pairs
+and Geminium storm's own pair. Swept sets retained `muDrift: 0.015`; all three
+shipped references were re-scored unmodified in the same headless run.
+
+- **Sets evaluated: 15 of 15.**
+- **References evaluated: 3 of 3.**
+- **Sets dropped for time: 0.** Radius 14 completed at 128² without approaching
+  the harness timeout; its three scored sets took 2.7–2.8 seconds each.
+
+### Ranking
+
+| | radius | μ | σ | score | entropy | autocorr | flux | coverage |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 14 | 0.24 | 0.028 | **0.463** | 0.28 | 0.69 | 0.0110 | 0.335 |
+| 2 | 12 | 0.24 | 0.028 | 0.455 | 0.28 | 0.67 | 0.0123 | 0.348 |
+| 3 | 14 | 0.212 | 0.028 | 0.425 | 0.23 | 0.70 | 0.0028 | 0.313 |
+| 4 | 12 | 0.212 | 0.028 | 0.424 | 0.24 | 0.69 | 0.0040 | 0.323 |
+| 5 | 10 | 0.24 | 0.028 | 0.416 | 0.29 | 0.58 | 0.0129 | 0.343 |
+| 6 | 14 | 0.15 | 0.017 | 0.402 | 0.25 | 0.61 | 0.0087 | 0.245 |
+| 7 | 10 | 0.212 | 0.028 | 0.392 | 0.24 | 0.61 | 0.0046 | 0.322 |
+| 8 | 12 | 0.15 | 0.017 | 0.371 | 0.25 | 0.54 | 0.0093 | 0.246 |
+| 9 | 8 | 0.24 | 0.028 | 0.369 | 0.29 | 0.49 | 0.0139 | 0.346 |
+| 10 | 10 | 0.15 | 0.017 | 0.362 | 0.28 | 0.47 | 0.0184 | 0.253 |
+| 11 | 8 | 0.212 | 0.028 | 0.345 | 0.26 | 0.50 | 0.0060 | 0.322 |
+| 12 | 6 | 0.24 | 0.028 | 0.334 | 0.31 | 0.38 | 0.0233 | 0.356 |
+| 13 | 8 | 0.15 | 0.017 | 0.289 | 0.27 | 0.34 | 0.0159 | 0.250 |
+| 14 | 6 | 0.212 | 0.028 | 0.286 | 0.27 | 0.35 | 0.0096 | 0.322 |
+| 15 | 6 | 0.15 | 0.017 | 0.284 | 0.34 | 0.24 | 0.0417 | 0.269 |
+
+| reference | score | entropy | autocorr | flux | coverage |
+|---|---:|---:|---:|---:|---:|
+| Geminium storm | **0.414** | 0.32 | 0.50 | 0.0316 | 0.272 |
+| Drifting soup | 0.289 | 0.27 | 0.34 | 0.0159 | 0.250 |
+| Still spots | 0.260 | 0.25 | 0.30 | 0.0142 | 0.229 |
+
+### Reading
+
+Radius raises the composite consistently for all three μ/σ pairs. The main
+gain is scale coherence: spatial autocorrelation climbs from 0.38 to 0.69 for
+the 0.24/0.028 pair and from 0.35 to 0.70 for 0.212/0.028 as the organisms grow
+from small fragments into broad connected bands. Coverage changes little, so
+the gain is not simple field saturation. Flux moves the other way: for the
+winning pair it falls from 0.0233 at radius 6 to 0.0110 at radius 14, and for
+0.212/0.028 from 0.0096 to 0.0028. Larger organisms are more spatially coherent
+but reorganise more slowly over the fixed eight-step flux gap.
+
+The winner, radius 14 with μ 0.24 and σ 0.028, scored 0.463022 versus the
+like-for-like Geminium storm reference at 0.413518: a gain of 0.049505, or
+11.97%, clearing the 5% gate. Against Geminium it has lower entropy (0.2821 vs
+0.3236) and flux (0.0110 vs 0.0316), but higher autocorrelation (0.6921 vs
+0.5042) and coverage (0.3346 vs 0.2722). A second headless run reproduced the
+winner exactly: entropy 0.2820936674215, autocorrelation 0.6921086381312402,
+flux 0.011026065978113397, and coverage 0.3345947265625.
+
+### Promotion
+
+None. The winner clears the numeric margin, but its broad continuous maze-like
+bands are a different visual character from Geminium storm's smaller broken
+filaments, not a sharper version of that incumbent. It is therefore recorded
+as a fourth-preset candidate under the escalation clause, with no change to the
+three shipped Lenia presets pending operator choice.
