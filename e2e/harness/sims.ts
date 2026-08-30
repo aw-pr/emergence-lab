@@ -29,6 +29,11 @@ export interface PhaseConfig {
   occupancy?: { channel: number; threshold: number };
 }
 
+export interface MultiSnapshotConfig {
+  /** Absolute kernel.step() counts before each frame A is captured. */
+  warmupSteps: number[];
+}
+
 export interface SimSweepConfig {
   slug: string;
   /** Artifact directory / report id; defaults to the slug. Lets several sweeps
@@ -44,6 +49,8 @@ export interface SimSweepConfig {
   coverageThreshold: number;
   /** Present only when a kernel exposes a phase channel. */
   phase?: PhaseConfig;
+  /** Present only when timing-sensitive trajectories need repeated scoring. */
+  multiSnapshot?: MultiSnapshotConfig;
   /** Fixed params applied to every set in the sweep. */
   baseParams: Params;
   /** Swept axes; the sweep is their Cartesian product. */
@@ -133,6 +140,9 @@ const LORENZ: SimSweepConfig = {
   fluxGap: 8,
   dt: 1,
   coverageThreshold: 0.04,
+  // Five deterministic positions span three trail-memory windows. Each sample
+  // starts from a fresh kernel, so this costs roughly five single-pair drives.
+  multiSnapshot: { warmupSteps: [280, 420, 560, 700, 840] },
   baseParams: { beta: 2.6667, stepsPerFrame: 6, fade: 0.992 },
   axes: [
     { key: "rho", values: linspace(24, 46, 6, 2) },

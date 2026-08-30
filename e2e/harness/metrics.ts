@@ -45,6 +45,17 @@ export interface InterestingnessMetrics extends FrameMetrics {
   circularSpatialAutocorrelation?: number;
 }
 
+export interface MetricSpread {
+  min: number;
+  max: number;
+  standardDeviation: number;
+}
+
+export interface MultiSnapshotMetrics extends InterestingnessMetrics {
+  sampleCount: number;
+  spread: Partial<Record<keyof InterestingnessMetrics, MetricSpread>>;
+}
+
 const DEFAULT_BINS = 32;
 const DEFAULT_COVERAGE_THRESHOLD = 0.08;
 
@@ -269,4 +280,62 @@ export function scoreFrames(
   const fm = frameMetrics(frameA, width, height, coverageThreshold);
   const flux = temporalFlux(frameA, frameB);
   return { ...fm, temporalFlux: flux, score: interestingness(fm, flux) };
+}
+
+/** Mean metrics and population spread for deterministic frame-pair samples. */
+export function summarizeMetrics(
+  samples: InterestingnessMetrics[],
+): MultiSnapshotMetrics {
+  if (samples.length === 0) {
+    throw new Error("summarizeMetrics requires at least one sample");
+  }
+
+  const keys: (keyof InterestingnessMetrics)[] = [
+    "entropy",
+    "variance",
+    "spatialAutocorrelation",
+    "coverage",
+    "temporalFlux",
+    "score",
+    "meanResultantLength",
+    "circularSpatialAutocorrelation",
+  ];
+  const means: Partial<Record<keyof InterestingnessMetrics, number>> = {};
+  const spread: Partial<Record<keyof InterestingnessMetrics, MetricSpread>> = {};
+
+  for (const key of keys) {
+    const values = samples
+      .map((sample) => sample[key])
+      .filter((value): value is number => value !== undefined);
+    if (values.length === 0) continue;
+
+    const metricMean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const squaredDeviation = values.reduce(
+      (sum, value) => sum + (value - metricMean) ** 2,
+      0,
+    );
+    means[key] = metricMean;
+    spread[key] = {
+      min: Math.min(...values),
+      max: Math.max(...values),
+      standardDeviation: Math.sqrt(squaredDeviation / values.length),
+    };
+  }
+
+  return {
+    entropy: means.entropy!,
+    variance: means.variance!,
+    spatialAutocorrelation: means.spatialAutocorrelation!,
+    coverage: means.coverage!,
+    temporalFlux: means.temporalFlux!,
+    score: means.score!,
+    ...(means.meanResultantLength === undefined
+      ? {}
+      : { meanResultantLength: means.meanResultantLength }),
+    ...(means.circularSpatialAutocorrelation === undefined
+      ? {}
+      : { circularSpatialAutocorrelation: means.circularSpatialAutocorrelation }),
+    sampleCount: samples.length,
+    spread,
+  };
 }

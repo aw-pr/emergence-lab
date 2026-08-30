@@ -5,10 +5,14 @@ import {
   meanResultantLength,
   scoreFrames,
   spatialAutocorrelation,
+  summarizeMetrics,
+  type InterestingnessMetrics,
+  type MultiSnapshotMetrics,
 } from "./harness/metrics.ts";
 import {
   SWEEP_CONFIGS,
   expandSweep,
+  type ReferenceSet,
   type SimSweepConfig,
   type Params,
 } from "./harness/sims.ts";
@@ -46,20 +50,22 @@ async function scoreOne(
     primaryChannel: config.primaryChannel,
     dt: config.dt,
   };
-  const result = await page.evaluate(driveKernel, driverConfig);
-  const metrics = scoreFrames(
-    result.frameA,
-    result.frameB,
-    result.width,
-    result.height,
-    config.coverageThreshold,
-  );
+  const scoreAtWarmup = async (warmupSteps: number): Promise<InterestingnessMetrics> => {
+    const snapshotConfig = { ...driverConfig, warmupSteps };
+    const result = await page.evaluate(driveKernel, snapshotConfig);
+    const metrics = scoreFrames(
+      result.frameA,
+      result.frameB,
+      result.width,
+      result.height,
+      config.coverageThreshold,
+    );
 
-  if (config.phase) {
+    if (!config.phase) return metrics;
     const phaseResult = config.phase.channel === config.primaryChannel
       ? result
       : await page.evaluate(driveKernel, {
-        ...driverConfig,
+        ...snapshotConfig,
         primaryChannel: config.phase.channel,
         fluxGap: 0,
       });
@@ -68,7 +74,7 @@ async function scoreOne(
       : config.phase.occupancy.channel === config.primaryChannel
         ? result
         : await page.evaluate(driveKernel, {
-          ...driverConfig,
+          ...snapshotConfig,
           primaryChannel: config.phase.occupancy.channel,
           fluxGap: 0,
         });
@@ -86,8 +92,56 @@ async function scoreOne(
       phaseResult.height,
       inclusionMask,
     );
+    return metrics;
+  };
+
+  if (!config.multiSnapshot) {
+    return { id, label, params, metrics: await scoreAtWarmup(config.warmupSteps) };
   }
-  return { id, label, params, metrics };
+
+  if (config.multiSnapshot.warmupSteps.length === 0) {
+    throw new Error(`${config.slug}: multiSnapshot.warmupSteps must not be empty`);
+  }
+  const samples: InterestingnessMetrics[] = [];
+  for (const warmupSteps of config.multiSnapshot.warmupSteps) {
+    samples.push(await scoreAtWarmup(warmupSteps));
+  }
+  return { id, label, params, metrics: summarizeMetrics(samples) };
+}
+
+function isMultiSnapshotMetrics(
+  metrics: InterestingnessMetrics,
+): metrics is MultiSnapshotMetrics {
+  return "spread" in metrics;
+}
+
+function multiSnapshotMetricsTable(candidates: ScoredCandidate[]): string {
+  const metricsKeys: (keyof InterestingnessMetrics)[] = [
+    "score",
+    "entropy",
+    "variance",
+    "spatialAutocorrelation",
+    "coverage",
+    "temporalFlux",
+    "meanResultantLength",
+    "circularSpatialAutocorrelation",
+  ];
+  const lines = [
+    "| set | metric | mean | min | max | std dev |",
+    "|---|---|---:|---:|---:|---:|",
+  ];
+  for (const candidate of candidates) {
+    if (!isMultiSnapshotMetrics(candidate.metrics)) continue;
+    for (const key of metricsKeys) {
+      const value = candidate.metrics[key];
+      const spread = candidate.metrics.spread[key];
+      if (value === undefined || spread === undefined) continue;
+      lines.push(
+        `| ${candidate.label} | ${key} | ${value.toFixed(6)} | ${spread.min.toFixed(6)} | ${spread.max.toFixed(6)} | ${spread.standardDeviation.toFixed(6)} |`,
+      );
+    }
+  }
+  return lines.join("\n");
 }
 
 function phaseMetricsTable(candidates: ScoredCandidate[]): string {
@@ -179,6 +233,14 @@ async function runSweep(
     "",
     metricsTable(references, paramKeys),
     "",
+    ...(config.multiSnapshot ? [
+      "## Multi-snapshot metric spread",
+      "",
+      `Each value is the mean of N=${config.multiSnapshot.warmupSteps.length} deterministic frame pairs captured after warmup steps ${config.multiSnapshot.warmupSteps.join(", ")}. Runtime is roughly N times a single-pair drive because every position starts from a fresh kernel.`,
+      "",
+      multiSnapshotMetricsTable([...topN, ...references]),
+      "",
+    ] : []),
     ...(config.phase ? [
       "## Linear and circular phase readings",
       "",
@@ -256,6 +318,62 @@ test("non-phase Gray-Scott scores are unchanged", async ({ page }) => {
   });
 });
 
+test("multi-snapshot summary reports the mean and population spread", () => {
+  const first = {
+    entropy: 0.2,
+    variance: 0.02,
+    spatialAutocorrelation: 0.4,
+    coverage: 0.3,
+    temporalFlux: 0.01,
+    score: 0.25,
+  };
+  const second = {
+    entropy: 0.6,
+    variance: 0.06,
+    spatialAutocorrelation: 0.8,
+    coverage: 0.5,
+    temporalFlux: 0.03,
+    score: 0.75,
+  };
+
+  expect(summarizeMetrics([first, second])).toEqual({
+    entropy: 0.4,
+    variance: 0.04,
+    spatialAutocorrelation: 0.6000000000000001,
+    coverage: 0.4,
+    temporalFlux: 0.02,
+    score: 0.5,
+    sampleCount: 2,
+    spread: {
+      entropy: { min: 0.2, max: 0.6, standardDeviation: 0.19999999999999998 },
+      variance: { min: 0.02, max: 0.06, standardDeviation: 0.02 },
+      spatialAutocorrelation: { min: 0.4, max: 0.8, standardDeviation: 0.2 },
+      coverage: { min: 0.3, max: 0.5, standardDeviation: 0.1 },
+      temporalFlux: { min: 0.01, max: 0.03, standardDeviation: 0.01 },
+      score: { min: 0.25, max: 0.75, standardDeviation: 0.25 },
+    },
+  });
+});
+
+test("Lorenz multi-snapshot scoring reproduces its recorded mean", async ({ page }) => {
+  const config = SWEEP_CONFIGS["lorenz-attractor"];
+  const classic = await scoreOne(page, config, "classic", "Classic rho=28", {
+    sigma: 10,
+    rho: 28,
+    beta: 2.6667,
+    stepsPerFrame: 6,
+    fade: 0.992,
+  });
+
+  expect(classic.metrics.score).toBe(0.5950786710384337);
+  expect(isMultiSnapshotMetrics(classic.metrics)).toBe(true);
+  if (isMultiSnapshotMetrics(classic.metrics)) {
+    expect(classic.metrics.spread.score?.standardDeviation).toBe(
+      0.010529246641957262,
+    );
+  }
+});
+
 test("circular autocorrelation is blind to a phase wrap", () => {
   const width = 32;
   const height = 32;
@@ -272,6 +390,39 @@ test("circular autocorrelation is blind to a phase wrap", () => {
 
 // Full sweeps are opt-in (SWEEP=1) — they step many kernels and take minutes.
 const sweepTest = process.env.SWEEP ? test : test.skip;
+const lorenzSnapshotsTest = process.env.LORENZ_SNAPSHOTS ? test : test.skip;
+
+lorenzSnapshotsTest("record Lorenz multi-snapshot appendix sets", async ({ page }) => {
+  const config = SWEEP_CONFIGS["lorenz-attractor"];
+  const sets: ReferenceSet[] = [
+    { id: "rho-28", label: "Classic rho=28", params: { sigma: 10, rho: 28, beta: 2.6667, stepsPerFrame: 6, fade: 0.992 } },
+    { id: "rho-35", label: "Wide wings rho=35", params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 } },
+    { id: "rho-37-fade", label: "rho=37 long fade", params: { sigma: 10, rho: 37, beta: 2.6667, stepsPerFrame: 6, fade: 0.997 } },
+    { id: "rho-42-fade", label: "rho=42 long fade", params: { sigma: 10, rho: 42, beta: 2.6667, stepsPerFrame: 6, fade: 0.997 } },
+  ];
+
+  for (const set of sets) {
+    const singleStart = performance.now();
+    const single = await scoreOne(
+      page,
+      { ...config, multiSnapshot: undefined },
+      set.id,
+      set.label,
+      set.params,
+    );
+    const singleMs = performance.now() - singleStart;
+    const multiStart = performance.now();
+    const multi = await scoreOne(page, config, set.id, set.label, set.params);
+    const multiMs = performance.now() - multiStart;
+    console.log(JSON.stringify({
+      id: set.id,
+      params: set.params,
+      singleScore: single.metrics.score,
+      wallClockMs: { single: singleMs, multi: multiMs },
+      multiSnapshot: multi.metrics,
+    }));
+  }
+});
 
 sweepTest("sweep gray-scott F/k surface", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["gray-scott"]);

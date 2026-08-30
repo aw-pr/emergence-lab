@@ -97,3 +97,41 @@ diffusion ratio, not the grid).
   lives in **velocity coherence** (the kernel's vx/vy channels 2–3), not occupancy
   texture. A polarisation/order-parameter metric on the velocity channels is the
   right follow-up before tuning Boids by measurement.
+
+## Appendix: Lorenz multi-snapshot scoring — 2026-08-30
+
+The Lorenz sweep now opts into **N=5** deterministic frame pairs, with frame A
+captured after **280, 420, 560, 700, and 840** kernel steps and frame B eight
+steps later. Every position starts from a fresh kernel. The harness reports the
+mean plus min, max, and population standard deviation for every metric; sims
+without this opt-in retain the original single-pair result shape and execution
+path.
+
+| set | single score at step 280 | N=5 mean | min–max | std dev |
+|---|---:|---:|---:|---:|
+| rho=28, sigma=10, fade=0.992, steps/frame=6 | 0.610012 | 0.595079 | 0.577254–0.610012 | 0.010529 |
+| rho=35, sigma=10, fade=0.990, steps/frame=12 | 0.677307 | 0.678021 | 0.672011–0.686087 | 0.005620 |
+| rho=37, sigma=10, fade=0.997, steps/frame=6 | 0.685512 | 0.684172 | 0.679966–0.690644 | 0.003716 |
+| rho=42, sigma=10, fade=0.997, steps/frame=6 | 0.687707 | 0.700738 | 0.687707–0.708288 | 0.006968 |
+
+The score spread is small: 0.004–0.011 standard deviation, and averaging moves
+the four single-frame readings by −0.015, +0.001, −0.001, and +0.013. The live
+headless harness no longer reproduces the historical rho=28 score of 0.174
+recorded above; at the same configured step 280 it now produces 0.610012. On
+the current kernel, timing noise therefore does not explain a large ranking
+gap. Multi-snapshot scoring is still the more robust trajectory measurement,
+but it does not change the preset conclusion: canonical rho=28 stays, and the
+existing **Wide wings** rho=35 preset already covers the fuller butterfly. No
+preset was changed.
+
+On this machine the four-set headless measurement completed in 3.96 seconds
+including browser and dev-server startup. Individual single-pair drives took
+75–115 ms; their five-snapshot counterparts took 405–446 ms, about 3.7–5.7×
+the wall-clock cost.
+
+Clifford–De Jong remains on single-pair scoring: its coefficients are pinned,
+its 260-step warmup is already about 2.6 trail-decay convergence times, and the
+documented sensitivity is saturation/framing rather than trajectory timing.
+DLA also remains single-pair: its seed is pinned and its 500-step scoring point
+is a terminal cluster state with exactly zero flux, so later snapshots would be
+identical rather than a timing sample.
