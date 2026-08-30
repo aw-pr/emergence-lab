@@ -97,7 +97,7 @@ Do not read anything else unless you need to; keep your context lean.
 
 ## Budget
 
-- **Worker wall-clock:** 240 minutes
+- **Worker wall-clock:** 180 minutes
 - **Verifier wall-clock:** 60 minutes
 
 ## Escalation
@@ -176,5 +176,8 @@ Deliverables, constraints, acceptance criteria, contract test, out-of-scope and
 escalation are all exactly as written above. In particular: **no preset
 promotions** — first run of a new instrument is calibration.
 
-- **Worker wall-clock:** 240 minutes
-- **Verifier wall-clock:** 60 minutes
+The Budget section above is cut from 240 to **180** worker minutes. The
+2026-08-24 attempt burned a full 240 and landed nothing, and deliverables 1
+and 2 now exist as a draft at `archive/63-point-cloud-metrics-wip`, so the
+remaining work is deliverable 3. This caps what a second stall can cost the
+overnight window.
