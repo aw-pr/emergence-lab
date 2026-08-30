@@ -83,3 +83,36 @@ None. The margin over the best incumbent is 1.7% on a metric that is known to be
 mis-specified for a circular channel; acting on it would not be honest evidence.
 Nothing is escalated as a defect either — the two low-scoring presets are
 correct demonstrations of global synchronisation.
+
+## Circular-statistics calibration — 2026-08-30
+
+The same capped search was rerun headlessly with two additive phase readings:
+mean resultant length (global phase order) and lag-1 circular spatial
+autocorrelation (local phase coherence). Neither enters the existing composite.
+The run evaluated 40 swept sets and 4 shipped references; 120 grid sets remained
+skipped, matching the original cap. Full tables and raw values are in
+`e2e/artifacts/kuramoto-oscillators/`.
+
+| linear rank | linear set | score | linear autocorr | circular rank | circular set | resultant length | circular autocorr |
+|---:|---|---:|---:|---:|---|---:|---:|
+| 1 | K 4.6, spread 0.1, local | 0.800 | 0.945 | 1 | K 4.6, spread 0.1, global | 1.000 | 1.000 |
+| 2 | K 3.2, spread 0.1, local | 0.796 | 0.939 | 2 | K 3.2, spread 0.1, global | 1.000 | 1.000 |
+| 3 | K 4.6, spread 0.3, local | 0.794 | 0.918 | 3 | K 1.8, spread 0.1, global | 0.999 | 0.999 |
+
+| reference | linear rank | score | linear autocorr | resultant-length rank | resultant length | circular-autocorr rank | circular autocorr |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Vortex field | 1 | 0.787 | 0.917 | 3 | 0.459 | 2 | 0.997 |
+| Local phase waves | 2 | 0.755 | 0.783 | 4 | 0.031 | 3 | 0.959 |
+| Global threshold | 3 | 0.201 | 0.010 | 2 | 0.952 | 4 | 0.908 |
+| Global lock | 4 | 0.077 | 0.010 | 1 | 0.999 | 1 | 0.998 |
+
+The circular readings do reorder the shipped presets. Most notably, Global lock
+moves from fourth on the texture-oriented composite to first on both phase
+readings, which is the behaviour its name promises. Circular autocorrelation
+also scores smooth local waves highly, while resultant length separates global
+locking from a phase-balanced wave. They are complementary diagnostics, not a
+replacement composite, so no preset was changed.
+
+The synthetic wrap check used a constant eight-step phase gradient across both
+grid axes. It scored 0.333333 under the linear autocorrelation and 0.707107
+circularly, recording that the circular reading sees through the 1-to-0 wrap.

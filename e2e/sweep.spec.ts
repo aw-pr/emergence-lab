@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
-import { scoreFrames } from "./harness/metrics.ts";
+import {
+  circularSpatialAutocorrelation,
+  meanResultantLength,
+  scoreFrames,
+  spatialAutocorrelation,
+} from "./harness/metrics.ts";
 import {
   SWEEP_CONFIGS,
   expandSweep,
@@ -49,7 +54,61 @@ async function scoreOne(
     result.height,
     config.coverageThreshold,
   );
+
+  if (config.phase) {
+    const phaseResult = config.phase.channel === config.primaryChannel
+      ? result
+      : await page.evaluate(driveKernel, {
+        ...driverConfig,
+        primaryChannel: config.phase.channel,
+        fluxGap: 0,
+      });
+    const occupancyResult = !config.phase.occupancy
+      ? undefined
+      : config.phase.occupancy.channel === config.primaryChannel
+        ? result
+        : await page.evaluate(driveKernel, {
+          ...driverConfig,
+          primaryChannel: config.phase.occupancy.channel,
+          fluxGap: 0,
+        });
+    const inclusionMask = occupancyResult && Float32Array.from(
+      occupancyResult.frameA,
+      (value) => value > config.phase!.occupancy!.threshold ? 1 : 0,
+    );
+    metrics.meanResultantLength = meanResultantLength(
+      phaseResult.frameA,
+      inclusionMask,
+    );
+    metrics.circularSpatialAutocorrelation = circularSpatialAutocorrelation(
+      phaseResult.frameA,
+      phaseResult.width,
+      phaseResult.height,
+      inclusionMask,
+    );
+  }
   return { id, label, params, metrics };
+}
+
+function phaseMetricsTable(candidates: ScoredCandidate[]): string {
+  const linear = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+  const circular = [...candidates].sort(
+    (a, b) =>
+      (b.metrics.circularSpatialAutocorrelation ?? -Infinity) -
+      (a.metrics.circularSpatialAutocorrelation ?? -Infinity),
+  );
+  const circularRanks = new Map(circular.map((candidate, index) => [candidate.id, index + 1]));
+  const lines = [
+    "| linear rank | circular rank | set | score | autocorr | flux | resultant length | circular autocorr |",
+    "|---:|---:|---|---:|---:|---:|---:|---:|",
+  ];
+  linear.forEach((candidate, index) => {
+    const metrics = candidate.metrics;
+    lines.push(
+      `| ${index + 1} | ${circularRanks.get(candidate.id)} | ${candidate.label} | ${metrics.score.toFixed(3)} | ${metrics.spatialAutocorrelation.toFixed(3)} | ${metrics.temporalFlux.toFixed(4)} | ${metrics.meanResultantLength?.toFixed(3)} | ${metrics.circularSpatialAutocorrelation?.toFixed(3)} |`,
+    );
+  });
+  return lines.join("\n");
 }
 
 /**
@@ -120,6 +179,20 @@ async function runSweep(
     "",
     metricsTable(references, paramKeys),
     "",
+    ...(config.phase ? [
+      "## Linear and circular phase readings",
+      "",
+      `Circular statistics use phase channel ${config.phase.channel}. Circular rank is by circular spatial autocorrelation; it is reported alongside, not folded into, the existing composite.`,
+      "",
+      "### Swept sets",
+      "",
+      phaseMetricsTable(ranked),
+      "",
+      "### References",
+      "",
+      phaseMetricsTable(references),
+      "",
+    ] : []),
   ].join("\n");
   writeText(`${ARTIFACT_ROOT}/${artifactId}/report.md`, md);
   writeText(
@@ -163,6 +236,38 @@ test("metrics harness rewards structure over washout", async ({ page }) => {
     expect(Number.isFinite(m.spatialAutocorrelation)).toBe(true);
   }
   expect(turing.metrics.score).toBeGreaterThan(washout.metrics.score);
+});
+
+test("non-phase Gray-Scott scores are unchanged", async ({ page }) => {
+  const config = SWEEP_CONFIGS["gray-scott"];
+  const coral = await scoreOne(page, config, "coral", "Coral", {
+    ...config.baseParams,
+    F: 0.0545,
+    k: 0.062,
+  });
+
+  expect(coral.metrics).toEqual({
+    entropy: 0.6967874006572629,
+    variance: 0.016457917737197007,
+    spatialAutocorrelation: 0.9369885340278952,
+    coverage: 0.6756591796875,
+    temporalFlux: 0.0011477361467768787,
+    score: 0.7102674508287455,
+  });
+});
+
+test("circular autocorrelation is blind to a phase wrap", () => {
+  const width = 32;
+  const height = 32;
+  const wrappedGradient = Float32Array.from(
+    { length: width * height },
+    (_, index) => ((index % width + Math.floor(index / width)) % 8) / 8,
+  );
+  const linear = spatialAutocorrelation(wrappedGradient, width, height);
+  const circular = circularSpatialAutocorrelation(wrappedGradient, width, height);
+
+  expect(linear).toBeLessThan(0.4);
+  expect(circular).toBeGreaterThan(0.7);
 });
 
 // Full sweeps are opt-in (SWEEP=1) — they step many kernels and take minutes.

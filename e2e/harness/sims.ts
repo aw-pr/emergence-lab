@@ -22,6 +22,13 @@ export interface ReferenceSet {
   params: Params;
 }
 
+/** Opt-in circular-statistics path for a phase channel normalised to [0, 1]. */
+export interface PhaseConfig {
+  channel: number;
+  /** Optional channel/threshold selecting cells whose phase is defined. */
+  occupancy?: { channel: number; threshold: number };
+}
+
 export interface SimSweepConfig {
   slug: string;
   /** Artifact directory / report id; defaults to the slug. Lets several sweeps
@@ -35,6 +42,8 @@ export interface SimSweepConfig {
   fluxGap: number;
   dt: number;
   coverageThreshold: number;
+  /** Present only when a kernel exposes a phase channel. */
+  phase?: PhaseConfig;
   /** Fixed params applied to every set in the sweep. */
   baseParams: Params;
   /** Swept axes; the sweep is their Cartesian product. */
@@ -335,6 +344,7 @@ const PHYSARUM: SimSweepConfig = {
 const SWARMALATORS: SimSweepConfig = {
   slug: "swarmalators",
   primaryChannel: 0, // Density
+  phase: { channel: 1, occupancy: { channel: 0, threshold: 0.05 } },
   gridWidth: 128,
   gridHeight: 128,
   warmupSteps: 250,
@@ -522,6 +532,7 @@ const DIFFUSION_LIMITED_AGGREGATION: SimSweepConfig = {
 const KURAMOTO_OSCILLATORS: SimSweepConfig = {
   slug: "kuramoto-oscillators",
   primaryChannel: 0, // Phase
+  phase: { channel: 0 },
   gridWidth: 128,
   gridHeight: 128,
   warmupSteps: 400,

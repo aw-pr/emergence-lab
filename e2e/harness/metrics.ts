@@ -39,6 +39,10 @@ export interface InterestingnessMetrics extends FrameMetrics {
   temporalFlux: number;
   /** Composite interestingness score, in [0, 1]. Higher is more interesting. */
   score: number;
+  /** Mean resultant length for an opted-in phase channel, in [0, 1]. */
+  meanResultantLength?: number;
+  /** Lag-1 circular coherence for an opted-in phase channel, in [-1, 1]. */
+  circularSpatialAutocorrelation?: number;
 }
 
 const DEFAULT_BINS = 32;
@@ -124,6 +128,60 @@ export function spatialAutocorrelation(
   const fieldVar = varAcc / n;
   if (fieldVar <= 1e-12 || pairs === 0) return 0;
   return cov / pairs / fieldVar;
+}
+
+/**
+ * Circular order parameter for phases normalised to [0, 1]. Each value is
+ * mapped to an angle on [0, 2π); the length of their mean unit vector is 1
+ * for perfect synchrony and approaches 0 for phases spread around the circle.
+ */
+export function meanResultantLength(values: Field, inclusionMask?: Field): number {
+  if (values.length === 0) return 0;
+  let sumCos = 0;
+  let sumSin = 0;
+  let included = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    if (inclusionMask && !(inclusionMask[i] > 0)) continue;
+    const angle = values[i] * Math.PI * 2;
+    sumCos += Math.cos(angle);
+    sumSin += Math.sin(angle);
+    included += 1;
+  }
+  return included === 0 ? 0 : clamp01(Math.hypot(sumCos, sumSin) / included);
+}
+
+/**
+ * Lag-1 circular spatial autocorrelation over right and down neighbour pairs
+ * (interior, non-toroidal). This is the mean cosine of the angular difference:
+ * 1 for locally aligned phases, 0 for unrelated neighbours, and -1 for
+ * anti-phase neighbours. Unlike linear covariance, crossing phase 1 -> 0 does
+ * not create a false discontinuity.
+ */
+export function circularSpatialAutocorrelation(
+  values: Field,
+  width: number,
+  height: number,
+  inclusionMask?: Field,
+): number {
+  if (width < 1 || height < 1 || values.length < width * height) return 0;
+  let coherence = 0;
+  let pairs = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      if (inclusionMask && !(inclusionMask[i] > 0)) continue;
+      const angle = values[i] * Math.PI * 2;
+      if (x + 1 < width && (!inclusionMask || inclusionMask[i + 1] > 0)) {
+        coherence += Math.cos((values[i + 1] * Math.PI * 2) - angle);
+        pairs += 1;
+      }
+      if (y + 1 < height && (!inclusionMask || inclusionMask[i + width] > 0)) {
+        coherence += Math.cos((values[i + width] * Math.PI * 2) - angle);
+        pairs += 1;
+      }
+    }
+  }
+  return pairs === 0 ? 0 : coherence / pairs;
 }
 
 /** Fraction of cells whose normalised intensity exceeds the background threshold. */

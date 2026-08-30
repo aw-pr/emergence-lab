@@ -85,3 +85,38 @@ None. The best incumbent wins on the metric, and the metric can only see half of
 what this sim does. A circular-statistics metric on the phase channel is the
 right instrument for Swarmalators and is out of scope here — recorded as
 follow-up work rather than acted on.
+
+## Circular-statistics calibration — 2026-08-30
+
+The same capped search was rerun headlessly with mean resultant length and
+lag-1 circular spatial autocorrelation on phase channel 1. Cells below density
+0.05 were excluded because the kernel writes phase zero where no swarm is
+present; counting that background would create false synchrony. The existing
+density composite is unchanged. The run evaluated 25 swept sets and 6 shipped
+references; 75 grid sets remained skipped. Full tables and raw values are in
+`e2e/artifacts/swarmalators/`.
+
+| linear rank | linear set | score | linear autocorr | circular rank | circular set | resultant length | circular autocorr |
+|---:|---|---:|---:|---:|---|---:|---:|
+| 1 | J 1, K −0.1 | 0.634 | 0.977 | 1 | J 0.1, K 1 | 1.000 | 1.000 |
+| 2 | J 0.5, K 0.5 | 0.625 | 0.938 | 2 | J −0.5, K 1 | 1.000 | 1.000 |
+| 3 | J 1, K 0.5 | 0.616 | 0.914 | 3 | J 0.5, K 1 | 0.986 | 1.000 |
+
+| reference | linear rank | score | linear autocorr | resultant-length rank | resultant length | circular-autocorr rank | circular autocorr |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Static phase wave | 1 | 0.636 | 0.973 | 3 | 0.148 | 2 | 0.983 |
+| Splintered phase wave | 2 | 0.634 | 0.977 | 2 | 0.153 | 3 | 0.969 |
+| Restless mix | 3 | 0.595 | 0.981 | 5 | 0.026 | 5 | 0.781 |
+| Active phase wave | 4 | 0.563 | 0.957 | 4 | 0.028 | 4 | 0.817 |
+| Static sync | 5 | 0.556 | 0.977 | 1 | 1.000 | 1 | 1.000 |
+| Static async | 6 | 0.542 | 0.971 | 6 | 0.005 | 6 | 0.773 |
+
+The circular readings do reorder the shipped presets: Static sync moves from
+fifth to first on both phase measures, while Restless mix moves from third to
+fifth. That is a useful correction of what the density-only ranking cannot see,
+not evidence for a promotion. No preset was changed.
+
+The shared synthetic wrap check used a constant eight-step phase gradient
+across both grid axes. It scored 0.333333 under the linear autocorrelation and
+0.707107 circularly, recording that the circular reading sees through the
+1-to-0 wrap.
