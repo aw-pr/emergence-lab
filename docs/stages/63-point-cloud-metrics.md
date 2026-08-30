@@ -112,3 +112,69 @@ inside this stage.
 Re-run `npm run verify`, the contract guard, the Gray-Scott reproduction
 check, and both new sweeps. Confirm no preset changed and the separation
 numbers in criterion 4. Judge numbers only.
+
+---
+
+## Re-brief (2026-08-30)
+
+The 2026-08-24 dispatch stalled: `worker_envelope_missing_after_exit`, 4,617,912
+tokens spent, no verifier ever dispatched, nothing landed. The card itself is
+unchanged and still correct — everything above stands. This re-brief records
+what the last attempt left behind and the three things that killed it.
+
+### Salvageable prior work
+
+The previous worker's tree is committed and preserved at tag
+`archive/63-point-cloud-metrics-wip` (`65e7d03`), authored to Claude Fable 5.
+**Nothing in it is verified** — `npm run verify` was never recorded green, the
+contract guard never ran, and the Gray-Scott reproduction check never ran.
+Treat it as a strong starting draft to review, not as trusted code:
+
+    git show archive/63-point-cloud-metrics-wip
+
+It covers deliverables 1 and 2 and appears to respect the additive constraint:
+
+- `e2e/harness/metrics.ts` — toroidal separable Gaussian blur, a
+  jointly-normalised two-frame preprocess (one shared max, so temporal flux
+  stays comparable), and a velocity polarisation order parameter.
+- `e2e/harness/sims.ts` — a `PointCloudConfig` opt-in wired to boids
+  (blurRadius 6, velocity channels 2–3, `obstacleLayout` pinned to `"none"`)
+  and Particle Life (blurRadius 8, no velocity channels).
+- `e2e/sweep.spec.ts` — routes opted-in sims through the smoothed path,
+  re-drives the deterministic kernel once per velocity channel, and emits a
+  `.smoothed.png` beside each thumbnail.
+
+Adopt, correct or discard it on your own judgement, but do not re-derive it
+from scratch without looking. Deliverable 3 — the sweep re-runs and the two
+dated write-ups — was never reached, and is the bulk of the remaining work.
+
+### Why it stalled, and what to do differently
+
+1. **It parked on a background task and never woke up.** The final log line is
+   "The Particle Life sweep is running in the background; I'll pick up when its
+   completion notification arrives". That notification never came and the
+   worker burned its 240-minute budget waiting. **Run the sweeps in the
+   foreground with an explicit timeout.** If a sweep genuinely cannot finish
+   inside the budget, cut the axes and record what you dropped — the card
+   already permits that.
+2. **It wrote no envelope on the way out.** Write
+   `state/handoffs/63-point-cloud-metrics.json` as soon as you have a
+   defensible partial result, and update it as you go. An envelope recording a
+   partial pass is worth vastly more than a perfect run that exits silently —
+   without one the tick cannot hand the stage to a verifier at all.
+3. **It replaced the worktree's tracked `state/` with a symlink** to the main
+   repo (`state -> ../emergence-lab/state`), deleting `state/handoffs/.gitkeep`
+   and `state/handoffs/README.md` from the run branch. Do not do this. The run
+   worktree's `state/` is tracked content; leave it alone. (The
+   `node_modules -> ../emergence-lab/node_modules` symlink it also created is
+   the sanctioned workaround for a worktree without installed deps — that one
+   is fine, just never commit it.)
+
+### Unchanged
+
+Deliverables, constraints, acceptance criteria, contract test, out-of-scope and
+escalation are all exactly as written above. In particular: **no preset
+promotions** — first run of a new instrument is calibration.
+
+- **Worker wall-clock:** 240 minutes
+- **Verifier wall-clock:** 60 minutes
