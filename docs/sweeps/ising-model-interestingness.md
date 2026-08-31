@@ -154,3 +154,27 @@ The unchanged references reproduced their 2026-08-23 values: Critical domains
 metrics are entropy 0.15635766186989672, autocorrelation
 0.8183746199900425, flux 0.05853271484375, and coverage 0.767822265625
 (composite score 0.5190352004615919).
+
+## Appendix: multi-lag structure term cross-check — 2026-08-30
+
+Stage 66 added `multiLagSpatialAutocorrelation` (`e2e/harness/metrics.ts`), a
+generalisation of the existing lag-1 spatial autocorrelation across lags
+{1, 2, 3, 4, 6, 8} that reports the strongest reading found at any of them. Full
+write-up and the Game of Life rescue case are in
+`docs/sweeps/game-of-life-interestingness.md`. This is the cross-check this card
+requires against a sim already flagged as the term behaving *correctly*
+(Critical domains vs Cold quench, above) — Ising's domains are large coarsened
+blobs, not fine-scale periodic structure, so no rescue is expected here.
+
+| reference | lag-1 (existing) | multi-lag (new) | disagreement |
+|---|---:|---:|---|
+| Critical domains | 0.6677 | 0.6677 | none |
+| Cold quench | 0.9600 | 0.9600 | none |
+| Hot noise | 0.2394 | 0.2394 | none |
+
+None. All three references read identically under both terms — Ising's domain
+walls have no periodicity at the lags searched, so the max-over-lags reading
+collapses to the lag-1 reading exactly. This confirms the new term does not
+disturb a case the write-up already established as correct: Critical domains
+still scores below Cold quench under either term, for the same physical
+reason given above.

@@ -77,3 +77,49 @@ recorded here so a future sweep does not "fix" a working preset on this number.
 
 A multi-lag or FFT-band structure term would rank fine-scale periodic patterns
 correctly. Out of scope for this stage; noted as follow-up.
+
+## Appendix: multi-lag structure term — 2026-08-30
+
+Stage 66 built `multiLagSpatialAutocorrelation` in `e2e/harness/metrics.ts`: the
+existing covariance/variance construction generalised to lags {1, 2, 3, 4, 6, 8},
+reporting the strongest (most positive) reading found at any of them. It is
+reported beside `spatialAutocorrelation`, not folded into the composite.
+
+Re-running "Maze-like" (B3/S12345, seed 0.05) through the harness:
+
+| term | reading |
+|---|---|
+| lag-1 (existing) | **−0.0733** |
+| multi-lag (new) | **0.3838** |
+
+The rescue is real: at lag 2, corridor cells share the same phase of the
+alternation the lag-1 term reads as anti-correlated, so the maze's periodic
+structure is visible to the new term even though its fundamental period makes
+lag 1 negative.
+
+**The term still starves white noise.** A synthetic uniform-random field
+(mulberry32 seed 42, 128×128, i.i.d. draws in [0, 1)) scores:
+
+| term | reading |
+|---|---|
+| lag-1 (existing) | −0.0013 |
+| multi-lag (new) | **0.0075** |
+
+Both numbers are low — the new term has not simply traded a blind spot at lag 1
+for a blind spot at every lag simultaneously. Both criteria (rescue Maze-like,
+starve noise) hold at once, so this is not the negative-result case the card's
+escalation clause anticipated.
+
+Re-scoring the other two shipped references under both terms for comparison:
+Conway (S2–3, seed 0.28) reads 0.4896 under both terms; Dense ash (S2–3, seed
+0.4) reads 0.5013 under both terms. Neither preset has fine-scale periodic
+structure at lag 1, so the new term agrees with the old one exactly for both —
+only Maze-like's reading moves. See the cross-sim tabulation in
+`docs/sweeps/ising-model-interestingness.md` and
+`docs/sweeps/gray-scott-interestingness.md` for the same appendix on sims where
+the term was expected to (and does) agree with the existing one.
+
+This card makes no promotion and no composite change (`git diff
+src/app/presets.ts` is empty) — it characterises a new instrument, it does not
+adopt it. Whether the composite should incorporate a multi-lag term is a
+follow-up decision with its own re-scoring plan.

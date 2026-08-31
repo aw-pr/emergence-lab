@@ -43,6 +43,13 @@ export interface InterestingnessMetrics extends FrameMetrics {
   meanResultantLength?: number;
   /** Lag-1 circular coherence for an opted-in phase channel, in [-1, 1]. */
   circularSpatialAutocorrelation?: number;
+  /**
+   * Multi-lag spatial structure reading (see multiLagSpatialAutocorrelation).
+   * Reported beside spatialAutocorrelation for comparison; not populated by
+   * frameMetrics/scoreFrames and not part of the composite — callers compute
+   * it explicitly where the extra pass is wanted.
+   */
+  multiLagStructure?: number;
 }
 
 export interface MetricSpread {
@@ -139,6 +146,70 @@ export function spatialAutocorrelation(
   const fieldVar = varAcc / n;
   if (fieldVar <= 1e-12 || pairs === 0) return 0;
   return cov / pairs / fieldVar;
+}
+
+const DEFAULT_LAGS = [1, 2, 3, 4, 6, 8];
+
+/**
+ * Multi-lag spatial structure term: the same covariance/variance construction
+ * as spatialAutocorrelation, generalised to a set of lag distances and
+ * reporting the strongest (most positive) reading found at any of them.
+ *
+ * The instrument gap this closes: a fine-scale periodic pattern (Game of
+ * Life's "Maze-like" — one-cell corridors alternating with one-cell walls) is
+ * anti-correlated at lag 1, exactly the signal white noise also produces
+ * there, so a lag-1-only reading cannot tell the two apart. At lag 2 the
+ * corridor cells share phase with each other, so a periodic pattern lights up
+ * positively somewhere in the lag set even though its fundamental period
+ * makes lag 1 negative. White noise has no phase to share at any lag, so its
+ * per-lag readings stay near zero and the max across lags stays low too.
+ *
+ * Chosen over an FFT band-energy term because it reuses the exact
+ * covariance/variance formula already in this module at a different
+ * neighbour offset — no transform, no new numerical machinery, no
+ * dependencies, and each lag's reading is as easy to reason about as the
+ * existing lag-1 term.
+ */
+export function multiLagSpatialAutocorrelation(
+  values: Field,
+  width: number,
+  height: number,
+  lags: number[] = DEFAULT_LAGS,
+): number {
+  if (width < 2 || height < 2 || values.length < width * height) return 0;
+  const m = mean(values);
+  let varAcc = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const d = values[i] - m;
+    varAcc += d * d;
+  }
+  const fieldVar = varAcc / (width * height);
+  if (fieldVar <= 1e-12) return 0;
+
+  let best = -Infinity;
+  for (const lag of lags) {
+    if (lag < 1 || lag >= width || lag >= height) continue;
+    let cov = 0;
+    let pairs = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = y * width + x;
+        const d = values[i] - m;
+        if (x + lag < width) {
+          cov += d * (values[i + lag] - m);
+          pairs += 1;
+        }
+        if (y + lag < height) {
+          cov += d * (values[i + lag * width] - m);
+          pairs += 1;
+        }
+      }
+    }
+    if (pairs === 0) continue;
+    const reading = cov / pairs / fieldVar;
+    if (reading > best) best = reading;
+  }
+  return best === -Infinity ? 0 : best;
 }
 
 /**
