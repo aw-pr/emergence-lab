@@ -832,6 +832,21 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         stepsPerFrame: 1,
       },
     },
+    {
+      // Promoted by the 2026-08-25 radius follow-up (0.414 -> 0.463):
+      // radius, mu and sigma are the winning searched values; muDrift, dt and
+      // stepsPerFrame are inherited unchanged from the stage 62 harness.
+      id: "living-labyrinth",
+      label: "Living labyrinth",
+      params: {
+        mu: 0.24,
+        sigma: 0.028,
+        muDrift: 0.015,
+        dt: 0.1,
+        radius: 14,
+        stepsPerFrame: 1,
+      },
+    },
   ],
 };
 

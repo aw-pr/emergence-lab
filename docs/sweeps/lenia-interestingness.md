@@ -143,3 +143,16 @@ bands are a different visual character from Geminium storm's smaller broken
 filaments, not a sharper version of that incumbent. It is therefore recorded
 as a fourth-preset candidate under the escalation clause, with no change to the
 three shipped Lenia presets pending operator choice.
+
+## Fourth-preset promotion — 2026-09-01
+
+The operator decision of 2026-08-30 authorised the radius-follow-up winner as
+a fourth shipped preset, **Living labyrinth**. Its searched values are
+`radius: 14`, `mu: 0.24`, and `sigma: 0.028`. The stage 62 harness values that
+were not searched are inherited unchanged: `muDrift: 0.015`, `dt: 0.1`, and
+`stepsPerFrame: 1`.
+
+Live visual verification and frame-rate measurement were not completed in this
+worker run because no browser surface was available. No screenshot path is
+recorded. The preset's visual state, default-profile frame rate and reset cycle
+therefore remain for the GUI verifier to assess before acceptance.
