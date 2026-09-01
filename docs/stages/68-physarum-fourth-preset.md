@@ -112,3 +112,47 @@ the browser to select the new preset and capture a frame. Physarum is a WebGL2
 sim: launch headless Chromium with `--use-angle=metal --enable-gpu` or the
 context will fail to create. Judge the agent-count arithmetic and confirm the
 frame is a filled branching mat.
+
+## Re-brief — attempt 2 (2026-09-01)
+
+Attempt 1 is preserved at `0497412` on
+`wip/68-physarum-fourth-preset-attempt-1`. It passed all five numbered
+acceptance criteria and was failed on a deliverable-level defect the verifier
+found outside them. Most of it was right: `agentCount: 31500` with the
+arithmetic recorded, the label "Root mat", the additive-only diff, and the
+sensing geometry all stand. Re-use them rather than re-deriving them.
+
+Two things to fix, and nothing else.
+
+**1. `depositAmount` was copied from the wrong source.** The preset ships
+`0.24`, which is the `veins` *reference* preset's value
+(`e2e/harness/sims.ts:344`). The sweep's pinned base — the params the winning
+`sensorAngle: 60` / `sensorDistance: 5` / `turnSpeed: 12` set actually ran
+under when it scored 0.901 — is `baseParams` at `e2e/harness/sims.ts:337`,
+where `depositAmount` is `0.22`. Deliverable 1 says "take them from the sweep's
+pinned base"; `baseParams` is that base, and a reference preset is a different
+object. `moveSpeed` (1), `evaporation` (0.9) and `stepsPerFrame` (1) were taken
+correctly. Ship `0.22` so the preset is the configuration that was measured,
+not a plausible variant of it.
+
+This also makes the appendix's traceability claim true. As written it says the
+preset inherits "the sweep's pinned base for the unsearched parameters", which
+is factually wrong for `depositAmount` at `0.24`.
+
+**2. The screenshot path does not resolve.** The appendix paths
+`e2e/artifacts/physarum/root-mat-app-384.png` and no such file exists in the
+tree; the appendix itself records the capture as "pending" because the worker
+could not get a browser backend. Criterion 3 asks for a screenshot committed
+*or* pathed — a path to nothing satisfies neither. Either commit the frame at
+that path or remove the path and say plainly that the frame was verified live
+rather than captured. Do not leave a dangling path.
+
+This card already declares `Requires GUI: true`, so the browser should be
+reachable. If it is not, say so explicitly in the handoff and take the second
+option rather than pathing a file you did not write.
+
+### Added acceptance criterion
+
+6. `depositAmount` in the new preset equals the `depositAmount` in
+   `baseParams` at `e2e/harness/sims.ts`, and any screenshot path named in the
+   appendix resolves to a file that exists in the tree.
