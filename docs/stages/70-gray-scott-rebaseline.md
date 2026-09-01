@@ -168,12 +168,25 @@ Leave it recorded and do not fix it here.
 
 ### Why it stalled, and the one thing to do differently
 
-It replaced the run worktree's `state/` with a symlink to the main repo
-(`state -> ../emergence-lab/state`). Stage 63's re-brief warned against
-exactly this move for exactly this reason, and it is the likeliest cause of
-the missing envelope: anything written to `state/handoffs/` from inside the
-worktree lands somewhere the tick does not look for it. That symlink was
-removed before the work was preserved, so this tree is clean.
+**Correction, 2026-09-01, after this re-brief caused a third stall.** The
+paragraph that stood here blamed the `state -> ../emergence-lab/state`
+symlink and told the next worker to remove it. That was wrong, and the worker
+that followed it stalled the stage with `dispatch_configuration_fault:worker`.
+
+The tick creates that symlink itself at every dispatch
+(`scripts/tick.sh:1461`) and validates it before dispatching
+(`scripts/tick.sh:1376-1388`). Removing it is what breaks the run, not what
+fixes it. **Leave `state` alone; it is meant to be a symlink.**
+
+Stage 63's warning was about something different: a worker replacing a
+*tracked* `state/` tree and deleting tracked files from the run branch. The
+real fragility here is that `state/handoffs/.gitkeep` and
+`state/handoffs/README.md` are tracked on the run branch, so checking the
+branch out materialises a real `state/` directory and the tick's `ln -s` then
+lands *inside* it as `state/state` instead of replacing it. That is an
+autometta defect, not this card's work.
+
+Why attempt 2's envelope went missing is still unestablished.
 
 **Write `state/handoffs/70-gray-scott-rebaseline.json` as soon as you have a
 defensible result, and update it as you go.** An envelope recording a partial
