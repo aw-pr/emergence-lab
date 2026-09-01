@@ -319,6 +319,24 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         stepsPerFrame: 1,
       },
     },
+    {
+      // Promoted by the 2026-08-23 interestingness sweep (0.851 → 0.901):
+      // 14,000 agents at 256² scales to 14,000 × (384 / 256)² = 31,500
+      // at the app's grid. The remaining parameters inherit the sweep's pinned
+      // base rather than being selected by the search.
+      id: "root-mat",
+      label: "Root mat",
+      params: {
+        agentCount: 31500,
+        sensorAngle: 60,
+        sensorDistance: 5,
+        turnSpeed: 12,
+        moveSpeed: 1,
+        depositAmount: 0.22,
+        evaporation: 0.9,
+        stepsPerFrame: 1,
+      },
+    },
   ],
   "particle-life": [
     {

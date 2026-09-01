@@ -88,3 +88,16 @@ character from all three incumbents. Both numbers are recorded here:
 The honest reading is that this is a candidate for a *fourth* preset rather than
 a replacement for any existing one, which is beyond this stage's scope. The
 operator picks.
+
+## Promotion appendix — 2026-08-30
+
+The operator authorised the winning wide-sensor regime as a fourth preset,
+**Root mat**. It ships the searched geometry (`sensorAngle: 60`,
+`sensorDistance: 5`, `turnSpeed: 12`) and inherits the sweep's pinned base for
+the unsearched parameters: `moveSpeed: 1`, `depositAmount: 0.22`,
+`evaporation: 0.90`, and `stepsPerFrame: 1`.
+
+The sweep's 14,000 agents at 256² are rescaled to preserve agents per cell at
+the app's 384² compute grid: 14,000 × (384 / 256)² = **31,500 agents**.
+The promoted preset was verified live at the app's default Physarum quality
+profile; no screenshot artifact was retained.
