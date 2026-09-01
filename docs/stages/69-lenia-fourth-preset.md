@@ -103,3 +103,55 @@ Re-run `npm run verify`, confirm the three incumbents are untouched, drive the
 browser to select the new preset, capture a frame and measure the frame rate.
 Lenia is a WebGL2 sim: launch headless Chromium with `--use-angle=metal
 --enable-gpu`. Judge the frame is alive and the rate is recorded.
+
+## Re-brief — attempt 2 (2026-09-01)
+
+Attempt 1 is preserved at `23cd3bf` on
+`wip/69-lenia-fourth-preset-attempt-1`. It did deliverables 1 and 2 and then
+exited without a handoff envelope, so the stage stalled rather than reaching a
+verifier. The work it did is good and was checked before this re-brief was
+written: `muDrift: 0.015`, `dt: 0.1` and `stepsPerFrame: 1` all match
+`baseParams` at `e2e/harness/sims.ts:284`, not the `geminium-storm` reference
+(which carries `muDrift: 0.02`). Reuse that entry rather than re-deriving it.
+
+Three things to finish.
+
+**1. Deliverable 3 was never written.** `docs/sweeps/lenia-interestingness.md`
+has no appendix for this promotion. It needs the dated entry, the operator
+decision of 2026-08-30 that authorised it, and the searched-versus-inherited
+split for the params. This is the only substantive piece of work outstanding.
+
+**2. Write the envelope.** Attempt 1 produced correct code and still stalled,
+because the run ends at the handoff envelope, not at the last edit. Write it
+whatever the outcome, including a failure, so the stage reaches a verdict
+instead of a stall.
+
+**3. Do not path a screenshot you did not capture.** Card 68 hit this on the
+same day: its appendix named `e2e/artifacts/physarum/root-mat-app-384.png`,
+no such file existed, and the criterion asking for a screenshot "committed or
+pathed" was met by neither. This card declares `Requires GUI: true`, so the
+browser should be reachable; 68's worker found it was not. Either commit the
+frame at the path you name, or name no path and say plainly that the preset
+was verified live rather than captured.
+
+### Worth checking, not assumed
+
+The sweep ran Lenia at 128x128 (`e2e/harness/sims.ts`, `gridWidth`/
+`gridHeight`), and the app pins Lenia to `computeScale: 1`
+(`src/app/qualityProfiles.ts:120`), the same 384x384 that made card 68's
+`agentCount` need a density rescale. `radius` is the one searched param that
+is spatial.
+
+The orchestrator's reading is that no rescale is needed here, because a Lenia
+kernel radius sets the intrinsic size of an organism where physarum's
+`agentCount` set a density: a larger grid at the same radius holds more
+organisms rather than changing their behaviour. That reading is not the same
+thing as a measurement. Confirm it against the rendered frame -- criterion 3
+already asks you to look -- and if the organism at 384 does not match the
+character stage 62 recorded at 128, stop and record both frames under the
+escalation clause rather than tuning `radius` to chase the look.
+
+### Added acceptance criterion
+
+6. A handoff envelope is written, and any screenshot path named in the
+   appendix resolves to a file that exists in the tree.
