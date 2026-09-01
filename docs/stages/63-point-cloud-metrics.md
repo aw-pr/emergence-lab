@@ -199,8 +199,10 @@ completed in 4.3 minutes last round only under a verifier-side CLI override,
 which is not a repeatable path. Raise the timeout for this spec or split the
 run, and say in the write-up which you did.
 
-Also clear before finishing: `e2e/grayscott-repro.scratch.spec.ts` is staged
-and `e2e/coverage-probe.scratch.spec.ts` is untracked. Neither is a declared
-deliverable and criterion 5's sibling forbids stray files.
+Last round also left two scratch specs behind, `e2e/grayscott-repro.scratch.spec.ts`
+and `e2e/coverage-probe.scratch.spec.ts`. They are not in this tree — they
+lived in the run worktree, which the re-queue removed, and survive only on
+`wip/63-point-cloud-metrics-attempt-1` if you want to read them. Do not
+recreate them as deliverables; criterion 5's sibling forbids stray files.
 
 The no-promotion rule stands. First run of a new instrument is calibration.
