@@ -137,3 +137,49 @@ Note for the gate: this card states its Assertions digest in prose and
 `e2e/sweep.spec.ts:279-301` carries no AUTOMETTA-CONTRACT-BEGIN/END markers, so
 `check-contract-test-gate.sh` exited 0 without recomputing anything. The gate
 passed vacuously last round. Add the markers or expect the same empty pass.
+
+## Re-brief 2026-09-01 (second): the work is done, the envelope is not
+
+Attempt 2 stalled with `worker_envelope_missing_after_exit` after 8,431,105
+tokens. No verifier ever ran. Its work is committed and preserved at
+`wip/70-gray-scott-rebaseline-attempt-2` (`06df598`), authored to Claude
+Sonnet 5. **Start there, not from the card.** Read it first:
+
+    git show wip/70-gray-scott-rebaseline-attempt-2
+
+On the face of it, that commit closes everything the previous re-brief asked
+for. **Nothing in it is verified** — `npm run verify` was never recorded
+green and no verifier saw any of it, so treat it as a strong draft to check,
+not as trusted work:
+
+- Retroactive old-kernel scores for the two presets that had none: Worms
+  0.704 old / 0.709 new, U-skate gliders 0.143 old / 0.201 new. That was the
+  criterion 3 failure.
+- U-skate temporal flux corrected to 0.001534, matching the verifier's
+  deterministic rerun rather than the stale 0.0009 in the write-up.
+- Freeze markers added around the `metrics harness rewards structure over
+  washout` test, with a real sha256 recorded in the Contract test section
+  above, replacing the prose digest that let the gate pass vacuously.
+
+It also records a pre-existing defect it found on the way: U-skate gliders
+scores far below every other preset under both the old and new kernels, and
+is broken rather than merely unlucky. That is a finding, not this card's work.
+Leave it recorded and do not fix it here.
+
+### Why it stalled, and the one thing to do differently
+
+It replaced the run worktree's `state/` with a symlink to the main repo
+(`state -> ../emergence-lab/state`). Stage 63's re-brief warned against
+exactly this move for exactly this reason, and it is the likeliest cause of
+the missing envelope: anything written to `state/handoffs/` from inside the
+worktree lands somewhere the tick does not look for it. That symlink was
+removed before the work was preserved, so this tree is clean.
+
+**Write `state/handoffs/70-gray-scott-rebaseline.json` as soon as you have a
+defensible result, and update it as you go.** An envelope recording a partial
+pass is worth far more than a perfect run that exits silently: without one the
+tick cannot hand the stage to a verifier at all, which is how 8.4M tokens of
+finished work ended up unverified twice. Do not touch the worktree's `state/`.
+
+Scope for this round: adopt or correct the preserved commit, confirm it,
+write the envelope. The acceptance criteria above are unchanged.
