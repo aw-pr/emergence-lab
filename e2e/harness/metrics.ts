@@ -50,6 +50,12 @@ export interface InterestingnessMetrics extends FrameMetrics {
    * it explicitly where the extra pass is wanted.
    */
   multiLagStructure?: number;
+  /**
+   * Polarisation order parameter over the sim's velocity channels, in [0, 1].
+   * Only present for point-cloud sims that opt in (see velocityCoherence);
+   * never feeds the composite score.
+   */
+  velocityCoherence?: number;
 }
 
 export interface MetricSpread {
@@ -370,6 +376,7 @@ export function summarizeMetrics(
     "score",
     "meanResultantLength",
     "circularSpatialAutocorrelation",
+    "velocityCoherence",
   ];
   const means: Partial<Record<keyof InterestingnessMetrics, number>> = {};
   const spread: Partial<Record<keyof InterestingnessMetrics, MetricSpread>> = {};
@@ -406,7 +413,135 @@ export function summarizeMetrics(
     ...(means.circularSpatialAutocorrelation === undefined
       ? {}
       : { circularSpatialAutocorrelation: means.circularSpatialAutocorrelation }),
+    ...(means.velocityCoherence === undefined
+      ? {}
+      : { velocityCoherence: means.velocityCoherence }),
     sampleCount: samples.length,
     spread,
   };
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Point-cloud instruments (stage 63). Everything below is additive: the four
+ * metrics and the composite above are untouched, and a sim only reaches these
+ * through an explicit `pointCloud` opt-in on its sweep config. Two sweeps
+ * recorded the same null result for sparse particle sims (boids 2026-07-16,
+ * Particle Life 2026-08-23): a one-cell dot next to an empty cell is maximally
+ * anti-correlated at lag 1 no matter how the dots are clustered, so clumping
+ * is invisible to the raw stack. The fix both write-ups name: score a
+ * smoothed density field, and score the organisation directly.
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * Gaussian blur of a field, separable and toroidal (every sim here wraps).
+ * `radius` is the kernel support in cells each side of centre; sigma is
+ * radius/2 so the tap at the edge of the support carries ~13% of the centre
+ * weight. Weights are normalised, so the field mean is preserved exactly.
+ */
+export function gaussianBlur(
+  values: Field,
+  width: number,
+  height: number,
+  radius: number,
+): number[] {
+  const n = width * height;
+  const out = new Array<number>(n);
+  if (n === 0 || values.length < n) return [];
+  const r = Math.round(radius);
+  if (r < 1) {
+    for (let i = 0; i < n; i += 1) out[i] = values[i];
+    return out;
+  }
+  const sigma = r / 2;
+  const taps = new Array<number>(2 * r + 1);
+  let weight = 0;
+  for (let k = -r; k <= r; k += 1) {
+    const w = Math.exp(-(k * k) / (2 * sigma * sigma));
+    taps[k + r] = w;
+    weight += w;
+  }
+  for (let k = 0; k < taps.length; k += 1) taps[k] /= weight;
+
+  const tmp = new Array<number>(n);
+  for (let y = 0; y < height; y += 1) {
+    const row = y * width;
+    for (let x = 0; x < width; x += 1) {
+      let acc = 0;
+      for (let k = -r; k <= r; k += 1) {
+        let xx = (x + k) % width;
+        if (xx < 0) xx += width;
+        acc += taps[k + r] * values[row + xx];
+      }
+      tmp[row + x] = acc;
+    }
+  }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let acc = 0;
+      for (let k = -r; k <= r; k += 1) {
+        let yy = (y + k) % height;
+        if (yy < 0) yy += height;
+        acc += taps[k + r] * tmp[yy * width + x];
+      }
+      out[y * width + x] = acc;
+    }
+  }
+  return out;
+}
+
+/**
+ * Point-cloud preprocess: blur both frames of a sparse density field, then
+ * rescale both by their joint maximum so the smoothed field spans [0, 1].
+ * The blur turns dot occupancy into a graded density surface that lag-1
+ * autocorrelation can actually read; the rescale matters because a blurred
+ * spike of height 1 flattens to ~1/(2*pi*sigma^2), which would park the whole
+ * histogram in the lowest entropy bin. One shared factor (not per-frame)
+ * keeps frame A and B comparable so temporal flux stays meaningful.
+ */
+export function smoothPointCloudFrames(
+  frameA: Field,
+  frameB: Field,
+  width: number,
+  height: number,
+  blurRadius: number,
+): { frameA: number[]; frameB: number[] } {
+  const a = gaussianBlur(frameA, width, height, blurRadius);
+  const b = gaussianBlur(frameB, width, height, blurRadius);
+  let max = 0;
+  for (let i = 0; i < a.length; i += 1) if (a[i] > max) max = a[i];
+  for (let i = 0; i < b.length; i += 1) if (b[i] > max) max = b[i];
+  if (max > 0) {
+    const inv = 1 / max;
+    for (let i = 0; i < a.length; i += 1) a[i] *= inv;
+    for (let i = 0; i < b.length; i += 1) b[i] *= inv;
+  }
+  return { frameA: a, frameB: b };
+}
+
+/**
+ * Polarisation order parameter over a rasterised velocity field: the magnitude
+ * of the summed cell velocity vectors divided by the summed magnitudes,
+ * in [0, 1]. 1 means every occupied cell moves the same way (a single
+ * coherent flock); ~0 means directions cancel (disordered swarm, or several
+ * flocks in balanced opposition). Cells with zero velocity (unoccupied cells
+ * rasterise to 0) drop out of both sums, so no separate occupancy mask is
+ * needed. Inputs are signed velocity components in the kernel's own units;
+ * scale cancels in the ratio.
+ */
+export function velocityCoherence(vx: Field, vy: Field): number {
+  const n = Math.min(vx.length, vy.length);
+  let sumX = 0;
+  let sumY = 0;
+  let sumMag = 0;
+  for (let i = 0; i < n; i += 1) {
+    const mag = Math.hypot(vx[i], vy[i]);
+    if (mag <= 0) continue;
+    sumX += vx[i];
+    sumY += vy[i];
+    sumMag += mag;
+  }
+  if (sumMag <= 1e-12) return 0;
+  return Math.hypot(sumX, sumY) / sumMag;
 }

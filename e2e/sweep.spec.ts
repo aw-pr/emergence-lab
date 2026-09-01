@@ -4,8 +4,10 @@ import {
   circularSpatialAutocorrelation,
   meanResultantLength,
   scoreFrames,
+  smoothPointCloudFrames,
   spatialAutocorrelation,
   summarizeMetrics,
+  velocityCoherence,
   type InterestingnessMetrics,
   type MultiSnapshotMetrics,
 } from "./harness/metrics.ts";
@@ -53,13 +55,57 @@ async function scoreOne(
   const scoreAtWarmup = async (warmupSteps: number): Promise<InterestingnessMetrics> => {
     const snapshotConfig = { ...driverConfig, warmupSteps };
     const result = await page.evaluate(driveKernel, snapshotConfig);
+
+    // Point-cloud sims (config.pointCloud) score a Gaussian-smoothed density
+    // field instead of raw dot occupancy; field sims take the identical path
+    // they always did. See PointCloudConfig in harness/sims.ts.
+    const pc = config.pointCloud;
+    let frameA: ArrayLike<number> = result.frameA;
+    let frameB: ArrayLike<number> = result.frameB;
+    let coverageThreshold = config.coverageThreshold;
+    if (pc) {
+      const smoothed = smoothPointCloudFrames(
+        result.frameA,
+        result.frameB,
+        result.width,
+        result.height,
+        pc.blurRadius,
+      );
+      frameA = smoothed.frameA;
+      frameB = smoothed.frameB;
+      coverageThreshold = pc.coverageThreshold;
+    }
     const metrics = scoreFrames(
-      result.frameA,
-      result.frameB,
+      frameA,
+      frameB,
       result.width,
       result.height,
-      config.coverageThreshold,
+      coverageThreshold,
     );
+
+    if (pc?.velocityChannels) {
+      // The kernels are deterministic (same params + same step count => same
+      // state), so re-driving with a different primaryChannel yields velocity
+      // frames exactly aligned with the density frame; driver.ts stays
+      // untouched. The channels carry a [-1, 1] channelRange that the driver
+      // normalises to [0, 1], so map back to signed components before the
+      // order parameter.
+      const [vxChannel, vyChannel] = pc.velocityChannels;
+      const vxResult = await page.evaluate(driveKernel, {
+        ...snapshotConfig,
+        primaryChannel: vxChannel,
+        fluxGap: 0,
+      });
+      const vyResult = await page.evaluate(driveKernel, {
+        ...snapshotConfig,
+        primaryChannel: vyChannel,
+        fluxGap: 0,
+      });
+      metrics.velocityCoherence = velocityCoherence(
+        vxResult.frameA.map((v) => v * 2 - 1),
+        vyResult.frameA.map((v) => v * 2 - 1),
+      );
+    }
 
     if (!config.phase) return metrics;
     const phaseResult = config.phase.channel === config.primaryChannel
@@ -216,6 +262,24 @@ async function runSweep(
     const rel = `${artifactId}/${cand.id}.png`;
     writePng(`${ARTIFACT_ROOT}/${rel}`, frame.frameA, frame.width, frame.height, 3);
     cand.thumb = rel;
+    if (config.pointCloud) {
+      // Also emit what the instrument actually scores, so the smoothing can
+      // be sanity-checked by eye alongside the raw dots.
+      const smoothed = smoothPointCloudFrames(
+        frame.frameA,
+        frame.frameA,
+        frame.width,
+        frame.height,
+        config.pointCloud.blurRadius,
+      );
+      writePng(
+        `${ARTIFACT_ROOT}/${artifactId}/${cand.id}.smoothed.png`,
+        smoothed.frameA,
+        frame.width,
+        frame.height,
+        3,
+      );
+    }
   }
 
   const md = [
@@ -262,15 +326,19 @@ async function runSweep(
     JSON.stringify({ ranked, references }, null, 2),
   );
 
+  const coherenceNote = (c: ScoredCandidate): string =>
+    c.metrics.velocityCoherence === undefined
+      ? ""
+      : ` vcoh ${c.metrics.velocityCoherence.toFixed(3)}`;
   console.log(`\n=== ${artifactId} top 5 ===`);
   for (const c of ranked.slice(0, 5)) {
     console.log(
-      `  ${c.metrics.score.toFixed(3)}  ${c.id}  (ent ${c.metrics.entropy.toFixed(2)} ac ${c.metrics.spatialAutocorrelation.toFixed(2)} cov ${c.metrics.coverage.toFixed(2)} flux ${c.metrics.temporalFlux.toFixed(4)})`,
+      `  ${c.metrics.score.toFixed(3)}  ${c.id}  (ent ${c.metrics.entropy.toFixed(2)} ac ${c.metrics.spatialAutocorrelation.toFixed(2)} cov ${c.metrics.coverage.toFixed(2)} flux ${c.metrics.temporalFlux.toFixed(4)}${coherenceNote(c)})`,
     );
   }
   console.log(`=== ${artifactId} references ===`);
   for (const c of references) {
-    console.log(`  ${c.metrics.score.toFixed(3)}  ${c.label}`);
+    console.log(`  ${c.metrics.score.toFixed(3)}  ${c.label}${coherenceNote(c)}`);
   }
 
   return ranked;
@@ -429,6 +497,10 @@ sweepTest("sweep gray-scott F/k surface", async ({ page }) => {
 });
 
 sweepTest("sweep boids", async ({ page }) => {
+  // 60 sets on a 200² grid with two extra velocity-channel re-drives per set
+  // outruns the global 180s budget (it died at ~50/60 there on 2026-08-30);
+  // ~4.3 minutes measured end-to-end, so 15 minutes is a generous ceiling.
+  test.setTimeout(900_000);
   await runSweep(page, SWEEP_CONFIGS["boids"]);
 });
 

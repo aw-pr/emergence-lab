@@ -87,3 +87,83 @@ or score the species-mixing statistics directly — how often unlike species are
 adjacent — which is what the attraction matrix actually controls. Both mean a
 new metric, which the stage card puts out of scope. The same follow-up would
 serve boids.
+
+## Appendix 2026-08-30: re-run under the smoothed point-cloud instrument (stage 63)
+
+Stage 63 built the follow-up this write-up asked for: opted-in sims are scored
+on a Gaussian-smoothed density field instead of raw dot occupancy (see
+`PointCloudConfig` in `e2e/harness/sims.ts` and the point-cloud section of
+`e2e/harness/metrics.ts`). Particle Life opts in with `blurRadius: 8`
+(sigma 4 — rmin scale, well under the rmax axis) and a smoothed-field coverage
+threshold of 0.5. Both frames are blurred and rescaled by one shared maximum,
+so temporal flux stays comparable. This is the **first run of the new
+instrument: a calibration run. No preset was changed and none of these numbers
+justifies a promotion on its own.**
+
+### Calibration notes, recorded honestly
+
+- **The coverage threshold had to be measured, not guessed.** rmin repulsion
+  spreads particles across the whole grid, so the smoothed field is nonzero
+  nearly everywhere: at the raw threshold (0.05) every set read coverage 1.000
+  and the composite's coverageFactor zeroed every score. A probe across
+  thresholds put the figure/ground split at half of peak density; at 0.5 the
+  swept regimes read coverage 0.13–0.82, inside the composite's plateau.
+- **The blur trades one saturation for another.** Raw occupancy pinned the
+  structure term at ≈0; the smoothed field pins it at 0.98–0.99 for every set,
+  so spatial autocorrelation *still* does not rank Particle Life — a blurred
+  field is smooth by construction. What changed is that **entropy now reads the
+  clustering** (0.72–0.82 across sets, versus 0.192–0.194 raw) because the
+  graded density surface fills the histogram, and coverage varies 0.13–0.82
+  where it was pinned at 0.165–0.169. The instrument sees the sim; it sees it
+  through the detail and coverage terms rather than the structure term.
+- **The species-mixing metric this write-up also proposed was not built** —
+  the stage scoped the smoothed-density path plus velocity coherence (boids
+  only; this kernel rasterises species colour, not velocity).
+
+### Coverage of the search
+
+Identical grid to 2026-08-23: **27 sets evaluated** (rmax ∈ {16, 24, 32} ×
+forceScale ∈ {25, 60, 110} × matrixBias ∈ {−0.15, 0.05, 0.25}),
+**3 references evaluated** (shipped presets, particleCount pinned at 3 000),
+**189 sets skipped** (the unbudgeted 6×6×6 grid), and the same 4 params not
+searched (`particleCount`, `species`, `rmin`, `friction`).
+
+### Ranking (smoothed instrument)
+
+| | set | score | entropy | autocorr | flux | coverage |
+|---|---|---|---|---|---|---|
+| 1 | rmax 32, force 25, bias 0.25 | 0.915 | 0.82 | 0.99 | 0.1623 | 0.398 |
+| 2 | rmax 32, force 25, bias −0.15 | 0.913 | 0.82 | 0.99 | 0.1620 | 0.284 |
+| 3 | rmax 32, force 25, bias 0.05 | 0.912 | 0.81 | 0.99 | 0.1495 | 0.335 |
+
+| reference | score | entropy | autocorr | flux | coverage |
+|---|---|---|---|---|---|
+| Gas clouds | 0.901 | 0.79 | 0.99 | 0.1642 | 0.405 |
+| Cells | 0.888 | 0.77 | 0.98 | 0.1236 | 0.378 |
+| Chasers | 0.876 | 0.75 | 0.98 | 0.1311 | 0.612 |
+
+### Does the new instrument separate the presets?
+
+**Yes, by the stage's criterion, modestly.** The three shipped presets span
+**0.025** (0.876–0.901) against **0.010** under the raw stack — a 2.5×
+improvement, carried by entropy and flux rather than a constant term. The full
+swept range spans 0.048 (0.867–0.915) against 0.025 raw. The ranking also
+stopped being a coverage-decimals artefact: the top sets are now the large-rmax
+low-force regimes that form big slow-moving clusters, and the reference order
+(Gas clouds > Cells > Chasers) tracks flux and entropy, not the third decimal
+of coverage. That said, 0.025 across presets that look nothing alike is still
+compressed; if Particle Life is ever to be tuned by measurement, the
+species-mixing statistic (how often unlike species are adjacent — what the
+attraction matrix actually controls) remains the sharper follow-up instrument.
+
+### Promotion
+
+**None.** First run of a new instrument is calibration: record, do not act.
+
+### Re-run 2026-09-01
+
+The stage-63 instruments were re-based onto `dev` after the circular-phase
+(65), multi-lag (66) and multi-snapshot (67) metric work landed, and the sweep
+was re-run in full (27 sets + 3 references, 56.9 s headless). Every number
+above reproduced exactly — the point-cloud path is independent of the three
+newer instruments, as intended. Still no promotion.

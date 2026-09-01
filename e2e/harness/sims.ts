@@ -22,6 +22,28 @@ export interface ReferenceSet {
   params: Params;
 }
 
+/**
+ * Opt-in scoring path for sparse point-cloud sims (stage 63). The raw lag-1
+ * metric stack is blind to rasterised dots — boids (2026-07-16) and Particle
+ * Life (2026-08-23) both recorded it — so opted-in sims are scored on a
+ * Gaussian-smoothed density field instead, plus a polarisation order
+ * parameter where the kernel rasterises velocity channels. Field sims never
+ * touch this path: no `pointCloud` block, byte-identical scoring.
+ */
+export interface PointCloudConfig {
+  /** Gaussian blur support in cells each side (sigma = radius/2), toroidal.
+   * Set at the scale of the sim's interaction/clustering radius. */
+  blurRadius: number;
+  /** Coverage threshold for the smoothed, max-normalised field. The raw
+   * per-sim threshold is tuned for dot occupancy and misreads a smoothed
+   * field (blur pushes some density into nearly every cell). */
+  coverageThreshold: number;
+  /** [vx, vy] channel indices for the velocity-coherence metric; omit for
+   * sims that do not rasterise velocity. Channels are assumed to carry a
+   * [-1, 1] channelRange, as boids does. */
+  velocityChannels?: readonly [number, number];
+}
+
 /** Opt-in circular-statistics path for a phase channel normalised to [0, 1]. */
 export interface PhaseConfig {
   channel: number;
@@ -47,6 +69,8 @@ export interface SimSweepConfig {
   fluxGap: number;
   dt: number;
   coverageThreshold: number;
+  /** Present only on sparse particle sims; see PointCloudConfig. */
+  pointCloud?: PointCloudConfig;
   /** Present only when a kernel exposes a phase channel. */
   phase?: PhaseConfig;
   /** Present only when timing-sensitive trajectories need repeated scoring. */
@@ -110,6 +134,17 @@ const GRAY_SCOTT: SimSweepConfig = {
   ],
 };
 
+// Stage 63: scored through the point-cloud path — smoothed density plus the
+// polarisation order parameter over the rasterised velocity channels (2-3),
+// which is where flocking "interest" actually lives. blurRadius 6 (sigma 3)
+// sits between the separationRadius axis (5-12) and the smallest visualRadius
+// (16), so a flock blurs into one graded blob without bridging separate
+// flocks. obstacleLayout is pinned to "none": the kernel's default reef
+// raster paints constant density AND constant pseudo-velocity tones into the
+// state channels, which would feed a fixed vector bias into every candidate's
+// coherence — the instrument is calibrated against the flock, not the rocks.
+// (The 2026-07-16 sweep predates obstacles, so this also restores its
+// conditions.)
 const BOIDS: SimSweepConfig = {
   slug: "boids",
   primaryChannel: 0, // density (occupancy)
@@ -119,15 +154,21 @@ const BOIDS: SimSweepConfig = {
   fluxGap: 6,
   dt: 1,
   coverageThreshold: 0.001, // occupancy is sparse; any occupied cell counts
-  baseParams: { boidCount: 2500, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, pointSize: 6 },
+  // The smoothed coverageThreshold is set from a measured probe, not guessed:
+  // at 0.25 of peak smoothed density the probed flocking regimes read 0.46-0.77
+  // (inside the composite's coverage plateau) while a fully collapsed flock
+  // reads ~0.07, so extreme concentration is penalised but ordinary flocks are
+  // ranked on structure/entropy.
+  pointCloud: { blurRadius: 6, coverageThreshold: 0.25, velocityChannels: [2, 3] },
+  baseParams: { boidCount: 2500, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, pointSize: 6, obstacleLayout: "none" },
   axes: [
     { key: "visualRadius", values: [16, 24, 32, 44, 56] },
     { key: "separation", values: [0.1, 0.2, 0.35, 0.55] },
     { key: "separationRadius", values: [5, 8, 12] },
   ],
   references: [
-    { id: "balanced-flock", label: "Balanced flock", params: { boidCount: 2500, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, pointSize: 6 } },
-    { id: "tight-flock", label: "Tight flock", params: { boidCount: 2500, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, pointSize: 6 } },
+    { id: "balanced-flock", label: "Balanced flock", params: { boidCount: 2500, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, pointSize: 6, obstacleLayout: "none" } },
+    { id: "tight-flock", label: "Tight flock", params: { boidCount: 2500, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, pointSize: 6, obstacleLayout: "none" } },
   ],
 };
 
@@ -569,6 +610,12 @@ const KURAMOTO_OSCILLATORS: SimSweepConfig = {
 // every set and the ranking collapses onto coverage. particleCount is pinned at
 // 3000 (the shipped presets run 5000-12000 on a 640² grid; 3000 on 128² is the
 // matching order of density) so the axes are compared at one population.
+// Stage 63: scored through the point-cloud path — the 2026-08-23 write-up's
+// own follow-up spec ("a Gaussian blur at the interaction radius before the
+// metrics run"). blurRadius 8 (sigma 4) sits at rmin (12) scale, well under
+// the rmax axis (16-32), so intra-cluster texture blurs to a graded blob but
+// distinct clusters stay distinct. No velocityChannels: this kernel
+// rasterises species colour only.
 const PARTICLE_LIFE: SimSweepConfig = {
   slug: "particle-life",
   primaryChannel: 0, // Red species density
@@ -578,6 +625,12 @@ const PARTICLE_LIFE: SimSweepConfig = {
   fluxGap: 6,
   dt: 1,
   coverageThreshold: 0.05,
+  // rmin repulsion spreads particles across the whole grid, so the smoothed
+  // field is nonzero nearly everywhere and low thresholds read coverage 1.0
+  // (which the composite's coverageFactor zeroes). A measured probe puts the
+  // figure/ground split at half of peak density: at 0.5 the probed regimes
+  // read 0.16-0.82, inside the composite's coverage plateau.
+  pointCloud: { blurRadius: 8, coverageThreshold: 0.5 },
   baseParams: { particleCount: 3000, species: 5, rmin: 12, friction: 0.7, seed: 0 },
   axes: [
     { key: "rmax", values: [16, 24, 32] },
