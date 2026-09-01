@@ -115,3 +115,25 @@ do not fix it and promote in the same stage.
 Re-run `npm run verify`, the contract guard, and the sweep. Confirm the old/new
 pairs are recorded for every shipped preset, that no stale number survives in
 the file, and the >5% margin if a promotion landed. Judge numbers only.
+
+## Re-brief 2026-09-01: the missing old scores, and one number that disagrees
+
+Terminal since 2026-08-31 on one criterion of six. Criterion 3 failed because
+Worms and U-skate gliders carry 'not previously measured' rather than numeric
+old scores (`docs/sweeps/gray-scott-interestingness.md:62-70`, explained at
+`:72-78`). Two ways to close it, and the choice is the worker's to argue:
+produce the old numbers by running the previous instrument against those two
+presets, or take the criterion back to the operator as unsatisfiable and say
+why. Silently restating 'not previously measured' fails the same way again.
+
+Second, independent of that criterion: the verifier's deterministic rerun
+disagrees with the write-up on one figure. U-skate temporal flux reads 0.0009
+at `docs/sweeps/gray-scott-interestingness.md:95-104`, but the rerun wrote
+0.0015342029914791055 at `e2e/artifacts/gray-scott/results.json:1211-1217`.
+Coverage, entropy and composite agree after rounding, so this is one number,
+not a broken pipeline. Find out which is right and correct the loser.
+
+Note for the gate: this card states its Assertions digest in prose and
+`e2e/sweep.spec.ts:279-301` carries no AUTOMETTA-CONTRACT-BEGIN/END markers, so
+`check-contract-test-gate.sh` exited 0 without recomputing anything. The gate
+passed vacuously last round. Add the markers or expect the same empty pass.

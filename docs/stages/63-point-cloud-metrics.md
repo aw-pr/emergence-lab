@@ -181,3 +181,26 @@ The Budget section above is cut from 240 to **180** worker minutes. The
 and 2 now exist as a draft at `archive/63-point-cloud-metrics-wip`, so the
 remaining work is deliverable 3. This caps what a second stall can cost the
 overnight window.
+
+## Re-brief 2026-09-01: the Boids write-up was never written
+
+Terminal since 2026-08-30 on one criterion of five, but that criterion hides
+most of a deliverable. Criterion 5 failed because `docs/sweeps/boids-interestingness.md`
+— required at deliverable 3 of this card — does not exist. The Particle Life
+half is done and correct (27 evaluated, 3 references, 189 skipped, no
+promotion recorded at `docs/sweeps/particle-life-interestingness.md:123-129`
+and `:159-161`); the Boids half produced no write-up, and
+`e2e/artifacts/boids/results.json` and `report.md` are absent too.
+
+The reason the Boids run did not finish is mechanical, and it will stop this
+round the same way unless it is dealt with first: the Boids sweep dies on the
+180s timeout at `playwright.config.ts:18` at roughly 50 of 60 sets. It
+completed in 4.3 minutes last round only under a verifier-side CLI override,
+which is not a repeatable path. Raise the timeout for this spec or split the
+run, and say in the write-up which you did.
+
+Also clear before finishing: `e2e/grayscott-repro.scratch.spec.ts` is staged
+and `e2e/coverage-probe.scratch.spec.ts` is untracked. Neither is a declared
+deliverable and criterion 5's sibling forbids stray files.
+
+The no-promotion rule stands. First run of a new instrument is calibration.
