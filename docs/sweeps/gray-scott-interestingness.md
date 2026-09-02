@@ -9,6 +9,10 @@ SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
 Artifacts (per-candidate grayscale field PNGs, full ranked JSON, a generated
 report) land under `e2e/artifacts/gray-scott/` (git-ignored).
 
+> Historical note (2026-07-16): the score tables below were captured with the
+> former raw square seed. The live kernel now generates a single approximate
+> warm-start wave, so fresh absolute scores are not directly comparable.
+
 ## How the harness scores a frame
 
 The sweep drives the **real kernel** headlessly through the Vite dev server: it
@@ -31,111 +35,39 @@ Four metrics, combined into one composite (see `e2e/harness/metrics.ts`):
 `coverageFactor` plateaus for coverage in ≈[0.12, 0.85] and falls to 0 for an
 empty or saturated field, and `liveliness` is a gentle flux bonus (floor 0.85).
 
-## Result: re-baselined against the current warm-start kernel — 2026-08-31
+## Result: two existing presets were measurably broken/weak
 
-The kernel has changed twice since the numbers above were first captured
-(2026-06-06): a fast approximate single-wave warm start landed 2026-07-16,
-then was itself replaced the next day by the current seed — concentric rings
-of small V blobs in undepleted U (`seedOrigins()` in
-`src/sims/gray-scott/kernel.ts`), which is what every regime has actually run
-on since 2026-07-17. Every absolute score below is fresh: same harness
-settings as always (128×128 grid, 700 `step()` calls ≈ 14 000 Euler
-iterations, channel 1/V, coverage threshold 0.1), same composite, same
-weights — this run only changes the seed under test.
+| Preset (regime) | F | k | score | note |
+|---|---|---|---|---|
+| **Waves** — *old* | 0.014 | 0.045 | **0.000** | renders a **dead, empty field** — V decays everywhere |
+| **Waves** — *promoted* | 0.018 | 0.0487 | **0.831** | full field of large pulsing cells; the actual travelling-wave regime |
+| **Spots** — *old* | 0.030 | 0.062 | **0.669** | sparse dots with an empty centre |
+| **Spots** — *promoted* | 0.026 | 0.0597 | **0.743** | dense hexagonal lattice that fills the frame |
 
-### Coverage of the search
+Reference scores for unchanged presets (same run, for context): Default/Coral
+0.722, Maze 0.695, Mitosis 0.661.
 
-- **Sets evaluated: 56** — F ∈ linspace(0.01, 0.066, 8) × k ∈
-  linspace(0.045, 0.067, 7).
-- **References evaluated: 7** — all shipped presets, unmodified (Mitosis,
-  Coral, Worms, Maze, Spots, Waves, U-skate gliders).
-- **Sets skipped: 7325.** The unbudgeted grid is the full `paramSchema`
-  slider space, F at 121 steps (0.01–0.07 by 0.0005) × k at 61 steps
-  (0.04–0.07 by 0.0005) — 7381 sets over the same ranges.
-- **Not searched at all: 3 params** — `Du`, `Dv`, `stepsPerFrame`. Diffusion
-  rates and the integration rate stay pinned at the shipped defaults
-  (0.2097, 0.105, 20 steps/frame); the sweep ranks presets purely on F/k
-  placement, as it always has.
+### Waves: 0.000 → 0.831 (defect fix)
 
-### Every shipped preset: old score vs new score
+`F=0.014, k=0.045` sits just inside the dying zone of the Pearson map, so the V
+species washes out to a uniform empty field — the "Waves" preset showed *nothing*.
+The genuine travelling-wave / soliton regime is slightly higher: `F=0.018,
+k=0.0487` was the top-scoring set in the whole sweep (0.831), a frame-filling
+pattern of large rounded cells that keeps moving (temporal flux 0.118 — the
+highest of any developed regime). This is the single biggest delta in the sweep
+and fixes a preset that was effectively broken.
 
-| Preset | F | k | old score | new score | Δ |
-|---|---|---|---:|---:|---:|
-| Waves | 0.018 | 0.0487 | 0.831 | **0.796** | −4.2% |
-| Spots | 0.026 | 0.0597 | 0.743 | **0.741** | −0.2% |
-| Coral (Default) | 0.0545 | 0.062 | 0.722 | **0.710** | −1.6% |
-| Maze | 0.029 | 0.057 | 0.695 | **0.690** | −0.8% |
-| Mitosis | 0.0367 | 0.0649 | 0.661 | **0.653** | −1.2% |
-| Worms | 0.054 | 0.063 | 0.704 | **0.709** | +0.7% |
-| U-skate gliders | 0.062 | 0.0609 | 0.143 | **0.201** | +40.0% |
+### Spots: 0.669 → 0.743 (+11%)
 
-"Old score" is the 2026-06-06 sweep's number for that preset's exact F/k pair
-(the Spots and Waves rows use the *promoted* parameters, since those are what
-ships today; the params that scored 0.000/0.669 pre-promotion no longer exist
-anywhere in the repo). Worms and U-skate gliders were never added to the
-sweep's reference set at any point before this stage, so neither preset has a
-number on record from an actual 2026-06-06 run — see `e2e/harness/sims.ts`,
-which now carries all seven shipped presets as references so this gap cannot
-recur. Their old scores above were produced retroactively for this stage by
-running the pre-warm-start kernel (`git show 37f585f:src/sims/gray-scott/kernel.ts`,
-the last commit before the fast approximate warm start landed) under the
-*current* harness and composite, at the same F/k pairs and the same 128×128/
-700-step settings as every other row. That mixes an old kernel with a newer
-harness, which is only valid because the composite formula and weights have
-not changed since 2026-06-06 (confirmed above against `metrics.ts`) — the
-harness additions from cards 63/65/66/67 are all new metrics or new sim
-support, not changes to how Gray-Scott's four scores combine.
+The old Spots regime leaves the centre and margins sparse. Dropping the kill rate
+(`k 0.062 → 0.0597`) and feed (`F 0.030 → 0.026`) yields a denser, regular
+hexagonal dot lattice that fills the whole field — visibly fuller and a clean
++0.074 on the composite, the same "spots" identity done better.
 
-### Null result: the ranking is unchanged
-
-Every one of the five previously-tracked presets moved down by 0.2–4.2% on
-the composite, and with old numbers now available for all seven shipped
-presets, the **full seven-way ranking is identical before and after the seed
-change**: Waves > Spots > Coral > Worms > Maze > Mitosis > U-skate gliders,
-both old and new. Worms sits between Coral and Maze in both runs (0.704 old,
-0.709 new); U-skate gliders sits last by a wide margin in both (0.143 old,
-0.201 new). This is the useful null result the card anticipated — the other
-eleven sweep write-ups that cross-reference this file's metric definitions
-and Gray-Scott's numbers are still sound; nothing about the composite or the
-ranking it produces moved when the seed did. The five previously-tracked
-presets' small uniform downward drift (none moved by more than 4.2%) is
-consistent with the new seed's many-smaller-blobs-in-rings layout reaching
-the same steady-state regimes slightly less completely by step 700 than the
-old single-wave-derived seed did, not with any regime changing character.
-U-skate gliders is the outlier in degree, not direction: it moved *up* 40.0%,
-the subject of its own section below.
-
-### Pre-existing defect: U-skate gliders is broken under both seeds (score 0.201, was 0.143)
-
-U-skate gliders (`F=0.062, k=0.0609`) is far below every other preset in both
-runs — old and new, its next-lowest neighbour (Mitosis) scores 3.2×–4.6×
-higher. Its frame (`e2e/artifacts/gray-scott/u-skate.png`, git-ignored,
-regenerate with the command above) is a near-uniform mid-grey field with only
-a handful of small dark dots scattered across it — coverage 0.9485, above the
-composite's ≈0.85 saturation edge, entropy 0.3753 (well below the other
-survivors' 0.47–0.70), and temporal flux 0.001534 (frozen by step 700). This
-is the same class of defect the 2026-06-06 run found in the old Waves preset:
-a dead-or-saturated field, not a tuning question — except here it is not new.
-The retroactive old-kernel measurement above (0.143) shows U-skate gliders
-was *already* in this state under the pre-warm-start square seed; the current
-warm-start seed does not explain the defect and in fact scores it 40% higher
-without fixing it. The F/k point sits in a narrow sliver of surviving
-parameter space under the current seed — every swept set at F=0.066 (one grid
-step higher) is fully dead or saturated (score 0.000), and F=0.062 was never
-itself a swept grid point, so the sweep did not characterise the regime
-around it. Per the card's escalation rule this is recorded, not fixed:
-U-skate gliders needs its own follow-up sweep (a finer F/k pass bracketing
-0.058–0.066, or a from-scratch look at whether either seed can produce the
-travelling-glider regime at all) before any retuning or promotion decision.
-
-No promotion was made. The top of the swept grid is occupied by the shipped
-Waves and Spots parameter points themselves (0.796 and 0.741, both exact
-grid points reproduced by the sweep) — nothing beats them. The next-nearest
-swept neighbours to Coral, Maze, Mitosis and Worms score within 2.3% of the
-shipped preset in the same F neighbourhood, under the 5% promotion bar; the
-one candidate that clears 5% against Mitosis (`F=0.034, k=0.0597`, +8.0%) is
-visually a maze/worm regime, not a mitosis-family splitting-dot pattern, so
-it is not a same-character replacement and was not promoted.
+Both regimes are stable steady-state Turing patterns at 14 000 iterations (the
+Spots lattice is quasi-static, flux 0.013), so they are safe as shipped presets
+and qualitatively grid-size independent (the Turing wavelength is set by the
+diffusion ratio, not the grid).
 
 ## Notes / honest limitations of the metric
 
@@ -144,11 +76,10 @@ it is not a same-character replacement and was not promoted.
   mildly over-rewards *sparse but coherent* frames (e.g. a single labyrinth
   "flower" on black scores ~0.71 on high autocorrelation despite being mostly
   empty). Coverage-gating limits this but does not eliminate it.
-- **Seed symmetry.** Every Gray-Scott regime is radially symmetric because the
-  kernel seeds one central blob plus concentric rings of blobs at fixed radial
-  spacing in a periodic domain (`seedOrigins()`). The sweep frames remain
-  mandala-like; this is faithful to the live sim's behaviour, just smaller and
-  earlier.
+- **Seed symmetry.** Every Gray-Scott regime is 4/8-fold symmetric because the
+  kernel generates one central warm-start wave in a symmetric, periodic domain.
+  The sweep frames remain mandala-like; this is faithful to the live sim's
+  behaviour, just smaller and earlier.
 
 ## Lorenz & Boids (swept, not promoted)
 
@@ -160,12 +91,62 @@ it is not a same-character replacement and was not promoted.
   (`rho=35`) already renders the full butterfly. A single snapshot of a
   trajectory sim is also timing-sensitive; a multi-snapshot average would score
   Lorenz more robustly. Filed as future work.
+
+  > **Closed — stage `67-lorenz-multi-snapshot-scoring`, completed
+  > 2026-08-30T22:14:53Z, commit `2a5b388` (reconciled 2026-09-02, stage
+  > `74-sweep-write-ups-record-what-landed`).** See "Appendix: Lorenz
+  > multi-snapshot scoring — 2026-08-30" below.
 - **Boids** (`-g boids`): the occupancy-field lens is the wrong instrument for a
   sparse swarm — all sets score ≈0.02 because binary point-density on a 200²
   grid carries almost no spatial-autocorrelation signal. Flocking "interest"
   lives in **velocity coherence** (the kernel's vx/vy channels 2–3), not occupancy
   texture. A polarisation/order-parameter metric on the velocity channels is the
   right follow-up before tuning Boids by measurement.
+
+  > **Closed — stage `63-point-cloud-metrics`, completed
+  > 2026-09-01T18:59:14Z, commit `2bf4c47` (reconciled 2026-09-02, stage
+  > `74-sweep-write-ups-record-what-landed`).** Both the smoothed-density
+  > point-cloud instrument and per-set velocity coherence were built and
+  > wired to Boids. See `docs/sweeps/boids-interestingness.md` (new file,
+  > this stage).
+
+## Appendix: Lorenz multi-snapshot scoring — 2026-08-30
+
+The Lorenz sweep now opts into **N=5** deterministic frame pairs, with frame A
+captured after **280, 420, 560, 700, and 840** kernel steps and frame B eight
+steps later. Every position starts from a fresh kernel. The harness reports the
+mean plus min, max, and population standard deviation for every metric; sims
+without this opt-in retain the original single-pair result shape and execution
+path.
+
+| set | single score at step 280 | N=5 mean | min–max | std dev |
+|---|---:|---:|---:|---:|
+| rho=28, sigma=10, fade=0.992, steps/frame=6 | 0.610012 | 0.595079 | 0.577254–0.610012 | 0.010529 |
+| rho=35, sigma=10, fade=0.990, steps/frame=12 | 0.677307 | 0.678021 | 0.672011–0.686087 | 0.005620 |
+| rho=37, sigma=10, fade=0.997, steps/frame=6 | 0.685512 | 0.684172 | 0.679966–0.690644 | 0.003716 |
+| rho=42, sigma=10, fade=0.997, steps/frame=6 | 0.687707 | 0.700738 | 0.687707–0.708288 | 0.006968 |
+
+The score spread is small: 0.004–0.011 standard deviation, and averaging moves
+the four single-frame readings by −0.015, +0.001, −0.001, and +0.013. The live
+headless harness no longer reproduces the historical rho=28 score of 0.174
+recorded above; at the same configured step 280 it now produces 0.610012. On
+the current kernel, timing noise therefore does not explain a large ranking
+gap. Multi-snapshot scoring is still the more robust trajectory measurement,
+but it does not change the preset conclusion: canonical rho=28 stays, and the
+existing **Wide wings** rho=35 preset already covers the fuller butterfly. No
+preset was changed.
+
+On this machine the four-set headless measurement completed in 3.96 seconds
+including browser and dev-server startup. Individual single-pair drives took
+75–115 ms; their five-snapshot counterparts took 405–446 ms, about 3.7–5.7×
+the wall-clock cost.
+
+Clifford–De Jong remains on single-pair scoring: its coefficients are pinned,
+its 260-step warmup is already about 2.6 trail-decay convergence times, and the
+documented sensitivity is saturation/framing rather than trajectory timing.
+DLA also remains single-pair: its seed is pinned and its 500-step scoring point
+is a terminal cluster state with exactly zero flux, so later snapshots would be
+identical rather than a timing sample.
 
 ## Appendix: multi-lag structure term cross-check — 2026-08-30
 

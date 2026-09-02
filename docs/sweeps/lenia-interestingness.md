@@ -144,6 +144,12 @@ filaments, not a sharper version of that incumbent. It is therefore recorded
 as a fourth-preset candidate under the escalation clause, with no change to the
 three shipped Lenia presets pending operator choice.
 
+> **Closed — stage `69-lenia-fourth-preset`, completed 2026-09-01T15:17:06Z,
+> commit `3e04c18` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** The operator authorised the
+> candidate as a fourth preset, "Living labyrinth". See "Fourth-preset
+> promotion — 2026-09-01" below.
+
 ## Fourth-preset promotion — 2026-09-01
 
 The operator decision of 2026-08-30 authorised the radius-follow-up winner as

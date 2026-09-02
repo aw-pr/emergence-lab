@@ -89,6 +89,12 @@ The honest reading is that this is a candidate for a *fourth* preset rather than
 a replacement for any existing one, which is beyond this stage's scope. The
 operator picks.
 
+> **Closed — stage `68-physarum-fourth-preset`, completed 2026-09-01T12:27:21Z,
+> commit `d2ebcf5` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** The operator authorised the
+> candidate as a fourth preset, "Root mat". See "Promotion appendix —
+> 2026-08-30" below.
+
 ## Promotion appendix — 2026-08-30
 
 The operator authorised the winning wide-sensor regime as a fourth preset,

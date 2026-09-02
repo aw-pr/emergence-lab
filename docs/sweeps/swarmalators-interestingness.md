@@ -86,6 +86,11 @@ what this sim does. A circular-statistics metric on the phase channel is the
 right instrument for Swarmalators and is out of scope here — recorded as
 follow-up work rather than acted on.
 
+> **Closed — stage `65-circular-phase-statistics`, completed
+> 2026-08-30T21:36:30Z, commit `b66b803` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** See "Circular-statistics
+> calibration — 2026-08-30" below.
+
 ## Circular-statistics calibration — 2026-08-30
 
 The same capped search was rerun headlessly with mean resultant length and

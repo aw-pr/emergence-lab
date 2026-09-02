@@ -87,6 +87,14 @@ cap the slider at 4 and stop offering a setting that blanks the sim. Both are
 kernel changes and out of scope for this stage, which is why nothing was
 promoted here. Flagged for a follow-up card.
 
+> **Closed — stage `59-sandpile-topple-conservation`, completed
+> 2026-08-25T11:59:54Z, commit `520367d` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** The kernel fix landed; see the
+> "Appendix — re-sweep after the conservation fix" below, which is the
+> follow-up card this line asked for. "High threshold" now scores 0.421
+> (alive) against 0.004 before. `presets.ts` was left untouched, as this
+> stage's own promotion section already anticipated.
+
 Classic critical and Fast avalanches are both fine (0.416, 0.417, mid-pack among
 the threshold-4 sets) and are left alone.
 

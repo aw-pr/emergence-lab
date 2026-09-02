@@ -110,6 +110,12 @@ Recommended follow-up, not acted on here: a one-axis pass over
 leaves visible domain structure at 300 steps. That is a narrow, cheap sweep and
 the honest way to fix this preset with evidence.
 
+> **Closed — stage `60-ising-external-field-sweep`, completed
+> 2026-08-25T12:15:04Z, commit `e3227e5` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** See "Appendix: external-field
+> sweep — 2026-08-25" below; "Positive field" was promoted to
+> `externalField: 0.02`.
+
 ## Appendix: external-field sweep — 2026-08-25
 
 The follow-up evaluated all 21 requested sets at J 1, 0.5 sweeps per step,

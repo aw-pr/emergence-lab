@@ -99,6 +99,16 @@ the crystalline one. The sweep also never sampled `states: 12` itself.
 The operator picks: accept a Demons-like replacement, drop the preset, or
 commission a finer von Neumann pass around states 10–16 at threshold 1–2.
 
+> **Closed — stage `61-cyclic-ca-crystal-rescue`, completed
+> 2026-08-25T12:30:14Z, commit `9fb0545` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** The operator commissioned the
+> finer von Neumann pass; see below. `states: 12, threshold: 1` was promoted
+> (0.283 → 0.626). The worker made the "visually distinct from Demons" call
+> itself rather than deferring it, which the overnight summary's escalation 4
+> records as a standing post-hoc sign-off item for the operator — the
+> promotion landed either way and nothing here is pending a code or doc
+> change.
+
 ## Fine von Neumann pass — 2026-08-25
 
 The follow-up pinned `neighbourhood: "vonNeumann"` and swept states 10–16 ×

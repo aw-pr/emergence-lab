@@ -25,6 +25,12 @@ more noise than the other eleven sweeps in this stage. A circular-statistics
 metric (mean resultant length, circular autocorrelation) is the right instrument
 and is out of scope for this stage — recorded as follow-up.
 
+> **Closed — stage `65-circular-phase-statistics`, completed
+> 2026-08-30T21:36:30Z, commit `b66b803` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** Both instruments named above
+> were built additively. See "Circular-statistics calibration — 2026-08-30"
+> below.
+
 Flux is ~0.001 for every local-coupling set: at timestep 0.045 the phase field
 advances far less than one bin of the 32-bin histogram over a six-step gap, so
 the liveliness term is effectively constant at its 0.85 floor.

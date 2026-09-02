@@ -78,6 +78,12 @@ recorded here so a future sweep does not "fix" a working preset on this number.
 A multi-lag or FFT-band structure term would rank fine-scale periodic patterns
 correctly. Out of scope for this stage; noted as follow-up.
 
+> **Closed — stage `66-multi-lag-structure-term`, completed
+> 2026-08-31T21:41:41Z, commit `7814fd7` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** See the "Appendix: multi-lag
+> structure term — 2026-08-30" below: the new term rescues Maze-like
+> (−0.0733 → 0.3838) while still starving white noise.
+
 ## Appendix: multi-lag structure term — 2026-08-30
 
 Stage 66 built `multiLagSpatialAutocorrelation` in `e2e/harness/metrics.ts`: the

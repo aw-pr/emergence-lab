@@ -88,6 +88,11 @@ adjacent — which is what the attraction matrix actually controls. Both mean a
 new metric, which the stage card puts out of scope. The same follow-up would
 serve boids.
 
+> **Closed — stage `63-point-cloud-metrics`, completed 2026-09-01T18:59:14Z,
+> commit `2bf4c47` (reconciled 2026-09-02, stage
+> `74-sweep-write-ups-record-what-landed`).** See "Appendix 2026-08-30:
+> re-run under the smoothed point-cloud instrument (stage 63)" below.
+
 ## Appendix 2026-08-30: re-run under the smoothed point-cloud instrument (stage 63)
 
 Stage 63 built the follow-up this write-up asked for: opted-in sims are scored
