@@ -113,3 +113,42 @@ score can rise on coverage while the field stays dead, which is exactly how the
 current preset scores 0.201. Confirm criterion 4 by viewing the rendered output
 and saying whether you can see travelling structures, then check the other six
 presets reproduce.
+
+## Re-brief 2026-09-02: attempt 1 reached the answer, then kept going
+
+Attempt 1 was killed by the operator at 00:35 BST after running 41 minutes past
+its token-outlier warning and reaching 36,406,788 tokens — 22.2x the worker
+baseline, and about four times what this whole batch was budgeted for. Its work
+is preserved at `wip/73-gray-scott-u-skate-repair-attempt-1` (`95589fc`).
+**Nothing in it is verified**, but it had already reached a defensible answer:
+
+    git show wip/73-gray-scott-u-skate-repair-attempt-1
+
+It concluded the preset should be **retired, not repaired**, and wrote the
+reasoning into `src/app/presets.ts` and a 142-line appendix in
+`docs/sweeps/gray-scott-interestingness.md`, with a committed screenshot at
+`docs/images/2026-09-02-gray-scott-u-skate-washout.png`. Its finding, in its
+own words: `F=0.062, k=0.0609` is the canonical u-skate pair from the
+literature, but this kernel's five-point Laplacian at `Du=0.2097` floods it to
+the uniform high-V steady state and freezes — no soliton, nothing that glides —
+and no pair reachable on the F/k sliders produces travelling solitons either.
+
+That is exactly the negative result this card's Escalation clause permits.
+
+**Your job is to check that conclusion and stop, not to re-derive it.** Adopt
+the preserved commit, verify the claim yourself on the evidence already
+gathered, confirm the other six presets still reproduce, and write the
+envelope. If you agree, the deliverable is the retirement plus its written
+justification. Do not restart the parameter search: it has been done, it cost
+36M tokens, and repeating it is the single most expensive way to fail this
+card.
+
+Criterion 4 is satisfied by a recorded negative result under the Escalation
+clause, not only by a repaired preset. Say plainly which of the two you are
+delivering.
+
+**Write `state/handoffs/73-gray-scott-u-skate-repair.json` as soon as you have
+a defensible position and update it as you go.** Attempt 1 produced its answer
+and never reported it, which is why it was still running when it was killed.
+Do not touch the run worktree's `state/` symlink; the tick creates and
+validates it.
