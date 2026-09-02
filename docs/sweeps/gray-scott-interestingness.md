@@ -124,3 +124,145 @@ reads them near-maximally and the wider lag set finds nothing stronger — same
 result as the Ising cross-check above. Across all three sims checked for this
 card (Game of Life, Ising, Gray-Scott), the new term only disagrees with the
 old one on the one case it was built for: Game of Life's "Maze-like" preset.
+
+## Appendix: U-skate gliders retired — 2026-09-02
+
+The shipped **U-skate gliders** preset (`F=0.062, k=0.0609`) rendered a
+near-uniform mid-grey field with a handful of small dark dots. It has been
+removed from `src/app/presets.ts`; Gray-Scott now ships six presets. This
+appendix records the measurement that retired it, because the parameter pair is
+the canonical one from the literature and will look correct to the next reader
+who checks it against a reference.
+
+![U-skate gliders (left) against Coral (right), V channel, 128×128, 700 steps](../images/2026-09-02-gray-scott-u-skate-washout.png)
+
+*Left: the retired preset. Right: Coral, for scale. Both are the sweep's own
+artefact — the V field at 128×128 after 700 `step()` calls, grayscale, 3×
+nearest-neighbour upscale. Left is not a low-scoring pattern; it is the absence
+of one.*
+
+### Before and after
+
+| preset | F | k | score | entropy | autocorr | coverage | flux |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| U-skate gliders (retired) | 0.062 | 0.0609 | **0.200813** | 0.3753 | 0.9303 | 0.9485 | 0.001534 |
+| Coral (Default) | 0.0545 | 0.062 | 0.710267 | 0.6968 | 0.9370 | 0.6757 | 0.001148 |
+| Worms | 0.054 | 0.063 | 0.708718 | 0.6910 | 0.9411 | 0.6080 | 0.000900 |
+| Maze | 0.029 | 0.057 | 0.689690 | 0.6488 | 0.9392 | 0.6573 | 0.000502 |
+| Mitosis | 0.0367 | 0.0649 | 0.652860 | 0.5350 | 0.9489 | 0.3113 | 0.001005 |
+| Spots | 0.026 | 0.0597 | 0.741193 | 0.5260 | 0.9491 | 0.2766 | 0.031086 |
+| Waves | 0.018 | 0.0487 | 0.796346 | 0.5806 | 0.9729 | 0.4063 | 0.148948 |
+
+There is no "after" score, because there is no repaired preset: the search below
+found nothing to repair it to. The other six presets are untouched and reproduce
+the values above exactly (Coral to all sixteen digits of the figure the
+contract test in `e2e/sweep.spec.ts` pins, `0.7102674508287455`).
+
+Coverage 0.9485 is past the composite's ≈0.85 saturation edge and entropy 0.3753
+is well below the 0.47–0.70 the survivors manage, so the composite is reading the
+frame correctly. The instrument is not what was wrong.
+
+### Which cause: the pair, not the seeding or the step budget
+
+The two candidate explanations were a wrong or drifted F/k pair, and a right pair
+that the seed geometry or step budget never lets develop. It is the pair, and the
+pair has not drifted — `F=0.062, k=0.0609` is the canonical u-skate point from the
+Gray-Scott literature, in the same non-dimensional units this kernel uses
+(`Du/dx²·dt = 0.2097`). It was copied correctly and does not survive this
+kernel's discretisation.
+
+What the field actually does at that pair: it runs to a homogeneous steady state
+and stops. The medium is bistable here, between an *empty* state (`U=1, V=0`, the
+undepleted background every seed is dropped into) and a *filled* one. Solving the
+reaction terms for `F=0.062, k=0.0609` puts the filled state at `U≈0.4199,
+V≈0.2927`, and the whole field converges to exactly that — measured `V` median
+0.293 by step 200, the dark dots being the few pinned holes left over from the
+seed rings.
+
+- **Not the step budget.** Coverage and flux are flat from step 2000 onwards:
+  coverage 0.9623 at flux 1×10⁻⁵ at step 2000, then coverage 0.9620 at flux
+  0.00000 from step 5000 all the way to step 40 000 (800 000 Euler iterations,
+  57× the sweep's budget). Nothing further happens, ever.
+- **Not the seeding.** Wiping to the empty state and painting a single 8×8 patch
+  of V reproduces the same end state: the filled region invades outward without
+  bound (coverage 0.0039 → 0.19 → 0.59 → 0.948 at steps 0/100/200/400) and
+  freezes when it meets itself around the torus. A smaller 9×4 patch is below the
+  critical nucleus and dies outright. Nothing between those two yields a bounded
+  structure, because at this pair the empty→filled front has a positive velocity,
+  which is exactly the condition under which an isolated soliton cannot exist. No
+  seed geometry can outrun an invading front.
+- **Not the sweep's grid either.** Same behaviour at every resolution, including
+  the ones the live app runs at: coverage 0.813 / 0.948 / 0.959 / 0.907 / 0.915 at
+  96², 128², 192², 256², 384², with flux ≤ 0.0016 at step 700 and ≤ 0.0004 at step
+  2000 in every case, and the composite never above 0.69. The bigger grids take
+  longer only because the front has further to travel before it closes; the end
+  state is the same everywhere.
+
+What a visitor actually saw is worth stating precisely, because it is not blank
+from the first frame. Driving the live page (Playwright, WebGL2, the default
+balanced grid) at `F=0.062, k=0.0609` shows an expanding disc with a busy,
+decorated rim for the first few minutes — the invasion front crossing the grid,
+and genuinely nice to look at. Then the front closes on itself, the interior is
+the uniform filled state, and the sim stops changing for as long as it is left
+running. That transient is a property of the saturating band, not of this pair in
+particular, and it contains no travelling structures: the rim advances, nothing
+crosses the field.
+
+### What was searched
+
+Two passes, both headless, both on the harness's own settings (V channel,
+700 `step()` calls, coverage threshold 0.1, composite unchanged), with a
+structure-tracking pass added on top: label the connected components of
+`V > 0.2`, match them between frames 100 steps apart, and report how many
+translated. Calibration on the shipped presets behaves as it should — Mitosis,
+Coral, Maze and Worms register no translation, Waves and Spots do.
+
+1. **The whole slider plane, 651 sets.** `F` ∈ [0.010, 0.070] step 0.002 × `k` ∈
+   [0.040, 0.070] step 0.0015, at 96². Everything at `F ≥ 0.056` is dead,
+   saturated, or a static labyrinth. The sets with translating structures are all
+   at low feed, `F` ≈ 0.012–0.028 with `k` ≈ 0.049–0.060, plus a few weak cases
+   beside Mitosis at `F` ≈ 0.036–0.038, `k = 0.0655`.
+2. **The u-skate neighbourhood at full slider resolution, 210 sets.** `F` ∈
+   [0.056, 0.066] × `k` ∈ [0.0590, 0.0635], both at step 0.0005 — that is *every
+   pair the F and k sliders can express* in the box around the shipped point,
+   scored at 128². 69 are alive at all; **none has a single translating
+   structure.** The best of them is a frozen labyrinth: `F=0.0585, k=0.0635`
+   scores 0.728 at flux 0.0052, and `F=0.062, k=0.0615` — 0.0006 above the
+   shipped kill rate, the same feed — scores 0.727 at flux 0.0032. Those are the
+   Coral/Worms regime under another name, not gliders.
+
+The low-feed region from pass 1 was then checked for whether its motion persists
+or is just the seed rings expanding. It persists: at `F=0.024, k=0.058` the
+composite runs 0.751 at step 700 and 0.781 at step 5000, with 56 of 60 and 68 of
+76 components displaced by 6–10 cells per 100 steps respectively. But following
+individual structures over 480 steps shows they do not *travel*: mean path length
+54–240 cells against mean net displacement 10–20 cells (straightness 0.04–0.26).
+They split, merge and pulse in place. That regime is the travelling-wave and
+self-replicating-spot family the shipped **Waves** (0.796) and **Spots** (0.741)
+presets already occupy, so it offers no distinct preset even setting the name
+aside.
+
+### Result: a negative one, per the card's escalation
+
+No pair reachable on this sim's sliders produces recognisable travelling gliders
+at the resolution and step budget it ships with. The likely reason is
+discretisation rather than parameters: u-skate solitons need more grid cells per
+feature than this kernel can give them. Feature size in cells scales as √Du, and
+`Du = 0.2097` is already 84% of the explicit-Euler stability ceiling (0.25 for
+the five-point Laplacian at `dt = 1`), so it cannot be raised. Getting the
+solitons would take a nine-point stencil or a smaller timestep — a kernel change
+that moves every Gray-Scott preset, not a preset change.
+
+Given that, the preset was retired rather than renamed. Renaming would have meant
+shipping `F=0.062, k=0.0609` under an honest label, and the honest label for that
+frame is "saturated washout", which is not worth a slot in the dropdown. Nothing
+else changed: no other preset, no metric, no weight, no sweep setting.
+
+Two things a future card could pick up, neither of them decided here:
+
+- **The `F=0.062, k=0.0615` labyrinth (0.727).** A real pattern a hair above the
+  retired kill rate, but static, and close enough to Coral (0.710) and Worms
+  (0.709) that it would need a visual case for why the set needs a third of them.
+- **Gliders at a finer discretisation.** A nine-point Laplacian or a sub-unit
+  timestep is the only route to the regime the retired preset was named for, and
+  it is a kernel-wide decision with its own re-baseline attached.

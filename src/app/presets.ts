@@ -38,11 +38,14 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Waves",
       params: { Du: 0.2097, Dv: 0.105, F: 0.018, k: 0.0487, stepsPerFrame: 20 },
     },
-    {
-      id: "u-skate",
-      label: "U-skate gliders",
-      params: { Du: 0.2097, Dv: 0.105, F: 0.062, k: 0.0609, stepsPerFrame: 20 },
-    },
+    // A "U-skate gliders" preset (F=0.062, k=0.0609) shipped here until the
+    // 2026-09-02 sweep retired it. That is the canonical u-skate pair from the
+    // literature, but this kernel's five-point Laplacian at Du=0.2097 floods it
+    // to the uniform high-V steady state and freezes: no soliton, nothing that
+    // glides. Neither the seed nor the step budget is the cause, and no pair
+    // reachable on the F/k sliders produces travelling solitons either — see
+    // docs/sweeps/gray-scott-interestingness.md. Re-adding it needs a finer
+    // stencil or a smaller timestep, not another parameter guess.
   ],
   "abelian-sandpile": [
     {
