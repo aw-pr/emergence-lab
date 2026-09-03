@@ -117,3 +117,37 @@ named stage's status in `state/state.yaml` **and** that its card's scope
 actually covers the claim — a completed stage with a different objective does
 not close a follow-up just because the topics are adjacent. Then confirm
 criterion 4 by checking the diff adds rather than rewrites.
+
+## Re-brief 2026-09-03: two items stage 73 left undecided are missing from the still-open list
+
+Attempt 1 is preserved at `wip/74-sweep-write-ups-record-what-landed-attempt-1`
+(`afb97ed40217f8e97ea9f33996ae20739a3530d2`), authored to Claude Sonnet 5. **Start there.** The verifier passed
+criteria 2 to 5 and every one of the eleven per-file closure annotations. It
+failed criterion 1 on one thing only: the new "Still genuinely open" section
+in `docs/sweeps/2026-08-24-overnight-summary.md` says everything has closed
+except the Brian's Brain `dyingValue` axis, and that is a closure by omission.
+
+Stage 73's appendix in `docs/sweeps/gray-scott-interestingness.md` (search for
+"neither of them decided here") names two items it deliberately did not decide:
+
+- the `F=0.062, k=0.0615` labyrinth scoring 0.727, a real pattern a hair above
+  the promotion bar that was neither promoted nor rejected;
+- gliders at a finer discretisation, via a nine-point Laplacian or a sub-unit
+  timestep, which is a kernel change and out of stage 73's scope.
+
+Neither is carded. Both are still open, and the still-open section must say
+so, with the reason (no card exists; the operator has not decided).
+
+Scope for this round, additive only:
+
+1. Cherry-pick `afb97ed` onto the run branch.
+2. Add those two items to the "Still genuinely open" section of the overnight
+   summary, each pointing at the gray-scott write-up's appendix and stating
+   that no card exists yet.
+3. Re-read every other appendix dated 2026-09-01 or later in `docs/sweeps/`
+   for the same pattern (an item explicitly left undecided), and list any you
+   find the same way. Report in the handoff which files you checked.
+4. Write the envelope.
+
+The acceptance criteria above are unchanged. Criterion 4 still holds: do not
+alter any dated text, including your predecessor's; add to it.
