@@ -347,6 +347,7 @@ async function runSweep(
 // Always-on: a fast sanity check that the metric stack rewards a coherent Turing
 // regime over a washed-out one, and produces finite numbers. Keeps the default
 // suite quick while still exercising the whole harness path through the browser.
+// AUTOMETTA-CONTRACT-BEGIN card=docs/stages/70-gray-scott-rebaseline.md
 test("metrics harness rewards structure over washout", async ({ page }) => {
   const config = SWEEP_CONFIGS["gray-scott"];
   const turing = await scoreOne(page, config, "coral", "Coral", {
@@ -367,6 +368,7 @@ test("metrics harness rewards structure over washout", async ({ page }) => {
   }
   expect(turing.metrics.score).toBeGreaterThan(washout.metrics.score);
 });
+// AUTOMETTA-CONTRACT-END
 
 test("non-phase Gray-Scott scores are unchanged", async ({ page }) => {
   const config = SWEEP_CONFIGS["gray-scott"];

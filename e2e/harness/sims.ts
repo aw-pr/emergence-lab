@@ -123,14 +123,18 @@ const GRAY_SCOTT: SimSweepConfig = {
     { key: "F", values: linspace(0.01, 0.066, 8) },
     { key: "k", values: linspace(0.045, 0.067, 7) },
   ],
-  // References mirror the shipped presets so a re-run reproduces their scores.
-  // The promoted Spots/Waves deltas are recorded in docs/sweeps/.
+  // References mirror all seven shipped presets (src/app/presets.ts) so a
+  // re-run reproduces their scores like-for-like. Worms and u-skate were never
+  // previously scored (added to this list at the 70-gray-scott-rebaseline
+  // stage); see docs/sweeps/ for the old/new comparison.
   references: [
     { id: "default-coral", label: "Default (Coral)", params: { Du: 0.2097, Dv: 0.105, F: 0.0545, k: 0.062, stepsPerFrame: 20 } },
     { id: "mitosis", label: "Mitosis", params: { Du: 0.2097, Dv: 0.105, F: 0.0367, k: 0.0649, stepsPerFrame: 20 } },
+    { id: "worms", label: "Worms", params: { Du: 0.2097, Dv: 0.105, F: 0.054, k: 0.063, stepsPerFrame: 20 } },
     { id: "maze", label: "Maze", params: { Du: 0.2097, Dv: 0.105, F: 0.029, k: 0.057, stepsPerFrame: 20 } },
     { id: "spots", label: "Spots (promoted: dense lattice)", params: { Du: 0.2097, Dv: 0.105, F: 0.026, k: 0.0597, stepsPerFrame: 20 } },
     { id: "waves", label: "Waves (promoted: pulsing cells)", params: { Du: 0.2097, Dv: 0.105, F: 0.018, k: 0.0487, stepsPerFrame: 20 } },
+    { id: "u-skate", label: "U-skate gliders", params: { Du: 0.2097, Dv: 0.105, F: 0.062, k: 0.0609, stepsPerFrame: 20 } },
   ],
 };
 

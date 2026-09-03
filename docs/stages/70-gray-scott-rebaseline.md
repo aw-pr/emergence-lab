@@ -90,8 +90,11 @@ Do not read anything else unless you need to; keep your context lean.
 ## Contract test
 
 - **Test file:** `e2e/sweep.spec.ts`
-- **Assertions digest:** the existing `metrics harness rewards structure over
-  washout` test must still pass unmodified.
+- **Assertions digest:** `sha256:d423a74581557368b535a0be297459def702f2f9357ee38f77e191e8e164d676`
+  — the existing `metrics harness rewards structure over washout` test in
+  `e2e/sweep.spec.ts`, now wrapped in the freeze markers so
+  `check-contract-test-gate.sh` actually checks it instead of passing
+  vacuously; see the 2026-09-01 re-brief.
 
 ## Out of scope
 
@@ -134,9 +137,16 @@ Coverage, entropy and composite agree after rounding, so this is one number,
 not a broken pipeline. Find out which is right and correct the loser.
 
 Note for the gate: this card states its Assertions digest in prose and
-`e2e/sweep.spec.ts:279-301` carries no AUTOMETTA-CONTRACT-BEGIN/END markers, so
-`check-contract-test-gate.sh` exited 0 without recomputing anything. The gate
-passed vacuously last round. Add the markers or expect the same empty pass.
+`e2e/sweep.spec.ts:279-301` carries no freeze markers (see
+`scripts/check-contract-test-gate.sh` for the marker format), so that script
+exited 0 without recomputing anything. The gate passed vacuously last round.
+Add the markers or expect the same empty pass. (Spelling the literal marker
+tokens in this note — as the previous wording did — makes the gate misfire on
+this card file itself the moment it is staged, since the gate flags any
+staged file containing the begin-token as an unattributed marker line. Keep
+this note's wording clear of the literal tokens for that reason. Closed
+2026-09-01: markers added around the `metrics harness rewards structure over
+washout` test, digest recorded above.)
 
 ## Re-brief 2026-09-01 (second): the work is done, the envelope is not
 
