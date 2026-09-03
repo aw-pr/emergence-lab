@@ -103,3 +103,35 @@ in the envelope with a `partial` status. Do not decide blind.
 Look at the three frames. Criterion 4 and 5 are about whether the stated
 visual case is true of the pictures, not about the score. Then check the six
 presets reproduce.
+
+## Re-brief 2026-09-03: the frames exist, the decision does not
+
+Attempt 1 rendered all three frames by 22:38 BST, then its API requests
+started timing out: 40 `Request timed out` errors, retries exhausted at
+23:10, and the tick stalled it on wall-clock at 23:24 with no envelope. Its
+work is preserved at `wip/75-gray-scott-labyrinth-preset-attempt-1`
+(`c5c42fa7e4059910dfc6b0730fcf6f33300741d5`), authored to Claude Opus 5. **Start there.**
+
+    git show --stat wip/75-gray-scott-labyrinth-preset-attempt-1
+
+What it holds: `e2e/artifacts/scratch75/` with `candidate-labyrinth.png`,
+`coral.png` and `worms.png` (plus `field-*.png` raw-field variants), and the
+scratch specs `e2e/scratch75.spec.ts` and `e2e/scratch75b.spec.ts` that
+produced them through the headless sweep driver. No appendix, no decision, no
+preset entry, no envelope.
+
+Scope for this round:
+
+1. Cherry-pick the preserved commit. Move the three named frames to
+   `docs/images/2026-09-03-gray-scott-<id>.png`; delete the scratch specs and
+   the `field-*` variants before you finish, since deliverable 1 asks for
+   three committed frames, not a scratch directory.
+2. Look at each frame **once**, make the visual case or say there is none,
+   and decide. Do not re-render unless a frame is unreadable.
+3. If promoted, add the preset and score it headless as deliverable 3 says.
+4. Close the stage 73 item in the appendix and write the envelope.
+
+Keep your context small: read the three PNGs one at a time and nothing else
+binary. Attempt 1's transcript was 1.2 MB when its requests began timing out.
+
+The acceptance criteria above are unchanged.
