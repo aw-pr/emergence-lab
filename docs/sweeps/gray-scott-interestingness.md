@@ -313,6 +313,107 @@ Two things a future card could pick up, neither of them decided here:
 - **The `F=0.062, k=0.0615` labyrinth (0.727).** A real pattern a hair above the
   retired kill rate, but static, and close enough to Coral (0.710) and Worms
   (0.709) that it would need a visual case for why the set needs a third of them.
+
+  > **Closed — rejected, stage `75-gray-scott-labyrinth-preset`, 2026-09-03.**
+  > Not promoted. The visual case does not hold and the pair is one `k` slider
+  > tick from a dead field in both directions. See "Appendix: the 0.727
+  > labyrinth rejected — 2026-09-03" below.
 - **Gliders at a finer discretisation.** A nine-point Laplacian or a sub-unit
   timestep is the only route to the regime the retired preset was named for, and
   it is a kernel-wide decision with its own re-baseline attached.
+
+## Appendix: the 0.727 labyrinth rejected — 2026-09-03
+
+Stage 73 left `F=0.062, k=0.0615` undecided: a real static labyrinth scoring
+0.727, above Coral (0.710) and Worms (0.709), but close enough to both that it
+needed a visual case before it could take a seventh slot in the Gray-Scott
+dropdown. **It was rejected.** Gray-Scott continues to ship six presets, and
+`src/app/presets.ts` is unchanged by this stage.
+
+### The three frames
+
+| candidate | Coral | Worms |
+|---|---|---|
+| ![F=0.062, k=0.0615](../images/2026-09-03-gray-scott-candidate-labyrinth.png) | ![Coral](../images/2026-09-03-gray-scott-coral.png) | ![Worms](../images/2026-09-03-gray-scott-worms.png) |
+
+All three are the sweep's own artefact at the shipped `Du=0.2097`,
+`Dv=0.105`, `stepsPerFrame=20`: the V field at 128×128 after 700 `step()`
+calls, grayscale, 3× nearest-neighbour upscale. They were produced through the
+headless sweep driver in one run, so nothing but F and k differs between them.
+
+### What distinguishes it visually: line weight, and nothing else
+
+The three frames are the same pattern at three points on one axis. Each is the
+same radially-symmetric mandala the seed geometry imposes on every Gray-Scott
+regime, drawn as bright ridges with black channels between them, and the only
+thing that changes across the row is how much of the frame the bright phase
+occupies:
+
+| | Worms | Coral | candidate |
+|---|---:|---:|---:|
+| coverage | 0.6080 | 0.6757 | 0.7125 |
+
+Worms is the sparsest — thin single filaments on wide black. Coral thickens
+them into paired ridges. The candidate thickens them one notch further, until
+the bright phase is the ground and the labyrinth reads as dark grooves cut
+into it. That is a real difference and it is visible when the three are set
+side by side, but it is a difference of degree along the axis Coral and Worms
+already sample, not a third regime. Cycled one at a time through the dropdown
+— which is how a visitor actually meets a preset — the step from Coral to the
+candidate is a change of line weight in an otherwise identical picture. That
+is the visual case the stage 73 note asked for, and it fails.
+
+Its metrics say the same thing. Entropy 0.7112 and autocorrelation 0.9385
+against Coral's 0.6968 and 0.9370: the composite separates them by 0.0167, and
+what it is rewarding is the slightly larger coverage, which is exactly the
+"one notch thicker" the picture shows.
+
+### The stronger reason: it is one slider tick from a dead field
+
+`k` on this sim's slider steps by 0.0005 (`paramSchema` in
+`src/sims/gray-scott/kernel.ts`). Driving the neighbourhood headlessly at
+`F=0.062`, at the harness's own settings, shows the candidate sitting on a
+knife edge one tick wide:
+
+| F | k | score | coverage | entropy | flux | what the field is |
+|---:|---:|---:|---:|---:|---:|---|
+| 0.062 | 0.0625 | **0.000** | 0.0000 | 0.0000 | 0.0000 | empty — the seed dies |
+| 0.062 | 0.0620 | **0.000** | 0.0000 | 0.0000 | 0.0000 | empty — the seed dies |
+| 0.062 | 0.0615 | **0.726955** | 0.7125 | 0.7112 | 0.003242 | the candidate |
+| 0.062 | 0.0610 | **0.689081** | 0.8318 | 0.6592 | 0.000438 | near-saturated, frozen |
+| 0.062 | 0.0605 | **0.000** | 1.0000 | 0.0000 | 0.0000 | uniformly filled — washout |
+
+One tick up in `k` and the pattern does not exist; one tick down and coverage
+runs to 0.832 at flux 0.0004, which is the saturated frozen field this sweep
+retired **U-skate gliders** for two ticks earlier at `k=0.0609`; two ticks down
+and the field is uniformly full, coverage 1.0, entropy zero. `F` is tolerant
+here — `F=0.0615` and `F=0.0625` at the same `k` score 0.714 and 0.726, the
+same pattern — so the fragility is entirely in `k`, and it is total.
+
+A preset is a jump-off point: the visitor picks one and then moves the
+sliders. Coral survives that treatment, and so do the other five. This pair
+does not survive a single tick of the one slider a visitor is most likely to
+touch, and the failure mode on the way down is the exact washout stage 73 just
+removed from the dropdown. Shipping it would re-introduce that frame one click
+away from a preset, under a name that promised a labyrinth.
+
+### Result
+
+Rejected. The score is real, the pattern is real, and neither is enough: it
+adds a third sample of the Coral/Worms regime, distinguishable only by line
+weight, at a parameter point that cannot be explored from. The six shipped
+presets are untouched and reproduce their recorded scores exactly — Waves
+0.796346, Spots 0.741193, Coral 0.710267, Worms 0.708718, Maze 0.689690,
+Mitosis 0.652860, all measured again in this stage's own run. No metric,
+weight, kernel or sweep setting changed.
+
+Because nothing was promoted, no row was added to the sweep table. Every
+number in this appendix was produced by this stage, headlessly, through the
+sweep driver and `scoreFrames` at the Gray-Scott config's own settings (128×128,
+700 `step()` calls, V channel, coverage threshold 0.1, `fluxGap` 12), driven
+from a scratch spec under `npx playwright test`; the shipped equivalent for
+reproducing the preset rows is:
+
+```bash
+SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
+```
