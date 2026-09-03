@@ -322,6 +322,14 @@ Two things a future card could pick up, neither of them decided here:
   timestep is the only route to the regime the retired preset was named for, and
   it is a kernel-wide decision with its own re-baseline attached.
 
+  > **Closed — negative, stage `76-gray-scott-nine-point-laplacian`,
+  > 2026-09-03.** A selectable nine-point Laplacian landed in the kernel behind
+  > the five-point default. At the shipped grid and step budget it produces no
+  > travelling structure at `F=0.062, k=0.0609` or at any of the 210 pairs in
+  > this appendix's u-skate box; the default stencil and the six presets are
+  > unchanged. See "Appendix: the nine-point stencil does not reach the glider
+  > regime — 2026-09-03" below.
+
 ## Appendix: the 0.727 labyrinth rejected — 2026-09-03
 
 Stage 73 left `F=0.062, k=0.0615` undecided: a real static labyrinth scoring
@@ -413,6 +421,210 @@ sweep driver and `scoreFrames` at the Gray-Scott config's own settings (128×128
 700 `step()` calls, V channel, coverage threshold 0.1, `fluxGap` 12), driven
 from a scratch spec under `npx playwright test`; the shipped equivalent for
 reproducing the preset rows is:
+
+```bash
+SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
+```
+
+## Appendix: the nine-point stencil does not reach the glider regime — 2026-09-03
+
+Stage 73 closed with one route left open to the regime the retired **U-skate
+gliders** preset was named for: a finer discretisation, by a nine-point
+Laplacian or a sub-unit timestep. This stage built the nine-point stencil and
+asked it the question. **The answer is no.** At the shipped grid and step
+budget, the nine-point stencil produces no travelling structure at
+`F=0.062, k=0.0609` or at any of the 210 pairs in stage 73's u-skate box. The
+default stencil stays five-point, the six shipped presets are untouched, and
+`src/app/presets.ts` is unchanged by this stage.
+
+### What landed in the kernel
+
+`src/sims/gray-scott/kernel.ts` gains a `stencil` parameter, an enum with two
+values, **`five-point`** (the default, the stencil every preset was tuned on)
+and **`nine-point`**, the isotropic Patra–Karttunen stencil
+`(4·edges + diagonals − 20·centre) / 6`. Both are second-order accurate; the
+nine-point's leading error term is rotationally symmetric, so features stop
+inheriting the grid's axes, and its spectral radius is 16/3 rather than 8, so
+the explicit-Euler ceiling on `Du` rises from 0.25 to 0.375. The five-point
+pass is the shipped loop moved verbatim into its own method; the arithmetic is
+unchanged. It appears in the control panel as "Laplacian stencil" under
+Reaction-diffusion, defaulting to five-point, and no preset sets it.
+
+Two unit tests pin the relationship between the stencils
+(`src/sims/gray-scott/kernel.test.cjs`). On a separable sine field
+`sin(kx·x)·sin(ky·y)` painted onto the torus, the two Laplacians differ by
+exactly `(2/3)(1 − cos kx)(1 − cos ky)` per unit amplitude, the O(h²k⁴)
+truncation gap between them; the test measures that gap after one Euler step
+at wavelengths 16 and 32 cells, requires it within 1% of the formula on both
+channels, and requires the ratio between the two wavelengths to sit between 14
+and 18, as a fourth-order term must (the analytic ratio is 15.7). A second test
+checks that a uniform field stays uniform under either stencil, and a third
+that the default, an unknown string, and a non-string all resolve to the
+five-point result while `nine-point` does not.
+
+### Nothing shipped changed: the six presets reproduce exactly
+
+With the default stencil, all six shipped presets reproduce their recorded
+scores to every digit through the shipped harness path (Playwright, headless,
+`driveKernel` at 128×128, 700 `step()` calls, V channel, coverage threshold
+0.1, `fluxGap` 12), in this stage's own run:
+
+| preset | F | k | score (five-point, default) |
+|---|---:|---:|---:|
+| Waves | 0.018 | 0.0487 | 0.7963458726372294 |
+| Spots | 0.026 | 0.0597 | 0.7411929696553551 |
+| Coral (Default) | 0.0545 | 0.062 | 0.7102674508287455 |
+| Worms | 0.054 | 0.063 | 0.7087181881369251 |
+| Maze | 0.029 | 0.057 | 0.6896900329572433 |
+| Mitosis | 0.0367 | 0.0649 | 0.6528595882826324 |
+
+Coral matches the contract test's pinned value in `e2e/sweep.spec.ts`, whose
+frozen assertion block is unmodified, and the five always-on harness tests
+pass. The retired pair reproduces its stage 73 number too, 0.20081257385221984.
+
+### The question: measured, and the answer is no
+
+**The canonical pair under nine-point.** `F=0.062, k=0.0609` at the shipped
+`Du=0.2097, Dv=0.105, stepsPerFrame=20`, 128×128, 700 `step()` calls:
+
+| stencil | score | coverage | entropy | autocorr | flux | components (V > 0.2) |
+|---|---:|---:|---:|---:|---:|---:|
+| five-point | 0.200813 | 0.9485 | 0.3753 | 0.9303 | 0.001534 | 1 |
+| nine-point | 0.153677 | 0.9587 | 0.3233 | 0.9244 | 0.000732 | 1 |
+
+The same washout, slightly more complete. The frame is the near-uniform
+filled state with the seed rings' pinned holes in it; one connected component
+covers 96% of the field and does not move.
+
+**The box under nine-point.** Every pair the sliders can express in
+`F ∈ [0.056, 0.066] × k ∈ [0.0590, 0.0635]`, both at step 0.0005, 210 sets,
+scored at the harness settings above and then tracked (measure below):
+
+| | five-point (this stage's control) | nine-point |
+|---|---:|---:|
+| sets | 210 | 210 |
+| alive at step 700 (0 < coverage < 1) | 69 | 74 |
+| sets with a translating structure between step 700 and 800 | 0 | 0 |
+| sets with a structure travelling ≥ 8 cells net over 480 steps | 0 | 0 |
+| best straightness of any track | 0 | 0 |
+| best score | 0.728 at F=0.0585, k=0.0635 | 0.720 at F=0.0595, k=0.062 |
+
+The five-point column reproduces stage 73 exactly, 69 alive and the same best
+pair at the same score, which is the check that this stage's re-implemented
+measure and stage 73's agree on the box. Under nine-point the box has the
+same shape: uniformly full at `k ≤ 0.0600`, dead at high `k` and high `F`, and
+a band of static labyrinths between, at flux no higher than 0.0030 (five-point:
+0.0052). The five extra nine-point survivors are all near-saturated fields,
+coverage 0.85–1, in the `k = 0.0605` column on the flooded edge of the box;
+the labyrinth band proper (coverage 0.12–0.85) is 58 sets under nine-point
+against 63 under five-point. The nine-point best member, `F=0.0595, k=0.062`,
+is two components at coverage 0.681 and flux 0.0016: the Coral regime, one
+notch thicker, frozen. Nothing in either column translates; the highest-flux
+living set in the nine-point box,
+`F=0.059, k=0.0635`, is four components at flux 0.0030 with none of them
+displaced.
+
+**The measure**, re-implemented from stage 73's description because its
+scratch code was never committed: label the 4-connected components of
+`V > 0.2` on the torus with wrap-aware centroids; match components between
+snapshots 20 `step()` calls apart by nearest centroid within 12 cells and a
+size ratio within 0.5–2, one-to-one; a component has *translated* if its
+centroid moved ≥ 3 cells between steps 700 and 800; a *track* follows one
+component for 24 consecutive hops (480 `step()` calls from step 700), with
+straightness = net displacement / path length, reported for tracks whose net
+displacement is ≥ 8 cells so that pulsing in place cannot register. Calibrated
+on the shipped presets under five-point it behaves as stage 73's did: Spots 8
+of 22 matched components translated at 3.0 cells per 100 steps, stage 73's
+low-feed set `F=0.024, k=0.058` 8 of 16 at 3.6 cells, and Mitosis, Coral,
+Worms and Maze zero. Waves is the one difference: its fronts change shape
+faster than a 20-step hop, so no component survives the matcher and it reads
+as unmatched rather than static. That is a limit of this implementation, not
+of stage 73's, and it cannot hide a glider in the box, where every living set
+is matched hop to hop and none moves. The measure does see motion under the
+new stencil when there is any: the same low-feed set under nine-point
+registers 20 of 28 translated at 6.4 cells and four full tracks of
+straightness 0.56.
+
+The search stayed inside stage 73's box. Nothing outside it was scored.
+
+### Why the stencil could never have answered yes
+
+Stage 73 attributed the missing solitons to discretisation, on the reasoning
+that feature size in cells scales as √Du and `Du = 0.2097` sits at 84% of the
+five-point ceiling. The nine-point stencil lifts that ceiling, but at the
+shipped `Du` it adds no cells per feature: it changes only how the diagonals
+are weighted. Two facts follow, and both were measured.
+
+First, the invasion that floods the canonical pair is the same under both
+stencils. Stage 73's single-patch probe, repeated here under nine-point: wipe
+the field to `U=1, V=0`, paint one 8×8 patch of `V`, run.
+
+| stencil | coverage at step 0 | 100 | 200 | 400 | 700 |
+|---|---:|---:|---:|---:|---:|
+| five-point | 0.0039 | 0.1877 | 0.5911 | 0.9480 | 0.9585 |
+| nine-point | 0.0039 | 0.1865 | 0.5876 | 0.9482 | 0.9595 |
+
+The front crosses the field at the same speed to within 1%, and the
+sub-critical 9×4 and 6×6 patches die under both. That is not a coincidence:
+on a field that is constant along one axis, the nine-point stencil reduces
+algebraically to the five-point one (`(6·left + 6·right − 12·centre) / 6`),
+so a planar front has *identical* dynamics under both, and only curvature
+corrections differ. The empty→filled front velocity that stage 73 identified
+as the condition ruling out an isolated soliton is a one-dimensional
+property, and the stencil cannot touch it.
+
+Second, what the stencil does change is anisotropy, and that shows up where
+it should: patterns are a little rounder, five of the six presets move their
+coverage by under 0.025 in either direction, and the regime at every pair in
+the box is the same. Waves, the one preset that moves more, is in the table
+below.
+
+The route that does add cells per feature is a larger `Du` in cell units,
+which for explicit Euler means a sub-unit timestep, so that `Du·dt` stays
+under the ceiling while `Du` itself grows: doubling the cells per feature
+needs `Du ≈ 0.84`, four substeps of `dt = 0.25`, four times the compute for
+the same physical time, and a 128×128 sweep grid that then holds a quarter as
+many features. The card names that as the fallback for the case where the
+stencil leaves the question open. It did not; the answer is no, and per the
+card's escalation rule the sub-unit timestep was not built and not needed.
+It remains the only discretisation route to the regime, and it is a kernel
+change with its own cost and re-baseline, not a preset change.
+
+### The six presets under nine-point, for the record
+
+Not a re-baseline, because nothing is switched. These are the six presets
+scored through the same browser path with `stencil: "nine-point"` and every
+other parameter at its shipped value, recorded so that a future card that does
+switch the default knows what it is walking into:
+
+| preset | five-point score | nine-point score | Δ | five-point coverage | nine-point coverage |
+|---|---:|---:|---:|---:|---:|
+| Waves | 0.796346 | 0.835836 | +5.0% | 0.4063 | 0.6401 |
+| Spots | 0.741193 | 0.757656 | +2.2% | 0.2766 | 0.2933 |
+| Coral (Default) | 0.710267 | 0.706525 | −0.5% | 0.6757 | 0.6921 |
+| Worms | 0.708718 | 0.705872 | −0.4% | 0.6080 | 0.6055 |
+| Maze | 0.689690 | 0.694360 | +0.7% | 0.6573 | 0.6359 |
+| Mitosis | 0.652860 | 0.657152 | +0.7% | 0.3113 | 0.3210 |
+
+Five of the six move by under 2.5% and keep their character. **Waves is the
+preset that would change character under a switch**: coverage rises from 0.41
+to 0.64 and the frame goes from soft mottled fronts on black to crisp bright
+rings, a different-looking picture at the same pair. That is the cost a
+switching card would have to justify, and this stage has no reason to pay it.
+
+### Result
+
+Negative, and recorded. The nine-point stencil is in the kernel, selectable,
+and off by default; the six shipped presets reproduce their recorded scores
+exactly; no pair in stage 73's box or the canonical pair produces a travelling
+structure under it; the default stays five-point. No preset was added,
+changed or restored, no metric, weight or sweep setting changed, and no frame
+was committed because there was no glider to commit. Every number in this
+appendix was produced by this stage: the preset scores through the shipped
+Playwright harness, and the box, the tracking and the patch probe in Node
+against the compiled kernel (`.test-build/sims/gray-scott/kernel.js`, the same
+code the unit tests run), which reproduces the harness's scores to the digit
+on the pairs checked.
 
 ```bash
 SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
