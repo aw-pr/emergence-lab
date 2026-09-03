@@ -135,3 +135,18 @@ Keep your context small: read the three PNGs one at a time and nothing else
 binary. Attempt 1's transcript was 1.2 MB when its requests began timing out.
 
 The acceptance criteria above are unchanged.
+
+## Correction 2026-09-03, same round: the frames did not survive the requeue
+
+The re-brief above says the preserved commit
+`c5c42fa7e4059910dfc6b0730fcf6f33300741d5` holds the three frames. It does
+not. `e2e/artifacts/` is gitignored, so the preserve verb committed only the
+two scratch specs, and the requeue then removed the worktree the PNGs were
+in. What you have is the specs that make them.
+
+So step 1 becomes: cherry-pick the preserved commit, run
+`npx playwright test e2e/scratch75b.spec.ts` once (it drives the headless
+sweep harness and writes `e2e/artifacts/scratch75/field-*.png` for the
+candidate, Coral and Worms), then copy those three into `docs/images/` under
+the dated names and continue from step 2. One run; do not iterate on the
+specs. Everything else in the re-brief stands.
