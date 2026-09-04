@@ -29,3 +29,63 @@ input to continual improvement of the loop. Times BST.
 | 23:50 | net | `dig` against the first resolver still times out (NordVPN's 100.64.0.2 is dead) but the system resolver falls through to Google, so 1Password and the API resolve. | Left as is. Restore Tailscale DNS with `tailscale set --accept-dns=true` once NordVPN is reconnected or off. |
 | 00:00 | 76 | Fable 5.1 worker wrote a pass envelope after 20 minutes of a 120-minute budget: nine-point stencil added behind the five-point default with a truncation-difference test; all 210 sets of stage 73's box re-swept under nine-point (74 alive, five-point control reproduces stage 73's 69 exactly); zero translating structures, best straightness 0; answer NO, recommendation leave the default. Opus 5 verifier dispatched 00:01. | none. The re-brief's "stop when you have the answer" was followed. |
 | 00:20 | 76 | Opus 5 verifier PASS 6/6, including a headless re-run of the shipped sweep and an independent check of the nine-point search. Parked "dev moved since dispatch" because this log was being committed to dev during the run. | Committed the tick's HANDOFF.md line, `merge-awaiting` merged clean, verify green (352 tests), pushed. Queue is now empty; stage 72 stays blocked on the operator's preset decision. Improvement: the watch itself caused two parked integrations by committing to dev mid-run; a watcher should batch its commits until the in-flight stage lands, or the tick should tolerate docs-only movement on the base. |
+
+## Closing summary, 01:18
+
+The 01:00 stop job fired on time: fleet tick unloaded, no agent processes, no
+run worktrees, drain expired at 00:59. The stop plist did not remove itself
+(its own `bootout` killed the script before the `rm`); removed by hand.
+
+**Landed on `dev`, all pushed:** 70 (Gray-Scott rebaseline, 6/6), 74 (sweep
+write-ups, 5/5), 75 (labyrinth rejected, 6/6), 76 (nine-point stencil added
+behind the default, answer no, 6/6). Four stages in three hours against one
+network outage.
+
+| Tokens | |
+|---|---|
+| Window start | 67,046,553 |
+| Window end | 81,748,443 |
+| Spent | 14,701,890 |
+
+Roughly a third of that was stage 75's first attempt, which sat retrying a
+dead network for 50 minutes.
+
+### Improvements, consolidated
+
+1. **`autometta status` should say when the fleet LaunchAgent is not loaded.**
+   The dashboard ticker in tmux made a dead loop look alive for 34 hours.
+2. **A pre-dispatch resolver check.** `dig +short api.anthropic.com` through
+   the system resolver, refuse to spend a dispatch on a dead network. Tonight
+   one outage cost a 50-minute worker, two instant launch failures, and the
+   quota reader.
+3. **Match `op-fetch: error: failed to resolve` in the instant-fault pattern**,
+   so a credential failure halts once with its real reason instead of
+   counting a worker stall per attempt against the failure cap.
+4. **Count `api_error` rows in the worker's transcript** under
+   `~/.claude/projects/<worktree>/` during the stall check. A `claude -p`
+   worker writes nothing to its log until exit, so an hour of retries is
+   indistinguishable from work.
+5. **Preserve should capture ignored artefacts the card names**, or requeue
+   should refuse while the worktree holds ignored files newer than dispatch.
+   Stage 75's three rendered frames were lost this way.
+6. **The stall path should TERM the `claude` child, not only the spawn
+   wrapper.** Stage 75's first worker survived its own stall.
+7. **A resume-to-verifier verb** for a stage whose envelope already passes
+   but whose `current_stage` was cleared. Stage 70 needed a hand edit.
+8. **The tick dirties the base checkout** by appending to `HANDOFF.md` when
+   it parks a branch, then its own `merge-awaiting` refuses that dirty tree.
+9. **Docs-only movement on the base should not park an integration.** Both
+   parked branches tonight were caused by this watch committing its log.
+10. **Workers inherit the operator's MCP servers.** An Obsidian vault server
+    was the stage 75 worker's only child process; nothing in the card needs it.
+
+### Morning
+
+- Reload the loop: `launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.autometta.tick.fleet.plist`
+- DNS: NordVPN's resolver (100.64.0.2) was dead all evening; Tailscale DNS
+  was disabled to get past it. Once NordVPN is reconnected or off, restore with
+  `tailscale set --accept-dns=true`.
+- Stage 72 still needs the operator decision on the two Brian's Brain presets
+  before it can be re-briefed. Nothing else is queued.
+- `autometta refresh-repo` was blocked all evening by in-flight stages and the
+  vendor stamp is still at 58fa586; run it now that the queue is empty.
