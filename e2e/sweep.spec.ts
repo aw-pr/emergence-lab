@@ -599,6 +599,13 @@ sweepTest("sweep belousov-zhabotinsky feed/kill", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["belousov-zhabotinsky"]);
 });
 
+// Stage 81: the diffusion line, at Spiral waves' feed/kill. Named so that the
+// card's `-g "sweep belousov"` runs it alongside the feed/kill sweep, which is
+// what re-scores the three references in the same session.
+sweepTest("sweep belousov-zhabotinsky diffusion line", async ({ page }) => {
+  await runSweep(page, SWEEP_CONFIGS["belousov-zhabotinsky-diffusion"]);
+});
+
 sweepTest("sweep physarum sensing geometry", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["physarum"]);
 });

@@ -82,3 +82,144 @@ it.
 ## Promotion
 
 None. The margin over the incumbents is too small to act on.
+
+---
+
+# Appendix — diffusion sweep, 2026-09-06
+
+The 2026-08-23 sweep above held `diffusionA`, `diffusionB` and `diffusionC`
+fixed at the Spiral waves values and ranked the three shipped presets on their
+feed/kill placement alone, even though the presets differ in all three
+diffusion rates. This appendix searches those three. Run it with:
+
+```bash
+SWEEP=1 npx playwright test sweep.spec.ts -g "sweep belousov"
+```
+
+which now runs two tests: the original feed/kill sweep and
+`sweep belousov-zhabotinsky diffusion line`. The config is
+`BELOUSOV_ZHABOTINSKY_DIFFUSION` in `e2e/harness/sims.ts` — a second entry
+against the same slug, so the feed/kill sweep and its ranking are untouched.
+Artifacts land under `e2e/artifacts/belousov-zhabotinsky-diffusion/`.
+
+Every lens setting is copied from the feed/kill config unchanged: 128×128,
+channel 0, 400 warmup steps, flux gap 8, coverage threshold 0.5. Metric stack,
+weights and composite are untouched. Feed and kill are pinned at the Spiral
+waves values (0.02 / 0.02) for all twelve sets, and `stepsPerFrame` stays at 1
+(out of scope — it is a speed control).
+
+## The line, and why it is not the line the card asked for
+
+**The three shipped presets are not collinear in (A, B, C).** The two segments
+disagree in the catalyst rate:
+
+| segment | ΔA | ΔB | ΔC |
+|---|---:|---:|---:|
+| Soft rings → Spiral waves | +0.04 | +0.02 | **−0.020** |
+| Spiral waves → Fast catalyst | +0.06 | +0.03 | **+0.045** |
+
+A and B move in a fixed 2:1 ratio across both segments; C reverses. No straight
+line passes through all three triples, so the design cannot be the one the
+stage card assumed, and the substitute is stated here rather than glossed.
+
+What *is* exactly true is that all three presets' **(A, B) projections lie on
+one line**, to the last digit:
+
+```
+B = A/2 − 0.01      0.14→0.06 (Soft rings)   0.18→0.08 (Spiral waves)   0.24→0.11 (Fast catalyst)
+```
+
+That is the sweep's spine. Ten sets walk it in A from 0.06 to 0.34 — beyond
+both outer presets, up to the activator slider's 0.35 ceiling — at Spiral
+waves' catalyst rate C = 0.035, so the spine passes exactly through Spiral
+waves' full triple and through the other two presets' (A, B). The remaining
+two sets are the off-line probes, and they go in the one direction the spine
+cannot reach: the other two presets' catalyst rates, C = 0.055 (Soft rings) and
+C = 0.08 (Fast catalyst), at Spiral waves' own (A, B). C is therefore searched
+as an independent axis at one point on the spine rather than dragged along it,
+which is the only honest way to search a parameter the presets disagree about.
+
+Twelve sets, listed here in line order. The three references are the shipped
+presets with their own unmodified params, re-scored in this same run.
+
+## Ranking
+
+| rank | A | B | C | score | entropy | autocorr | flux | coverage |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 12 | 0.06 | 0.02 | 0.035 | 0.879 | 0.96 | 0.81 | 0.1957 | 0.395 |
+| 11 | 0.09 | 0.035 | 0.035 | 0.903 | 0.94 | 0.87 | 0.1904 | 0.336 |
+| 10 | 0.12 | 0.05 | 0.035 | 0.913 | 0.93 | 0.90 | 0.1914 | 0.297 |
+| 9 | 0.14 | 0.06 | 0.035 | 0.918 | 0.92 | 0.91 | 0.1965 | 0.288 |
+| 8 | 0.18 | 0.08 | 0.035 | 0.931 | 0.92 | 0.94 | 0.2027 | 0.294 |
+| 7 | 0.18 | 0.08 | 0.055 | 0.936 | 0.93 | 0.94 | 0.2040 | 0.304 |
+| 5 | 0.18 | 0.08 | 0.08 | **0.942** | 0.93 | 0.95 | 0.2063 | 0.319 |
+| 6 | 0.21 | 0.095 | 0.035 | 0.942 | 0.93 | 0.95 | 0.2064 | 0.318 |
+| 4 | 0.24 | 0.11 | 0.035 | 0.950 | 0.94 | 0.96 | 0.2134 | 0.347 |
+| 3 | 0.27 | 0.125 | 0.035 | 0.957 | 0.95 | 0.96 | 0.2199 | 0.375 |
+| 2 | 0.30 | 0.14 | 0.035 | 0.962 | 0.95 | 0.97 | 0.2268 | 0.392 |
+| 1 | 0.34 | 0.16 | 0.035 | **0.967** | 0.96 | 0.97 | 0.2363 | 0.407 |
+
+The two bold rows are the off-line probe at C = 0.08 (rank 5) and the top set
+(rank 1). Rows 5 and 6 are a genuine tie at three decimals; rank 5 wins at
+0.9417 against 0.9416.
+
+| reference | score | entropy | autocorr | flux | coverage |
+|---|---:|---:|---:|---:|---:|
+| Fast catalyst | 0.941 | 0.92 | 0.96 | 0.3279 | 0.385 |
+| Spiral waves | 0.931 | 0.92 | 0.94 | 0.2027 | 0.294 |
+| Soft rings | 0.875 | 0.77 | 0.96 | 0.0863 | 0.120 |
+
+**The three references reproduce the 2026-08-23 figures exactly** — not to three
+decimals but bit-for-bit: 0.9308081945379483, 0.8746268563174677,
+0.940553399396508, identical in both runs of this session. Nothing but the
+diffusion triple moved. A second internal check falls out of the design: the
+spine's A = 0.18 set is Spiral waves' full triple at Spiral waves' feed/kill,
+and it scores the same 0.9308081945379483 as the reference, so the sweep path
+and the reference path agree on the same point.
+
+## Reading
+
+**Do the presets rank differently on diffusion than on feed/kill?** No — the
+order is the same, Fast catalyst > Spiral waves > Soft rings on both axes
+(0.950 / 0.931 / 0.918 for their (A, B) at common feed/kill, against 0.941 /
+0.931 / 0.875 in the feed/kill sweep), but the spread across the presets more
+than halves, from 0.066 to 0.032, so their diffusion placement separates them
+about half as much as their feed/kill placement does.
+
+**Which single triple does the composite prefer at Spiral waves' feed/kill?**
+(A 0.34, B 0.16, C 0.035), score 0.967.
+
+**The score is monotone in A across the whole spine and peaks at its far end.**
+0.879 → 0.967 with no interior optimum: the sweep did not find a preferred
+front width, it found that the composite always wants a wider one, and stopped
+because the activator slider ends at 0.35. Almost all of the ramp is
+spatial autocorrelation (0.81 → 0.97, the only term that rises monotonically
+with the score); entropy and coverage are U-shaped in A with their minima at
+A = 0.14, and flux dips before it climbs (0.1957 at A = 0.06, a minimum of
+0.1904 at 0.09, 0.2363 at 0.34). Wider fronts are a
+smoother field, and a smoother field is what the autocorrelation term rewards —
+which is the same direction the kernel's own param note describes as blur
+("higher values blur the spiral and target-pattern fronts into softer, wider
+bands"). Treat the high-A end as a metric artefact until someone looks at it.
+
+**The catalyst rate barely matters.** Across its full shipped range at fixed
+(A, B) = (0.18, 0.08), C moves the score by 0.011 — 0.931 → 0.936 → 0.942 —
+against 0.088 for A/B along the spine. It is monotone increasing and in the
+same direction as A, and it lands the C = 0.08 probe in a tie with an on-spine
+set two steps up the line. Of the three rates the feed/kill sweep held fixed,
+two do the work and one is close to a free parameter at this feed/kill.
+
+## Promotion
+
+**None.**
+
+The top set beats Spiral waves' incumbent triple by 0.036 (3.9%) and the best
+incumbent, Fast catalyst, by 0.026 (2.8%). That is larger than the 0.011 margin
+the feed/kill sweep produced, but still well short of the 0.07–0.5 deltas that
+justified the Gray-Scott and Clifford promotions, and it is the wrong shape to
+act on: the ranking is a monotone ramp that runs to the edge of the parameter's
+own slider, carried almost entirely by an autocorrelation term that rewards
+exactly the blur the parameter's documentation warns about. A promotion here
+would be promoting the metric's known bias, not a frame anyone chose. The
+correct follow-up is a browser look at the A ≥ 0.27 end — its own card, with a
+visual check — not a preset change on this evidence.

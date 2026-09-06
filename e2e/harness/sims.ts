@@ -77,8 +77,16 @@ export interface SimSweepConfig {
   multiSnapshot?: MultiSnapshotConfig;
   /** Fixed params applied to every set in the sweep. */
   baseParams: Params;
-  /** Swept axes; the sweep is their Cartesian product. */
+  /** Swept axes; the sweep is their Cartesian product, unless `sets` is
+   * present, in which case they only declare which keys vary and which values
+   * each one visits (the report's columns and candidate ids read from here). */
   axes: SweepAxis[];
+  /** Explicit set list, for a sweep whose points lie on a tied curve through
+   * parameter space rather than on a grid. Two of Belousov-Zhabotinsky's three
+   * diffusion rates move together along the line its presets share, so their
+   * Cartesian product would spend most of a twelve-set budget off it. When
+   * present this replaces the product; each entry is merged onto baseParams. */
+  sets?: Params[];
   /** Existing presets/defaults to baseline candidates against. */
   references: ReferenceSet[];
 }
@@ -94,8 +102,10 @@ export function linspace(min: number, max: number, count: number, decimals = 4):
   return out;
 }
 
-/** Cartesian product of the axes into concrete param objects merged onto base. */
+/** Cartesian product of the axes into concrete param objects merged onto base,
+ * or the explicit `sets` list where a config declares one. */
 export function expandSweep(config: SimSweepConfig): Params[] {
+  if (config.sets) return config.sets.map((set) => ({ ...config.baseParams, ...set }));
   let combos: Params[] = [{ ...config.baseParams }];
   for (const axis of config.axes) {
     const next: Params[] = [];
@@ -363,6 +373,52 @@ const BELOUSOV_ZHABOTINSKY: SimSweepConfig = {
     { id: "soft-rings", label: "Soft rings", params: { diffusionA: 0.14, diffusionB: 0.06, diffusionC: 0.055, feed: 0.012, kill: 0.03, stepsPerFrame: 1 } },
     { id: "fast-catalyst", label: "Fast catalyst", params: { diffusionA: 0.24, diffusionB: 0.11, diffusionC: 0.08, feed: 0.03, kill: 0.03, stepsPerFrame: 3 } },
   ],
+};
+
+// Stage 81: the three diffusion rates the feed/kill sweep above held fixed, at
+// Spiral waves' feed/kill. A second entry rather than extra axes on the config
+// above, so the feed/kill ranking stands and neither sweep's set count depends
+// on the other's. Every lens setting is copied from it unchanged, which is what
+// lets the same three references re-score to the 2026-08-23 figures and prove
+// nothing but the diffusion triple moved.
+//
+// The three shipped presets are NOT collinear in (A, B, C) — see the appendix
+// in docs/sweeps/belousov-zhabotinsky-interestingness.md — but their (A, B)
+// projections lie exactly on B = A/2 - 0.01, all three of them. That line is
+// the sweep's spine, walked at Spiral waves' catalyst rate; the two off-line
+// probes put the other two presets' catalyst rates at Spiral waves' own (A, B),
+// which is the one direction the spine cannot reach.
+const BELOUSOV_ZHABOTINSKY_DIFFUSION: SimSweepConfig = {
+  slug: "belousov-zhabotinsky",
+  artifactId: "belousov-zhabotinsky-diffusion",
+  primaryChannel: 0,
+  gridWidth: 128,
+  gridHeight: 128,
+  warmupSteps: 400,
+  fluxGap: 8,
+  dt: 1,
+  coverageThreshold: 0.5,
+  baseParams: { feed: 0.02, kill: 0.02, stepsPerFrame: 1 },
+  axes: [
+    { key: "diffusionA", values: [0.06, 0.09, 0.12, 0.14, 0.18, 0.21, 0.24, 0.27, 0.3, 0.34] },
+    { key: "diffusionB", values: [0.02, 0.035, 0.05, 0.06, 0.08, 0.095, 0.11, 0.125, 0.14, 0.16] },
+    { key: "diffusionC", values: [0.035, 0.055, 0.08] },
+  ],
+  sets: [
+    { diffusionA: 0.06, diffusionB: 0.02, diffusionC: 0.035 },
+    { diffusionA: 0.09, diffusionB: 0.035, diffusionC: 0.035 },
+    { diffusionA: 0.12, diffusionB: 0.05, diffusionC: 0.035 },
+    { diffusionA: 0.14, diffusionB: 0.06, diffusionC: 0.035 }, // Soft rings' (A, B)
+    { diffusionA: 0.18, diffusionB: 0.08, diffusionC: 0.035 }, // Spiral waves' triple
+    { diffusionA: 0.21, diffusionB: 0.095, diffusionC: 0.035 },
+    { diffusionA: 0.24, diffusionB: 0.11, diffusionC: 0.035 }, // Fast catalyst's (A, B)
+    { diffusionA: 0.27, diffusionB: 0.125, diffusionC: 0.035 },
+    { diffusionA: 0.3, diffusionB: 0.14, diffusionC: 0.035 },
+    { diffusionA: 0.34, diffusionB: 0.16, diffusionC: 0.035 },
+    { diffusionA: 0.18, diffusionB: 0.08, diffusionC: 0.055 }, // off-line: Soft rings' C
+    { diffusionA: 0.18, diffusionB: 0.08, diffusionC: 0.08 },  // off-line: Fast catalyst's C
+  ],
+  references: BELOUSOV_ZHABOTINSKY.references,
 };
 
 // Stigmergy. Swept on the sensing geometry, which is what decides whether the
@@ -656,6 +712,7 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "clifford-dejong-svensson": SVENSSON,
   lenia: LENIA,
   "belousov-zhabotinsky": BELOUSOV_ZHABOTINSKY,
+  "belousov-zhabotinsky-diffusion": BELOUSOV_ZHABOTINSKY_DIFFUSION,
   physarum: PHYSARUM,
   swarmalators: SWARMALATORS,
   "abelian-sandpile": ABELIAN_SANDPILE,
