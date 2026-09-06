@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-06
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/81-belousov-zhabotinsky-diffusion-sweep
@@ -99,3 +99,15 @@ drift and do not fill the table.
 Check criterion 4 first, from your own rerun, before anything else in the
 appendix is read as meaningful. Then confirm the twelve-set bound from the
 config, not the prose.
+
+## Re-card (2026-09-06, Codex session limit reached)
+
+The Codex provider window is exhausted for this session, so the worker seat
+moved from `GPT-5.6 Sol` to `Claude Opus 5`, at the worker effort of high the
+card already specifies. The verifier (Claude Sonnet 5) is unchanged, so the
+pair is still cross-model.
+
+The Metadata pairing rationale above is left standing as the record of what was
+designed; its "Codex synthesis seat" is now an Opus seat, and the claim of
+cross-family alternation from card 80 no longer holds. The sweep bounds, the
+three diffusion axes and the no-promotion rule are untouched.

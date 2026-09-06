@@ -101,3 +101,37 @@ Run your own grep for exact-equality comparisons against float-typed state or
 parameters across `src/sims/*/kernel.ts` before reading the worker's table,
 then reconcile the two. Rerun each new test against `dev` in a scratch
 checkout. Criterion 3 fails on a single missing kernel.
+
+## Re-card (2026-09-06, Codex session limit reached)
+
+The Codex provider window is exhausted for this session, so the verifier seat
+moved from `GPT-5.6 Sol` to `Claude Opus 5`, at the verifier effort of high the
+card already specifies.
+
+The Metadata pairing rationale above is left standing as the record of what was
+designed, and this card is the one that loses most by the substitution: an
+audit is precisely the case where the verifier must find what the worker
+missed, and a Sonnet worker checked by an Opus verifier shares training lineage
+in a way a Codex seat did not. The mitigation is procedural, not architectural
+— the verifier runs its own grep across `src/sims` and builds its own list
+before opening the worker's, and reports any kernel the worker did not
+enumerate. If the two lists agree exactly, say so explicitly rather than
+treating agreement as confirmation.
+
+
+### Correction (2026-09-06 14:0xZ)
+
+The Re-card section above is **wrong about this stage and is retained only as
+the record of the mistake**. This stage's verifier had already run as
+`GPT-5.6 Sol <gpt-5-6-sol@local>` and passed, at 10:30:18Z, before the
+controller rewrote the identity at 10:47Z. The re-card was applied from a
+10:05Z snapshot without re-reading state immediately before editing, so it
+overwrote the record of an attempt that had already happened.
+
+The identity has been restored to what actually ran, in both the Metadata
+above and `state/state.yaml`. No git damage resulted: the commit (`d0b35e92`)
+was made before the rewrite and already carries the correct
+`Co-Authored-By: GPT-5.6 Sol <gpt-5-6-sol@local>` trailer.
+
+The Codex session limit is real, but it bit after this stage was already done.
+It only ever blocked card 81's worker, which was genuinely re-carded.

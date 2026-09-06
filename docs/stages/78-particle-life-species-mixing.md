@@ -111,3 +111,35 @@ per-species raster to make it work.
 Recompute the three synthetic cases by hand from the docstring's definition
 before reading the test. Then run the Gray-Scott byte-identity check yourself.
 Read the appendix last and confirm criterion 6.
+
+## Re-card (2026-09-06, Codex session limit reached)
+
+The Codex provider window is exhausted for this session, so the verifier seat
+moved from `Codex GPT-5.6 Terra` to `Claude Sonnet 5`. The worker (Claude Opus
+5) was already running when this changed and is unaffected.
+
+The Metadata pairing rationale above is now partly stale and is left standing
+as the record of what was designed: the cross-*vendor* independence it claims
+is no longer available. What replaces it is cross-*model* independence, Opus
+worker against a Sonnet verifier, which is weaker. Criterion-level effect: the
+verifier must still recompute the statistic on synthetic fields where the
+answer is known rather than reading the worker's arithmetic back. Nothing else
+about this card changes.
+
+
+### Correction (2026-09-06 14:0xZ)
+
+The Re-card section above is **wrong about this stage and is retained only as
+the record of the mistake**. This stage's verifier had already run as
+`Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>` and passed, at 10:19:19Z, before the
+controller rewrote the identity at 10:47Z. The re-card was applied from a
+10:05Z snapshot without re-reading state immediately before editing, so it
+overwrote the record of an attempt that had already happened.
+
+The identity has been restored to what actually ran, in both the Metadata
+above and `state/state.yaml`. No git damage resulted: the commit (`a93eba65`)
+was made before the rewrite and already carries the correct
+`Co-Authored-By: Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>` trailer.
+
+The Codex session limit is real, but it bit after this stage was already done.
+It only ever blocked card 81's worker, which was genuinely re-carded.
