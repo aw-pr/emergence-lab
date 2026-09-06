@@ -447,9 +447,8 @@ const ABELIAN_SANDPILE: SimSweepConfig = {
   ],
 };
 
-// Three-state CA. dyingValue stays fixed at 0.5: it only sets the brightness of
-// the refractory state, and moving it under a fixed coverage threshold would
-// change what "covered" counts rather than changing the dynamics.
+// Three-state CA. Keep coverage above every refractory value so it counts
+// firing cells only; the other metrics still measure the rendered afterglow.
 const BRIANS_BRAIN: SimSweepConfig = {
   slug: "brians-brain",
   primaryChannel: 0, // State
@@ -458,11 +457,11 @@ const BRIANS_BRAIN: SimSweepConfig = {
   warmupSteps: 120, // the transient burns off by ~80 steps and settles to waves
   fluxGap: 4,
   dt: 1,
-  coverageThreshold: 0.25, // counts firing + refractory, excludes dead
-  baseParams: { dyingValue: 0.5 },
+  coverageThreshold: 0.99, // counts firing only for all sets and references
+  baseParams: { birthCount: 2 },
   axes: [
-    { key: "birthCount", values: [1, 2, 3, 4] },
-    { key: "seedDensity", values: [0.06, 0.12, 0.18, 0.22, 0.28, 0.36, 0.45] },
+    { key: "dyingValue", values: [0.1, 0.3, 0.5, 0.7, 0.9] },
+    { key: "seedDensity", values: [0.12, 0.36] },
   ],
   references: [
     { id: "classic", label: "Classic waves", params: { birthCount: 2, seedDensity: 0.22, dyingValue: 0.5 } },

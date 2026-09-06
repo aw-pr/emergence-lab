@@ -107,3 +107,80 @@ waves" to be byte-identical and requires the divergence of the other two to be
 measured and reported, not prevented. Re-tuning "Sparse spirals" and "Storm"
 under the corrected kernel, and the `dyingValue` sweep this unblocks, are
 follow-up cards; neither is part of stage 72.
+
+## `dyingValue` sweep — 2026-09-06
+
+### Method (defined before measurement)
+
+This appendix isolates the coverage artefact by scoring firing cells alone for
+coverage. The per-sim `coverageThreshold` is 0.99, above every swept refractory
+value (0.1–0.9) and both non-default reference values (0.42 and 0.62), while a
+firing cell remains 1. Coverage therefore cannot jump merely because the
+afterglow crosses the old 0.25 threshold. The threshold and metric stack stay
+fixed across all sets and references.
+
+The corrected kernel stores `dyingValue` as float32 and compares against that
+same stored value. For every tested value strictly between 0 and 1, a firing
+cell spends one step refractory and then retires, so the discrete state
+evolution is invariant for a fixed seed density; only the rendered refractory
+brightness changes. The exact endpoints are excluded because 0 aliases dead
+and 1 aliases firing rather than representing a distinct refractory state.
+
+The composite still scores the rendered scalar field. Entropy, autocorrelation
+and flux can therefore move with afterglow brightness even when the discrete
+dynamics do not; such movement describes presentation, not a more generative
+rule. Rankings below will be read only as an appearance-sensitive signal, with
+firing-only coverage reported separately.
+
+### Run and frames
+
+The headless run evaluated all 10 defined sets and skipped none: `birthCount`
+2, `seedDensity` 0.12 and 0.36, and `dyingValue` 0.1, 0.3, 0.5, 0.7 and 0.9.
+Each set used a 128×128 grid. Frame A was captured after 120 steps and frame B
+after four more steps, at step 124; the pair supplies the temporal-flux term.
+
+### Appearance-sensitive ranking
+
+| rank | dying | seed | score | entropy | autocorr | flux | firing coverage |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.9 | 0.36 | **0.070** | 0.083 | 0.385 | 0.0983 | 0.034 |
+| 2 | 0.7 | 0.36 | 0.067 | 0.083 | 0.368 | 0.0902 | 0.034 |
+| 3 | 0.5 | 0.36 | 0.061 | 0.083 | 0.328 | 0.0821 | 0.034 |
+| 4 | 0.9 | 0.12 | 0.055 | 0.074 | 0.368 | 0.0824 | 0.028 |
+| 5 | 0.7 | 0.12 | 0.053 | 0.074 | 0.352 | 0.0754 | 0.028 |
+| 6 | 0.3 | 0.36 | 0.050 | 0.083 | 0.256 | 0.0741 | 0.034 |
+| 7 | 0.5 | 0.12 | 0.047 | 0.074 | 0.312 | 0.0684 | 0.028 |
+| 8 | 0.3 | 0.12 | 0.038 | 0.074 | 0.241 | 0.0613 | 0.028 |
+| 9 | 0.1 | 0.36 | 0.035 | 0.083 | 0.158 | 0.0660 | 0.034 |
+| 10 | 0.1 | 0.12 | 0.026 | 0.074 | 0.142 | 0.0543 | 0.028 |
+
+Coverage is exactly invariant across `dyingValue` at each seed density: 0.028
+for every 0.12 set and 0.034 for every 0.36 set. The increasing composite is
+therefore not the old threshold-crossing artefact. It reflects brighter
+afterglow increasing measured autocorrelation and flux in the rendered field;
+the composite cannot interpret whether that brighter presentation is visually
+preferable, and it supplies no evidence of richer dynamics.
+
+### Corrected-kernel references
+
+| reference | dying | seed | score | entropy | autocorr | flux | firing coverage |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Classic waves | 0.50 | 0.22 | 0.036 | 0.060 | 0.315 | 0.0553 | 0.022 |
+| Sparse spirals | 0.62 | 0.12 | **0.051** | 0.074 | 0.339 | 0.0726 | 0.028 |
+| Storm | 0.42 | 0.36 | **0.057** | 0.083 | 0.303 | 0.0789 | 0.034 |
+
+These are fresh scores under the corrected kernel and the firing-only coverage
+method. The 2026-08-23 reference scores for Sparse spirals (0.205) and Storm
+(0.191) were measured under the float32 comparison bug, when both non-dyadic
+`dyingValue` settings followed the wrong evolution. They also used the old 0.25
+coverage threshold, so neither old number is comparable with this table.
+
+### Recommendation for card 79
+
+Use `dyingValue: 0.9` as the re-tuning candidate for both Sparse spirals and
+Storm, keeping their existing `birthCount` and `seedDensity`. At the matching
+seed densities it is the strongest measured appearance-sensitive setting:
+0.055 against Sparse spirals' corrected 0.051, and 0.070 against Storm's 0.057,
+with firing coverage unchanged at 0.028 and 0.034 respectively. Card 79 does
+not need to re-run this sweep; it should treat 0.9 as a brighter-afterglow
+candidate for operator visual review, not as a claim of changed dynamics.
