@@ -103,3 +103,56 @@ Check the failing-test-first claim by running the new test against `dev`
 yourself. Then confirm criterion 4 by diffing headless output for all three
 presets, not by reading that it was done. The single most likely way to pass
 this card wrongly is to accept a test that passes both before and after.
+
+## Re-brief 2026-09-06: criterion 4 was unsatisfiable, and the operator has decided the trade
+
+Attempt 1 is preserved at
+`2f38be27ad444f798cb177c8649fb6ff2e83c7c6`
+(`wip/72-brians-brain-dying-value-comparison-attempt-1`). The verifier passed
+criteria 1, 2, 3 and 5 and failed only criterion 4, and it failed it correctly:
+the fix is one `Math.fround` at `src/sims/brians-brain/kernel.ts:135`, and two
+of the three shipped presets use exactly the non-dyadic `dyingValue`s the bug
+made inert. "Classic waves" (0.5) is byte-identical; "Sparse spirals" (0.62) and
+"Storm" (0.42) diverge from step 2 and end 43.1% and 45.5% different. The card's
+premise and its criterion 4 could not both hold, and the escalation clause said
+the operator decides. They have: **land the fix, accept the two presets
+change.** The decision and its rejected alternatives are recorded in
+`docs/sweeps/brians-brain-interestingness.md` under "Operator decision
+2026-09-06".
+
+### What attempt 2 does
+
+Adopt the preserved WIP. Start from `2f38be27ad444f798cb177c8649fb6ff2e83c7c6`
+rather than re-deriving the fix: cherry-pick it onto the run branch or apply
+its diff. Re-run the headless comparison the verifier ran (all three presets,
+128x128, every cell at every step 0..120, dev kernel against the fixed kernel)
+and put the measured divergence for each preset in the handoff. Write a `pass`
+envelope; attempt 1's was `partial` only because of the escalation.
+
+Constraints are unchanged: kernel and its tests only, no preset edits, no
+sweep. Do not touch `src/app/presets.ts` even though two presets will now look
+different. Re-tuning them is a follow-up card.
+
+### Criterion 4, before and after
+
+Before:
+
+> The three shipped presets produce byte-identical output to `dev`.
+
+After:
+
+> "Classic waves" produces byte-identical output to `dev` at every step. "Sparse
+> spirals" and "Storm" are expected to diverge; the handoff reports, for each,
+> the first step at which the field differs and the fraction of cells differing
+> at step 120, measured headlessly at 128x128. A divergence that is absent, or
+> that appears in "Classic waves", is a FAIL.
+
+All other criteria stand as written.
+
+### Verifier handoff, addendum
+
+Criterion 4 is now a measurement, not a guarantee. Reproduce the three-preset
+diff yourself as before; the headless harness is seeded, so your numbers must reproduce the worker's
+exactly, and "Classic waves" must still be exact.
+Do not fail the card for the two presets changing. That was decided above the
+card, and a FAIL on it would re-open a closed question.

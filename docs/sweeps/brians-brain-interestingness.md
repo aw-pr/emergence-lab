@@ -83,3 +83,27 @@ Do not let the composite replace this preset on coverage alone. If "Classic
 waves" is to change at all, the case would be to raise its coverage while
 keeping birthCount 2 — which this sweep shows is not achievable through
 seedDensity, and would need the `dyingValue` axis it did not search.
+
+## Operator decision 2026-09-06: fix the comparison, let the two presets change
+
+Stage 72 fixed the float32 comparison and stopped under its escalation clause:
+"Classic waves" (dyingValue 0.5) is byte-identical after the fix, but "Sparse
+spirals" (0.62) and "Storm" (0.42) diverge from step 2 and end 43.1% and 45.5%
+different at 128x128 over 120 steps. Both presets use exactly the non-dyadic
+values the bug made inert, so their shipped appearance is the bug's behaviour,
+not the rule's, and the scores recorded for them were scored in that state.
+
+The operator chose to **land the fix and accept that the two presets change**.
+Rejected alternatives, for the record:
+
+- re-pinning the two presets to a dyadic value, which preserves nothing of
+  their current look either and only avoids a re-sweep;
+- a legacy flag that lets the two presets opt into the broken comparison,
+  which enshrines a defect to keep an artefact of it;
+- retiring the card and leaving the slider inert.
+
+Consequences: stage 72 is re-briefed so criterion 4 requires only "Classic
+waves" to be byte-identical and requires the divergence of the other two to be
+measured and reported, not prevented. Re-tuning "Sparse spirals" and "Storm"
+under the corrected kernel, and the `dyingValue` sweep this unblocks, are
+follow-up cards; neither is part of stage 72.
