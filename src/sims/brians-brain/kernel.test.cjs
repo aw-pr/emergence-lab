@@ -161,6 +161,28 @@ test("params are finite-checked and clamped", () => {
   assert.deepEqual(bounded, explicit);
 });
 
+// AUTOMETTA-CONTRACT-BEGIN card=docs/stages/72-brians-brain-dying-value-comparison.md
+test("a non-dyadic dyingValue still resolves a dying cell to off, not a spurious birth", () => {
+  const kernel = new BriansBrainKernel();
+  kernel.init(3, 3, { birthCount: 2, seedDensity: 0, dyingValue: 0.42 });
+
+  const state = kernel.readState();
+  state.fill(0);
+  // Center cell (index 4) holds the float32-rounded dying glow a real step
+  // would have produced firing at dyingValue 0.42. Two of its neighbours are
+  // alive, matching birthCount, so a kernel that fails to recognise the
+  // center cell as still dying will wrongly "birth" it instead of retiring
+  // it to off.
+  state[4] = 0.42;
+  state[1] = 1;
+  state[7] = 1;
+
+  kernel.step(1);
+
+  assert.equal(kernel.readState()[4], 0);
+});
+// AUTOMETTA-CONTRACT-END
+
 test("destroy releases state and leaves step/readState safe", () => {
   const kernel = new BriansBrainKernel();
   kernel.init(12, 10, {});

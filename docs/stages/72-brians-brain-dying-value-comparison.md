@@ -74,11 +74,8 @@ Do not read anything else unless you need to; keep your context lean.
 
 ## Contract test
 
-- **Test file:** the Brian's Brain kernel test file
-- **Assertions digest:** wrap the new assertions in the freeze-marker block
-  naming this card and record a real sha256. Do not write the literal marker
-  tokens into this card's prose; a staged card containing the begin-token trips
-  the gate on itself.
+- **Test file:** `src/sims/brians-brain/kernel.test.cjs`
+- **Assertions digest:** sha256:6d8ae044bcf508d8fde20c4f1eaf6d8a23dbf885e8a214c9048e767b7d54769d
 
 ## Out of scope
 
