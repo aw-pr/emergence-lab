@@ -581,14 +581,24 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { birthCount: 2, seedDensity: 0.22, dyingValue: 0.5 },
     },
     {
+      // Retuned 2026-09-06 on the corrected float32 dyingValue kernel
+      // (0.62 -> 0.9, composite 0.051 -> 0.055). dyingValue is the chosen
+      // value from the 2026-09-06 sweep; birthCount and seedDensity are
+      // inherited unchanged. The change is a brighter afterglow, not a
+      // change in dynamics: firing coverage is 0.028 at every swept value.
       id: "sparse-spirals",
       label: "Sparse spirals",
-      params: { birthCount: 2, seedDensity: 0.12, dyingValue: 0.62 },
+      params: { birthCount: 2, seedDensity: 0.12, dyingValue: 0.9 },
     },
     {
+      // Retuned 2026-09-06 on the corrected float32 dyingValue kernel
+      // (0.42 -> 0.9, composite 0.057 -> 0.070). dyingValue is the chosen
+      // value from the 2026-09-06 sweep; birthCount and seedDensity are
+      // inherited unchanged. The change is a brighter afterglow, not a
+      // change in dynamics: firing coverage is 0.034 at every swept value.
       id: "storm",
       label: "Storm",
-      params: { birthCount: 2, seedDensity: 0.36, dyingValue: 0.42 },
+      params: { birthCount: 2, seedDensity: 0.36, dyingValue: 0.9 },
     },
   ],
   mandelbrot: [

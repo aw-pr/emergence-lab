@@ -184,3 +184,43 @@ seed densities it is the strongest measured appearance-sensitive setting:
 with firing coverage unchanged at 0.028 and 0.034 respectively. Card 79 does
 not need to re-run this sweep; it should treat 0.9 as a brighter-afterglow
 candidate for operator visual review, not as a claim of changed dynamics.
+
+## Preset retune — 2026-09-06 (card 79)
+
+Acts on the recommendation above. The operator resolved the fork in
+deliverable 1 of card 79 on 2026-09-06: the axis is cosmetic as dynamics, but
+the appearance-sensitive composite gave a basis to prefer a value, so the
+recommended-parameters branch was taken rather than holding 0.5.
+
+| preset | before (dying / seed / birth) | after (dying / seed / birth) | corrected score before | score at 0.9 | firing coverage |
+|---|---|---|---:|---:|---:|
+| Sparse spirals | 0.62 / 0.12 / 2 | **0.9** / 0.12 / 2 | 0.051 | 0.055 | 0.028 (unchanged) |
+| Storm | 0.42 / 0.36 / 2 | **0.9** / 0.36 / 2 | 0.057 | 0.070 | 0.034 (unchanged) |
+
+"Classic waves" is untouched at `dyingValue: 0.5`. Both scores are from the
+appearance-sensitive ranking and corrected-kernel reference tables above,
+measured on the corrected float32 comparison with firing-only coverage; they
+are not comparable with the 2026-08-23 figures.
+
+What changed, and what did not: `dyingValue` is the only chosen value, and
+`birthCount` and `seedDensity` are inherited from each preset's shipped
+parameters. Firing coverage is exactly invariant across the swept range at both
+seed densities, so the discrete state evolution at 0.9 is the same as at any
+other interior value. The retune is a brighter afterglow, not richer dynamics.
+The composite gain comes from the rendered refractory band being closer to the
+firing band, which raises measured autocorrelation and flux; it is not evidence
+that the rule generates more structure.
+
+- **Sparse spirals** at 0.9: thin firing fronts on a dark field, each trailing
+  a bright, almost firing-intensity refractory band one cell wide, so the
+  spiral arms read as doubled bright lines rather than a bright edge with a
+  dim shadow.
+- **Storm** at 0.9: a dense, fast-churning field where the bright afterglow
+  band sits directly behind every firing front, so the frame reads as a busy
+  mesh of near-uniform brightness with dark gaps between colliding waves
+  rather than a bright-and-grey interleave.
+
+Acceptance is visual: the card 79 verifier drives the browser to each preset
+and watches 300 steps for flooding to uniform or dying. The sim thumbnail
+`public/thumbnails/brians-brain.png` predates both the stage 72 comparison fix
+and this retune and is now stale; regenerating it is out of scope for card 79.
