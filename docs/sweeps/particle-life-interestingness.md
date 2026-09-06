@@ -161,6 +161,12 @@ compressed; if Particle Life is ever to be tuned by measurement, the
 species-mixing statistic (how often unlike species are adjacent — what the
 attraction matrix actually controls) remains the sharper follow-up instrument.
 
+> **Superseded at the channel-proxy level — stage `78-particle-life-species-mixing`,
+> 2026-09-06.** The instrument was built against the three colour channels the
+> harness actually rasterises and does *not* separate these presets; see
+> "Appendix 2026-09-06: the channel-mixing instrument (stage 78)" below. The
+> claim may still hold for a true per-species statistic, which has not been built.
+
 ### Promotion
 
 **None.** First run of a new instrument is calibration: record, do not act.
@@ -172,3 +178,110 @@ The stage-63 instruments were re-based onto `dev` after the circular-phase
 was re-run in full (27 sets + 3 references, 56.9 s headless). Every number
 above reproduced exactly — the point-cloud path is independent of the three
 newer instruments, as intended. Still no promotion.
+
+## Appendix 2026-09-06: the channel-mixing instrument (stage 78)
+
+Stage 78 built the second follow-up this write-up asked for twice: a reading of
+how much unlike material shares a cell, which is what the attraction matrix
+controls. `channelMixing` in `e2e/harness/metrics.ts` scores, for every included
+cell, the fraction of that cell's density held by channels other than its
+dominant one, averaged over included cells. It is **reported beside the
+composite and does not enter it**, exactly as the stage-63 velocity-coherence
+term does not. **No preset was changed and none of these numbers justifies one.**
+
+### This is a channel proxy, not species adjacency
+
+The harness rasterises Particle Life into **three** channels — red, green and
+blue species density — not one channel per species. The instrument therefore
+reads *colour-channel* mixing. It is a proxy for the species adjacency this
+write-up kept asking for, and the gap is not cosmetic:
+
+- Both shipped presets that this sweep scores run more species than channels
+  (Cells 5, Chasers 6, Gas clouds 4), so several species fold into one channel
+  and their mutual adjacency is invisible to the reading.
+- Two species that share a channel read as segregated no matter how thoroughly
+  they interpenetrate.
+
+A true species-adjacency statistic needs a per-species raster in the harness
+driver, which stage 78 put out of scope. Read every number below as
+"channel mixing", never as "species mixing".
+
+### Definition, range and units
+
+Per included cell, `1 - max_c(density_c) / sum_c(density_c)`; the reading is the
+mean over included cells. It is a dimensionless within-cell ratio, so it is
+invariant to any rescaling applied equally to all three channels.
+
+**Range [0, 1 − 1/C] for C channels, so [0, 2/3] here — not [0, 1].** A field
+whose every occupied cell is single-colour reads 0; a field whose every occupied
+cell is an even three-way blend reads 2/3. Compare a reading against 2/3.
+
+Each of the three channels is blurred with the sim's own `pointCloud.blurRadius`
+before the ratio is taken, and a cell is included when its max-normalised total
+density clears the sim's `pointCloud.coverageThreshold` — the same figure/ground
+split the composite's coverage term uses. The blur is not optional: on the raw
+dot raster an occupied cell almost always holds particles of one species, which
+is the same one-cell blindness stage 63 recorded for autocorrelation.
+
+### The three references, re-scored
+
+Existing columns are unchanged and reproduce the 2026-08-30 appendix exactly
+(3 references, no sweep, headless, 14.9 s). The mixing column is new.
+
+| reference | score | entropy | autocorr | flux | coverage | channel mixing (max 2/3) |
+|---|---|---|---|---|---|---|
+| Gas clouds | 0.901 | 0.79 | 0.99 | 0.1642 | 0.405 | 0.6310 |
+| Cells | 0.888 | 0.77 | 0.98 | 0.1236 | 0.378 | 0.6325 |
+| Chasers | 0.876 | 0.75 | 0.98 | 0.1311 | 0.612 | 0.6347 |
+
+### Does the reading separate Gas clouds, Cells and Chasers?
+
+**No. This is a negative calibration, recorded with the numbers rather than
+worked around.**
+
+The three presets span **0.003628** (0.6310–0.6347), which is **0.54% of the
+instrument's 0–2/3 range**. The composite spans 0.025109 across the same three,
+**2.51% of its own range** — so the new reading separates them roughly **4.6×
+worse** than the composite it was meant to sharpen. All three sit within 0.036
+of the even-blend ceiling: by this instrument every shipped preset is very
+nearly a uniform three-way blend, and the differences between them are noise
+against that.
+
+The ordering is also reversed — mixing ranks Chasers > Cells > Gas clouds where
+the composite ranks Gas clouds > Cells > Chasers — but at a spread of 0.0036
+that reversal is not evidence of anything.
+
+**Why it saturates, checked rather than assumed.** The instrument inherits
+`blurRadius: 8` from the point-cloud config, a 17-cell-wide support on a 128²
+grid. A probe of the same three references across radii 0 to 12 shows the
+reading climbing monotonically toward the 2/3 ceiling and the spread collapsing
+as it goes:
+
+| blur radius | Gas clouds | Cells | Chasers | spread |
+|---:|---:|---:|---:|---:|
+| 0 (raw dots) | 0.5128 | 0.5002 | 0.5667 | 0.0665 |
+| 2 | 0.5905 | 0.5886 | 0.5818 | 0.0087 |
+| 4 | 0.6125 | 0.6174 | 0.6102 | 0.0072 |
+| 8 (shipped) | 0.6310 | 0.6325 | 0.6347 | 0.0036 |
+| 12 | 0.6395 | 0.6391 | 0.6434 | 0.0043 |
+
+At radius 8 the neighbourhood each cell averages over is wider than any cluster
+the sim makes, so it contains every species regardless of how the sim has
+organised them. The blur that made the density field legible to the composite
+(stage 63) is the same blur that destroys the signal this instrument wants.
+
+The raw radius-0 column separates the presets by 0.0665, **9.98% of range** and
+four times the composite's relative spread. That is an observation, not a
+promotion: the 0.5 coverage threshold was calibrated for the smoothed field
+(stage 63) and means something accidental on raw occupancy, and three points are
+not a calibration. If channel mixing is pursued further, the radius and the
+inclusion threshold have to be probed together on a full sweep, and the honest
+version of the instrument still needs the per-species raster named above.
+
+### Promotion
+
+**None.** A negative calibration is a result: the channel proxy does not
+separate these three presets, and the sentence this write-up has carried since
+2026-08-23 — that the species-mixing statistic "remains the sharper follow-up
+instrument" — is now measured and does not hold at the channel-proxy level. It
+may still hold for a true per-species statistic; that has not been built.

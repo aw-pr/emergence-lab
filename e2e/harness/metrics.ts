@@ -56,6 +56,13 @@ export interface InterestingnessMetrics extends FrameMetrics {
    * never feeds the composite score.
    */
   velocityCoherence?: number;
+  /**
+   * Mean per-cell channel-mixing fraction over the sim's like-kind density
+   * channels, in [0, 1 - 1/channelCount] (see channelMixing). Only present for
+   * point-cloud sims whose channels are all densities; never feeds the
+   * composite score.
+   */
+  channelMixing?: number;
 }
 
 export interface MetricSpread {
@@ -377,6 +384,7 @@ export function summarizeMetrics(
     "meanResultantLength",
     "circularSpatialAutocorrelation",
     "velocityCoherence",
+    "channelMixing",
   ];
   const means: Partial<Record<keyof InterestingnessMetrics, number>> = {};
   const spread: Partial<Record<keyof InterestingnessMetrics, MetricSpread>> = {};
@@ -416,6 +424,9 @@ export function summarizeMetrics(
     ...(means.velocityCoherence === undefined
       ? {}
       : { velocityCoherence: means.velocityCoherence }),
+    ...(means.channelMixing === undefined
+      ? {}
+      : { channelMixing: means.channelMixing }),
     sampleCount: samples.length,
     spread,
   };
@@ -544,4 +555,65 @@ export function velocityCoherence(vx: Field, vy: Field): number {
   }
   if (sumMag <= 1e-12) return 0;
   return Math.hypot(sumX, sumY) / sumMag;
+}
+
+/**
+ * Mean channel-mixing fraction over a set of like-kind density channels.
+ *
+ * Per included cell: `1 - max_c(fields[c][i]) / sum_c(fields[c][i])` — the
+ * fraction of that cell's total density held by channels other than its
+ * dominant one. The reading is the mean of that fraction over included cells.
+ *
+ * A cell is included when the optional `mask` marks it (`mask[i] > 0`, the same
+ * convention the circular statistics above use) *and* its total density is
+ * positive. Callers build the mask from the sim's point-cloud coverage
+ * threshold applied to the smoothed total-density field, so "included" means
+ * the same figure/ground split the composite's coverage term already uses.
+ * With no mask, every cell carrying density is included. Empty cells have no
+ * dominant channel and are never included, so they cannot drag the mean down.
+ *
+ * **Units:** a dimensionless fraction of per-cell density. It is a ratio within
+ * each cell, so it is invariant to any rescaling applied equally to all
+ * channels — blurred-and-normalised fields and raw ones read the same, as long
+ * as one common factor was used.
+ *
+ * **Range: [0, 1 - 1/C] for C channels**, not [0, 1]. A field whose every
+ * occupied cell holds all its density in one channel (perfect segregation)
+ * reads 0. A field whose every occupied cell is an even C-way blend reads the
+ * maximum 1 - 1/C, which is 2/3 for the three-channel raster this harness
+ * produces. Read a value against 1 - 1/C, never against 1.
+ *
+ * **What it measures, and what it does not.** The harness rasterises a particle
+ * sim into colour channels — for Particle Life, red/green/blue species density
+ * — not one channel per species. So this reads *colour-channel* mixing and is a
+ * proxy for species adjacency, not a measure of it: species that share a colour
+ * channel are invisible to it, and a sim with more species than channels folds
+ * several species into one reading. Report it as a channel proxy.
+ *
+ * Reported beside the composite for opted-in point-cloud sims; it never enters
+ * `interestingness`, exactly as velocityCoherence does not.
+ */
+export function channelMixing(fields: readonly Field[], mask?: Field): number {
+  if (fields.length < 2) return 0;
+  let cells = fields[0].length;
+  for (const field of fields) cells = Math.min(cells, field.length);
+  if (cells === 0) return 0;
+
+  let acc = 0;
+  let included = 0;
+  for (let i = 0; i < cells; i += 1) {
+    if (mask && !(mask[i] > 0)) continue;
+    let total = 0;
+    let dominant = 0;
+    for (let c = 0; c < fields.length; c += 1) {
+      const density = fields[c][i];
+      if (!(density > 0)) continue;
+      total += density;
+      if (density > dominant) dominant = density;
+    }
+    if (total <= 0) continue;
+    acc += 1 - dominant / total;
+    included += 1;
+  }
+  return included === 0 ? 0 : acc / included;
 }

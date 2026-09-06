@@ -1,7 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
 import {
+  channelMixing,
   circularSpatialAutocorrelation,
+  gaussianBlur,
   meanResultantLength,
   scoreFrames,
   smoothPointCloudFrames,
@@ -27,6 +29,12 @@ import {
 
 const REGISTRY_URL = "http://localhost:5173/src/app/registry.ts";
 const ARTIFACT_ROOT = "e2e/artifacts";
+
+// The particle kernels rasterise species membership as an RGB triple, so the
+// like-kind density channels the channel-mixing instrument reads are 0, 1, 2.
+// This is a raster property of the harness, not a per-sim setting, which is why
+// it is a constant here and not a field on PointCloudConfig.
+const DENSITY_CHANNELS = [0, 1, 2] as const;
 
 // Every test must run from the dev-server origin so the page-context dynamic
 // import of the registry resolves same-origin (about:blank would block it).
@@ -105,6 +113,51 @@ async function scoreOne(
         vxResult.frameA.map((v) => v * 2 - 1),
         vyResult.frameA.map((v) => v * 2 - 1),
       );
+    } else if (pc) {
+      // Channel mixing (stage 78), for point-cloud sims whose channels are all
+      // like-kind densities. A sim that declares velocityChannels is excluded
+      // by the branch above: its channels are density, speed and two signed
+      // velocity components, which are not comparable quantities to blend.
+      //
+      // The raw dot raster cannot answer this — an occupied cell almost always
+      // holds one particle of one species, so it reads 0 by construction, the
+      // same one-cell blindness stage 63 recorded for autocorrelation. So each
+      // channel is blurred with the sim's own blurRadius first, turning the
+      // triple into a local per-species density estimate; the mixing fraction
+      // is a within-cell ratio, so blurring every channel by the same kernel
+      // leaves the reading comparable across cells.
+      const smoothedChannels: number[][] = [];
+      for (const channel of DENSITY_CHANNELS) {
+        const channelResult = channel === config.primaryChannel
+          ? result
+          : await page.evaluate(driveKernel, {
+            ...snapshotConfig,
+            primaryChannel: channel,
+            fluxGap: 0,
+          });
+        smoothedChannels.push(
+          gaussianBlur(
+            channelResult.frameA,
+            result.width,
+            result.height,
+            pc.blurRadius,
+          ),
+        );
+      }
+      // Include the cells the composite's coverage term would call figure
+      // rather than ground: total density, max-normalised the way
+      // smoothPointCloudFrames normalises the primary channel, above the sim's
+      // point-cloud threshold.
+      const total = new Array<number>(result.width * result.height).fill(0);
+      for (const field of smoothedChannels) {
+        for (let i = 0; i < total.length; i += 1) total[i] += field[i];
+      }
+      let peak = 0;
+      for (let i = 0; i < total.length; i += 1) if (total[i] > peak) peak = total[i];
+      const mask = peak > 0
+        ? total.map((value) => (value / peak > pc.coverageThreshold ? 1 : 0))
+        : total.map(() => 0);
+      metrics.channelMixing = channelMixing(smoothedChannels, mask);
     }
 
     if (!config.phase) return metrics;
@@ -327,9 +380,12 @@ async function runSweep(
   );
 
   const coherenceNote = (c: ScoredCandidate): string =>
-    c.metrics.velocityCoherence === undefined
+    (c.metrics.velocityCoherence === undefined
       ? ""
-      : ` vcoh ${c.metrics.velocityCoherence.toFixed(3)}`;
+      : ` vcoh ${c.metrics.velocityCoherence.toFixed(3)}`) +
+    (c.metrics.channelMixing === undefined
+      ? ""
+      : ` mix ${c.metrics.channelMixing.toFixed(3)}`);
   console.log(`\n=== ${artifactId} top 5 ===`);
   for (const c of ranked.slice(0, 5)) {
     console.log(
@@ -461,6 +517,17 @@ test("circular autocorrelation is blind to a phase wrap", () => {
 // Full sweeps are opt-in (SWEEP=1) — they step many kernels and take minutes.
 const sweepTest = process.env.SWEEP ? test : test.skip;
 const lorenzSnapshotsTest = process.env.LORENZ_SNAPSHOTS ? test : test.skip;
+const mixingTest = process.env.PARTICLE_LIFE_MIXING ? test : test.skip;
+
+mixingTest("re-score Particle Life references under channel mixing", async ({ page }) => {
+  // Stage 78 is a calibration read on the three shipped references only, not a
+  // sweep: three extra kernel drives per reference, no ranking, no promotion.
+  const config = SWEEP_CONFIGS["particle-life"];
+  for (const ref of config.references) {
+    const scored = await scoreOne(page, config, ref.id, ref.label, ref.params);
+    console.log(JSON.stringify({ id: ref.id, label: ref.label, metrics: scored.metrics }));
+  }
+});
 
 lorenzSnapshotsTest("record Lorenz multi-snapshot appendix sets", async ({ page }) => {
   const config = SWEEP_CONFIGS["lorenz-attractor"];
