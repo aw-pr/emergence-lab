@@ -45,6 +45,8 @@ const CHANNEL_COUNT = 2;
 const STENCIL_OPTIONS = ["five-point", "nine-point"] as const;
 type Stencil = (typeof STENCIL_OPTIONS)[number];
 const DEFAULT_STENCIL: Stencil = "five-point";
+const DEFAULT_DT = 1;
+const MIN_DT = 0.125;
 
 /**
  * Seed geometry in cells, never as a fraction of the grid.
@@ -86,6 +88,18 @@ function numberParam(
 function stencilParam(params: SimParams, fallback: Stencil): Stencil {
   const value = params.stencil;
   return value === "five-point" || value === "nine-point" ? value : fallback;
+}
+
+function timeStepParam(params: SimParams, fallback: number): number {
+  const value = numberParam(params, "dt", fallback);
+  if (!Number.isFinite(value) || value < MIN_DT || value > 1) {
+    return fallback;
+  }
+
+  // Keep the physical time per frame exact: only reciprocal-integer substeps
+  // are selectable, and the slider's eighths snap to the nearest dyadic value.
+  const substeps = 2 ** Math.round(Math.log2(1 / value));
+  return 1 / Math.min(8, Math.max(1, substeps));
 }
 
 function clampStepCount(value: number): number {
@@ -162,6 +176,17 @@ export class GrayScottKernel implements SimKernel {
       group: "Reaction-diffusion",
     },
     {
+      key: "dt",
+      label: "Timestep",
+      type: "number",
+      default: DEFAULT_DT,
+      min: MIN_DT,
+      max: 1,
+      step: MIN_DT,
+      info: "Euler timestep per substep. Smaller values use proportionally more substeps to cover the same simulated time, adding compute while refining the discretisation.",
+      group: "Reaction-diffusion",
+    },
+    {
       key: "stepsPerFrame",
       label: "Steps per frame",
       type: "number",
@@ -182,6 +207,7 @@ export class GrayScottKernel implements SimKernel {
   private feed = DEFAULT_F;
   private kill = DEFAULT_K;
   private stencil: Stencil = DEFAULT_STENCIL;
+  private dt = DEFAULT_DT;
   private stepsPerFrame = 12;
 
   init(width: number, height: number, params: SimParams): void {
@@ -202,6 +228,7 @@ export class GrayScottKernel implements SimKernel {
     this.feed = numberParam(params, "F", DEFAULT_F);
     this.kill = numberParam(params, "k", DEFAULT_K);
     this.stencil = stencilParam(params, DEFAULT_STENCIL);
+    this.dt = timeStepParam(params, DEFAULT_DT);
     this.stepsPerFrame = clampStepCount(
       numberParam(params, "stepsPerFrame", 12),
     );
@@ -224,11 +251,12 @@ export class GrayScottKernel implements SimKernel {
     let state = output;
     let next = this.next;
 
-    for (let stepIndex = 0; stepIndex < this.stepsPerFrame; stepIndex += 1) {
+    const substepsPerFrame = this.stepsPerFrame / this.dt;
+    for (let stepIndex = 0; stepIndex < substepsPerFrame; stepIndex += 1) {
       if (this.stencil === "nine-point") {
-        this.reactDiffuseNinePoint(state, next);
+        this.reactDiffuseNinePoint(state, next, this.dt);
       } else {
-        this.reactDiffuseFivePoint(state, next);
+        this.reactDiffuseFivePoint(state, next, this.dt);
       }
 
       const swap = state;
@@ -249,7 +277,11 @@ export class GrayScottKernel implements SimKernel {
   }
 
   /** The shipped stencil: one explicit-Euler pass over the four edge neighbours. */
-  private reactDiffuseFivePoint(state: Float32Array, next: Float32Array): void {
+  private reactDiffuseFivePoint(
+    state: Float32Array,
+    next: Float32Array,
+    dt: number,
+  ): void {
     const width = this.width;
     const height = this.height;
     const du = this.du;
@@ -283,10 +315,19 @@ export class GrayScottKernel implements SimKernel {
           4 * v;
         const reaction = u * v * v;
 
-        next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
-        next[index + 1] = clamp01(
-          dv * laplaceV + reaction - (feed + kill) * v + v,
-        );
+        if (dt === 1) {
+          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
+          next[index + 1] = clamp01(
+            dv * laplaceV + reaction - (feed + kill) * v + v,
+          );
+        } else {
+          next[index] = clamp01(
+            u + dt * (du * laplaceU - reaction + feed * (1 - u)),
+          );
+          next[index + 1] = clamp01(
+            v + dt * (dv * laplaceV + reaction - (feed + kill) * v),
+          );
+        }
       }
     }
   }
@@ -296,7 +337,11 @@ export class GrayScottKernel implements SimKernel {
    * (4·edges + diagonals − 20·centre) / 6. Identical reaction terms; only the
    * diffusion sampling differs from the five-point pass.
    */
-  private reactDiffuseNinePoint(state: Float32Array, next: Float32Array): void {
+  private reactDiffuseNinePoint(
+    state: Float32Array,
+    next: Float32Array,
+    dt: number,
+  ): void {
     const width = this.width;
     const height = this.height;
     const du = this.du;
@@ -346,10 +391,19 @@ export class GrayScottKernel implements SimKernel {
           6;
         const reaction = u * v * v;
 
-        next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
-        next[index + 1] = clamp01(
-          dv * laplaceV + reaction - (feed + kill) * v + v,
-        );
+        if (dt === 1) {
+          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
+          next[index + 1] = clamp01(
+            dv * laplaceV + reaction - (feed + kill) * v + v,
+          );
+        } else {
+          next[index] = clamp01(
+            u + dt * (du * laplaceU - reaction + feed * (1 - u)),
+          );
+          next[index + 1] = clamp01(
+            v + dt * (dv * laplaceV + reaction - (feed + kill) * v),
+          );
+        }
       }
     }
   }

@@ -44,7 +44,7 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["Du", "Dv", "F", "k", "stencil", "stepsPerFrame"],
+    ["Du", "Dv", "F", "k", "stencil", "dt", "stepsPerFrame"],
   );
 
   for (const descriptor of kernel.paramSchema) {
@@ -73,6 +73,41 @@ test("stencil defaults to five-point and unknown values fall back to it", () => 
   assert.deepEqual(runKernel({ stencil: "seven-point" }, 24), baseline);
   assert.deepEqual(runKernel({ stencil: 9 }, 24), baseline);
   assert.notDeepEqual(runKernel({ stencil: "nine-point" }, 24), baseline);
+});
+
+test("dt=1 preserves the pre-change five-point path bit-for-bit", () => {
+  const before = runKernel({}, 24);
+
+  assert.deepEqual(runKernel({ dt: 1 }, 24), before);
+  assert.deepEqual(runKernel({ dt: 0 }, 24), before);
+  assert.deepEqual(runKernel({ dt: "1" }, 24), before);
+});
+
+test("sub-unit dt uses compensating substeps and remains selectable", () => {
+  const kernel = new GrayScottKernel();
+  const defaults = defaultsFromSchema(kernel);
+
+  assert.equal(defaults.dt, 1);
+  assert.deepEqual(
+    kernel.paramSchema.find((descriptor) => descriptor.key === "dt"),
+    {
+      key: "dt",
+      label: "Timestep",
+      type: "number",
+      default: 1,
+      min: 0.125,
+      max: 1,
+      step: 0.125,
+      info: "Euler timestep per substep. Smaller values use proportionally more substeps to cover the same simulated time, adding compute while refining the discretisation.",
+      group: "Reaction-diffusion",
+    },
+  );
+
+  const halfStep = runKernel({ dt: 0.5 }, 1);
+  const twoFrames = runKernel({}, 2);
+  assert.notDeepEqual(halfStep, runKernel({}, 1));
+  assert.notDeepEqual(halfStep, twoFrames);
+  assert.deepEqual(runKernel({ dt: 0.5 }, 2), runKernel({ dt: 0.5 }, 2));
 });
 
 /**
@@ -176,6 +211,7 @@ test("schema defaults use waves regime at gentler pace", () => {
   assert.equal(defaults.Dv, 0.105);
   assert.equal(defaults.F, 0.018);
   assert.equal(defaults.k, 0.0487);
+  assert.equal(defaults.dt, 1);
   assert.equal(defaults.stepsPerFrame, 12);
 });
 
