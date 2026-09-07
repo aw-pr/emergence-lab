@@ -14,7 +14,7 @@
 - **Path claims:** docs/audits/2026-09-07-interestingness-structure-bias.md
 - **Pairing rationale:** cross-family, and both seats at high effort because
   the finding under audit is a reasoning claim, not a measurement. The worker
-  must argue a case about a metric's construction across nine write-ups; the
+  must argue a case about a metric's construction across fifteen write-ups; the
   verifier's job is to try to break that argument, which needs the same tier.
 - **Type:** Audit. No code change, no metric change.
 
@@ -28,7 +28,7 @@ exactly the smoothing that the Belousov-Zhabotinsky parameter note calls
 blur — and stage 81 found a score that ramps monotonically to the edge of a
 slider, carried almost entirely by that term, and refused to promote on it.
 
-If that bias is real, it is not confined to BZ. Nine sweep write-ups in
+If that bias is real, it is not confined to BZ. Fifteen sweep write-ups in
 `docs/sweeps/` rank presets by this composite, and promotions have been made
 on it.
 
@@ -40,7 +40,7 @@ on it.
   of the composite
 - `docs/sweeps/belousov-zhabotinsky-interestingness.md` — the 2026-09-06
   appendix, which is the case that prompted this
-- The other eight files in `docs/sweeps/` — the ranking tables and any
+- The other fourteen `*-interestingness.md` files in `docs/sweeps/` — the ranking tables and any
   promotion sections. You do not need their prose in full; you need the
   rankings and what was promoted.
 
@@ -51,7 +51,7 @@ Do not read anything else unless you need to; keep your context lean.
 1. A dated audit under `docs/audits/` stating whether the structure term's
    preference for smoothness is a defect, a deliberate tradeoff, or
    circumstantial — argued from the metric's construction, not asserted.
-2. A table of every promotion made on this composite across the nine sweeps,
+2. A table of every promotion made on this composite across the fifteen sweeps,
    with the margin that justified it and whether that margin survives if the
    structure term is discounted. Show the arithmetic; do not re-run sweeps.
 3. A named test that would distinguish "the metric rewards blur" from "blurred
@@ -63,7 +63,7 @@ Do not read anything else unless you need to; keep your context lean.
 ## Constraints
 
 - No change to `e2e/harness/metrics.ts` or any weight, threshold or term.
-  A metric change is its own card with its own re-baseline of nine sweeps.
+  A metric change is its own card with its own re-baseline of fifteen sweeps.
 - No sweep runs. Every number in the audit comes from a write-up already on
   `dev`, cited by file and section.
 - No preset changes.
@@ -78,7 +78,7 @@ Do not read anything else unless you need to; keep your context lean.
    test file named explicitly.
 3. The audit takes a position in its first paragraph — defect, tradeoff, or
    circumstantial — and the rest of the document supports that position.
-4. Every promotion across the nine sweeps appears in the table, or the audit
+4. Every promotion across the fifteen sweeps appears in the table, or the audit
    states which sweeps made none.
 5. Every number cited is traceable to a file and section already on `dev`.
 6. The distinguishing test in deliverable 3 is specific enough that a later
@@ -106,7 +106,7 @@ and reporting no violation.
 
 ## Escalation
 
-If the nine write-ups turn out not to record their promotion margins
+If the fifteen write-ups turn out not to record their promotion margins
 consistently enough to build the table, stop and report which ones are missing
 what. An incomplete table presented as complete is worse than no table.
 
