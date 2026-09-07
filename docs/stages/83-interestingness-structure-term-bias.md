@@ -151,3 +151,61 @@ exit code and message verbatim in your envelope, with one sentence saying
 which of the three outcomes above it was and why that is correct for this
 card. An exit code cited without which case it was is not evidence — that is
 the whole lesson of the defect this replaces.
+
+## Re-brief (2026-09-07, attempt 1 FAIL — the card's scope was wrong)
+
+Attempt 1 failed criterion 4 and passed the other five. The failure is the
+card's fault before it is the worker's, and the correction belongs here rather
+than in an instruction to try harder.
+
+**This card says "nine write-ups" in five places. There are fifteen.**
+`docs/sweeps/` holds fifteen `*-interestingness.md` files: abelian-sandpile,
+belousov-zhabotinsky, boids, brians-brain, clifford-dejong, cyclic-ca,
+diffusion-limited-aggregation, game-of-life, gray-scott, ising-model,
+kuramoto-oscillators, lenia, particle-life, physarum, swarmalators. The
+orchestrator authored the card from a truncated directory listing and wrote
+the wrong number into the Surfacing concern, the Inputs, deliverable 2,
+criterion 4 and the Escalation clause. Every one of those now reads
+**fifteen**, and the Inputs line "the other eight files" reads **the other
+fourteen**.
+
+What the worker did with that is still a defect, and naming it is the point of
+this re-brief. It asserted a specific list of nine at :55-60 with no basis
+given, never mentioned the six it dropped, and closed at :150-154 by
+enumerating which decisions need reopening — presenting the census as complete.
+The card was wrong about the count; the directory was not, and it was one `ls`
+away. The Escalation clause you were given says exactly this: "An incomplete
+table presented as complete is worse than no table." A census whose scope you
+cannot justify from the filesystem is the case that clause is about, and the
+right move was to stop and report the mismatch.
+
+**Two specific gaps the verifier found, which the new table must close:**
+
+- `docs/sweeps/clifford-dejong-interestingness.md` scores on the same metric
+  stack (:14-15) and promotes three shipped presets on it (:38-44): Clifford
+  veils 0.481 → 0.740, De Jong web→swan 0.435 → 0.762, De Jong scroll→heart
+  0.262 → 0.768, called "The promoted sets" at :48-50. None appear in attempt
+  1's table and none are declared absent.
+- `docs/sweeps/gray-scott-interestingness.md:73-75` records that the Spots and
+  Waves rows use the *promoted* parameters and that the pre-promotion params
+  "no longer exist" — a further promotion pair on this composite, neither
+  tabulated nor declared absent.
+
+Four of the six dropped write-ups do record "None" (boids:138-140,
+kuramoto-oscillators:86-90, swarmalators:82-86, particle-life:77-82), so the
+omission was not total. Record those as "none" explicitly rather than by
+silence.
+
+**Your starting point is committed.** Attempt 1's audit is preserved at
+`df560c52` on `wip/83-interestingness-structure-term-bias-attempt-1`, 154 lines.
+The verifier passed its verdict (criterion 3), its arithmetic (criterion 5) and
+its distinguishing test (criterion 6) — the phase-scrambled surrogate design at
+:96-135 was called specific enough to write a later card from. Build on that
+document; do not start over. What it needs is the six missing write-ups folded
+into the census and the two promotion records above tabulated.
+
+One thing to carry forward from the verifier's own reading: it accepted the
+"deliberate tradeoff" verdict, but the counter-case in the card's Verifier
+handoff still stands — a sharp periodic pattern has high lag-1 autocorrelation
+too. If the expanded census changes which promotions look fragile, say so
+rather than preserving attempt 1's conclusion out of momentum.
