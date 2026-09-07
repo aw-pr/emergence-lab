@@ -700,3 +700,236 @@ on the pairs checked.
 ```bash
 SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
 ```
+
+## Appendix: the nine-point Waves is not a different picture — 2026-09-07
+
+The appendix above recorded that switching the default stencil would change
+Waves' character: coverage 0.4063 to 0.6401, "soft mottled fronts on black" to
+"crisp bright rings", "the cost a switching card would have to justify". Four
+frames were captured to look at that claim. **It does not survive being
+looked at.** The Waves difference is an artefact of the 128x128 sweep grid and
+of reading one snapshot of an oscillating regime; at the resolution the app
+renders, the two stencils give the same Waves to within 0.2% of score and 0.4%
+of coverage. The Coral control, meanwhile, is *not* indistinguishable — its
+0.5% score delta hides a labyrinth that reroutes.
+
+The recommendation is **do not switch**, and the reason is not the one the
+previous appendix expected.
+
+### How the frames were made
+
+Same path as the three 2026-09-03 labyrinth frames and the 2026-09-07
+Belousov-Zhabotinsky ones: the headless sweep driver (`e2e/harness/driver.ts`)
+in one browser session, written with `encodeGrayscalePng` from
+`e2e/harness/report.ts` at scale 3, V channel normalised to its declared
+channel range. Grid **128x128**, **700 `step()` calls** at `dt = 1` and the
+shipped `stepsPerFrame: 20` (so 14000 inner Euler iterations), `fluxGap` 12,
+coverage threshold 0.1 — the Gray-Scott sweep config exactly, because the sweep
+config is where the numbers under adjudication were made.
+
+**On the seed.** There is no seed number to quote, and as with
+Belousov-Zhabotinsky that is the strongest available statement about
+reproducibility. `GrayScottKernel.seedOrigins()` paints a fixed lattice of
+radius-4 blobs at a 56-cell spacing from closed-form geometry, with no random
+source anywhere in the kernel and no dependence on any parameter. All four
+frames start from a bit-identical field, and the kernel is deterministic
+thereafter: same params plus same step count gives the same field, byte for
+byte, on any machine.
+
+`dt` is left at its default of 1 throughout, so the timestep control card 84
+added is not in play. The two Waves frames differ in the `stencil` value and
+nothing else; so do the two Coral frames.
+
+**Two checks that the capture is the same capture.** Waves under five-point
+scores **0.7963458726372294** here, every digit of the recorded value, so the
+escalation clause does not fire and the baseline has not moved. And the Coral
+five-point PNG is **byte-identical** to the frame committed on 2026-09-03
+(`docs/images/2026-09-03-gray-scott-coral.png`, sha256 `ab2722c9…`): the same
+picture out of the same pipeline six stages later.
+
+### The four frames
+
+| Waves, five-point (shipped) | Waves, nine-point |
+|---|---|
+| ![Waves V field, five-point stencil](../images/2026-09-07-gray-scott-waves-five-point.png) | ![Waves V field, nine-point stencil](../images/2026-09-07-gray-scott-waves-nine-point.png) |
+
+| Coral (Default), five-point (shipped) | Coral (Default), nine-point |
+|---|---|
+| ![Coral V field, five-point stencil](../images/2026-09-07-gray-scott-coral-five-point.png) | ![Coral V field, nine-point stencil](../images/2026-09-07-gray-scott-coral-nine-point.png) |
+
+### Is the nine-point Waves a better picture? No, and it is not a brighter one either
+
+Set the two Waves side by side and they are visibly different frames, so the
+previous appendix was right that something changes. It was wrong about what.
+
+**Nothing gets crisper and nothing gets brighter.** Measured on the same frame
+that produced each score:
+
+| | Waves 5-pt | Waves 9-pt | Coral 5-pt | Coral 9-pt |
+|---|---:|---:|---:|---:|
+| std dev of V | 0.1001 | 0.1005 | 0.1283 | 0.1260 |
+| deep dark, V < 0.15 | 0.7125 | 0.4946 | 0.4111 | 0.3992 |
+| saturated bright, V > 0.85 | 0 | 0 | 0 | 0 |
+| ambiguous mid-band, \|V−0.5\| < 0.1 | 0.0028 | 0.0020 | 0.0035 | 0.0028 |
+| components, V > 0.2, 4-connected on the torus | 20 | 6 | 4 | 2 |
+| mean front spacing, rows / cols (cells) | 25.2 / 30.1 | 15.9 / 14.8 | 10.6 / 11.3 | 9.9 / 11.5 |
+
+Waves' standard deviation moves by 0.4% and its mid-band fraction falls. Not one
+cell in any of the four frames exceeds V = 0.85, under either stencil: this
+medium has no bright end to reach. "Crisp bright rings" describes neither the
+crispness nor the brightness of what is actually there. What the nine-point
+Waves has is a different *morphology* — its fronts close into annuli with hollow
+centres, where the five-point's stay filled soft lobes — and a lower dark
+fraction because rings enclose more area than lobes do. That is the whole of the
+coverage rise.
+
+**Which would I ship? The five-point one, weakly.** The nine-point rings are
+more legible, and if the choice were made on a single frame it would be close.
+But the ring lattice is also more repetitive: the same annulus tiled across the
+frame, where the five-point frame has lobes of visibly different shapes at
+different sites. Waves was promoted as pulsing cells, and the five-point frame
+is the one that reads as pulsing rather than as a printed pattern. This is a
+preference, not a finding, and if it were the only evidence here the honest
+verdict would be "too close to call". It is not the only evidence.
+
+### The Waves difference is a small-grid artefact
+
+Two measurements dissolve it.
+
+**First, one snapshot of an oscillating regime is not a measurement.** Waves has
+a temporal flux of 0.149, two orders above Coral's 0.0011: it is not a static
+Turing pattern but a pulsing one, and its coverage swings through a cycle.
+Sampling the same run every 20 `step()` calls either side of step 700:
+
+| `step()` calls | 640 | 660 | 680 | **700** | 720 | 740 | 760 | 780 | 800 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| coverage, five-point | 0.249 | 0.438 | 0.513 | **0.406** | 0.425 | 0.367 | 0.484 | 0.543 | 0.465 |
+| coverage, nine-point | 0.505 | 0.516 | 0.563 | **0.640** | 0.572 | 0.514 | 0.528 | 0.416 | 0.510 |
+| score, five-point | 0.725 | 0.809 | 0.821 | **0.796** | 0.798 | 0.789 | 0.825 | 0.836 | 0.816 |
+| score, nine-point | 0.814 | 0.831 | 0.822 | **0.836** | 0.832 | 0.819 | 0.833 | 0.789 | 0.825 |
+
+Step 700 is close to the five-point cycle's coverage trough and to the
+nine-point's peak. The ranges overlap heavily — five-point reaches 0.543,
+nine-point falls to 0.416 — and the five-point's best score in this window,
+0.836 at step 780, **exceeds every nine-point sample**. The recorded "+5.0%"
+is a phase reading, not a stencil effect.
+
+**Second, and decisively: the difference does not exist at app resolution.**
+The seed lattice is a fixed 56-cell spacing with a radius-4 blob, so a 128x128
+grid holds a handful of origins and the frame is mostly seed geometry. Repeat
+the same capture at 448x448, where the blob count is comparable to the app's
+700x560 canvas:
+
+| preset | grid | five-point coverage | nine-point coverage | five-point score | nine-point score |
+|---|---|---:|---:|---:|---:|
+| Waves | 128² | 0.4063 | 0.6401 | 0.7963 | 0.8358 |
+| Waves | 448² | 0.4796 | 0.4761 | 0.8216 | 0.8201 |
+| Coral | 128² | 0.6757 | 0.6921 | 0.7103 | 0.7065 |
+| Coral | 448² | 0.6840 | 0.6838 | 0.7145 | 0.7141 |
+
+At 448² the Waves coverage gap is **−0.7%** and the score gap **−0.2%**, both
+inside the pulse noise above, and the two frames are the same picture: a dense
+field of pulsing cells and short arcs, with no ring lattice in either. The
+character change stage 76 recorded is a property of running Waves on a grid
+barely wider than four of its own features, not a property of the stencil.
+
+Waves therefore does not need retuning, and the third option this stage was
+asked to consider — switch with Waves retuned — is off the table. There is
+nothing to recover.
+
+### The Coral control is not indistinguishable, and that matters
+
+Stage 76's numbers say Coral should be the case where nothing happens: −0.5% on
+score, +0.016 on coverage. Look at the two frames. The character is the same,
+a labyrinth of thin bright filaments on black, and every summary statistic in
+the table above agrees. The *picture* is not the same. Arms terminate in
+different hooks, the four-fold arms around the centre reroute, and the count of
+connected components falls from four to two because two arms that were separate
+under five-point now join. Per-pixel, the two frames correlate at **0.739** with
+a mean absolute difference of 0.053 and a maximum of 0.366 — a third of the
+field's usable range at the worst cell.
+
+So the 0.5% delta predicts the *character* correctly and says nothing whatever
+about the *picture*. That is not a defect in the composite, which was built to
+score regimes rather than to diff images, but it does undermine the specific
+use stage 76's table was being put to. Five presets "moving by under 2.5% and
+keeping their character" was read as five presets that a switch would leave
+alone. Coral shows that a preset can hold every statistic and still be redrawn.
+Whatever the switch costs, the table above cannot be used to bound it.
+
+For symmetry, the Waves pair correlates at 0.079 — effectively unrelated
+frames — but that number carries no weight, because two snapshots of a pulsing
+regime decorrelate on their own.
+
+### The stencil's stated benefit does not show either
+
+The nine-point stencil is justified by a rotationally symmetric leading error
+term, so features should stop inheriting the grid's axes. Measured as the spread
+of the directional autocorrelation over 0°–90° in 15° steps, bilinearly sampled
+on the torus, the frames go the other way:
+
+| | radius 4 | radius 8 |
+|---|---:|---:|
+| Waves, five-point | 0.048 | 0.108 |
+| Waves, nine-point | 0.077 | 0.206 |
+| Coral, five-point | 0.081 | 0.395 |
+| Coral, nine-point | 0.148 | 0.494 |
+
+Read this cautiously: the seed lattice is itself axis-aligned and square, so at
+128² this measure sees the seeding as much as the stencil, and the numbers are
+not a refutation of the stencil's mathematics. What they do establish is that on
+the frames a user would actually see, the isotropy argument buys nothing
+visible. The Coral frames make the same point without any instrument: the
+nine-point labyrinth is if anything the more angular of the two, with squarer
+hooks at its arm ends.
+
+### Recommendation: do not switch
+
+Of the three options this stage was asked to choose between — switch, do not
+switch, switch with Waves retuned — the recommendation is **do not switch**.
+Keep the nine-point stencil in the kernel, selectable, defaulting to five-point.
+
+The reasoning is not stage 76's. Stage 76 declined to switch because Waves would
+cost too much; that cost is now measured and it is approximately zero at app
+resolution. The case against switching is instead that **nothing has been shown
+on the benefit side**. At the resolution the app renders, the nine-point
+Gray-Scott is the same simulation to within a fraction of a percent on every
+preset checked, the isotropy it is meant to buy is not visible in the frames,
+and the one regime question anyone wanted it for — the glider — it already
+answered with a no. A change that is invisible where it ships and costly where
+it is measured is not worth making by default.
+
+Two caveats stated plainly. This adjudicates two of the six presets; Spots,
+Worms, Maze and Mitosis were not re-captured, and their 128² deltas are subject
+to the same grid-artefact doubt in both directions. And "invisible at app
+resolution" is established for Waves and Coral at 448², not for the full
+700x560 canvas or for the app's own renderer and colourmap.
+
+**What a switch would cost, if the operator decides otherwise.** Not the Waves
+character, which is the one thing the previous appendix priced. What it costs is
+a re-baseline, because the sweep runs at 128² where the deltas are real:
+
+1. `e2e/sweep.spec.ts`, test `non-phase Gray-Scott scores are unchanged`, pins
+   Coral's six metrics to the digit (score `0.7102674508287455`). It fails on a
+   switch and its literals must be regenerated.
+2. The frozen contract block in the same file (`AUTOMETTA-CONTRACT-BEGIN
+   card=docs/stages/70-gray-scott-rebaseline.md`, digest `sha256:d423a745…`)
+   asserts only that Coral outscores washout, which survives — but the file
+   changes, so the switch needs a card that owns that file and re-verifies the
+   digest.
+3. Every Gray-Scott number in this document: the 56-set sweep grid, all seven
+   reference rows, the 2026-09-02 and 2026-09-03 comparison tables, the
+   retired u-skate pair's 0.20081257385221984, and stage 73's box as
+   re-measured in the appendix above.
+4. `public/thumbnails/gray-scott.png`, which
+   `scripts/generate-thumbnails.mjs` bakes from the default parameters at 1100
+   steps.
+5. Any interaction with the sub-unit timestep card 84 added, which was measured
+   under five-point only.
+
+The default is unchanged by this stage. No preset, kernel, metric or composite
+was touched; the four frames and this appendix are the whole of it.
+
+```bash
+SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
+```
