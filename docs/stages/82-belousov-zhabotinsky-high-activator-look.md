@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-06
 - **Orchestrator:** Claude Opus 5 <claude-opus-5@local>
-- **Worker:** Codex GPT-5.6 Terra <codex-gpt-5-6-terra@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier:** Claude Fable 5.1 <claude-fable-5-1@local>
 - **Base branch:** dev
 - **Run branch:** autometta/82-belousov-zhabotinsky-high-activator-look
@@ -149,3 +149,33 @@ exit code and message verbatim in your envelope, with one sentence saying
 which of the three outcomes above it was and why that is correct for this
 card. An exit code cited without which case it was is not evidence — that is
 the whole lesson of the defect this replaces.
+
+## Re-card (2026-09-07, a Codex seat cannot open a browser on this machine)
+
+Attempt 1 failed for a reason that has nothing to do with the work. The Codex
+worker could not capture frames: its in-app browser reported no available
+instance, and the Playwright Chromium fallback was refused by macOS before it
+opened a page — `bootstrap_check_in ... Permission denied (1100)`, a Mach-port
+rendezvous the seat is not permitted to make. The worker spent 752,509 tokens,
+ran `npm run verify` green over 358 tests, invoked the contract guard correctly
+in `--worktree` mode and reported the no-relevant-files case in the words this
+card's re-brief asked for, then declined to fabricate frames or write an
+evidence-free appendix, and stopped. That is the right behaviour and the reason
+this is a re-card rather than a re-brief: nothing about the card was wrong.
+
+**The worker seat moves to `Claude Opus 5 <claude-opus-5@local>`.** Claude seats
+drive Playwright successfully on this machine — stage 79's verifier did so on
+2026-09-06, as did stages 77 and 81 — and the deliverable here is frames, which
+cannot be produced by a seat that cannot open a browser.
+
+The cost, stated plainly: worker and verifier are now both Claude, so this card
+loses the cross-family check the repo prefers. What contains that is the shape
+of the acceptance — the verifier's job is to look at the frames and form its
+own view before reading the prose, which is an independent judgement rather
+than a rerun of the worker's reasoning. The verifier stays `Claude Fable 5.1`,
+the aesthetic tier, precisely because that judgement is the gate.
+
+The Metadata pairing rationale above still says "the Codex seat drives the
+browser". It is left standing as the record of what was designed and is no
+longer true. Everything else in the card — the deliverables, the constraints,
+the frames required and the escalation clause — is unchanged.
