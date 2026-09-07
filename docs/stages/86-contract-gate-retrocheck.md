@@ -159,3 +159,33 @@ exit code and message verbatim in your envelope, with one sentence saying
 which of the three outcomes above it was and why that is correct for this
 card. An exit code cited without which case it was is not evidence — that is
 the whole lesson of the defect this replaces.
+
+## Re-brief (2026-09-07, the cause is fixed; the damage is still yours to audit)
+
+The Surfacing concern above describes the gate defect in the present tense. It
+is now past tense. Autometta cards 129 and 134 rewrote the gate and the fix was
+re-vendored here at `0d4760db`, so `scripts/check-contract-test-gate.sh` on
+`dev` is the fixed version, with `--staged` and `--worktree` modes and a loud
+empty-set signal.
+
+Nothing about this card's job changes. The twenty-nine verifier artefacts were
+written against the broken gate and their criteria are still unchecked; that is
+the historical record you are auditing and no fix can retroactively check it.
+What changes is that you now have a working instrument to audit with, and the
+constraint against editing the gate is no longer protecting a pending fix — it
+is simply not this card's business.
+
+Two amendments to the deliverables:
+
+- Deliverable 4, the recommendation on what cards should say instead, should
+  now be written against the fixed gate's actual behaviour: which files it
+  inspects, what its three exit outcomes mean, and what a card should declare
+  when it touches no frozen file at all. Read the fixed script before writing
+  it. The old advice would be obsolete on arrival.
+- Add a short section recording which of the twenty-nine stages, if any, would
+  now fail the fixed gate if their change set were replayed through it. You are
+  not replaying them — this is a judgement from the table you are already
+  building, and "cannot be determined without replay" is an acceptable entry.
+
+The escalation clause stands unchanged: a frozen block that drifted from its
+card's declared digest stops the card.
