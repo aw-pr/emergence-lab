@@ -223,3 +223,198 @@ exactly the blur the parameter's documentation warns about. A promotion here
 would be promoting the metric's known bias, not a frame anyone chose. The
 correct follow-up is a browser look at the A ≥ 0.27 end — its own card, with a
 visual check — not a preset change on this evidence.
+
+---
+
+# Appendix — the high-activator end, looked at, 2026-09-07
+
+The diffusion appendix above found the composite monotone in the activator rate
+across its whole spine, 0.879 at A = 0.06 to 0.967 at A = 0.34, with no interior
+optimum, and declined to promote on the grounds that the ramp was probably the
+autocorrelation term rewarding the blur the kernel's own parameter note warns
+about. It ended: "Treat the high-A end as a metric artefact until someone looks
+at it." This appendix is the looking. No preset, metric, weight or threshold is
+changed by it.
+
+## How the four frames were captured
+
+Four frames, at A = 0.18 (the shipped **Spiral waves** value), 0.24, 0.27 and
+0.35 (the activator slider's ceiling). Everything else is identical across all
+four:
+
+| | value |
+|---|---|
+| feed / kill | 0.02 / 0.02 — Spiral waves', unmodified |
+| diffusionB / diffusionC | 0.08 / 0.035 — Spiral waves', unmodified |
+| stepsPerFrame | 1 |
+| grid | 128 × 128, periodic |
+| channel | 0, Activator |
+| **step count** | **400 `step()` calls**, dt 1 — the diffusion sweep's warmup |
+| colourmap | 8-bit grayscale, 0 → black, 1 → white, no gamma or contrast |
+| upscale | 3× nearest-neighbour, so each frame is 384 × 384 |
+
+**On the seed.** There is no seed number to quote, and that is the strongest
+thing that can be said about reproducibility here.
+`BelousovZhabotinskyKernel.seedSpatialPattern()` is a closed-form function of
+`(x, y, width, height)` with no random source anywhere in the kernel and no
+dependence on any parameter, so all four frames start from a bit-identical
+initial field and the kernel is deterministic thereafter. Same params plus same
+step count gives the same field, byte for byte, on any machine.
+
+They were produced through the existing headless sweep driver
+(`e2e/harness/driver.ts`) in a single browser session, written with
+`encodeGrayscalePng` from `e2e/harness/report.ts` — the same path and the same
+grayscale convention as the three Gray-Scott frames in the 2026-09-03
+labyrinth appendix. `e2e/harness/sims.ts` is untouched: no sweep set was added,
+because these are four captures rather than a search.
+
+**These four walk A alone; the sweep's spine walked A and B together**
+(B = A/2 − 0.01). The card asked for four frames differing in the activator
+rate and nothing else, which is the cleaner attribution, so B is pinned at
+Spiral waves' 0.08 throughout. The two axes agree to within 0.006 of composite
+score at every point, so the frames are a faithful stand-in for the ramp they
+are being used to adjudicate:
+
+| A | score, A alone (B = 0.08) | score, on the spine (B = A/2 − 0.01) |
+|---:|---:|---:|
+| 0.18 | 0.9308 | 0.9308 — the same point; Spiral waves' full triple |
+| 0.24 | 0.9448 | 0.9499 |
+| 0.27 | 0.9501 | 0.9569 |
+| 0.34 | — | 0.9666 |
+| 0.35 | 0.9620 | 0.9674 |
+
+The A = 0.18 row reproduces the Spiral waves reference score from both earlier
+runs exactly, which is the check that this capture session and the sweep are
+looking at the same medium.
+
+## The four frames
+
+| A = 0.18 (shipped) | A = 0.24 |
+|---|---|
+| ![Activator field, A = 0.18](../images/2026-09-07-belousov-zhabotinsky-activator-018.png) | ![Activator field, A = 0.24](../images/2026-09-07-belousov-zhabotinsky-activator-024.png) |
+
+| A = 0.27 | A = 0.35 (slider maximum) |
+|---|---|
+| ![Activator field, A = 0.27](../images/2026-09-07-belousov-zhabotinsky-activator-027.png) | ![Activator field, A = 0.35](../images/2026-09-07-belousov-zhabotinsky-activator-035.png) |
+
+## A better picture, or a softer one? A coarser one
+
+They are not indistinguishable — the escalation clause does not fire. Set the
+first and last side by side and the difference is obvious. But the difference is
+not the one the word "blur" predicts, and getting that right is the whole value
+of having looked.
+
+At 400 steps the activator field at Spiral waves' feed/kill is a **labyrinth of
+worm-like fronts**, bright ridges separated by black troughs, filling the frame
+edge to edge. All four frames are that same picture. What changes along the ramp
+is its **scale**, and almost nothing else:
+
+| A | score | autocorr | mean front spacing | mid-band, \|v−0.5\| < 0.1 | deep dark, v < 0.15 | bright, v > 0.85 | std dev |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.18 | 0.9308 | 0.937 | 10.5 px | 0.221 | 0.147 | 0.032 | 0.222 |
+| 0.24 | 0.9448 | 0.953 | 11.7 px | 0.217 | 0.152 | 0.034 | 0.231 |
+| 0.27 | 0.9501 | 0.959 | 12.2 px | 0.216 | 0.155 | 0.038 | 0.237 |
+| 0.35 | 0.9620 | 0.968 | 13.5 px | 0.224 | 0.168 | 0.060 | 0.250 |
+
+Front spacing is the frame width divided by the mean number of 0.5-threshold
+crossings per scanline, averaged over rows and columns — a direct read of how
+many fronts fit across the picture.
+
+**Front width: fronts widen by 28% across the ramp**, 10.5 px to 13.5 px at a
+fixed 128-cell grid. Equivalently, about twelve fronts cross the frame at
+A = 0.18 and about nine and a half at A = 0.35. Every large-scale shape in the
+0.18 frame is still recognisably present in the 0.35 frame; it has simply been
+drawn with a fatter brush, and the small hooks, stubs and single-cell curls that
+crowd the 0.18 frame have been absorbed into their neighbours.
+
+**Contrast: it does not fall. It rises slightly.** This is where the word "blur"
+misleads. Real blur pushes intensities towards the middle of the range; here the
+fraction of the frame sitting in the ambiguous mid-band is flat at 0.216–0.224
+across the whole ramp, the deep-black fraction grows from 0.147 to 0.168, the
+saturated-bright fraction nearly doubles from 0.032 to 0.060, and the standard
+deviation climbs from 0.222 to 0.250. Each individual front is *better* resolved
+at A = 0.35 than at A = 0.18 — wider, with a flatter bright plateau in the
+middle and a black trough on each side. What is lost is not edge definition but
+**feature count**. It is not a washout. It is a zoom-in.
+
+**Spiral pitch and spiral cores.** Neither can be judged from these four frames,
+and saying so is more useful than inventing an answer. At 128 cells and 400
+steps the medium has no visible spiral or target core at *any* of the four A
+values, including the shipped one — the seeded ring geometry has already broken
+up into the labyrinth described above, and there is nothing rotating in shot to
+lose. Driven longer (1200 and 3000 steps) and wider (256²) the picture does not
+change character: still a labyrinth at both ends of the range, still coarser at
+0.35, with the composite settling at 0.943 for A = 0.18 and 0.954–0.956 for
+A = 0.35 — the same ordering by the same margin.
+
+The organised waves the preset is named for appear at the **app's own** scale,
+not the harness's, and there the answer is clear. Loading `#/belousov-zhabotinsky`
+in the running app at a 1280 × 720 canvas with these two parameter sets and
+letting each reach ~700 iterations gives, at A = 0.18, a dense system of
+concentric target rings around an off-centre core with fine beading along every
+front; at A = 0.35, the **same ring system, with the cores intact**, at a wider
+ring pitch, fewer rings across the frame, and bolder strokes. The cores survive.
+The beading survives. The picture opens up. Repeat it by setting
+`localStorage["el:values:belousov-zhabotinsky"]` to the triple in the table above
+before navigating to the route; the two live captures behind this paragraph were
+scratch, and are not committed.
+
+## The verdict on 0.967: it is the structure term rewarding coarseness
+
+**The 0.967 is not reading a real improvement.** It is reading feature size, and
+it would read the same rise for any operation that made the fronts wider.
+
+The case is in the two middle columns of the table above. Spatial
+autocorrelation as this harness computes it is Moran's-I at **lag 1** — the
+covariance between each cell and the neighbour immediately right and immediately
+below it, over the field variance. Lag 1 is one grid cell. When the mean front
+spacing goes from 10.5 cells to 13.5 cells, a larger share of every
+cell's immediate neighbourhood necessarily lies inside the same front, and the
+lag-1 correlation must rise. It does, monotonically and in lockstep: 10.5 px →
+0.937, 11.7 → 0.953, 12.2 → 0.959, 13.5 → 0.968. At a fixed grid this term is a
+**scale meter**, not a structure meter, and A is the one shipped parameter that
+moves scale directly. The ramp runs to the end of the slider because the term
+has no interior optimum to find: there is no feature width it prefers, only
+"wider".
+
+Two things follow, and the second is the reason to state this carefully. First,
+stage 81's instinct was right and its promotion decision was right: the ramp is
+an artefact of the instrument. Second, its diagnosis was half wrong, and
+repeating it unexamined would have put a false claim in the record — the field
+at A = 0.35 is not blurred, washed out, or low-contrast, and anyone who rejects
+the high-A end expecting to see mush will not see mush. The metric is not
+rewarding a *degraded* picture. It is rewarding a *coarser* one and calling
+coarseness structure, which is a subtler failure and a harder one to catch by
+looking at a single frame.
+
+**Which frame I would ship: A = 0.18, the incumbent.** Not because 0.35 is bad —
+at the app's own scale it is a perfectly good picture and a bolder one — but
+because the shipped value packs more incident into the same frame, and a gallery
+entry is looked at for a few seconds. Fine beading and a tight ring cadence read
+as more going on; the wide-pitch version reads as the same thing, larger. If the
+gallery wanted a deliberately open, bold BZ variant, A ≈ 0.30–0.35 is where to
+get it, and that is a design decision about the set, not a score to chase. On
+the evidence of the composite alone there is no reason to move: the 0.036 the
+score offers is 0.036 of coarseness.
+
+## Promotion
+
+**None.**
+
+Confirmed against the frames, and for a sharper reason than the diffusion
+appendix could give. The 0.036 margin the A = 0.34 set holds over Spiral waves
+is a measurement of front width in cells, not of anything a viewer would call an
+improvement, and promoting it would move the shipped preset to the edge of a
+slider in the direction the instrument is biased. The three shipped presets stay
+as they are. `src/app/presets.ts` is unchanged by this stage.
+
+**Escalation, for card 83 and not acted on here.** The lag-1 spatial
+autocorrelation term is scale-dependent by construction, so at a fixed grid it
+scores any monotone widening of a field's features as a monotone gain in
+structure. That behaviour is not confined to this sim: it applies to every field
+sim the harness scores, and it means the composite systematically prefers the
+coarse end of any diffusion-like parameter. The `multiLagStructure` reading
+already implemented in `e2e/harness/metrics.ts` but deliberately kept out of the
+composite is the obvious instrument to compare it against. Whether the term
+should be changed is out of scope for this card, which changes no metric, weight,
+threshold or composite.
