@@ -112,3 +112,38 @@ you would ship. Note that "crisp bright rings" is not automatically better than
 "soft mottled fronts on black" — the shipped look was chosen. If the appendix
 treats higher coverage as self-evidently an improvement, that is the failure to
 catch.
+
+## Re-brief (2026-09-07, the contract gate was fixed underneath this card)
+
+This card's acceptance criterion 2 was written against the old gate and its
+wording is now wrong. Autometta cards 129 and 134 rewrote
+`scripts/check-contract-test-gate.sh`, and the fix was re-vendored into this
+repo at `0d4760db`. Criterion 2 is superseded by what follows; nothing else in
+the card changes.
+
+**Invoke it as `scripts/check-contract-test-gate.sh --worktree`.** A dispatch
+evaluates an unstaged working tree. The bare invocation still means `--staged`
+and will find nothing staged; that is the defect stage 79 found, and it is now
+loud rather than silent.
+
+**Three outcomes, and all three can be correct.**
+
+- Exit 0 with no warnings: files this gate is responsible for were inspected
+  and their frozen blocks match their cards. This is a real pass.
+- Exit 2 with `no relevant changed files to inspect in the working tree`: your
+  change touches nothing that any card names as a contract test. For a card
+  whose claims are a single document this is the *expected* outcome and it
+  satisfies criterion 2. Report it in those words. Do not stage extra files to
+  make the gate find something, and do not report it as a pass it is not.
+- Non-zero with warnings: a real violation. Read the message; it names the
+  file, the card, and the two digests.
+
+The gate now inspects only files a card names on a `**Test file:**` line, plus
+`scripts/*-smoke.sh`. A file no card names is skipped, so editing a test file
+this card does not declare is not a violation.
+
+**Criterion 2 now reads:** run the guard in `--worktree` mode and report its
+exit code and message verbatim in your envelope, with one sentence saying
+which of the three outcomes above it was and why that is correct for this
+card. An exit code cited without which case it was is not evidence — that is
+the whole lesson of the defect this replaces.
