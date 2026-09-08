@@ -44,8 +44,9 @@ const CHANNEL_COUNT = 2;
  */
 const STENCIL_OPTIONS = ["five-point", "nine-point"] as const;
 type Stencil = (typeof STENCIL_OPTIONS)[number];
-const DEFAULT_STENCIL: Stencil = "five-point";
+const DEFAULT_STENCIL: Stencil = "nine-point";
 const DEFAULT_DT = 1;
+const DEFAULT_STEPS_PER_FRAME = 1;
 const MIN_DT = 0.125;
 
 /**
@@ -190,7 +191,7 @@ export class GrayScottKernel implements SimKernel {
       key: "stepsPerFrame",
       label: "Steps per frame",
       type: "number",
-      default: 12,
+      default: DEFAULT_STEPS_PER_FRAME,
       min: 1,
       max: 60,
       step: 1,
@@ -208,7 +209,7 @@ export class GrayScottKernel implements SimKernel {
   private kill = DEFAULT_K;
   private stencil: Stencil = DEFAULT_STENCIL;
   private dt = DEFAULT_DT;
-  private stepsPerFrame = 12;
+  private stepsPerFrame = DEFAULT_STEPS_PER_FRAME;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -230,7 +231,7 @@ export class GrayScottKernel implements SimKernel {
     this.stencil = stencilParam(params, DEFAULT_STENCIL);
     this.dt = timeStepParam(params, DEFAULT_DT);
     this.stepsPerFrame = clampStepCount(
-      numberParam(params, "stepsPerFrame", 12),
+      numberParam(params, "stepsPerFrame", DEFAULT_STEPS_PER_FRAME),
     );
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {

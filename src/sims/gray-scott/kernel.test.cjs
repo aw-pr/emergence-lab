@@ -64,15 +64,15 @@ test("metadata matches the renderer contract", () => {
   }
 });
 
-test("stencil defaults to five-point and unknown values fall back to it", () => {
+test("stencil defaults to nine-point and unknown values fall back to it", () => {
   const defaults = defaultsFromSchema(new GrayScottKernel());
-  assert.equal(defaults.stencil, "five-point");
+  assert.equal(defaults.stencil, "nine-point");
 
   const baseline = runKernel({}, 24);
-  assert.deepEqual(runKernel({ stencil: "five-point" }, 24), baseline);
+  assert.deepEqual(runKernel({ stencil: "nine-point" }, 24), baseline);
   assert.deepEqual(runKernel({ stencil: "seven-point" }, 24), baseline);
   assert.deepEqual(runKernel({ stencil: 9 }, 24), baseline);
-  assert.notDeepEqual(runKernel({ stencil: "nine-point" }, 24), baseline);
+  assert.notDeepEqual(runKernel({ stencil: "five-point" }, 24), baseline);
 });
 
 test("dt=1 preserves the pre-change five-point path bit-for-bit", () => {
@@ -212,7 +212,7 @@ test("schema defaults use waves regime at gentler pace", () => {
   assert.equal(defaults.F, 0.018);
   assert.equal(defaults.k, 0.0487);
   assert.equal(defaults.dt, 1);
-  assert.equal(defaults.stepsPerFrame, 12);
+  assert.equal(defaults.stepsPerFrame, 1);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
