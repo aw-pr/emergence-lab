@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-10
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Worker:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Verifier:** GPT-6 Astra <gpt-6-astra@local>
 - **Base branch:** dev
 - **Run branch:** autometta/87-logistic-mandelbrot-zoom-diagnostic
@@ -229,3 +229,17 @@ flags a WebGL2 sim crashes the headless browser on this machine.
 Astra verifier: do not attempt to open a browser. Codex seats are refused at
 the Mach-port rendezvous on this machine and the attempt costs the stage its
 wall clock. Your half of this card is source arithmetic.
+
+## Re-card 2026-09-11 (attempt 4): worker seat moved to Claude Sonnet 5
+
+Attempts 1-3 on Claude Opus 5 each did four to ten minutes of correct work
+(built the app, drove Playwright with the Metal flags, captured frames) and
+then hung after a routine tool result: no transcript writes, no live sockets,
+no children, for 27-52 minutes each. The same hang took an Opus design agent
+in the operator's session at 20:50Z, while Fable 5.1 sessions ran unaffected
+across the same hours and a fresh `claude -p` probe on Opus answered in 2s.
+status.claude.com carried an "elevated latency, some request timeouts" incident
+from 21:43Z. Nothing about the card was wrong; the seat moves to Sonnet 5 as
+the cheaper Claude seat that can still drive the browser. The verifier stays
+on GPT-6 Astra, so the pairing remains cross-family. Attempt 3's frames were
+under a temp dir and are not preserved; this attempt starts clean.
