@@ -23,6 +23,7 @@ const {
   ESCAPED,
   MAX_DETECTABLE_PERIOD,
   PERIOD_TOLERANCE,
+  periodDetectionWindow,
   sampleAttractorCell,
 } = model;
 
@@ -72,11 +73,11 @@ function radicalInverseBase2(index) {
   return bits / 4294967296;
 }
 
-function estimatePeriod64(samples) {
-  const limit = Math.min(MAX_DETECTABLE_PERIOD, samples.length - 1);
+function estimatePeriod64(samples, count = samples.length) {
+  const limit = Math.min(MAX_DETECTABLE_PERIOD, count - 1);
   for (let period = 1; period <= limit; period += 1) {
     let matches = true;
-    for (let index = 0; index + period < samples.length; index += 1) {
+    for (let index = 0; index + period < count; index += 1) {
       const delta = samples[index + period] - samples[index];
       if (delta > PERIOD_TOLERANCE || delta < -PERIOD_TOLERANCE) {
         matches = false;
@@ -88,12 +89,12 @@ function estimatePeriod64(samples) {
   return 0;
 }
 
-function estimatePeriod32(samples) {
-  const limit = Math.min(MAX_DETECTABLE_PERIOD, samples.length - 1);
+function estimatePeriod32(samples, count = samples.length) {
+  const limit = Math.min(MAX_DETECTABLE_PERIOD, count - 1);
   const tolerance = f32(PERIOD_TOLERANCE);
   for (let period = 1; period <= limit; period += 1) {
     let matches = true;
-    for (let index = 0; index + period < samples.length; index += 1) {
+    for (let index = 0; index + period < count; index += 1) {
       const delta = f32(samples[index + period] - samples[index]);
       if (delta > tolerance || delta < f32(-tolerance)) {
         matches = false;
@@ -190,7 +191,30 @@ function runOrbit64(cRe, cIm, warmup, sampleCount, allowConvergenceExit) {
       zr > SAMPLE_CLIP ? SAMPLE_CLIP : zr < -SAMPLE_CLIP ? -SAMPLE_CLIP : zr;
   }
 
-  const period = estimatePeriod64(samples);
+  // Detection window, mirroring model.ts sampleAttractorCell: the orbit runs
+  // on past the plot window into a scratch buffer, truncating if the tail
+  // escapes, and the period test sees that longer window. The plot samples,
+  // the escape verdict and the multiplier start point are all unchanged.
+  const detectionCount = periodDetectionWindow(sampleCount);
+  let period;
+  if (detectionCount <= sampleCount) {
+    period = estimatePeriod64(samples, sampleCount);
+  } else {
+    const window = new Float32Array(detectionCount);
+    window.set(samples.subarray(0, sampleCount));
+    let kept = sampleCount;
+    let tailR = zr;
+    let tailI = zi;
+    while (kept < detectionCount) {
+      [tailR, tailI] = step64(tailR, tailI, cRe, cIm);
+      if (tailR * tailR + tailI * tailI > escapeSquared) break;
+      window[kept] =
+        tailR > SAMPLE_CLIP ? SAMPLE_CLIP : tailR < -SAMPLE_CLIP ? -SAMPLE_CLIP : tailR;
+      kept += 1;
+    }
+    period = estimatePeriod64(window, kept);
+  }
+
   let multiplier = 1;
   if (period > 0) {
     for (let step = 0; step < period; step += 1) {
@@ -277,7 +301,30 @@ function runOrbit32(cReInput, cImInput, warmup, sampleCount, allowConvergenceExi
           : zr;
   }
 
-  const period = estimatePeriod32(samples);
+  const detectionCount = periodDetectionWindow(sampleCount);
+  let period;
+  if (detectionCount <= sampleCount) {
+    period = estimatePeriod32(samples, sampleCount);
+  } else {
+    const window = new Float32Array(detectionCount);
+    window.set(samples.subarray(0, sampleCount));
+    let kept = sampleCount;
+    let tailR = zr;
+    let tailI = zi;
+    while (kept < detectionCount) {
+      [tailR, tailI] = step32(tailR, tailI, cRe, cIm);
+      if (magnitudeSquared32(tailR, tailI) > escapeSquared) break;
+      window[kept] =
+        tailR > f32(SAMPLE_CLIP)
+          ? f32(SAMPLE_CLIP)
+          : tailR < f32(-SAMPLE_CLIP)
+            ? f32(-SAMPLE_CLIP)
+            : tailR;
+      kept += 1;
+    }
+    period = estimatePeriod32(window, kept);
+  }
+
   let multiplier = f32(1);
   if (period > 0) {
     for (let step = 0; step < period; step += 1) {
