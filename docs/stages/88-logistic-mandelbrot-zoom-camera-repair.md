@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-10
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Worker:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Verifier:** Claude Opus 5 <claude-opus-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/88-logistic-mandelbrot-zoom-camera-repair
@@ -323,7 +323,7 @@ by eye on a captured pair plus criteria 1-3 mechanically, and spot-checks 4.
 The token baseline for this attempt is 3.0M on the worker; stop and report
 above 5.0M.
 
-## Re-card 2026-09-11 02:25Z: attempt 2's worker seat moves to Claude Opus 5
+## Re-card 2026-09-11 02:25Z: attempt 2's worker seat moves to Claude Sonnet 5
 
 The Codex 5-hour window hit its limit at 01:57Z (the provider refused stage
 89's Astra verifier outright; reset 05:58Z). An Astra worker for this attempt
@@ -331,4 +331,5 @@ would be refused the same way, and each refusal pauses the whole repo for an
 hour, which would also hold the Claude seats that still have headroom. Attempt
 1, the substantive work on this card, was GPT-6 Astra's and stays credited to
 it at `062fc3f2`; attempt 2 is the small plumbing of deliverable 2 and runs on
-Claude Opus 5. The verifier is unchanged, so the pairing is still cross-model.
+Claude Sonnet 5, so the Opus 5 verifier that does the by-eye frame checks
+stays a different model from the worker.
