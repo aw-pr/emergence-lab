@@ -125,6 +125,7 @@ export class AbelianSandpileKernel implements SimKernel {
   private queueTail = 0;
   private queueCount = 0;
   private toppleThreshold = DEFAULT_TOPPLE_THRESHOLD;
+  private minToppleGrains = DEFAULT_TOPPLE_THRESHOLD;
   private grainsPerStep = DEFAULT_GRAINS_PER_STEP;
   private topplesPerStep = DEFAULT_TOPPLES_PER_STEP;
 
@@ -155,6 +156,13 @@ export class AbelianSandpileKernel implements SimKernel {
       2,
       12,
     );
+    // A topple ships bulk * threshold grains split four ways, so it only makes
+    // progress once that shipment reaches 4 grains. Below threshold 4 a cell at
+    // the bare threshold would ship nothing, take the whole remainder back and
+    // requeue forever; requiring a full shipment keeps low thresholds live.
+    // At threshold >= 4 this is exactly `grains >= threshold`.
+    this.minToppleGrains =
+      this.toppleThreshold * Math.ceil(4 / this.toppleThreshold);
     this.grainsPerStep = boundedInteger(
       numberParam(params, "grainsPerStep", DEFAULT_GRAINS_PER_STEP),
       0,
@@ -209,28 +217,41 @@ export class AbelianSandpileKernel implements SimKernel {
       this.queued[index] = 0;
 
       const grains = this.grains[index];
-      if (grains < this.toppleThreshold) {
+      if (grains < this.minToppleGrains) {
         continue;
       }
 
+      // Conservation at any threshold: the topple ships bulk * threshold
+      // grains, each neighbour takes an equal quarter, and the integer
+      // remainder of the four-way split returns to the toppling cell rather
+      // than vanishing. At threshold 4 the remainder is always 0, so this is
+      // bit-identical to the classic rule; above 4 it is what stops the pile
+      // burning away (thresholds 5-12 destroyed (threshold - 4) * bulk grains
+      // per topple before). Grains still leave through the open boundary when
+      // a neighbour is off-grid.
       const bulk = Math.floor(grains / this.toppleThreshold);
-      this.grains[index] = grains - bulk * this.toppleThreshold;
+      const share = Math.floor((bulk * this.toppleThreshold) / 4);
+      this.grains[index] = grains - share * 4;
       const intensity = Math.min(1, Math.log2(bulk + 1) / 12);
       this.activity[index] = Math.max(this.activity[index], intensity);
 
       const x = index % this.width;
       if (x > 0) {
-        this.addGrains(index - 1, bulk);
+        this.addGrains(index - 1, share);
       }
       if (x < this.width - 1) {
-        this.addGrains(index + 1, bulk);
+        this.addGrains(index + 1, share);
       }
       if (index >= this.width) {
-        this.addGrains(index - this.width, bulk);
+        this.addGrains(index - this.width, share);
       }
       if (index < this.width * (this.height - 1)) {
-        this.addGrains(index + this.width, bulk);
+        this.addGrains(index + this.width, share);
       }
+      // The returned remainder can leave the cell at or above the threshold
+      // (never at threshold 4, where the remainder is 0), so it re-queues
+      // itself; each pass sheds share * 4 >= 4 grains, so this terminates.
+      this.enqueueIfUnstable(index);
     }
 
     if (this.queueCount === 0) {
@@ -317,7 +338,7 @@ export class AbelianSandpileKernel implements SimKernel {
 
   private enqueueIfUnstable(index: number): void {
     if (
-      this.grains[index] < this.toppleThreshold ||
+      this.grains[index] < this.minToppleGrains ||
       this.queued[index] === 1 ||
       this.queueCount >= this.queue.length
     ) {

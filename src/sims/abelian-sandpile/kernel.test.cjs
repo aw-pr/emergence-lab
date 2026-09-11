@@ -146,6 +146,67 @@ test("toppling spreads grains beyond centre with open boundaries", () => {
   );
 });
 
+// Raw grain counts are unrecoverable from readState() (it reduces them modulo
+// the threshold), so these tests read the kernel's grains field directly —
+// TS-private, but a plain property in the compiled output the tests run
+// against. The grid is sized so the pile never reaches the open boundary,
+// where grains legitimately leave.
+function totalGrains(kernel) {
+  return kernel.grains.reduce((sum, value) => sum + value, 0);
+}
+
+test("toppling conserves total grain count at thresholds 4, 5, 6, 8 and 12", () => {
+  for (const toppleThreshold of [4, 5, 6, 8, 12]) {
+    const initialPile = 2000;
+    const grainsPerStep = 3;
+    const kernel = new AbelianSandpileKernel();
+    kernel.init(64, 64, {
+      initialPile,
+      toppleThreshold,
+      grainsPerStep,
+      topplesPerStep: 100000,
+    });
+
+    assert.equal(totalGrains(kernel), initialPile);
+
+    let expected = initialPile;
+    for (let step = 1; step <= 20; step += 1) {
+      kernel.step(1);
+      expected += grainsPerStep;
+      assert.equal(
+        totalGrains(kernel),
+        expected,
+        `threshold ${toppleThreshold}, step ${step}`,
+      );
+    }
+  }
+});
+
+test("thresholds below 4 conserve grains and settle instead of livelocking", () => {
+  for (const toppleThreshold of [2, 3]) {
+    const kernel = new AbelianSandpileKernel();
+    kernel.init(64, 64, {
+      initialPile: 500,
+      toppleThreshold,
+      grainsPerStep: 0,
+      topplesPerStep: 100000,
+    });
+
+    kernel.step(1);
+    assert.equal(totalGrains(kernel), 500, `threshold ${toppleThreshold}`);
+
+    // Fully relaxed: a second step with no feed must do no topple work, which
+    // shows small cells are not requeueing themselves forever.
+    const settled = Array.from(kernel.grains);
+    kernel.step(1);
+    assert.deepEqual(
+      Array.from(kernel.grains),
+      settled,
+      `threshold ${toppleThreshold} keeps toppling after relaxation`,
+    );
+  }
+});
+
 test("toppling emits a visible avalanche activity channel", () => {
   const kernel = new AbelianSandpileKernel();
   kernel.init(21, 21, {

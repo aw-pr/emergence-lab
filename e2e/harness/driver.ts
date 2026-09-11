@@ -42,9 +42,27 @@ export async function driveKernel(
   const specifier = cfg.registryUrl;
   const reg: any = await import(/* @vite-ignore */ specifier);
   const entry = reg.REGISTRY.find((e: any) => e.slug === cfg.slug);
-  if (!entry) throw new Error(`unknown slug: ${cfg.slug}`);
 
-  const kernel: any = await entry.load();
+  // A slug listed in registry.ts's SHELVED_SLUGS is filtered out of REGISTRY, so
+  // it is unreachable through the normal path even though its kernel is intact
+  // and worth scoring. Fall back to the fixed module convention
+  // (src/sims/<slug>/kernel.ts), resolved relative to the registry URL, and pick
+  // the constructor the same way registry.ts's pickKernelExport does.
+  // Everything stays inline: Playwright serialises only this function into the
+  // page, so a module-scope helper would be undefined there.
+  let kernel: any;
+  if (entry) {
+    kernel = await entry.load();
+  } else {
+    const kernelUrl = new URL(`../sims/${cfg.slug}/kernel.ts`, specifier).href;
+    const mod: any = await import(/* @vite-ignore */ kernelUrl);
+    const ctor =
+      mod.default ?? Object.values(mod).find((v) => typeof v === "function");
+    if (typeof ctor !== "function") {
+      throw new Error(`unknown slug: ${cfg.slug} (no kernel at ${kernelUrl})`);
+    }
+    kernel = new (ctor as new () => unknown)();
+  }
   const w = cfg.gridWidth;
   const h = cfg.gridHeight;
   kernel.init(w, h, cfg.params);

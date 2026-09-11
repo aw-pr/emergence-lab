@@ -1480,8 +1480,13 @@ export class WebGLRendererBackend implements RendererBackend {
     this.orbit3d?.syncCameraToSweep(progress, maxDelta);
   }
 
-  orbit3dDolly(factor: number): void {
-    this.orbit3d?.dolly(factor);
+  orbit3dDolly(
+    factor: number,
+    viewportX?: number,
+    viewportY?: number,
+    aspect?: number,
+  ): void {
+    this.orbit3d?.dolly(factor, viewportX, viewportY, aspect);
   }
 
   orbit3dPan(deltaRight: number, deltaUp: number): void {
@@ -1510,6 +1515,9 @@ export class WebGLRendererBackend implements RendererBackend {
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.orbit3dPoints;
+    delete canvas.dataset.orbit3dCameraDistance;
+    delete canvas.dataset.orbit3dCameraAzimuth;
+    delete canvas.dataset.orbit3dBoundaryDetailOpacity;
     delete canvas.dataset.orbit3dPointBudget;
     delete canvas.dataset.orbit3dBuild;
     delete canvas.dataset.orbit3dBoundaryDetail;
@@ -1601,7 +1609,7 @@ export class WebGLRendererBackend implements RendererBackend {
         frame.colourOptions.paletteCycleReverse === true,
         numericParam(frame.params, "pointDensity", 1),
         numericParam(frame.params, "surfaceOpacity", 0.4),
-        numericParam(frame.params, "edgeGlow", 0.6),
+        numericParam(frame.params, "edgeGlow", 0),
         surfaceDiagnosticMode,
       )
     ) {
@@ -1613,6 +1621,9 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.fractalSupersample;
     canvas.dataset.simulationRenderer = "gpu-orbit3d";
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
+    canvas.dataset.orbit3dCameraDistance = String(this.orbit3d.cameraReadout.distance);
+    canvas.dataset.orbit3dCameraAzimuth = String(this.orbit3d.cameraReadout.azimuth);
+    canvas.dataset.orbit3dBoundaryDetailOpacity = String(this.orbit3d.boundaryDetailOpacity);
     canvas.dataset.orbit3dPointBudget = String(stats.pointBudget);
     canvas.dataset.orbit3dBuild = stats.building ? "building" : "complete";
     canvas.dataset.orbit3dSampler = stats.samplingPath;

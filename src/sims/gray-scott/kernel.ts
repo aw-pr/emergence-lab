@@ -35,6 +35,21 @@ const DEFAULT_K = 0.0487;
 const CHANNEL_COUNT = 2;
 
 /**
+ * Laplacian stencils. Five-point reads the four edge neighbours and is what
+ * every shipped preset was tuned on. Nine-point adds the diagonals with the
+ * isotropic 1-4-1 weighting (Patra-Karttunen): the same O(h²) accuracy, but
+ * its leading error term is rotationally symmetric, so the grid's axes stop
+ * leaking into the pattern. It also has a smaller spectral radius (16/3 against
+ * 8), which lifts the explicit-Euler ceiling on Du from 0.25 to 0.375.
+ */
+const STENCIL_OPTIONS = ["five-point", "nine-point"] as const;
+type Stencil = (typeof STENCIL_OPTIONS)[number];
+const DEFAULT_STENCIL: Stencil = "nine-point";
+const DEFAULT_DT = 1;
+const DEFAULT_STEPS_PER_FRAME = 1;
+const MIN_DT = 0.125;
+
+/**
  * Seed geometry in cells, never as a fraction of the grid.
  *
  * The reaction's length scale is fixed by Du, Dv, F and k, which are per-cell,
@@ -69,6 +84,23 @@ function numberParam(
 ): number {
   const value = params[key];
   return typeof value === "number" ? value : fallback;
+}
+
+function stencilParam(params: SimParams, fallback: Stencil): Stencil {
+  const value = params.stencil;
+  return value === "five-point" || value === "nine-point" ? value : fallback;
+}
+
+function timeStepParam(params: SimParams, fallback: number): number {
+  const value = numberParam(params, "dt", fallback);
+  if (!Number.isFinite(value) || value < MIN_DT || value > 1) {
+    return fallback;
+  }
+
+  // Keep the physical time per frame exact: only reciprocal-integer substeps
+  // are selectable, and the slider's eighths snap to the nearest dyadic value.
+  const substeps = 2 ** Math.round(Math.log2(1 / value));
+  return 1 / Math.min(8, Math.max(1, substeps));
 }
 
 function clampStepCount(value: number): number {
@@ -136,10 +168,30 @@ export class GrayScottKernel implements SimKernel {
       group: "Reaction-diffusion",
     },
     {
+      key: "stencil",
+      label: "Laplacian stencil",
+      type: "enum",
+      default: DEFAULT_STENCIL,
+      options: STENCIL_OPTIONS,
+      info: "How diffusion samples a cell's neighbours. Five-point reads the four edge neighbours and is what every preset was tuned on. Nine-point adds the diagonals with isotropic weighting, so features stop favouring the grid's axes at the same size and speed.",
+      group: "Reaction-diffusion",
+    },
+    {
+      key: "dt",
+      label: "Timestep",
+      type: "number",
+      default: DEFAULT_DT,
+      min: MIN_DT,
+      max: 1,
+      step: MIN_DT,
+      info: "Euler timestep per substep. Smaller values use proportionally more substeps to cover the same simulated time, adding compute while refining the discretisation.",
+      group: "Reaction-diffusion",
+    },
+    {
       key: "stepsPerFrame",
       label: "Steps per frame",
       type: "number",
-      default: 12,
+      default: DEFAULT_STEPS_PER_FRAME,
       min: 1,
       max: 60,
       step: 1,
@@ -155,7 +207,9 @@ export class GrayScottKernel implements SimKernel {
   private dv = DEFAULT_DV;
   private feed = DEFAULT_F;
   private kill = DEFAULT_K;
-  private stepsPerFrame = 12;
+  private stencil: Stencil = DEFAULT_STENCIL;
+  private dt = DEFAULT_DT;
+  private stepsPerFrame = DEFAULT_STEPS_PER_FRAME;
 
   init(width: number, height: number, params: SimParams): void {
     this.width = Math.max(0, Math.floor(width));
@@ -174,8 +228,10 @@ export class GrayScottKernel implements SimKernel {
     this.dv = numberParam(params, "Dv", DEFAULT_DV);
     this.feed = numberParam(params, "F", DEFAULT_F);
     this.kill = numberParam(params, "k", DEFAULT_K);
+    this.stencil = stencilParam(params, DEFAULT_STENCIL);
+    this.dt = timeStepParam(params, DEFAULT_DT);
     this.stepsPerFrame = clampStepCount(
-      numberParam(params, "stepsPerFrame", 12),
+      numberParam(params, "stepsPerFrame", DEFAULT_STEPS_PER_FRAME),
     );
 
     for (let cell = 0; cell < this.width * this.height; cell += 1) {
@@ -192,48 +248,16 @@ export class GrayScottKernel implements SimKernel {
       return;
     }
 
-    const width = this.width;
-    const height = this.height;
     const output = this.state;
     let state = output;
     let next = this.next;
-    const du = this.du;
-    const dv = this.dv;
-    const feed = this.feed;
-    const kill = this.kill;
 
-    for (let stepIndex = 0; stepIndex < this.stepsPerFrame; stepIndex += 1) {
-      for (let y = 0; y < height; y += 1) {
-        const yUp = y === 0 ? height - 1 : y - 1;
-        const yDown = y === height - 1 ? 0 : y + 1;
-
-        for (let x = 0; x < width; x += 1) {
-          const xLeft = x === 0 ? width - 1 : x - 1;
-          const xRight = x === width - 1 ? 0 : x + 1;
-
-          const index = (y * width + x) * CHANNEL_COUNT;
-          const left = (y * width + xLeft) * CHANNEL_COUNT;
-          const right = (y * width + xRight) * CHANNEL_COUNT;
-          const up = (yUp * width + x) * CHANNEL_COUNT;
-          const down = (yDown * width + x) * CHANNEL_COUNT;
-
-          const u = state[index];
-          const v = state[index + 1];
-          const laplaceU =
-            state[left] + state[right] + state[up] + state[down] - 4 * u;
-          const laplaceV =
-            state[left + 1] +
-            state[right + 1] +
-            state[up + 1] +
-            state[down + 1] -
-            4 * v;
-          const reaction = u * v * v;
-
-          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
-          next[index + 1] = clamp01(
-            dv * laplaceV + reaction - (feed + kill) * v + v,
-          );
-        }
+    const substepsPerFrame = this.stepsPerFrame / this.dt;
+    for (let stepIndex = 0; stepIndex < substepsPerFrame; stepIndex += 1) {
+      if (this.stencil === "nine-point") {
+        this.reactDiffuseNinePoint(state, next, this.dt);
+      } else {
+        this.reactDiffuseFivePoint(state, next, this.dt);
       }
 
       const swap = state;
@@ -251,6 +275,138 @@ export class GrayScottKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /** The shipped stencil: one explicit-Euler pass over the four edge neighbours. */
+  private reactDiffuseFivePoint(
+    state: Float32Array,
+    next: Float32Array,
+    dt: number,
+  ): void {
+    const width = this.width;
+    const height = this.height;
+    const du = this.du;
+    const dv = this.dv;
+    const feed = this.feed;
+    const kill = this.kill;
+
+    for (let y = 0; y < height; y += 1) {
+      const yUp = y === 0 ? height - 1 : y - 1;
+      const yDown = y === height - 1 ? 0 : y + 1;
+
+      for (let x = 0; x < width; x += 1) {
+        const xLeft = x === 0 ? width - 1 : x - 1;
+        const xRight = x === width - 1 ? 0 : x + 1;
+
+        const index = (y * width + x) * CHANNEL_COUNT;
+        const left = (y * width + xLeft) * CHANNEL_COUNT;
+        const right = (y * width + xRight) * CHANNEL_COUNT;
+        const up = (yUp * width + x) * CHANNEL_COUNT;
+        const down = (yDown * width + x) * CHANNEL_COUNT;
+
+        const u = state[index];
+        const v = state[index + 1];
+        const laplaceU =
+          state[left] + state[right] + state[up] + state[down] - 4 * u;
+        const laplaceV =
+          state[left + 1] +
+          state[right + 1] +
+          state[up + 1] +
+          state[down + 1] -
+          4 * v;
+        const reaction = u * v * v;
+
+        if (dt === 1) {
+          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
+          next[index + 1] = clamp01(
+            dv * laplaceV + reaction - (feed + kill) * v + v,
+          );
+        } else {
+          next[index] = clamp01(
+            u + dt * (du * laplaceU - reaction + feed * (1 - u)),
+          );
+          next[index + 1] = clamp01(
+            v + dt * (dv * laplaceV + reaction - (feed + kill) * v),
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * One explicit-Euler pass with the isotropic nine-point Laplacian:
+   * (4·edges + diagonals − 20·centre) / 6. Identical reaction terms; only the
+   * diffusion sampling differs from the five-point pass.
+   */
+  private reactDiffuseNinePoint(
+    state: Float32Array,
+    next: Float32Array,
+    dt: number,
+  ): void {
+    const width = this.width;
+    const height = this.height;
+    const du = this.du;
+    const dv = this.dv;
+    const feed = this.feed;
+    const kill = this.kill;
+
+    for (let y = 0; y < height; y += 1) {
+      const yUp = y === 0 ? height - 1 : y - 1;
+      const yDown = y === height - 1 ? 0 : y + 1;
+      const rowIndex = y * width;
+      const rowUp = yUp * width;
+      const rowDown = yDown * width;
+
+      for (let x = 0; x < width; x += 1) {
+        const xLeft = x === 0 ? width - 1 : x - 1;
+        const xRight = x === width - 1 ? 0 : x + 1;
+
+        const index = (rowIndex + x) * CHANNEL_COUNT;
+        const left = (rowIndex + xLeft) * CHANNEL_COUNT;
+        const right = (rowIndex + xRight) * CHANNEL_COUNT;
+        const up = (rowUp + x) * CHANNEL_COUNT;
+        const down = (rowDown + x) * CHANNEL_COUNT;
+        const upLeft = (rowUp + xLeft) * CHANNEL_COUNT;
+        const upRight = (rowUp + xRight) * CHANNEL_COUNT;
+        const downLeft = (rowDown + xLeft) * CHANNEL_COUNT;
+        const downRight = (rowDown + xRight) * CHANNEL_COUNT;
+
+        const u = state[index];
+        const v = state[index + 1];
+        const laplaceU =
+          (4 * (state[left] + state[right] + state[up] + state[down]) +
+            (state[upLeft] + state[upRight] + state[downLeft] + state[downRight]) -
+            20 * u) /
+          6;
+        const laplaceV =
+          (4 *
+            (state[left + 1] +
+              state[right + 1] +
+              state[up + 1] +
+              state[down + 1]) +
+            (state[upLeft + 1] +
+              state[upRight + 1] +
+              state[downLeft + 1] +
+              state[downRight + 1]) -
+            20 * v) /
+          6;
+        const reaction = u * v * v;
+
+        if (dt === 1) {
+          next[index] = clamp01(du * laplaceU - reaction + feed * (1 - u) + u);
+          next[index + 1] = clamp01(
+            dv * laplaceV + reaction - (feed + kill) * v + v,
+          );
+        } else {
+          next[index] = clamp01(
+            u + dt * (du * laplaceU - reaction + feed * (1 - u)),
+          );
+          next[index + 1] = clamp01(
+            v + dt * (dv * laplaceV + reaction - (feed + kill) * v),
+          );
+        }
+      }
+    }
   }
 
   /**

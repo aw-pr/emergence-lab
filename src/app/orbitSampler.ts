@@ -2,11 +2,13 @@ import {
   IM_MAX,
   IM_MIN,
   MAX_DETECTABLE_PERIOD,
+  PERIOD_DETECTION_SAMPLES,
   PERIOD_TOLERANCE,
   RE_MAX,
   RE_MIN,
   SAMPLE_CLIP,
   cellCoordinate,
+  periodDetectionWindow,
 } from "../sims/logistic-mandelbrot/model.ts";
 
 const SAMPLE_BATCH_SIZE = 4;
@@ -179,9 +181,17 @@ uniform sampler2DArray u_samples;
 uniform int u_cellCount;
 uniform int u_width;
 uniform int u_sampleCount;
+uniform int u_detectionCount;
 layout(location = 0) out vec4 outMetadata;
 
 ${DOUBLE_SINGLE_GLSL}
+
+// Iterates past the plot window, computed here rather than stored in
+// u_samples: the sample texture array is sized by the point budget, so
+// widening the detection window through it would cost VRAM linearly. The
+// tail runs from the post-sample state, so these are the same iterates the
+// CPU oracle appends in model.ts sampleAttractorCell.
+float tailSamples[${PERIOD_DETECTION_SAMPLES}];
 
 float orbitSample(ivec2 pixel, int sampleIndex) {
   vec4 batch = texelFetch(
@@ -196,6 +206,11 @@ float orbitSample(ivec2 pixel, int sampleIndex) {
   return batch.w;
 }
 
+float detectionSample(ivec2 pixel, int index) {
+  if (index < u_sampleCount) return orbitSample(pixel, index);
+  return tailSamples[index - u_sampleCount];
+}
+
 void main() {
   ivec2 pixel = ivec2(gl_FragCoord.xy);
   int index = pixel.y * u_width + pixel.x;
@@ -205,13 +220,39 @@ void main() {
     return;
   }
 
+  vec4 coordinate = texelFetch(u_coords, pixel, 0);
+  vec2 cr = coordinate.xy;
+  vec2 ci = coordinate.zw;
+
+  // Extend the plot window to the detection window. An escaping tail is
+  // unbounded and cannot carry an attracting cycle, so truncate there rather
+  // than feeding clipped divergence into the comparisons — matching the CPU
+  // oracle's truncation exactly.
+  int detectionCount = u_sampleCount;
+  {
+    vec2 tailR = packedState.xy;
+    vec2 tailI = packedState.zw;
+    for (int tailIndex = 0; tailIndex < ${PERIOD_DETECTION_SAMPLES}; tailIndex += 1) {
+      if (u_sampleCount + tailIndex >= u_detectionCount) break;
+      orbitStep(tailR, tailI, cr, ci);
+      if (orbitEscaped(tailR, tailI)) break;
+      tailSamples[tailIndex] = clamp(
+        dsValue(tailR),
+        -${SAMPLE_CLIP.toFixed(1)},
+        ${SAMPLE_CLIP.toFixed(1)}
+      );
+      detectionCount += 1;
+    }
+  }
+
   int period = 0;
   for (int q = 1; q <= ${MAX_DETECTABLE_PERIOD}; q += 1) {
-    if (q >= u_sampleCount) break;
+    if (q >= detectionCount) break;
     bool matches = true;
     for (int lane = 0; lane < ${MAX_SAMPLE_COUNT}; lane += 1) {
-      if (lane + q >= u_sampleCount) break;
-      float delta = orbitSample(pixel, lane + q) - orbitSample(pixel, lane);
+      if (lane + q >= detectionCount) break;
+      float delta =
+        detectionSample(pixel, lane + q) - detectionSample(pixel, lane);
       if (delta > ${PERIOD_TOLERANCE} || delta < -${PERIOD_TOLERANCE}) {
         matches = false;
         break;
@@ -225,9 +266,6 @@ void main() {
 
   float interior = 1.0;
   if (period > 0) {
-    vec4 coordinate = texelFetch(u_coords, pixel, 0);
-    vec2 cr = coordinate.xy;
-    vec2 ci = coordinate.zw;
     vec2 zr = packedState.xy;
     vec2 zi = packedState.zw;
     float multiplier = 1.0;
@@ -532,6 +570,10 @@ export class OrbitSampler {
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_cellCount"), cellCount);
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_width"), targets.width);
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_sampleCount"), sampleCount);
+    gl.uniform1i(
+      gl.getUniformLocation(this.periodProgram, "u_detectionCount"),
+      periodDetectionWindow(sampleCount),
+    );
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return source;
   }

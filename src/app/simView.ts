@@ -913,7 +913,8 @@ export async function renderSimView(
         renderer.moveOrbit3dMarker(clientX, clientY),
       orbit: (deltaCssX, deltaCssY) =>
         renderer.orbitOrbit3d(deltaCssX, deltaCssY),
-      dolly: (factor) => renderer.dollyOrbit3d(factor),
+      dolly: (factor, clientX, clientY) =>
+        renderer.dollyOrbit3d(factor, clientX, clientY),
       pan: (deltaCssX, deltaCssY) => renderer.panOrbit3d(deltaCssX, deltaCssY),
       resetCamera: () => renderer.resetOrbit3dCamera(),
       onMarkerChange: (marker) => orbitMarkerReadout?.set(marker),

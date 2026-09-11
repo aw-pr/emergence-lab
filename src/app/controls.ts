@@ -55,6 +55,9 @@ export interface ControlsCallbacks {
   onAutoCycleChange: (enabled: boolean) => void;
 }
 
+/** The neutral kernel-preset option: factory defaults, named by no preset. */
+const KERNEL_DEFAULT_PRESET = "__default__";
+
 const RESOLUTION_OPTIONS: ReadonlyArray<{
   value: ResolutionPreset;
   label: string;
@@ -167,6 +170,7 @@ export class ControlsPanel {
   private displayOptions: DisplayOptions;
   private resolution: ResolutionPreset;
   private resolutionSelect?: HTMLSelectElement;
+  private kernelPresetSelect?: HTMLSelectElement;
   private readonly paramInputs = new Map<
     string,
     HTMLInputElement | HTMLSelectElement
@@ -781,7 +785,7 @@ export class ControlsPanel {
 
     const select = document.createElement("select");
     const kernelDefault = document.createElement("option");
-    kernelDefault.value = "__default__";
+    kernelDefault.value = KERNEL_DEFAULT_PRESET;
     kernelDefault.textContent = "Kernel default";
     select.appendChild(kernelDefault);
 
@@ -794,13 +798,14 @@ export class ControlsPanel {
 
     select.addEventListener("change", () => {
       const preset =
-        select.value === "__default__"
-          ? { params: options.initialParams }
+        select.value === KERNEL_DEFAULT_PRESET
+          ? { params: this.defaultParams }
           : options.paramPresets.find((candidate) => candidate.id === select.value);
       if (!preset) return;
       this.applyParams(preset.params, options.paramSchema);
     });
 
+    this.kernelPresetSelect = select;
     wrap.appendChild(select);
 
     return wrap;
@@ -1101,6 +1106,9 @@ export class ControlsPanel {
     this.resolution = this.defaultResolution;
     if (this.resolutionSelect) {
       this.resolutionSelect.value = this.defaultResolution;
+    }
+    if (this.kernelPresetSelect) {
+      this.kernelPresetSelect.value = KERNEL_DEFAULT_PRESET;
     }
     this.syncColourControls();
     if (this.showAutoCycleControl && this.autoCycle !== this.defaultAutoCycle) {

@@ -31,6 +31,27 @@ export const ESCAPED = -1;
 export const MAX_DETECTABLE_PERIOD = 32;
 
 /**
+ * Iterates the period test consumes, independent of how many iterates the
+ * caller keeps for plotting. Two full cycles at the cap, so every period up
+ * to MAX_DETECTABLE_PERIOD is confirmed against at least q further lagged
+ * pairs rather than the single pair an 8-value plot window could offer.
+ *
+ * Kept separate from the plot window because the two trade against different
+ * budgets: plot samples cost GPU point-budget slots one for one, while these
+ * cost only orbit iterations, which are already dominated by warmup.
+ */
+export const PERIOD_DETECTION_SAMPLES = 2 * MAX_DETECTABLE_PERIOD;
+
+/**
+ * Iterates fed to estimatePeriod for a plot window of `sampleCount`. Callers
+ * that already keep more than the detection window get their whole window
+ * tested, so raising sampleCount never lowers the detectable period.
+ */
+export function periodDetectionWindow(sampleCount: number): number {
+  return Math.max(sampleCount, PERIOD_DETECTION_SAMPLES);
+}
+
+/**
  * Attracting cycles reached via 200 warmup iterations converge geometrically,
  * so away from bulb boundaries the residual is far below this. A chaotic orbit
  * matching itself within this tolerance across an entire sample window is
@@ -46,6 +67,13 @@ export const PERIOD_TOLERANCE = 1e-4;
  */
 const CONVERGENCE_TOLERANCE_SQ = 1e-18;
 const CONVERGENCE_WINDOW_CAP = 256;
+
+/**
+ * Detection window for sampleAttractorCell, reused across cells so a grid
+ * sweep does not allocate per cell. Exactly long enough: a caller keeping
+ * more than this many plot samples has its own window tested in place.
+ */
+const detectionWindow = new Float32Array(PERIOD_DETECTION_SAMPLES);
 
 export interface CGridSpec {
   width: number;
@@ -125,7 +153,13 @@ export function estimatePeriod(
 /**
  * Sample one c-cell: warm up, then write `sampleCount` clipped Re(z) values
  * into samplesOut at `offset`. Returns ESCAPED for escaping orbits (window is
- * zero-filled), otherwise the estimated period of the sample window.
+ * zero-filled), otherwise the estimated period of the orbit.
+ *
+ * The period is estimated over periodDetectionWindow(sampleCount) iterates,
+ * not over the plot window: once the plot window is filled the orbit keeps
+ * running into a scratch buffer until the detection window is full. Plotted
+ * values, escape classification and the returned interior measure are all
+ * untouched by that tail, so detection depth costs iterations only.
  */
 export function sampleAttractorCell(
   cRe: number,
@@ -190,15 +224,56 @@ export function sampleAttractorCell(
       zr > SAMPLE_CLIP ? SAMPLE_CLIP : zr < -SAMPLE_CLIP ? -SAMPLE_CLIP : zr;
   }
 
-  const period = estimatePeriod(samplesOut, offset, sampleCount);
+  const detectionCount = periodDetectionWindow(sampleCount);
+  let period: number;
+
+  if (detectionCount <= sampleCount) {
+    period = estimatePeriod(samplesOut, offset, sampleCount);
+  } else {
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      detectionWindow[sample] = samplesOut[offset + sample];
+    }
+
+    // A tail that escapes is unbounded, so it cannot carry an attracting
+    // cycle; truncating there keeps NaN and clipped divergence out of the
+    // comparisons and leaves the cell classified exactly as before.
+    let kept = sampleCount;
+    let tailR = zr;
+    let tailI = zi;
+    while (kept < detectionCount) {
+      const nextR = tailR * tailR - tailI * tailI + cRe;
+      tailI = 2 * tailR * tailI + cIm;
+      tailR = nextR;
+
+      if (tailR * tailR + tailI * tailI > escapeSquared) {
+        break;
+      }
+
+      detectionWindow[kept] =
+        tailR > SAMPLE_CLIP
+          ? SAMPLE_CLIP
+          : tailR < -SAMPLE_CLIP
+            ? -SAMPLE_CLIP
+            : tailR;
+      kept += 1;
+    }
+
+    period = estimatePeriod(detectionWindow, 0, kept);
+  }
+
   if (measureOut) {
+    // Measured from the end of the plot window, not the end of the detection
+    // tail: the cycle multiplier is the same either way, and holding the
+    // start point fixed keeps this figure identical to the pre-decoupling one.
     let multiplier = 1;
     if (period > 0) {
+      let cycleR = zr;
+      let cycleI = zi;
       for (let step = 0; step < period; step += 1) {
-        const nextR = zr * zr - zi * zi + cRe;
-        zi = 2 * zr * zi + cIm;
-        zr = nextR;
-        multiplier *= 2 * Math.hypot(zr, zi);
+        const nextR = cycleR * cycleR - cycleI * cycleI + cRe;
+        cycleI = 2 * cycleR * cycleI + cIm;
+        cycleR = nextR;
+        multiplier *= 2 * Math.hypot(cycleR, cycleI);
       }
     }
     measureOut.interior = Math.max(0, Math.min(1, multiplier));

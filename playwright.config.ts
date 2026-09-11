@@ -25,6 +25,13 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5173",
     headless: true,
+    // Headless Chromium on this machine falls back to SwiftShader for WebGL2
+    // without these, and the software path renders the point pass differently
+    // enough to fail luma-based regression assertions (card 92, attempt 2).
+    launchOptions:
+      process.platform === "darwin"
+        ? { args: ["--use-angle=metal", "--enable-gpu"] }
+        : {},
   },
   webServer: {
     command: "npm run dev -- --port 5173 --strictPort",

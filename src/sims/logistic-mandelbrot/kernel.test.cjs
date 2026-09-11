@@ -227,9 +227,9 @@ test("exact component classification reaches periods the sample window cannot", 
     return model.sampleAttractorCell(re, im, 1500, 8, out, 0, { interior: 1 });
   };
 
-  // An eight-sample window needs a lag pair to see a repeat, so period 8 is
-  // outside its reach; the exact classifier answers where it cannot.
-  assert.equal(sampled(-1.3815474, 0), 0);
+  // The sampler reaches period 8 now that its detection window is decoupled
+  // from the eight-value plot window; the exact classifier agrees.
+  assert.equal(sampled(-1.3815474, 0), 8);
   assert.equal(classify(-1.3815474, 0).period, 8);
 
   assert.equal(classify(-0.5, 0).period, 1);
@@ -1278,6 +1278,180 @@ test("c = -1.76 sits inside the mapped logistic period-3 window (period 3)", () 
   assert.ok(Math.abs(levels[0] - levels[2]) > 1e-3);
 });
 
+// Real-axis period-doubling cascade, derived here rather than quoted. The
+// superstable parameter of a period-q window is where the critical orbit
+// closes, f_c^q(0) = 0. Between two consecutive doublings the only parameter
+// at which the critical orbit closes is the doubled cycle's own, so scanning
+// down from the period-q/2 superstable parameter for the first sign change of
+// f_c^q(0) and bisecting it lands on the period-q one, exactly. No literature
+// constant enters: the recursion starts from c = 0, where f_c(0) = c.
+function criticalOrbit(c, q) {
+  let z = 0;
+  for (let index = 0; index < q; index += 1) {
+    z = z * z + c;
+  }
+  return z;
+}
+
+function nextSuperstableParameter(previous, q) {
+  const step = 1e-5;
+  let left = previous - step;
+  let fLeft = criticalOrbit(left, q);
+
+  for (let scan = 0; scan < 100000; scan += 1) {
+    const right = left - step;
+    const fRight = criticalOrbit(right, q);
+    if (fLeft === 0) return left;
+
+    if (fLeft > 0 !== fRight > 0) {
+      let low = left;
+      let high = right;
+      let fLow = fLeft;
+      for (let refine = 0; refine < 200; refine += 1) {
+        const mid = (low + high) / 2;
+        if (mid === low || mid === high) break;
+        const fMid = criticalOrbit(mid, q);
+        if (fMid === 0) return mid;
+        if (fLow > 0 === fMid > 0) {
+          low = mid;
+          fLow = fMid;
+        } else {
+          high = mid;
+        }
+      }
+      return (low + high) / 2;
+    }
+
+    left = right;
+    fLeft = fRight;
+  }
+
+  throw new Error(`no period-${q} superstable parameter below ${previous}`);
+}
+
+const SUPERSTABLE_CASCADE = (() => {
+  const byPeriod = new Map();
+  let c = 0;
+  for (const q of [2, 4, 8, 16, 32]) {
+    c = nextSuperstableParameter(c, q);
+    byPeriod.set(q, c);
+  }
+  return byPeriod;
+})();
+
+// Shipped kernel default: DEFAULT_KERNEL_WARMUP / DEFAULT_KERNEL_SAMPLES.
+const SHIPPED_WARMUP = 1500;
+const SHIPPED_SAMPLES = 8;
+
+test("the derived cascade parameters are the superstable ones", () => {
+  // c = -1 is the period-2 superstable parameter and c = -1.3107026413368328
+  // the period-4 one; both are independently fixed elsewhere in this suite and
+  // in scripts/spike-fp32-orbit.mjs, so they check the recursion itself.
+  assert.ok(Math.abs(SUPERSTABLE_CASCADE.get(2) - -1) < 1e-12);
+  assert.ok(Math.abs(SUPERSTABLE_CASCADE.get(4) - -1.3107026413368328) < 1e-12);
+
+  for (const [q, c] of SUPERSTABLE_CASCADE) {
+    // The critical orbit closes after exactly q steps, and after no proper
+    // divisor of q, which is what makes the period q and not q/2.
+    assert.ok(Math.abs(criticalOrbit(c, q)) < 1e-12);
+    assert.ok(Math.abs(criticalOrbit(c, q / 2)) > 1e-6);
+    // Strictly decreasing, as the cascade requires.
+    if (q > 2) assert.ok(c < SUPERSTABLE_CASCADE.get(q / 2));
+  }
+});
+
+test("the shipped default labels periods the plot window cannot hold", () => {
+  const out = new Float32Array(SHIPPED_SAMPLES);
+
+  for (const q of [8, 16, 32]) {
+    const c = SUPERSTABLE_CASCADE.get(q);
+    assert.equal(
+      model.sampleAttractorCell(c, 0, SHIPPED_WARMUP, SHIPPED_SAMPLES, out, 0),
+      q,
+    );
+
+    // The old window size, run over the very same plotted values: an
+    // eight-value window can offer no lag pair beyond seven, so every one of
+    // these reads as chaotic. That is what dev shipped.
+    assert.equal(model.estimatePeriod(out, 0, SHIPPED_SAMPLES), 0);
+  }
+});
+
+test("the detection window is set by the period cap, not by any plot control", () => {
+  assert.equal(
+    model.PERIOD_DETECTION_SAMPLES,
+    2 * model.MAX_DETECTABLE_PERIOD,
+  );
+
+  // estimatePeriod clamps to count - 1. At the shipped default that clamp is
+  // now looser than MAX_DETECTABLE_PERIOD, so the cap is what binds.
+  const detection = model.periodDetectionWindow(SHIPPED_SAMPLES);
+  assert.equal(detection, model.PERIOD_DETECTION_SAMPLES);
+  assert.equal(
+    Math.min(model.MAX_DETECTABLE_PERIOD, detection - 1),
+    model.MAX_DETECTABLE_PERIOD,
+  );
+
+  // A plot window wider than the detection window is tested whole, never cut.
+  assert.equal(model.periodDetectionWindow(96), 96);
+
+  // And the cap is reachable in practice, not just arithmetically.
+  const out = new Float32Array(SHIPPED_SAMPLES);
+  assert.equal(
+    model.sampleAttractorCell(
+      SUPERSTABLE_CASCADE.get(32),
+      0,
+      SHIPPED_WARMUP,
+      SHIPPED_SAMPLES,
+      out,
+      0,
+    ),
+    model.MAX_DETECTABLE_PERIOD,
+  );
+});
+
+test("plotting fewer iterates does not shorten the detected period", () => {
+  const width = 30;
+  const height = 20;
+  const full = runKernel({}, width, height).readState();
+  const thinned = runKernel({ plottedIterations: 1 }, width, height).readState();
+
+  for (let cell = 0; cell < width * height; cell += 1) {
+    assert.equal(thinned[cell * 2 + 1], full[cell * 2 + 1]);
+  }
+});
+
+test("the detection tail leaves plotted samples and escapes untouched", () => {
+  // Same orbit, same warmup: the extra iterates are appended after the plot
+  // window is filled, so nothing the renderer consumes moves.
+  const c = SUPERSTABLE_CASCADE.get(8);
+  const plotted = new Float32Array(SHIPPED_SAMPLES);
+  const measure = { interior: Number.NaN };
+  model.sampleAttractorCell(
+    c,
+    0,
+    SHIPPED_WARMUP,
+    SHIPPED_SAMPLES,
+    plotted,
+    0,
+    measure,
+  );
+
+  // Superstable: the critical point is on the cycle, so one of the plotted
+  // values is 0 and the cycle multiplier is 0.
+  assert.ok(plotted.some((value) => Math.abs(value) < 1e-12));
+  assert.ok(measure.interior < 1e-9);
+
+  // An escaping cell still escapes, and its window is still zero-filled; the
+  // tail never runs for it.
+  const escaping = new Float32Array(SHIPPED_SAMPLES);
+  assert.equal(
+    model.sampleAttractorCell(0.5, 0, SHIPPED_WARMUP, SHIPPED_SAMPLES, escaping, 0),
+    model.ESCAPED,
+  );
+  assert.ok(escaping.every((value) => value === 0));
+});
+
 test("c = 0.5 escapes and contributes nothing", () => {
   const { period, out } = sampleCell(0.5, 0);
   assert.equal(period, model.ESCAPED);
@@ -1412,7 +1586,7 @@ test("repeated runs are deterministic for the same params and steps", () => {
   );
 });
 
-test("plotted iterations = 1 collapses the period structure", () => {
+test("plotted iterations = 1 collapses the density structure", () => {
   const width = 30;
   const height = 20;
   const full = runKernel({}, width, height).readState();
@@ -1428,11 +1602,14 @@ test("plotted iterations = 1 collapses the period structure", () => {
   // Full window: cardioid (1), period-2 disc (0.5), and more bands coexist.
   assert.ok(densities(full).size > 2);
 
-  // One plotted sample: every bounded cell is a single level, no periods.
+  // One plotted sample: every bounded cell collapses to a single level. The
+  // period channel does not follow it down — how much of the orbit is drawn
+  // is a plotting choice, and the orbit's period is not.
   assert.deepEqual(Array.from(densities(collapsed)), [1]);
-  for (let cell = 0; cell < width * height; cell += 1) {
-    assert.equal(collapsed[cell * 2 + 1], 0);
-  }
+  assert.ok(
+    Array.from({ length: width * height }, (_v, cell) => collapsed[cell * 2 + 1])
+      .some((period) => period > 0),
+  );
 });
 
 test("real-slice-only repeats the bifurcation slice down every column", () => {

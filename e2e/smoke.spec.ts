@@ -299,6 +299,136 @@ for (const slug of ["mandelbrot", "julia-set"]) {
   });
 }
 
+for (const continuousSpin of [false, true]) {
+  test(`logistic-Mandelbrot manual zoom holds after ambient motion resumes: spin=${continuousSpin}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/#/logistic-mandelbrot");
+    const canvas = page.locator(".sim-view__canvas");
+    await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
+    await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+    // The immersive view parks the controls off screen, so dispatch the
+    // checkbox's normal input event without moving the camera to reach it.
+    await page.locator('[data-param-key="continuousSpin"]').evaluate((element, checked) => {
+      const input = element as HTMLInputElement;
+      input.checked = checked;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }, continuousSpin);
+    await expect(page.locator('[data-param-key="continuousSpin"]')).toBeChecked({ checked: continuousSpin });
+    const distance = async () => Number(await canvas.getAttribute("data-orbit3d-camera-distance"));
+    const before = await distance();
+    expect(before).toBeGreaterThan(0);
+    await canvas.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      for (let step = 0; step < 8; step += 1) {
+        element.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true, cancelable: true,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+          deltaY: -100,
+        }));
+      }
+    });
+    const zoomed = await distance();
+    expect(zoomed).toBeLessThan(before * 0.5);
+    const azimuth = Number(await canvas.getAttribute("data-orbit3d-camera-azimuth"));
+    await page.waitForTimeout(15_000);
+    expect(Math.abs(await distance() - zoomed) / zoomed).toBeLessThanOrEqual(0.02);
+    expect(await distance()).toBeLessThan(before * 0.5);
+    expect(Math.abs(Number(await canvas.getAttribute("data-orbit3d-camera-azimuth")) - azimuth)).toBeGreaterThan(0.01);
+    await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete");
+  });
+}
+
+// Card 88 gave the point sprites a depth term so a zoomed-in sheet stops
+// reading as a dot lattice; card 91 found it saturated the near face instead,
+// with 76% of the frame above luma 200 at the clamp. The gate is 20% blown
+// out; 25% here so an unrelated capture difference cannot fail the suite.
+test("logistic-Mandelbrot sheet does not blow out at the zoom clamp", async ({ page }) => {
+  // The 13 M-point orbit build eats most of the default budget before the
+  // camera can be driven at all, and the frame then has to be read back.
+  test.slow();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/#/logistic-mandelbrot");
+  const canvas = page.locator(".sim-view__canvas");
+  await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+  await canvas.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    for (let step = 0; step < 25; step += 1) {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        deltaY: -100,
+      }));
+    }
+  });
+  await page.waitForTimeout(2_000);
+  expect(Number(await canvas.getAttribute("data-orbit3d-camera-distance"))).toBeLessThan(0.36);
+  // Pause first: at 13 M points a frame is long enough that the screenshot
+  // waits for the element to go stable and never gets there, and the paused
+  // canvas keeps the last composited frame, which is the one being measured.
+  // The immersive view parks the controls off screen, so click the button
+  // where it stands rather than scrolling the camera to reach it.
+  await page.getByRole("button", { name: "Pause" })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("button", { name: "Play" })).toHaveCount(1);
+  // The drawing buffer is not preserved, so the pixels have to come from a
+  // compositor screenshot, and a blank page reads it back: the sim page's main
+  // thread is busy enough drawing 13 M points that it starves an evaluate.
+  const shot = (await canvas.screenshot()).toString("base64");
+  const reader = await page.context().newPage();
+  const blownOut = await reader.evaluate(async (encoded) => {
+    const response = await fetch(`data:image/png;base64,${encoded}`);
+    const bitmap = await createImageBitmap(await response.blob());
+    const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = surface.getContext("2d");
+    if (!context) throw new Error("no 2d context for the frame histogram");
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let above = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      if (luma > 200) above += 1;
+    }
+    return above / (data.length / 4);
+  }, shot);
+  await reader.close();
+  expect(blownOut).toBeLessThan(0.25);
+});
+
+test("orbit camera dolly preserves an off-axis world point from rotated poses", async ({ page }) => {
+  await page.goto("/");
+  const errors = await page.evaluate(async () => {
+    const { Orbit3DPointCloud } = await import("/src/app/orbit3d.ts");
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) throw new Error("WebGL2 is required for the orbit camera regression");
+    const cloud = new Orbit3DPointCloud(gl);
+    const errors: number[] = [];
+    try {
+      for (const pose of ["default", "side"] as const) {
+        for (const [width, height] of [[1280, 720], [720, 1280]]) {
+          for (const factor of [0.8, 1.2]) {
+            cloud.setCameraPose(pose);
+            cloud.orbit(0.4, 0.15);
+            cloud.setMarker(-1, 0.2);
+            const before = cloud.projectMarker(width, height)!;
+            cloud.dolly(factor, before.x, before.y, width / height);
+            const after = cloud.projectMarker(width, height)!;
+            errors.push(Math.max(Math.abs(before.x - after.x), Math.abs(before.y - after.y)));
+          }
+        }
+      }
+    } finally {
+      cloud.destroy();
+    }
+    return errors;
+  });
+  // Projection matrices are float32; the target translation itself uses doubles.
+  for (const error of errors) expect(error).toBeLessThan(1e-6);
+});
+
 test("shared fractal transforms preserve the pointer coordinate", async ({ page }) => {
   const errors = await page.evaluate(async () => {
     const { complexAtPoint, zoomAroundPoint } = await import("/src/app/fractalView.ts");
@@ -417,3 +547,65 @@ test("boids behaviour presets preserve the full flock population", async ({ page
   expect(counts).toHaveLength(3);
   expect(new Set(counts)).toEqual(new Set([17777]));
 });
+
+/** Every `[data-param-key]` control's displayed value, keyed by param. */
+function paramSnapshot(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      Array.from(
+        document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+          "[data-param-key]",
+        ),
+      ).map((el) => [
+        el.dataset.paramKey ?? "",
+        el instanceof HTMLInputElement && el.type === "checkbox"
+          ? String(el.checked)
+          : el.value,
+      ]),
+    ),
+  );
+}
+
+for (const slug of ["mandelbrot", "boids", "abelian-sandpile"]) {
+  test(`reset restores the kernel preset select: ${slug}`, async ({ page }) => {
+    await page.goto(`/#/${slug}`);
+
+    // Headless Chromium reports viewport == screen, so every route loads
+    // immersive with the settings drawer parked off-screen behind its handle.
+    await page.locator(".sim-view__drawer-handle").click();
+
+    const select = page.getByLabel("Kernel preset");
+    const reset = page.getByRole("button", { name: "Reset to defaults" });
+
+    // Reset first, so the baseline is the factory default rather than whatever
+    // an earlier test in this worker persisted for the slug.
+    await reset.dispatchEvent("click");
+    await expect(select).toHaveValue("__default__");
+    const defaults = await paramSnapshot(page);
+
+    const presetIds = await select.evaluate((el) =>
+      Array.from((el as HTMLSelectElement).options)
+        .map((option) => option.value)
+        .filter((value) => value !== "__default__"),
+    );
+    let chosen = "";
+    for (const id of presetIds) {
+      await select.selectOption(id);
+      if (JSON.stringify(await paramSnapshot(page)) !== JSON.stringify(defaults)) {
+        chosen = id;
+        break;
+      }
+    }
+    expect(chosen, `no kernel preset on ${slug} changes a parameter`).not.toBe("");
+    await expect(select).toHaveValue(chosen);
+
+    await reset.dispatchEvent("click");
+    await expect(select).toHaveValue("__default__");
+    expect(await paramSnapshot(page)).toEqual(defaults);
+
+    // The neutral option must name the parameters reset actually loaded.
+    await select.selectOption(chosen);
+    await select.selectOption("__default__");
+    expect(await paramSnapshot(page)).toEqual(defaults);
+  });
+}

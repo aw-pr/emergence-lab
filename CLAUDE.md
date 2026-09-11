@@ -15,8 +15,11 @@ cross-checking (stage cards under `docs/stages/`, see
 
 The logistic-Mandelbrot bifurcation reveal is landed and validated, including
 free camera navigation and the machine-local prebaked point cloud (see
-"Baking a local point cloud" in `README.md`). No required implementation work
-remains. Gray-Scott stays the priority kernel for future refinement.
+"Baking a local point cloud" in `README.md`). The analytic surface arc
+(stages 52-56) is landed, deployed and mirrored publicly as of 2026-08-23.
+Stage 57, an interestingness sweep harness scoring frames on entropy, spatial
+autocorrelation, temporal flux and coverage, is queued and unstarted.
+Gray-Scott stays the priority kernel for future refinement.
 
 ## Worktrees and branches
 
@@ -24,24 +27,31 @@ remains. Gray-Scott stays the priority kernel for future refinement.
 advances from it and `publish` is the mirror boundary. A worktree branched from
 anywhere else inherits a history the rest of the fleet is not working against.
 
-Two long-lived branches are not `dev` and should not be treated as a base:
+As of 2026-08-23 there are no long-lived feature branches and no worktrees
+beyond the primary one. Every parallel line is closed:
 
-- `feat/logistic-mandelbrot-hybrid-surface` (worktree `../emergence-lab-surface`)
-  is **an experiment whose fate is undecided.** It rewrites `orbit3d.ts`
-  internals and adds `src/app/orbitSurface.ts`; operator visual review rejected
-  its output on 2026-07-20 (sawtooth silhouette, no sheet-to-cloud dissolve) and
-  it has been parked since. Do not branch from it, import from it, reconcile
-  against it, or treat its approach as precedent. Do not delete it or propose
-  deleting it either — the decision is the operator's and has not been made.
-  Follow-up notes live at
-  `docs/plans/2026-07-20-logistic-mandelbrot-edge-transition-next-steps.md`.
-- `feat/logistic-mandelbrot-gpu-sampler` (worktree `../emergence-lab-gpu`) is the
-  active autometta run for stages 34-36, moving orbit sampling to a WebGL2
-  fragment shader. Branched from `dev`.
+- `feat/logistic-mandelbrot-hybrid-surface` — the parked surface experiment.
+  Rejected on visual review 2026-07-20 (sawtooth silhouette, no sheet-to-cloud
+  dissolve); stages 40-41 reopened it 2026-08-19 against those two defects and
+  it stalled again. Superseded by the analytic edge-curve arc below, and retired
+  2026-08-23 at operator decision. Its reusable parts already reached `dev`
+  independently — both stage cards, `docs/plans/2026-08-19-edge-analysis-findings.md`,
+  and `src/app/orbitSurface.ts` (ported at `94024ef`). The branch implementation
+  is preserved at tag `archive/logistic-mandelbrot-hybrid-surface`; nothing else
+  should be recovered from it without a fresh decision, since the approach was
+  rejected twice.
+- `feat/logistic-mandelbrot-surface-v2` — the analytic edge-curve arc, stages
+  52-56 (`docs/plans/2026-08-22-analytic-edge-curves.md`). Merged to `dev`,
+  deployed and mirrored 2026-08-23; branch and worktree deleted.
+- `feat/logistic-mandelbrot-gpu-sampler` — stages 34-36, WebGL2 fragment-shader
+  orbit sampling. Merged to `dev` at `636315c` on 2026-08-16; branch and worktree
+  `../emergence-lab-gpu` deleted. Background survives in
+  `docs/plans/2026-08-15-logistic-mandelbrot-gpu-sampler-next-steps.md`.
 
-Both touch the same `orbit3d.ts` internals, and a rebase between them has
-already failed once with eight structural conflicts. They are deliberately
-allowed to diverge.
+Retire a branch this way: land or discard the work, confirm anything worth
+keeping is on `dev`, tag the tip as `archive/<name>` if the implementation has
+diagnostic value, then remove the worktree and delete the branch on both
+local and `origin`.
 
 ## Interface contract
 

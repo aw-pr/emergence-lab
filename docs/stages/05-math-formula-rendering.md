@@ -88,3 +88,19 @@ Worker returns:
 
 - Codex worker: `</dev/null` stdin redirect.
 - Claude verifier: cross-family. The verifier should pay attention to the mathematical content — the formulas must match the kernel, not just be syntactically valid LaTeX.
+
+## Re-brief 2026-09-01: report the gzip delta the criterion asks for
+
+Terminal since 2026-05-26 on one criterion of seven. The implementation landed
+at `8863280` and six criteria PASSed. Criterion 6 failed because the size
+impact was never *reported*, not because it was never *measured*:
+`state/verifiers/05-math-formula-rendering.json` records the verifier taking
+the measurement itself (`index-*.css` 36.28 kB / gzip 10.05 kB, `index-*.js`
+326.26 kB / gzip 97.14 kB, plus KaTeX fonts as separate hashed assets) and
+then correctly refusing to credit its own number to the worker.
+
+Scope for this round is that criterion alone. Produce the before/after gzip
+delta from a real pair of production builds, one with KaTeX and one without,
+and commit it where a reader will find it: a note under `docs/`, not only a
+commit message. Do not re-open the inline-lookup design decision — five of the
+six other criteria depend on it and all of them passed.

@@ -70,7 +70,15 @@ export interface RendererBackend {
   orbit3dReady?(): boolean;
   orbit3dOrbit?(deltaAzimuth: number, deltaElevation: number): void;
   orbit3dSyncCameraToSweep?(progress: number, maxDelta: number): void;
-  orbit3dDolly?(factor: number): void;
+  /** viewportX/viewportY (0-1, origin top-left) and aspect anchor the dolly
+   * on a screen point instead of the orbit target; omit all three to dolly
+   * on-target as before. */
+  orbit3dDolly?(
+    factor: number,
+    viewportX?: number,
+    viewportY?: number,
+    aspect?: number,
+  ): void;
   /** Slide the orbit target across the camera plane; deltas are fractions of
    * the viewport height. */
   orbit3dPan?(deltaRight: number, deltaUp: number): void;

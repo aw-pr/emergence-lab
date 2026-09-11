@@ -132,10 +132,8 @@ export class BriansBrainKernel implements SimKernel {
       0,
       1,
     );
-    this.dyingValue = boundedNumber(
-      numberParam(params, "dyingValue", DEFAULT_DYING_VALUE),
-      0,
-      1,
+    this.dyingValue = Math.fround(
+      boundedNumber(numberParam(params, "dyingValue", DEFAULT_DYING_VALUE), 0, 1),
     );
 
     for (let y = 0; y < this.height; y += 1) {

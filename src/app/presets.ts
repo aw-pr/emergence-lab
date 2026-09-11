@@ -38,11 +38,14 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Waves",
       params: { Du: 0.2097, Dv: 0.105, F: 0.018, k: 0.0487, stepsPerFrame: 20 },
     },
-    {
-      id: "u-skate",
-      label: "U-skate gliders",
-      params: { Du: 0.2097, Dv: 0.105, F: 0.062, k: 0.0609, stepsPerFrame: 20 },
-    },
+    // A "U-skate gliders" preset (F=0.062, k=0.0609) shipped here until the
+    // 2026-09-02 sweep retired it. That is the canonical u-skate pair from the
+    // literature, but this kernel's five-point Laplacian at Du=0.2097 floods it
+    // to the uniform high-V steady state and freezes: no soliton, nothing that
+    // glides. Neither the seed nor the step budget is the cause, and no pair
+    // reachable on the F/k sliders produces travelling solitons either — see
+    // docs/sweeps/gray-scott-interestingness.md. Re-adding it needs a finer
+    // stencil or a smaller timestep, not another parameter guess.
   ],
   "abelian-sandpile": [
     {
@@ -93,9 +96,12 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { temperature: 4.5, coupling: 1, externalField: 0, sweepsPerStep: 1, initialState: "random" },
     },
     {
+      // Promoted by the 2026-08-25 external-field sweep (0.003 → 0.519):
+      // field 0.02 is the largest tested bias with score >= 0.3 and coverage
+      // <= 0.9; stronger fields saturate the lattice at this temperature.
       id: "field-sweep",
       label: "Positive field",
-      params: { temperature: 1.8, coupling: 1, externalField: 0.35, sweepsPerStep: 0.6, initialState: "random" },
+      params: { temperature: 1.8, coupling: 1, externalField: 0.02, sweepsPerStep: 0.5, initialState: "random" },
     },
   ],
   "kuramoto-oscillators": [
@@ -144,6 +150,10 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.374 → 0.411):
+      // this preset was a byte-for-byte duplicate of "conway" and scored
+      // identically. Raising the seed density is what the label already
+      // claimed, and it was the sweep's top-scoring B3/S23 set.
       id: "dense-ash",
       label: "Dense ash",
       params: {
@@ -151,7 +161,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         birthMax: 3,
         surviveMin: 2,
         surviveMax: 3,
-        seedDensity: 0.28,
+        seedDensity: 0.4,
       },
     },
   ],
@@ -309,6 +319,24 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         moveSpeed: 0.8,
         depositAmount: 0.12,
         evaporation: 0.96,
+        stepsPerFrame: 1,
+      },
+    },
+    {
+      // Promoted by the 2026-08-23 interestingness sweep (0.851 → 0.901):
+      // 14,000 agents at 256² scales to 14,000 × (384 / 256)² = 31,500
+      // at the app's grid. The remaining parameters inherit the sweep's pinned
+      // base rather than being selected by the search.
+      id: "root-mat",
+      label: "Root mat",
+      params: {
+        agentCount: 31500,
+        sensorAngle: 60,
+        sensorDistance: 5,
+        turnSpeed: 12,
+        moveSpeed: 1,
+        depositAmount: 0.22,
+        evaporation: 0.9,
         stepsPerFrame: 1,
       },
     },
@@ -495,14 +523,21 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.397 → 0.542):
+      // low stickiness lets walkers work their way into the fjords instead of
+      // freezing on the first tip they touch, which is what actually produces
+      // a dense cluster. Every metric improves, not just fill — coverage
+      // 0.397 → 0.430, entropy 0.351 → 0.610, autocorrelation 0.519 → 0.660.
+      // walkersPerStep moves 80 → 64 because the sweep held it fixed there; it
+      // sets growth rate, not the morphology of the finished cluster.
       id: "dense-coral",
       label: "Dense coral",
       params: {
-        walkersPerStep: 80,
+        walkersPerStep: 64,
         maxWalkSteps: 400,
-        spawnRadius: 0.03,
-        stickiness: 0.4,
-        seedCount: 3,
+        spawnRadius: 0.06,
+        stickiness: 0.15,
+        seedCount: 4,
       },
     },
     {
@@ -546,14 +581,24 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { birthCount: 2, seedDensity: 0.22, dyingValue: 0.5 },
     },
     {
+      // Retuned 2026-09-06 on the corrected float32 dyingValue kernel
+      // (0.62 -> 0.9, composite 0.051 -> 0.055). dyingValue is the chosen
+      // value from the 2026-09-06 sweep; birthCount and seedDensity are
+      // inherited unchanged. The change is a brighter afterglow, not a
+      // change in dynamics: firing coverage is 0.028 at every swept value.
       id: "sparse-spirals",
       label: "Sparse spirals",
-      params: { birthCount: 2, seedDensity: 0.12, dyingValue: 0.62 },
+      params: { birthCount: 2, seedDensity: 0.12, dyingValue: 0.9 },
     },
     {
+      // Retuned 2026-09-06 on the corrected float32 dyingValue kernel
+      // (0.42 -> 0.9, composite 0.057 -> 0.070). dyingValue is the chosen
+      // value from the 2026-09-06 sweep; birthCount and seedDensity are
+      // inherited unchanged. The change is a brighter afterglow, not a
+      // change in dynamics: firing coverage is 0.034 at every swept value.
       id: "storm",
       label: "Storm",
-      params: { birthCount: 2, seedDensity: 0.36, dyingValue: 0.42 },
+      params: { birthCount: 2, seedDensity: 0.36, dyingValue: 0.9 },
     },
   ],
   mandelbrot: [
@@ -744,14 +789,21 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       params: { states: 14, threshold: 1, neighbourhood: "moore" },
     },
     {
+      // Promoted by the 2026-08-23 interestingness sweep (0.250 → 0.719):
+      // at threshold 3 the medium froze into static noise within ~150 steps
+      // (temporal flux 0.0000, autocorrelation 0.04). Threshold 2 keeps the
+      // same eight states rotating — flux 0.1036, autocorrelation 0.82.
       id: "turbulence",
       label: "Turbulence",
-      params: { states: 8, threshold: 3, neighbourhood: "moore" },
+      params: { states: 8, threshold: 2, neighbourhood: "moore" },
     },
     {
+      // Promoted by the 2026-08-25 fine von Neumann sweep (0.283 → 0.626):
+      // threshold 2 froze completely (flux 0.0000, autocorrelation 0.02), while
+      // threshold 1 sustains distinct diamond waves (flux 0.4625, autocorrelation 0.55).
       id: "crystal-lattice",
       label: "Crystal lattice",
-      params: { states: 12, threshold: 2, neighbourhood: "vonNeumann" },
+      params: { states: 12, threshold: 1, neighbourhood: "vonNeumann" },
     },
   ],
   // muDrift keeps the field reorganising; muDrift 0 is classic static-growth
@@ -790,6 +842,21 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         muDrift: 0.02,
         dt: 0.1,
         radius: 10,
+        stepsPerFrame: 1,
+      },
+    },
+    {
+      // Promoted by the 2026-08-25 radius follow-up (0.414 -> 0.463):
+      // radius, mu and sigma are the winning searched values; muDrift, dt and
+      // stepsPerFrame are inherited unchanged from the stage 62 harness.
+      id: "living-labyrinth",
+      label: "Living labyrinth",
+      params: {
+        mu: 0.24,
+        sigma: 0.028,
+        muDrift: 0.015,
+        dt: 0.1,
+        radius: 14,
         stepsPerFrame: 1,
       },
     },

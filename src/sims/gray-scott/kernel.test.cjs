@@ -44,10 +44,16 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["Du", "Dv", "F", "k", "stepsPerFrame"],
+    ["Du", "Dv", "F", "k", "stencil", "dt", "stepsPerFrame"],
   );
 
   for (const descriptor of kernel.paramSchema) {
+    if (descriptor.type === "enum") {
+      assert.equal(typeof descriptor.default, "string");
+      assert.ok(Array.isArray(descriptor.options));
+      assert.ok(descriptor.options.includes(descriptor.default));
+      continue;
+    }
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -58,6 +64,146 @@ test("metadata matches the renderer contract", () => {
   }
 });
 
+test("stencil defaults to nine-point and unknown values fall back to it", () => {
+  const defaults = defaultsFromSchema(new GrayScottKernel());
+  assert.equal(defaults.stencil, "nine-point");
+
+  const baseline = runKernel({}, 24);
+  assert.deepEqual(runKernel({ stencil: "nine-point" }, 24), baseline);
+  assert.deepEqual(runKernel({ stencil: "seven-point" }, 24), baseline);
+  assert.deepEqual(runKernel({ stencil: 9 }, 24), baseline);
+  assert.notDeepEqual(runKernel({ stencil: "five-point" }, 24), baseline);
+});
+
+test("dt=1 preserves the pre-change five-point path bit-for-bit", () => {
+  const before = runKernel({}, 24);
+
+  assert.deepEqual(runKernel({ dt: 1 }, 24), before);
+  assert.deepEqual(runKernel({ dt: 0 }, 24), before);
+  assert.deepEqual(runKernel({ dt: "1" }, 24), before);
+});
+
+test("sub-unit dt uses compensating substeps and remains selectable", () => {
+  const kernel = new GrayScottKernel();
+  const defaults = defaultsFromSchema(kernel);
+
+  assert.equal(defaults.dt, 1);
+  assert.deepEqual(
+    kernel.paramSchema.find((descriptor) => descriptor.key === "dt"),
+    {
+      key: "dt",
+      label: "Timestep",
+      type: "number",
+      default: 1,
+      min: 0.125,
+      max: 1,
+      step: 0.125,
+      info: "Euler timestep per substep. Smaller values use proportionally more substeps to cover the same simulated time, adding compute while refining the discretisation.",
+      group: "Reaction-diffusion",
+    },
+  );
+
+  const halfStep = runKernel({ dt: 0.5 }, 1);
+  const twoFrames = runKernel({}, 2);
+  assert.notDeepEqual(halfStep, runKernel({}, 1));
+  assert.notDeepEqual(halfStep, twoFrames);
+  assert.deepEqual(runKernel({ dt: 0.5 }, 2), runKernel({ dt: 0.5 }, 2));
+});
+
+/**
+ * Paint a separable sine field into the kernel state, periodic on the torus:
+ * U = 0.5 + amplitude·sin(kx·x)·sin(ky·y), V = 0.25 + (amplitude/2)·sin·sin.
+ * Returns the per-channel amplitudes so the caller can predict the stencil gap.
+ */
+function paintSineField(kernel, width, height, wavelength, amplitude) {
+  const state = kernel.readState();
+  const kx = (2 * Math.PI * (width / wavelength)) / width;
+  const ky = (2 * Math.PI * (height / wavelength)) / height;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const s = Math.sin(kx * x) * Math.sin(ky * y);
+      const index = (y * width + x) * kernel.channelCount;
+      state[index] = 0.5 + amplitude * s;
+      state[index + 1] = 0.25 + (amplitude / 2) * s;
+    }
+  }
+  return { kx, ky, amplitudeU: amplitude, amplitudeV: amplitude / 2 };
+}
+
+/** Largest |a − b| over a channel of two equal-length states. */
+function maxChannelGap(a, b, channel, channelCount) {
+  let gap = 0;
+  for (let index = channel; index < a.length; index += channelCount) {
+    gap = Math.max(gap, Math.abs(a[index] - b[index]));
+  }
+  return gap;
+}
+
+function stepSineField(stencil, width, height, wavelength, amplitude, Du, Dv) {
+  const kernel = new GrayScottKernel();
+  kernel.init(width, height, { Du, Dv, stencil, stepsPerFrame: 1 });
+  const field = paintSineField(kernel, width, height, wavelength, amplitude);
+  kernel.step(1);
+  return { state: Array.from(kernel.readState()), field, kernel };
+}
+
+// Both stencils are second-order accurate; on a smooth field they differ by the
+// diagonal correction alone, (2/3)(1 − cos kx)(1 − cos ky) per unit amplitude,
+// which is the O(h²k⁴) truncation gap between them. Pin that gap on a field
+// that is exactly periodic on the torus, and check it shrinks sixteenfold when
+// the wavelength doubles, as a fourth-order term must.
+test("five- and nine-point stencils agree on a smooth field to the truncation difference", () => {
+  const width = 64;
+  const height = 64;
+  const Du = 0.2097;
+  const Dv = 0.105;
+  const amplitude = 0.2;
+
+  const gaps = [16, 32].map((wavelength) => {
+    const five = stepSineField("five-point", width, height, wavelength, amplitude, Du, Dv);
+    const nine = stepSineField("nine-point", width, height, wavelength, amplitude, Du, Dv);
+    const { kx, ky, amplitudeU, amplitudeV } = five.field;
+    const diagonalCorrection = (2 / 3) * (1 - Math.cos(kx)) * (1 - Math.cos(ky));
+
+    const measuredU = maxChannelGap(five.state, nine.state, 0, 2);
+    const measuredV = maxChannelGap(five.state, nine.state, 1, 2);
+    const expectedU = Du * diagonalCorrection * amplitudeU;
+    const expectedV = Dv * diagonalCorrection * amplitudeV;
+
+    assert.ok(measuredU > 0, "stencils must not be identical on a curved field");
+    assert.ok(
+      Math.abs(measuredU - expectedU) < 0.01 * expectedU,
+      `U gap ${measuredU} vs truncation difference ${expectedU} at wavelength ${wavelength}`,
+    );
+    assert.ok(
+      Math.abs(measuredV - expectedV) < 0.01 * expectedV,
+      `V gap ${measuredV} vs truncation difference ${expectedV} at wavelength ${wavelength}`,
+    );
+    return measuredU;
+  });
+
+  const ratio = gaps[0] / gaps[1];
+  assert.ok(ratio > 14 && ratio < 18, `fourth-order gap ratio ${ratio}`);
+});
+
+test("both stencils leave a uniform field uniform", () => {
+  for (const stencil of ["five-point", "nine-point"]) {
+    const kernel = new GrayScottKernel();
+    kernel.init(16, 16, { stencil, stepsPerFrame: 3 });
+    const state = kernel.readState();
+    for (let index = 0; index < state.length; index += 2) {
+      state[index] = 0.6;
+      state[index + 1] = 0.3;
+    }
+    kernel.step(1);
+    const first = { u: state[0], v: state[1] };
+    for (let index = 0; index < state.length; index += 2) {
+      assert.equal(state[index], first.u, stencil);
+      assert.equal(state[index + 1], first.v, stencil);
+    }
+  }
+});
+
 test("schema defaults use waves regime at gentler pace", () => {
   const defaults = defaultsFromSchema(new GrayScottKernel());
 
@@ -65,7 +211,8 @@ test("schema defaults use waves regime at gentler pace", () => {
   assert.equal(defaults.Dv, 0.105);
   assert.equal(defaults.F, 0.018);
   assert.equal(defaults.k, 0.0487);
-  assert.equal(defaults.stepsPerFrame, 12);
+  assert.equal(defaults.dt, 1);
+  assert.equal(defaults.stepsPerFrame, 1);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {

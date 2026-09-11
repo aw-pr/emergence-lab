@@ -8,7 +8,7 @@ import {
   RE_MAX,
   RE_MIN,
   cellCoordinate,
-  estimatePeriod,
+  periodDetectionWindow,
   sampleAttractorCell,
 } from "./model.js";
 
@@ -47,7 +47,9 @@ const MAX_SAMPLE_COUNT = 96;
 // Kernel defaults tuned by eye: the long warmup shrinks the unresolved
 // fringe at bulb boundaries, which reads far clearer. Samples stay low
 // because the GPU point budget is fixed — cells × samples = budget, so
-// raising samples thins the cloud's spatial coverage of the c-plane.
+// raising samples thins the cloud's spatial coverage of the c-plane. It no
+// longer caps the detectable period: the period test runs over
+// periodDetectionWindow(sampleCount) iterates regardless.
 // Plotted iterations defaults to the ceiling, meaning "plot every sample"
 // at any sample count. The model's DEFAULT_* constants stay at the
 // sampler's own reference values.
@@ -65,7 +67,8 @@ const DISTINCT_LEVEL_CAP = 32;
 /**
  * Sampling the whole grid at once would stall init on large grids, so cells
  * are swept across step() calls under an iteration budget. The per-cell cost
- * estimate covers the orbit iterations plus sample analysis.
+ * estimate covers the orbit iterations — warmup plus the period detection
+ * window, which subsumes the plot window — plus sample analysis.
  */
 const STEP_ITERATION_BUDGET = 3_500_000;
 const ANALYSIS_COST_PER_SAMPLE = 34;
@@ -152,7 +155,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "edgeGlow",
       label: "Edge glow",
       type: "number",
-      default: 0.6,
+      default: 0,
       min: 0,
       max: 2,
       step: 0.05,
@@ -364,7 +367,9 @@ export class LogisticMandelbrotKernel implements SimKernel {
 
     this.cursor = 0;
     const costPerCell =
-      this.warmupIterations + this.sampleCount * ANALYSIS_COST_PER_SAMPLE;
+      this.warmupIterations +
+      periodDetectionWindow(this.sampleCount) +
+      this.sampleCount * ANALYSIS_COST_PER_SAMPLE;
     this.cellsPerStep = Math.max(
       MIN_CELLS_PER_STEP,
       Math.floor(STEP_ITERATION_BUDGET / costPerCell),
@@ -403,11 +408,12 @@ export class LogisticMandelbrotKernel implements SimKernel {
         continue;
       }
 
+      // Period is whatever the detection window found. Plotting fewer of the
+      // kept iterates thins the cloud; it does not make the cell's orbit a
+      // different length, and clamping the period to it was the same defect
+      // as clamping it to sampleCount.
       this.state[base] = 1 / this.countDistinctLevels(offset);
-      this.state[base + 1] =
-        this.plottedIterations < this.sampleCount
-          ? estimatePeriod(this.samples, offset, this.plottedIterations)
-          : result;
+      this.state[base + 1] = result;
     }
 
     this.cursor = end;

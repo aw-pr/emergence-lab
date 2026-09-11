@@ -54,6 +54,7 @@ in float a_boundary;
 in float a_weight;
 uniform mat4 u_viewProjection;
 uniform float u_pointSize;
+uniform float u_cameraZoomOffset;
 uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
@@ -80,6 +81,14 @@ out float v_sliceGlow;
 out float v_markerGlow;
 out float v_selfGlow;
 out float v_energy;
+out float v_spread;
+
+// How fast a splat grows with the zoom magnification, and how much of its
+// intensity it keeps while it grows. A flux exponent of 2.0 is exact
+// conservation: a splat twice as wide is a quarter as bright per pixel, so
+// the light the sheet emits is the same whatever the camera distance.
+const float POINT_GROWTH_EXPONENT = 0.5;
+const float POINT_FLUX_EXPONENT = 2.0;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -206,9 +215,33 @@ void main() {
   // Light every Im(c) depth at the active Re(c), forming a full orbit slice.
   v_markerGlow = u_fanActive
     * (1.0 - smoothstep(0.006, 0.025, abs(age)));
-  gl_PointSize = u_pointSize
+  float baseSize = u_pointSize
     * mix(1.0, 5.5, v_markerGlow)
     * mix(1.0, 1.25, min(v_selfGlow, 1.0));
+  // clip.w is eye-space depth. Referencing the same pose at the opening
+  // distance preserves every original splat when no zoom has been applied.
+  float depthScale = 1.0 + u_cameraZoomOffset / max(gl_Position.w, 0.05);
+  // Samples are denser than the pixel grid at the opening distance, so a
+  // splat already overlaps its neighbours there. Growing it linearly with the
+  // magnification holds that overlap ratio fixed, which is invisible while
+  // the splat is a dot and reads as a blur kernel once the same ratio means
+  // 32 px. Growing with POINT_GROWTH_EXPONENT closes the gaps the
+  // magnification opens while keeping the splat a small multiple of the
+  // sample pitch.
+  float unzoomedSize = clamp(baseSize, 1.8, 32.0);
+  float sizedPoint = clamp(
+    baseSize * pow(max(1.0, depthScale), POINT_GROWTH_EXPONENT),
+    1.8,
+    32.0
+  );
+  gl_PointSize = sizedPoint;
+  // A splat is a fixed quantity of light. Under additive blending, holding
+  // its peak intensity while its footprint grows multiplies what the sheet
+  // emits by the footprint area, and that, not the sample pitch, is what
+  // saturated the near face at the zoom clamp. Spreading the same flux over
+  // the larger footprint fills the gaps out of light the splat already had.
+  float footprintGain = max(1.0, sizedPoint / unzoomedSize);
+  v_spread = pow(footprintGain, -POINT_FLUX_EXPONENT);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
@@ -378,6 +411,9 @@ in float v_sliceGlow;
 in float v_markerGlow;
 in float v_selfGlow;
 in float v_energy;
+// Reciprocal footprint area of a depth-grown splat, so its light spreads
+// with its size instead of accumulating with it.
+in float v_spread;
 // 1.0 in cycle colour mode: the beam trades its fixed cyan for the cycling
 // palette hue carried per point in v_cycleHue.
 uniform float u_cycleBeam;
@@ -413,7 +449,8 @@ void main() {
     + vec3(1.0) * sparkle * 1.8
   );
   outColor = vec4(
-    (pointLight + fanLight + sliceLight + markerLight + selfLight) * v_energy,
+    (pointLight + fanLight + sliceLight + markerLight + selfLight)
+      * v_energy * v_spread,
     max(core, haze * 0.62)
   );
 }
@@ -635,11 +672,10 @@ const CAMERA_FAR_PLANE = 20;
 const CAMERA_MIN_DISTANCE = 0.35;
 const CAMERA_PAN_LIMIT = 1.6;
 const CAMERA_MAX_DISTANCE = 12;
-// The full raised tier fits under the reference display's vsync boundary only
-// once the camera is this close. A small exit hysteresis prevents a camera
-// hovering at the threshold from repeatedly restarting the temporal fade.
-const BOUNDARY_DETAIL_SHOW_DISTANCE = 0.9;
-const BOUNDARY_DETAIL_HIDE_DISTANCE = 0.95;
+// Reveal the finer tier before the eye enters the cloud's bounding sphere.
+// A small exit hysteresis prevents threshold jitter from restarting the fade.
+const BOUNDARY_DETAIL_SHOW_DISTANCE = 2.8;
+const BOUNDARY_DETAIL_HIDE_DISTANCE = 2.85;
 const BOUNDARY_DETAIL_FADE_MS = 300;
 const MARKER_PLANE_ORBIT_VALUE = -2.08;
 const DEFAULT_CAMERA_EYE = [2.9, 2.15, -3.6] as const;
@@ -895,6 +931,7 @@ export class Orbit3DPointCloud {
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
   private readonly pointSizeUniform: WebGLUniformLocation;
+  private readonly cameraZoomOffsetUniform: WebGLUniformLocation;
   private readonly colourModeUniform: WebGLUniformLocation;
   // Nullable: the point shader's dedicated cycle wheel means the palette
   // sampler may be optimised out as inactive; a null location is silently
@@ -954,6 +991,7 @@ export class Orbit3DPointCloud {
   private boundaryDetailFadeProgress = 0;
   private boundaryDetailFadeUpdatedAt: number | null = null;
   private camera = defaultCameraState();
+  private manualCameraDistance = false;
   private marker: Orbit3DMarkerReadout = {
     re: DEFAULT_MARKER_RE,
     im: DEFAULT_MARKER_IM,
@@ -1038,6 +1076,10 @@ export class Orbit3DPointCloud {
     this.pointSizeUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_pointSize"),
       "orbit3d point-size uniform",
+    );
+    this.cameraZoomOffsetUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_cameraZoomOffset"),
+      "orbit3d camera zoom offset uniform",
     );
     this.colourModeUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_colourMode"),
@@ -1206,6 +1248,17 @@ export class Orbit3DPointCloud {
     return { ...this.marker };
   }
 
+  get cameraReadout(): Readonly<OrbitCameraState> {
+    return { ...this.camera, target: [...this.camera.target] };
+  }
+
+  get boundaryDetailOpacity(): number {
+    const progress = this.boundaryDetailFadeProgress;
+    return this.boundaryDetail === "active"
+      ? progress * progress * (3 - 2 * progress)
+      : 0;
+  }
+
   get ready(): boolean {
     return !this.building && this.fullPointCount > 0;
   }
@@ -1273,26 +1326,44 @@ export class Orbit3DPointCloud {
       maxDelta,
       Math.max(-maxDelta, targetElevation - this.camera.elevation),
     );
-    this.camera.distance += Math.min(
-      maxDelta * 2,
-      Math.max(-maxDelta * 2, targetDistance - this.camera.distance),
-    );
+    if (!this.manualCameraDistance) {
+      this.camera.distance += Math.min(
+        maxDelta * 2,
+        Math.max(-maxDelta * 2, targetDistance - this.camera.distance),
+      );
+    }
   }
 
-  dolly(factor: number): void {
-    if (!Number.isFinite(factor) || factor <= 0) return;
-    this.camera.distance = Math.min(
+  dolly(factor: number, viewportX = 0.5, viewportY = 0.5, aspect = 1): void {
+    if (
+      !Number.isFinite(factor) || factor <= 0 ||
+      !Number.isFinite(viewportX) || !Number.isFinite(viewportY) ||
+      !Number.isFinite(aspect) || aspect <= 0
+    ) return;
+    const distance = Math.min(
       CAMERA_MAX_DISTANCE,
       Math.max(CAMERA_MIN_DISTANCE, this.camera.distance * factor),
     );
+    const approach = 1 - distance / this.camera.distance;
+    // Translate eye and target along the pointer ray. Every point on that
+    // ray keeps its projection (until passed); pan clips the translation
+    // continuously at the target bounds, using the actual clamped dolly.
+    this.pan(
+      (0.5 - viewportX) * Math.max(0.25, aspect) * approach,
+      (0.5 - viewportY) * approach,
+    );
+    this.camera.distance = distance;
+    this.manualCameraDistance = true;
   }
 
   resetCamera(): void {
     this.camera = defaultCameraState();
+    this.manualCameraDistance = false;
   }
 
   setCameraPose(pose: Orbit3DCameraPose): void {
     this.camera = pose === "side" ? sideCameraState() : defaultCameraState();
+    this.manualCameraDistance = false;
   }
 
   projectMarker(width: number, height: number): Orbit3DProjectedPoint | null {
@@ -1440,6 +1511,7 @@ export class Orbit3DPointCloud {
   ): void {
     this.cancelBuild();
     this.resetBoundaryDetailFade();
+    this.manualCameraDistance = false;
     this.buildFailed = false;
     const generation = this.buildGeneration;
     const inputWidth = Math.max(1, Math.floor(width));
@@ -3121,7 +3193,7 @@ export class Orbit3DPointCloud {
     paletteReverse = false,
     drawDensity = 1,
     surfaceOpacity = 0.4,
-    edgeGlow = 0.6,
+    edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
@@ -3177,6 +3249,10 @@ export class Orbit3DPointCloud {
     gl.uniform1f(
       this.pointSizeUniform,
       Math.min(3, Math.max(1.8, width / 650)),
+    );
+    gl.uniform1f(
+      this.cameraZoomOffsetUniform,
+      Math.max(0, defaultCameraState().distance - this.camera.distance),
     );
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(this.paletteUniform, 3);

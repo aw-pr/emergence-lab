@@ -4,6 +4,7 @@ const { spawnSync } = require("node:child_process");
 
 const SIMS_DIR = join(process.cwd(), "src", "sims");
 const APP_DIR = join(process.cwd(), "src", "app");
+const HARNESS_DIR = join(process.cwd(), "e2e", "harness");
 
 function findTests(dir, isMatch) {
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -32,9 +33,15 @@ if (!statSync(SIMS_DIR, { throwIfNoEntry: false })?.isDirectory()) {
 
 // Kernel tests live one per sim directory; app-level unit tests (e.g. shared
 // quality/device logic) live alongside the module they cover under src/app.
+// The sweep harness under e2e/harness is pure numerics with no browser
+// dependency, so its unit tests belong in this fast gate rather than behind
+// Playwright; they require the .ts sources directly under type stripping.
 const tests = [
   ...findTests(SIMS_DIR, (name) => name.endsWith(".test.cjs")),
   ...findTests(APP_DIR, (name) => name.endsWith(".test.cjs")),
+  ...(statSync(HARNESS_DIR, { throwIfNoEntry: false })?.isDirectory()
+    ? findTests(HARNESS_DIR, (name) => name.endsWith(".test.cjs"))
+    : []),
 ].sort();
 
 if (tests.length === 0) {
