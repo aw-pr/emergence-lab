@@ -13,7 +13,7 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Gate:** stage-completed: 87-logistic-mandelbrot-zoom-diagnostic
-- **Path claims:** src/app/orbit3d.ts, src/app/fractalCanvas.ts, src/app/renderer.ts, src/app/webglRenderer.ts, src/app/simView.ts, e2e/smoke.spec.ts
+- **Path claims:** src/app/orbit3d.ts, src/app/fractalCanvas.ts, src/app/renderer.ts, src/app/webglRenderer.ts, src/app/rendererBackend.ts, src/app/simView.ts, e2e/smoke.spec.ts
 - **Pairing rationale:** cross-family, worker chosen for the task. This is
   interaction plumbing across five files with a live camera invariant to hold,
   which is the software-engineering shape Astra is the frontier seat for. The
@@ -290,3 +290,35 @@ Read the deliverables and criteria with these amendments:
 - **Path claims** are unchanged; deliverable 6 lives in `src/app/orbit3d.ts`.
 - **Token baseline** rises to worker 6.5M for the extra deliverable; the
   stop-and-report line moves to 10.0M.
+
+## Re-brief 2026-09-11 (attempt 2): the path claims omitted `rendererBackend.ts`
+
+Attempt 1 (GPT-6 Astra) landed deliverables 1, 3, 4, 5 and 6 and the verifier
+passed seven of eight criteria on them: `npm run verify` green, the gate
+clean, the spin-parameterised regression test at `e2e/smoke.spec.ts:302-338`,
+the hold measured at zero drift over 15 s in both configurations, the
+default view pose-matched to card 87's frame 01, and the boundary-detail
+tier now visible below the new show threshold. It stopped short of
+deliverable 2 because the typed dolly chain runs through
+`src/app/rendererBackend.ts` (`orbit3dDolly?(factor: number): void`), which
+the card did not claim, and the worker correctly declined to edit an
+unclaimed file. That was a card defect, now fixed: the Path claims line above
+includes `src/app/rendererBackend.ts`.
+
+Attempt 1's work is preserved at `062fc3f2` on
+`wip/88-logistic-mandelbrot-zoom-camera-repair-attempt-1` (`e2e/smoke.spec.ts`,
+`src/app/orbit3d.ts`, `src/app/webglRenderer.ts`). **Start from it**: in your
+fresh worktree run `git checkout 062fc3f2 -- e2e/smoke.spec.ts src/app/orbit3d.ts
+src/app/webglRenderer.ts`, confirm `npm run verify` is green, then finish
+deliverable 2 only: extend the `orbit3dDolly` declaration with optional
+viewport coordinates, forward `ev.clientX`/`ev.clientY` from the wheel and
+pinch handlers in `src/app/fractalCanvas.ts` (the option type at `:106` and
+the calls at `:205` and `:271`), through `src/app/simView.ts:916` and
+`src/app/renderer.ts` to the dolly core attempt 1 already wrote in
+`src/app/orbit3d.ts`, normalising against the canvas rectangle. Do not redo
+deliverables 1, 3, 4, 5 and 6, and do not change what attempt 1 wrote there
+unless deliverable 2 requires it; say so if it does. The verifier's frames
+for criteria 6, 7 and 8 stand; the second verification re-checks criterion 5
+by eye on a captured pair plus criteria 1-3 mechanically, and spot-checks 4.
+The token baseline for this attempt is 3.0M on the worker; stop and report
+above 5.0M.
