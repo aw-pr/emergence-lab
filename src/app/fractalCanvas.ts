@@ -103,7 +103,9 @@ export interface LogisticMandelbrotCanvasInteractionOptions {
   ) => Orbit3DMarkerClientSnapshot | null;
   orbit: (deltaCssX: number, deltaCssY: number) => void;
   pan: (deltaCssX: number, deltaCssY: number) => void;
-  dolly: (factor: number) => void;
+  /** clientX/clientY anchor the dolly on that viewport point; omit both to
+   * dolly on the orbit target. */
+  dolly: (factor: number, clientX?: number, clientY?: number) => void;
   resetCamera: () => void;
   onMarkerChange: (marker: Orbit3DMarkerClientSnapshot) => void;
 }
@@ -202,7 +204,11 @@ export function attachLogisticMandelbrotCanvasInteractions(
           after[0].clientY - after[1].clientY,
         );
         if (beforeDistance > 0 && afterDistance > 0) {
-          options.dolly(Math.min(1.25, Math.max(0.8, beforeDistance / afterDistance)));
+          options.dolly(
+            Math.min(1.25, Math.max(0.8, beforeDistance / afterDistance)),
+            (after[0].clientX + after[1].clientX) / 2,
+            (after[0].clientY + after[1].clientY) / 2,
+          );
         }
         const centroidDx =
           (after[0].clientX + after[1].clientX - before[0].clientX - before[1].clientX) / 2;
@@ -268,7 +274,7 @@ export function attachLogisticMandelbrotCanvasInteractions(
           ? 0.08
           : 0.0015;
       const factor = Math.exp(ev.deltaY * sensitivity);
-      options.dolly(Math.min(1.35, Math.max(1 / 1.35, factor)));
+      options.dolly(Math.min(1.35, Math.max(1 / 1.35, factor)), ev.clientX, ev.clientY);
     },
     { passive: false, signal },
   );

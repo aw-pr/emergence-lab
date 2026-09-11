@@ -299,6 +299,78 @@ for (const slug of ["mandelbrot", "julia-set"]) {
   });
 }
 
+for (const continuousSpin of [false, true]) {
+  test(`logistic-Mandelbrot manual zoom holds after ambient motion resumes: spin=${continuousSpin}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/#/logistic-mandelbrot");
+    const canvas = page.locator(".sim-view__canvas");
+    await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
+    await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+    // The immersive view parks the controls off screen, so dispatch the
+    // checkbox's normal input event without moving the camera to reach it.
+    await page.locator('[data-param-key="continuousSpin"]').evaluate((element, checked) => {
+      const input = element as HTMLInputElement;
+      input.checked = checked;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }, continuousSpin);
+    await expect(page.locator('[data-param-key="continuousSpin"]')).toBeChecked({ checked: continuousSpin });
+    const distance = async () => Number(await canvas.getAttribute("data-orbit3d-camera-distance"));
+    const before = await distance();
+    expect(before).toBeGreaterThan(0);
+    await canvas.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      for (let step = 0; step < 8; step += 1) {
+        element.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true, cancelable: true,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+          deltaY: -100,
+        }));
+      }
+    });
+    const zoomed = await distance();
+    expect(zoomed).toBeLessThan(before * 0.5);
+    const azimuth = Number(await canvas.getAttribute("data-orbit3d-camera-azimuth"));
+    await page.waitForTimeout(15_000);
+    expect(Math.abs(await distance() - zoomed) / zoomed).toBeLessThanOrEqual(0.02);
+    expect(await distance()).toBeLessThan(before * 0.5);
+    expect(Math.abs(Number(await canvas.getAttribute("data-orbit3d-camera-azimuth")) - azimuth)).toBeGreaterThan(0.01);
+    await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete");
+  });
+}
+
+test("orbit camera dolly preserves an off-axis world point from rotated poses", async ({ page }) => {
+  await page.goto("/");
+  const errors = await page.evaluate(async () => {
+    const { Orbit3DPointCloud } = await import("/src/app/orbit3d.ts");
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) throw new Error("WebGL2 is required for the orbit camera regression");
+    const cloud = new Orbit3DPointCloud(gl);
+    const errors: number[] = [];
+    try {
+      for (const pose of ["default", "side"] as const) {
+        for (const [width, height] of [[1280, 720], [720, 1280]]) {
+          for (const factor of [0.8, 1.2]) {
+            cloud.setCameraPose(pose);
+            cloud.orbit(0.4, 0.15);
+            cloud.setMarker(-1, 0.2);
+            const before = cloud.projectMarker(width, height)!;
+            cloud.dolly(factor, before.x, before.y, width / height);
+            const after = cloud.projectMarker(width, height)!;
+            errors.push(Math.max(Math.abs(before.x - after.x), Math.abs(before.y - after.y)));
+          }
+        }
+      }
+    } finally {
+      cloud.destroy();
+    }
+    return errors;
+  });
+  // Projection matrices are float32; the target translation itself uses doubles.
+  for (const error of errors) expect(error).toBeLessThan(1e-6);
+});
+
 test("shared fractal transforms preserve the pointer coordinate", async ({ page }) => {
   const errors = await page.evaluate(async () => {
     const { complexAtPoint, zoomAroundPoint } = await import("/src/app/fractalView.ts");

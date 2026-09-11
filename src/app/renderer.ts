@@ -388,9 +388,24 @@ export class Renderer {
     this.draw();
   }
 
-  dollyOrbit3d(factor: number): void {
+  /** clientX/clientY are viewport pixels (e.g. from a wheel or pinch event);
+   * omit both to dolly on the orbit target as before. */
+  dollyOrbit3d(factor: number, clientX?: number, clientY?: number): void {
     this.pauseOrbit3dAutoRotate();
-    this.backend.orbit3dDolly?.(factor);
+    const rect = this.canvas.getBoundingClientRect();
+    if (
+      clientX !== undefined && clientY !== undefined &&
+      rect.width > 0 && rect.height > 0
+    ) {
+      this.backend.orbit3dDolly?.(
+        factor,
+        (clientX - rect.left) / rect.width,
+        (clientY - rect.top) / rect.height,
+        rect.width / rect.height,
+      );
+    } else {
+      this.backend.orbit3dDolly?.(factor);
+    }
     this.draw();
   }
 
