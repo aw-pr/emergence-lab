@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-10
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Sonnet 5 <claude-sonnet-5@local>
+- **Worker:** Claude Fable 5.1 <claude-fable-5-1@local>
 - **Verifier:** GPT-6 Astra <gpt-6-astra@local>
 - **Base branch:** dev
 - **Run branch:** autometta/87-logistic-mandelbrot-zoom-diagnostic
@@ -243,3 +243,13 @@ from 21:43Z. Nothing about the card was wrong; the seat moves to Sonnet 5 as
 the cheaper Claude seat that can still drive the browser. The verifier stays
 on GPT-6 Astra, so the pairing remains cross-family. Attempt 3's frames were
 under a temp dir and are not preserved; this attempt starts clean.
+
+## Re-card 2026-09-11 (attempt 5): worker seat moved to Claude Fable 5.1
+
+Attempt 4 on Sonnet 5 never received its first response: seventeen transcript
+rows, no tool call, closed sockets, silent for twelve minutes. So the hang is
+not Opus-specific. Every hang tonight is a request that never returns while
+status.claude.com carries an open latency incident, and the only Claude seat
+that has run clean through the same hours is Fable 5.1. The seat moves there
+for one attempt; the verifier stays GPT-6 Astra. If this attempt hangs as
+well, the stage is held until the incident clears rather than re-dispatched.
