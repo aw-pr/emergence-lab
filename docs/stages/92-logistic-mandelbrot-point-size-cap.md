@@ -71,7 +71,13 @@ and 05 in card 91's audit are what a revert would lose.
    Choose one, or a combination, and say why in the audit. The choice is the
    card's job; the constraint is that the fix must hold at the clamp *and* at
    the intermediate distances card 91 measured (`d = 1.32` and the default
-   `d = 5.10`).
+   `d = 5.10`). The tuning surface includes the point fragment shader's
+   `haze`, `core` and `sparkle` radii (`src/app/orbit3d.ts:392-396`), not
+   only the vertex-stage size. The operator's own screenshot at the clamp
+   reads as a gaussian blur, not just a bright patch: a 32 px sprite whose
+   haze fades across its whole radius is a blur kernel, so the falloff
+   profile at large sizes matters as much as the diameter. A lower ceiling
+   alone is expected to trade the blur for the lattice.
 2. **A re-shoot of card 91's pair 04** at `d = 0.35000`, `az = 1.0240`,
    `el = 0.4353`, kernel defaults, zoomed to the clamp and untouched for 10 s,
    using card 91's rig (`--use-angle=metal --enable-gpu`, 1440x900 CSS at
@@ -105,9 +111,11 @@ and 05 in card 91's audit are what a revert would lose.
 - The frozen block in `src/sims/logistic-mandelbrot/gpu-parity.test.cjs`
   (`sha256:111b37b263b2afb8137c4628eae41ec55f035d2a2c8955f939ad82816d7be30e`)
   is out of this card's claims and must not drift. The shader change is in
-  the vertex stage of the point pass, not in the sampler.
+  the point pass (vertex size and, if needed, fragment falloff), not in the
+  sampler.
 - Do not commit anything under `public/baked/`.
-- One shader change. If the chosen shape needs a new uniform, add it; if it
+- One coherent change to the point pass, size and falloff together if the
+  shape needs both. If the chosen shape needs a new uniform, add it; if it
   needs a new control in the UI, stop and report, because that is a different
   card.
 
