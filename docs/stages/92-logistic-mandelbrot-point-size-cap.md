@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-11
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Opus 5 <claude-opus-5@local>
+- **Worker:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/92-logistic-mandelbrot-point-size-cap
@@ -13,7 +13,7 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Gate:** stage-completed: 91-logistic-mandelbrot-detail-adjudication
-- **Path claims:** src/app/orbit3d.ts, e2e/smoke.spec.ts, docs/images, docs/audits/2026-09-11-logistic-mandelbrot-point-size-cap.md
+- **Path claims:** src/app/orbit3d.ts, e2e/smoke.spec.ts, playwright.config.ts, docs/images, docs/audits/2026-09-11-logistic-mandelbrot-point-size-cap.md
 - **Pairing rationale:** both seats Claude, for the reason cards 85 and 91 gave:
   the worker has to shoot frames to tune against a pixel statistic, and the
   verifier has to re-shoot the same frame and look at it, and a Codex seat
@@ -225,3 +225,64 @@ but exit 127; run `npm ci` first.
 The luma and `|lap|` figures come from card 91's measurement script if it
 committed one; if it did not, the audit's "Measurement conditions" section
 describes the computation and a few lines of Node with `pngjs` reproduce it.
+
+## Re-brief 2026-09-11 (attempt 2): the harness needs the GPU flags the card put out of scope
+
+Attempt 1 (Claude Opus 5) landed the fix and the verifier passed seven of
+eight criteria on it, recomputing every figure from the committed frames with
+its own pipeline: whole-frame pixels above luma 200 at 0.0066% against the
+20% gate, the crop continuous at mean `|lap|` 3.155, the leaf and filigree
+legible, the default view moved 0.6 points inside the 1-point tolerance. The
+shape chosen is square-root growth of the splat with its light divided by
+its footprint area, so the sheet's surface brightness is zoom-invariant.
+That work is not in question and must not be redone.
+
+It failed criterion 8 alone. The new e2e test passes under a Chromium
+launched with `--use-angle=metal --enable-gpu` (2% blown out) and fails under
+the repo's checked-in `playwright.config.ts`, which sets no launch flags, so
+Chromium falls back to SwiftShader and the software path reads 40% blown out
+at the same pose. This is the harness gap card 91 recorded and this card put
+out of scope. That was a card defect, now fixed: the Path claims line above
+includes `playwright.config.ts`, and the "Out of scope" bullet about it no
+longer applies.
+
+Attempt 1's work is preserved at `17116ccf` on
+`wip/92-logistic-mandelbrot-point-size-cap-attempt-1`. **Start from it**: in
+your fresh worktree run
+
+```
+git checkout 17116ccf -- src/app/orbit3d.ts e2e/smoke.spec.ts \
+  docs/audits/2026-09-11-logistic-mandelbrot-point-size-cap.md \
+  docs/images/2026-09-11-logistic-mandelbrot-point-size-01-default-view.png \
+  docs/images/2026-09-11-logistic-mandelbrot-point-size-03-period-2-bulb.png \
+  docs/images/2026-09-11-logistic-mandelbrot-point-size-04-hold-10s.png \
+  docs/images/2026-09-11-logistic-mandelbrot-point-size-crop-sheet-swirls.png
+```
+
+confirm `npm run verify` is green, then do one thing: give the repo's
+Playwright config the launch flags this machine's WebGL2 path needs, so the
+regression test and card 88's zoom tests pass when run exactly as
+`npx playwright test e2e/smoke.spec.ts` runs them. The expected shape is
+`use.launchOptions.args` set to `["--use-angle=metal", "--enable-gpu"]`,
+guarded on `process.platform === "darwin"` so a Linux runner is not handed a
+Metal flag. Add a one-paragraph note to the audit recording the change and
+the two figures the verifier measured (2% with the flags, 40% without),
+because that pair is the evidence the harness gate was real.
+
+Do not touch the shader, the test's threshold, the frames or the audit's
+numbers. If the test still fails under the repo config with the flags in
+place, stop and report the figure it reads rather than tuning anything;
+that is a finding about the harness, not about the fix.
+
+- **Criterion 8, clarified.** "Runs under the repo's Playwright config"
+  means the checked-in `playwright.config.ts` after this attempt's change,
+  with no scratch config and no flags passed by hand.
+- **Criterion 1, extended.** `npm run verify` green, and additionally the
+  full `e2e/smoke.spec.ts` file passes under the repo config, so the new
+  flags have not broken any other e2e case.
+- **Budget for this attempt.** Worker 1.5M tokens, stop-and-report at 3.0M.
+  Verifier unchanged. Criteria 3 to 7 may be verified against attempt 1's
+  verdict in `state/verifiers/` history if the committed frames are
+  byte-identical to `17116ccf`; recompute criterion 4 regardless, it is
+  cheap.
+
