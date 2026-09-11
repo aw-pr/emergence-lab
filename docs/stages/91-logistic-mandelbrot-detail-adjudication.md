@@ -12,7 +12,7 @@
 - **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
-- **Gate:** stage-completed: 90-logistic-mandelbrot-windowed-domain
+- **Gate:** stage-completed: 89-logistic-mandelbrot-period-detection-window
 - **Path claims:** docs/images, docs/audits/2026-09-11-logistic-mandelbrot-detail-adjudication.md
 - **Pairing rationale:** both seats Claude, deliberately, and the repo has done
   this before for the same reason (stage 85, 2026-09-07). The deliverable is
@@ -185,3 +185,25 @@ the WebGL2 canvas crashes the headless browser on this machine.
 
 The run worktree needs `node_modules` before `npm run verify` will do anything
 but exit 127.
+
+## Re-brief 2026-09-11, before first dispatch: card 90 was superseded
+
+Cards 88 and 89 landed (`3600fdaa`, `b5f8c6b6`); card 90 was retired
+unimplemented because card 87's audit ranks the fixed sample domain as "not a
+defect" and every cause it does rank is addressed by 88 and 89. The gate above
+now reads 89. Read the card with these amendments:
+
+- Wherever the card refers to "card 90's control", "card 90's own acceptance"
+  or `state/verifiers/90-logistic-mandelbrot-windowed-domain.json`, there is no
+  such control and no such verdict; the file to read for 90 is its card's
+  "Superseded" section, one paragraph. Deliverable 4 may still recommend a
+  windowed domain as a further card if the frames argue for one, but it is a
+  recommendation against the audit's finding and must say so.
+- Criterion 6 (both states of card 90's control captured) is void; the matched
+  set covers one state, the shipped defaults after 88 and 89.
+- The Escalation clause's "fewer than two of 88, 89 and 90" does not fire: two
+  landed. The scorecard (deliverable 3) covers card 87's five ranked defects
+  against what 88 and 89 changed.
+- The before frames are card 87's five at `docs/images/2026-09-11-logistic-mandelbrot-zoom-0*.png`;
+  the after frames must be captured at the same poses, which card 87's audit
+  records in its "Frames" section.

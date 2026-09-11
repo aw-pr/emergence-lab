@@ -256,3 +256,16 @@ WebGL2 canvas crashes the headless browser on this machine.
 
 The run worktree needs `node_modules` before `npm run verify` will do anything
 but exit 127.
+
+## Superseded 2026-09-11
+
+Retired at orchestrator decision after one dispatch. The GPT-6 Astra worker
+stopped under this card's own Escalation clause at 06:00Z, 268k tokens, no
+files changed: card 87's audit ranks the period window, the hidden
+boundary-detail tier and the constant point size as the causes of missing
+close-up detail, and states in terms that "the sample pitch itself" is not a
+defect, because the live grid is already finer than the point size can draw.
+All three ranked causes landed in cards 88 and 89. A windowed domain would put
+more points behind the same dots. The card file stays so the reasoning
+survives; nothing here should be dispatched without a fresh measurement that
+contradicts the audit.
