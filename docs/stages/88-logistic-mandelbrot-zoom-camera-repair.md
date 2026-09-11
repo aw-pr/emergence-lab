@@ -237,3 +237,56 @@ WebGL2 canvas crashes the headless browser on this machine.
 
 The run worktree needs `node_modules` before `npm run verify` will do anything
 but exit 127.
+
+## Re-brief 2026-09-11, before first dispatch: card 87's audit corrects deliverable 1
+
+Card 87's audit (`docs/audits/2026-09-11-logistic-mandelbrot-zoom-and-resolution-ceiling.md`,
+section A4 and ranked defect 5) measured the camera **holding** the zoomed
+distance exactly, indefinitely, at the shipped defaults: `0.35` at every one of
+31 readings over 15 s. The reel-out this card was written against is real but
+**conditional**: it fires only when "Continuous camera spin" (`continuousSpin`,
+default `true` at `src/sims/logistic-mandelbrot/kernel.ts:205`) is unticked,
+which routes `advanceOrbit3dCamera` (`src/app/renderer.ts:649-665`) into
+`syncCameraToSweep`. Measured in that configuration: `0.35 -> 1.93 -> 4.48`
+over 10 s, and elevation dragged `0.4353 -> 0.2462`. The audit's ranked list
+puts the period window and the hidden boundary-detail tier above every camera
+defect; those are cards 89 and this re-brief's deliverable 6 respectively.
+
+The Escalation clause's first paragraph does **not** apply: the camera holds at
+defaults, but there is still a defect to fix, so do not withdraw deliverable 1.
+Read the deliverables and criteria with these amendments:
+
+- **Deliverable 1, amended.** The hold must be unconditional: with "Continuous
+  camera spin" unticked, a manual zoom must survive `syncCameraToSweep` the
+  same way it already survives the spin path. The sticky manual-camera flag
+  consulted by `syncCameraToSweep` remains the obvious mechanism; the sweep may
+  keep driving azimuth and elevation if you decide the choreography needs
+  them, but say so, and it may never write `distance` after a manual zoom
+  until a reset or a rebuild.
+- **Deliverable 5, amended.** The regression test must set `continuousSpin`
+  to `false` (through the control panel or the param interface, not by editing
+  the default) before the zoom gesture, because that is the only configuration
+  in which the current dev behaviour fails. A test at the defaults passes
+  before and after and is not a regression test. Also assert, in the same
+  test or a sibling, that the default configuration still holds the distance,
+  so the fix cannot regress the path that already works.
+- **Deliverable 6, added (audit defect 2).** `BOUNDARY_DETAIL_SHOW_DISTANCE
+  0.9` and `HIDE 0.95` (`src/app/orbit3d.ts:641-642`) draw the only finer-pitch
+  tier in the build at zero opacity until the camera is 5.665x closer than its
+  default, i.e. already inside the cloud. Raise both thresholds so the tier is
+  visible from a moderate zoom (the audit's default distance is `5.098`; a
+  first proposal is show at `2.5`, hide at `2.8`, but you choose from what the
+  frames show) and state the values chosen and why. Keep the fade width. The
+  default opening view (criterion 7) must remain unchanged, so the thresholds
+  must sit below the default distance.
+- **Criterion 3, amended:** the envelope records the test failing on
+  unmodified dev *with `continuousSpin` false*.
+- **Criterion 4, amended:** zoom-and-wait is verified twice in the browser,
+  once at defaults and once with "Continuous camera spin" unticked; both must
+  hold within 2%.
+- **Criterion 8, added:** a frame at camera distance ~2.5-3.0 shows the
+  boundary-detail tier where the same view on dev shows none; the worker names
+  the frame pair and the verifier confirms it by eye.
+- **Path claims** are unchanged; deliverable 6 lives in `src/app/orbit3d.ts`.
+- **Token baseline** rises to worker 6.5M for the extra deliverable; the
+  stop-and-report line moves to 10.0M.
