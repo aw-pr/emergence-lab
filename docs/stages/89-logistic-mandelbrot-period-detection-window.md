@@ -5,7 +5,7 @@
 - **Authored:** 2026-09-10
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
 - **Worker:** Claude Opus 5 <claude-opus-5@local>
-- **Verifier:** GPT-6 Astra <gpt-6-astra@local>
+- **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/89-logistic-mandelbrot-period-detection-window
 - **Worker effort:** high
@@ -226,3 +226,14 @@ rendezvous on this machine.
 
 The run worktree needs `node_modules` before `npm run verify` will do anything
 but exit 127.
+
+## Re-card 2026-09-11 02:25Z: verifier seat moves to Claude Sonnet 5
+
+The worker (Claude Opus 5) wrote a passing envelope at 01:56Z. The GPT-6
+Astra verifier was refused by the provider at 01:57Z, Codex 5-hour window
+exhausted, reset 05:58Z, and the tick paused the repo for an hour on it.
+Rather than hold a finished stage for five hours the verifier moves to Claude
+Sonnet 5: a different Claude model from the worker, same family. The repo
+accepted the same trade on stages 82 and 85 (2026-09-07); what contains it is
+that this card's criteria are numeric and mechanical (test counts, measured
+periods, digest checks), so the verifier re-derives rather than re-reads.
