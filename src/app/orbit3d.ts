@@ -81,6 +81,14 @@ out float v_sliceGlow;
 out float v_markerGlow;
 out float v_selfGlow;
 out float v_energy;
+out float v_spread;
+
+// How fast a splat grows with the zoom magnification, and how much of its
+// intensity it keeps while it grows. A flux exponent of 2.0 is exact
+// conservation: a splat twice as wide is a quarter as bright per pixel, so
+// the light the sheet emits is the same whatever the camera distance.
+const float POINT_GROWTH_EXPONENT = 0.5;
+const float POINT_FLUX_EXPONENT = 2.0;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
 // (viridis teal/green, twilight blue/violet, plasma rose, amber, ice cyan);
@@ -213,7 +221,27 @@ void main() {
   // clip.w is eye-space depth. Referencing the same pose at the opening
   // distance preserves every original splat when no zoom has been applied.
   float depthScale = 1.0 + u_cameraZoomOffset / max(gl_Position.w, 0.05);
-  gl_PointSize = clamp(baseSize * max(1.0, depthScale), 1.8, 32.0);
+  // Samples are denser than the pixel grid at the opening distance, so a
+  // splat already overlaps its neighbours there. Growing it linearly with the
+  // magnification holds that overlap ratio fixed, which is invisible while
+  // the splat is a dot and reads as a blur kernel once the same ratio means
+  // 32 px. Growing with POINT_GROWTH_EXPONENT closes the gaps the
+  // magnification opens while keeping the splat a small multiple of the
+  // sample pitch.
+  float unzoomedSize = clamp(baseSize, 1.8, 32.0);
+  float sizedPoint = clamp(
+    baseSize * pow(max(1.0, depthScale), POINT_GROWTH_EXPONENT),
+    1.8,
+    32.0
+  );
+  gl_PointSize = sizedPoint;
+  // A splat is a fixed quantity of light. Under additive blending, holding
+  // its peak intensity while its footprint grows multiplies what the sheet
+  // emits by the footprint area, and that, not the sample pitch, is what
+  // saturated the near face at the zoom clamp. Spreading the same flux over
+  // the larger footprint fills the gaps out of light the splat already had.
+  float footprintGain = max(1.0, sizedPoint / unzoomedSize);
+  v_spread = pow(footprintGain, -POINT_FLUX_EXPONENT);
   v_fanGlow = u_fanActive
     * max(front, behindFront * wake * max(lateral * 0.3, rim * 0.8));
 }
@@ -383,6 +411,9 @@ in float v_sliceGlow;
 in float v_markerGlow;
 in float v_selfGlow;
 in float v_energy;
+// Reciprocal footprint area of a depth-grown splat, so its light spreads
+// with its size instead of accumulating with it.
+in float v_spread;
 // 1.0 in cycle colour mode: the beam trades its fixed cyan for the cycling
 // palette hue carried per point in v_cycleHue.
 uniform float u_cycleBeam;
@@ -418,7 +449,8 @@ void main() {
     + vec3(1.0) * sparkle * 1.8
   );
   outColor = vec4(
-    (pointLight + fanLight + sliceLight + markerLight + selfLight) * v_energy,
+    (pointLight + fanLight + sliceLight + markerLight + selfLight)
+      * v_energy * v_spread,
     max(core, haze * 0.62)
   );
 }

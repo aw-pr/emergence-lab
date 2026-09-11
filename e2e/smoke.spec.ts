@@ -339,6 +339,64 @@ for (const continuousSpin of [false, true]) {
   });
 }
 
+// Card 88 gave the point sprites a depth term so a zoomed-in sheet stops
+// reading as a dot lattice; card 91 found it saturated the near face instead,
+// with 76% of the frame above luma 200 at the clamp. The gate is 20% blown
+// out; 25% here so an unrelated capture difference cannot fail the suite.
+test("logistic-Mandelbrot sheet does not blow out at the zoom clamp", async ({ page }) => {
+  // The 13 M-point orbit build eats most of the default budget before the
+  // camera can be driven at all, and the frame then has to be read back.
+  test.slow();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/#/logistic-mandelbrot");
+  const canvas = page.locator(".sim-view__canvas");
+  await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
+  await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+  await canvas.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    for (let step = 0; step < 25; step += 1) {
+      element.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        deltaY: -100,
+      }));
+    }
+  });
+  await page.waitForTimeout(2_000);
+  expect(Number(await canvas.getAttribute("data-orbit3d-camera-distance"))).toBeLessThan(0.36);
+  // Pause first: at 13 M points a frame is long enough that the screenshot
+  // waits for the element to go stable and never gets there, and the paused
+  // canvas keeps the last composited frame, which is the one being measured.
+  // The immersive view parks the controls off screen, so click the button
+  // where it stands rather than scrolling the camera to reach it.
+  await page.getByRole("button", { name: "Pause" })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(page.getByRole("button", { name: "Play" })).toHaveCount(1);
+  // The drawing buffer is not preserved, so the pixels have to come from a
+  // compositor screenshot, and a blank page reads it back: the sim page's main
+  // thread is busy enough drawing 13 M points that it starves an evaluate.
+  const shot = (await canvas.screenshot()).toString("base64");
+  const reader = await page.context().newPage();
+  const blownOut = await reader.evaluate(async (encoded) => {
+    const response = await fetch(`data:image/png;base64,${encoded}`);
+    const bitmap = await createImageBitmap(await response.blob());
+    const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = surface.getContext("2d");
+    if (!context) throw new Error("no 2d context for the frame histogram");
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let above = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      if (luma > 200) above += 1;
+    }
+    return above / (data.length / 4);
+  }, shot);
+  await reader.close();
+  expect(blownOut).toBeLessThan(0.25);
+});
+
 test("orbit camera dolly preserves an off-axis world point from rotated poses", async ({ page }) => {
   await page.goto("/");
   const errors = await page.evaluate(async () => {
