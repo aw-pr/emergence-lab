@@ -493,12 +493,6 @@ code {
   cursor: pointer;
 }
 
-.boids-obstacle-tools__clear {
-  width: auto;
-  padding: 0 10px;
-  font-size: 11px;
-}
-
 .fractal-hud__button:last-child {
   border-right: 0;
 }
@@ -513,6 +507,232 @@ code {
   z-index: 1;
   outline: 2px solid rgba(90, 200, 250, 0.9);
   outline-offset: -2px;
+}
+
+/* ---------- Boids dropped-boulder tools ----------
+ * Same top-right HUD slot as the fractal zoom strip, restyled in the promo
+ * site's lab chrome idiom: small tracked uppercase labels, sky hairlines,
+ * 2px corners, translucent slate. */
+
+.boids-obstacle-tools {
+  z-index: 2;
+}
+
+.boids-obstacle-tools__hint-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.boids-obstacle-tools__hint-row[hidden] {
+  display: none;
+}
+
+.boids-obstacle-tools__hint {
+  max-width: min(520px, calc(100vw - 96px));
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.boids-obstacle-tools__dismiss {
+  width: 26px;
+  border: 1px solid rgba(90, 200, 250, 0.28);
+  border-radius: 2px;
+  background: rgba(4, 9, 17, 0.76);
+  color: rgba(225, 248, 255, 0.72);
+  font: 500 15px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.boids-obstacle-tools__dismiss:hover {
+  background: rgba(90, 200, 250, 0.14);
+  color: #fff;
+}
+
+.boids-obstacle-tools__bar {
+  position: relative;
+  overflow: visible;
+  border-radius: 2px;
+  border-color: rgba(90, 200, 250, 0.4);
+}
+
+.boids-obstacle-tools__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(186, 230, 253, 0.92);
+  font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+    Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.boids-obstacle-tools__bar > .boids-obstacle-tools__button,
+.boids-obstacle-tools__bar > .boids-obstacle-layouts {
+  border-right: 1px solid rgba(90, 200, 250, 0.22);
+}
+
+.boids-obstacle-tools__bar > :last-child {
+  border-right: 0;
+}
+
+.boids-obstacle-tools__button:hover {
+  background: rgba(90, 200, 250, 0.12);
+  color: #fff;
+}
+
+.boids-obstacle-tools__button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid rgba(90, 200, 250, 0.9);
+  outline-offset: -2px;
+}
+
+.boids-obstacle-tools__button--primary {
+  background: rgba(90, 200, 250, 0.16);
+  color: #fff;
+}
+
+.boids-obstacle-layouts {
+  position: static;
+}
+
+.boids-obstacle-layouts__toggle {
+  list-style: none;
+}
+
+.boids-obstacle-layouts__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.boids-obstacle-layouts__toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.boids-obstacle-layouts[open] > .boids-obstacle-layouts__toggle {
+  background: rgba(90, 200, 250, 0.12);
+  color: #fff;
+}
+
+.boids-obstacle-layouts[open] > .boids-obstacle-layouts__toggle::after {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+
+.boids-obstacle-layouts__popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(300px, calc(100vw - 36px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(90, 200, 250, 0.4);
+  border-radius: 2px;
+  background: rgba(4, 9, 17, 0.88);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  text-align: left;
+}
+
+.boids-obstacle-layouts__field {
+  display: grid;
+  gap: 5px;
+}
+
+.boids-obstacle-layouts__label {
+  font: 600 10px/1 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+    Roboto, sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(125, 211, 252, 0.8);
+}
+
+.boids-obstacle-layouts__input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid rgba(90, 200, 250, 0.22);
+  border-radius: 2px;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--fg);
+  font: 500 12px/1.4 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+    Roboto, sans-serif;
+  resize: vertical;
+}
+
+textarea.boids-obstacle-layouts__input {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+}
+
+.boids-obstacle-layouts__input::placeholder {
+  color: rgba(168, 185, 209, 0.5);
+}
+
+.boids-obstacle-layouts__input:disabled {
+  color: rgba(168, 185, 209, 0.55);
+}
+
+.boids-obstacle-layouts__input:focus-visible {
+  outline: 2px solid rgba(90, 200, 250, 0.9);
+  outline-offset: -1px;
+}
+
+.boids-obstacle-layouts__actions {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(90, 200, 250, 0.4);
+  border-radius: 2px;
+}
+
+.boids-obstacle-layouts__actions > .boids-obstacle-tools__button {
+  flex: 1;
+  justify-content: center;
+  border-right: 1px solid rgba(90, 200, 250, 0.22);
+}
+
+.boids-obstacle-layouts__actions > .boids-obstacle-tools__button:last-child {
+  border-right: 0;
+}
+
+.boids-obstacle-layouts__status {
+  min-height: 1em;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--fg-dim);
+}
+
+.boids-obstacle-layouts__status:empty {
+  display: none;
+}
+
+.boids-obstacle-layouts__status[data-state="ok"] {
+  color: #7dd3a8;
+}
+
+.boids-obstacle-layouts__status[data-state="error"] {
+  color: var(--accent-warm);
 }
 
 .sim-view__legend {

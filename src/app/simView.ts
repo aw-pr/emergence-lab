@@ -962,85 +962,89 @@ function buildBoidsObstacleTools(options: {
   root.className = "fractal-hud boids-obstacle-tools";
   root.setAttribute("aria-label", "Dropped boulder tools");
 
+  const hintRow = document.createElement("div");
+  hintRow.className = "boids-obstacle-tools__hint-row";
   const hint = document.createElement("output");
   hint.className = "fractal-hud__zoom boids-obstacle-tools__hint";
   hint.value = "Click to drop a boulder · Hold and drag to lay a breakwater · Click a dropped obstacle to remove";
-  root.appendChild(hint);
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "boids-obstacle-tools__dismiss";
+  dismiss.textContent = "×";
+  dismiss.setAttribute("aria-label", "Dismiss obstacle drawing hint");
+  dismiss.addEventListener("click", options.onDismissHint);
+  hintRow.append(hint, dismiss);
+  root.appendChild(hintRow);
 
   const controls = document.createElement("div");
-  controls.className = "fractal-hud__controls";
+  controls.className = "fractal-hud__controls boids-obstacle-tools__bar";
+
+  const makeButton = (label: string, className = ""): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `boids-obstacle-tools__button ${className}`.trim();
+    button.textContent = label;
+    return button;
+  };
+  const makeField = (
+    label: string,
+    input: HTMLElement,
+  ): HTMLLabelElement => {
+    const field = document.createElement("label");
+    field.className = "boids-obstacle-layouts__field";
+    const caption = document.createElement("span");
+    caption.className = "boids-obstacle-layouts__label";
+    caption.textContent = label;
+    field.append(caption, input);
+    return field;
+  };
 
   const layouts = document.createElement("details");
   layouts.className = "boids-obstacle-layouts";
   const layoutsToggle = document.createElement("summary");
-  layoutsToggle.className = "fractal-hud__button";
+  layoutsToggle.className =
+    "boids-obstacle-tools__button boids-obstacle-layouts__toggle";
   layoutsToggle.textContent = "Layouts";
   layouts.appendChild(layoutsToggle);
 
   const popup = document.createElement("div");
-  popup.className = "controls__params boids-obstacle-layouts__popup";
+  popup.className = "boids-obstacle-layouts__popup";
   popup.setAttribute("aria-label", "Saved obstacle layouts");
 
-  const nameRow = document.createElement("label");
-  nameRow.className = "control control--enum";
-  const nameLabel = document.createElement("span");
-  nameLabel.className = "control__label";
-  nameLabel.textContent = "Layout name";
   const nameInput = document.createElement("input");
-  nameInput.className = "control__value";
+  nameInput.className = "boids-obstacle-layouts__input";
   nameInput.type = "text";
   nameInput.maxLength = 64;
   nameInput.placeholder = "My layout";
-  nameRow.append(nameLabel, nameInput);
-  popup.appendChild(nameRow);
+  const save = makeButton("Save current", "boids-obstacle-tools__button--primary");
+  const saveRow = document.createElement("div");
+  saveRow.className = "boids-obstacle-layouts__actions";
+  saveRow.appendChild(save);
+  popup.append(makeField("Layout name", nameInput), saveRow);
 
-  const makeButton = (label: string): HTMLButtonElement => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "fractal-hud__button";
-    button.textContent = label;
-    return button;
-  };
-
-  const save = makeButton("Save current");
-  popup.appendChild(save);
-
-  const slotRow = document.createElement("label");
-  slotRow.className = "control control--enum";
-  const slotLabel = document.createElement("span");
-  slotLabel.className = "control__label";
-  slotLabel.textContent = "Saved layouts";
   const slotSelect = document.createElement("select");
-  slotSelect.className = "control__value";
-  slotRow.append(slotLabel, slotSelect);
-  popup.appendChild(slotRow);
-
+  slotSelect.className = "boids-obstacle-layouts__input";
   const slotActions = document.createElement("div");
-  slotActions.className = "fractal-hud__controls";
+  slotActions.className = "boids-obstacle-layouts__actions";
   const load = makeButton("Load");
   const remove = makeButton("Delete");
   const exportLayout = makeButton("Export");
   slotActions.append(load, remove, exportLayout);
-  popup.appendChild(slotActions);
+  popup.append(makeField("Saved layouts", slotSelect), slotActions);
 
-  const transferRow = document.createElement("label");
-  transferRow.className = "control control--enum";
-  const transferLabel = document.createElement("span");
-  transferLabel.className = "control__label";
-  transferLabel.textContent = "Layout JSON";
   const transfer = document.createElement("textarea");
-  transfer.className = "control__value";
+  transfer.className = "boids-obstacle-layouts__input";
   transfer.rows = 3;
   transfer.spellcheck = false;
   transfer.placeholder = "Paste an exported layout";
-  transferRow.append(transferLabel, transfer);
-  popup.appendChild(transferRow);
-
   const importLayout = makeButton("Import and load");
-  popup.appendChild(importLayout);
+  const importRow = document.createElement("div");
+  importRow.className = "boids-obstacle-layouts__actions";
+  importRow.appendChild(importLayout);
+  popup.append(makeField("Layout JSON", transfer), importRow);
 
   const status = document.createElement("output");
-  status.className = "control__value boids-obstacle-layouts__status";
+  status.className = "boids-obstacle-layouts__status";
   status.setAttribute("aria-live", "polite");
   popup.appendChild(status);
   layouts.appendChild(popup);
@@ -1129,25 +1133,14 @@ function buildBoidsObstacleTools(options: {
     layouts.open = true;
   }
 
-  const dismiss = document.createElement("button");
-  dismiss.type = "button";
-  dismiss.className = "fractal-hud__button";
-  dismiss.textContent = "×";
-  dismiss.setAttribute("aria-label", "Dismiss obstacle drawing hint");
-  dismiss.addEventListener("click", options.onDismissHint);
-  controls.appendChild(dismiss);
-
-  const clear = document.createElement("button");
-  clear.type = "button";
-  clear.className = "fractal-hud__button boids-obstacle-tools__clear";
-  clear.textContent = "Clear dropped boulders";
+  const clear = makeButton("Clear boulders", "boids-obstacle-tools__clear");
+  clear.setAttribute("aria-label", "Clear dropped boulders");
   clear.addEventListener("click", options.onClear);
   controls.appendChild(clear);
   root.appendChild(controls);
 
   const hideHint = (): void => {
-    hint.hidden = true;
-    dismiss.hidden = true;
+    hintRow.hidden = true;
   };
   if (options.hintDismissed()) {
     hideHint();
