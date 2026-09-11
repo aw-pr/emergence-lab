@@ -4,7 +4,7 @@
 
 - **Authored:** 2026-09-10
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Fable 5.1 <claude-fable-5-1@local>
+- **Worker:** Claude Opus 5 <claude-opus-5@local>
 - **Verifier:** GPT-6 Astra <gpt-6-astra@local>
 - **Base branch:** dev
 - **Run branch:** autometta/87-logistic-mandelbrot-zoom-diagnostic
@@ -253,3 +253,14 @@ status.claude.com carries an open latency incident, and the only Claude seat
 that has run clean through the same hours is Fable 5.1. The seat moves there
 for one attempt; the verifier stays GPT-6 Astra. If this attempt hangs as
 well, the stage is held until the incident clears rather than re-dispatched.
+
+## Re-card 2026-09-11 (attempt 6): worker back on Claude Opus 5; the hang was the CLI build
+
+Attempt 5 on Fable 5.1 hung after six minutes and 72 tool calls, so the seat
+was never the variable. The variable was the binary: the `claude` launcher
+symlink moved to Claude Code 2.1.268 at 21:02Z tonight, minutes before the
+first hang, and every worker since has run 2.1.268 while the operator's own
+session, which never hung, is still on 2.1.267. A `sample` of the hung worker
+shows its main thread parked in a lock wait inside the 2.1.268 binary with no
+open sockets and no children. The launcher is pinned to 2.1.267 and
+auto-update is off for the night. The seat returns to Opus 5 as designed.
