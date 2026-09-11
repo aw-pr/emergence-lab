@@ -130,13 +130,6 @@ export interface ControlsOptions {
    * Parameters section.
    */
   viewParamKeys?: readonly string[];
-  /**
-   * Named clusters rendered as their own headed sections between the View
-   * group and the trailing "Parameters" section, in the order given. Keys
-   * already hoisted into View are skipped; schema params in no cluster land
-   * in "Parameters" as before.
-   */
-  paramGroups?: readonly { label: string; keys: readonly string[] }[];
 }
 
 /**
@@ -392,28 +385,8 @@ export class ControlsPanel {
     );
 
     const grouped = new Set(viewParamKeys);
-    for (const group of options.paramGroups ?? []) {
-      const members = options.paramSchema.filter(
-        (descriptor) =>
-          group.keys.includes(descriptor.key) && !grouped.has(descriptor.key),
-      );
-      if (members.length === 0) continue;
-      const groupSection = collapsibleSection(
-        this.slug,
-        group.label,
-        "controls__params",
-      );
-      for (const descriptor of members) {
-        const current = this.params[descriptor.key] ?? descriptor.default;
-        groupSection.appendChild(this.buildParamControl(descriptor, current));
-        grouped.add(descriptor.key);
-      }
-      this.container.appendChild(groupSection);
-    }
-
     // Schema-native grouping (ParamDescriptor.group, docs/INTERFACE.md v1.3.0):
-    // params sharing a group render together, sections in first-appearance
-    // schema order, reusing the same collapsible-section mechanism as above.
+    // sections follow first appearance; members retain schema order.
     const schemaGroupOrder: string[] = [];
     for (const descriptor of options.paramSchema) {
       if (grouped.has(descriptor.key) || !descriptor.group) continue;

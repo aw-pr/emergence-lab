@@ -137,7 +137,7 @@ export class LeniaKernel implements SimKernel {
       min: 0.02,
       max: 0.3,
       step: 0.01,
-      group: "Growth",
+      group: "Kernel & timing",
       info: "How far the field moves towards its growth target each step. Higher values evolve faster but can destabilise organisms into flickering noise. Only takes effect on the next reset.",
     },
     {
@@ -148,6 +148,7 @@ export class LeniaKernel implements SimKernel {
       min: MIN_RADIUS,
       max: MAX_RADIUS,
       step: 1,
+      group: "Kernel & timing",
       info: "Reach in cells of the ring each cell samples to decide its next state. Larger radii grow bigger organisms and cost more per step. Changing it rebuilds the sim from a fresh seed.",
     },
     {
@@ -158,6 +159,7 @@ export class LeniaKernel implements SimKernel {
       min: 1,
       max: 4,
       step: 1,
+      group: "Kernel & timing",
       info: "How many simulation steps run before each frame is drawn. Higher values speed up organism motion at the cost of more work per frame.",
     },
   ] as const satisfies readonly ParamDescriptor[];

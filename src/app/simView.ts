@@ -95,84 +95,6 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
   "burning-ship": ["palettePhase", "cycleSpeed"],
 };
 
-/**
- * Named, collapsible sections for the remaining kernel params, per sim. Keys
- * left out of every group land in the trailing "Parameters" section; sims
- * with a handful of params skip grouping entirely rather than dressing three
- * sliders in three headings.
- */
-const PARAM_GROUPS: Readonly<
-  Record<string, readonly { label: string; keys: readonly string[] }[]>
-> = {
-  // logistic-mandelbrot's "Light beam" and "Sampling" groups come from its
-  // kernel paramSchema's `group` field (docs/INTERFACE.md v1.3.0) instead of
-  // this per-sim table — see ControlsPanel's schema-native grouping.
-  boids: [
-    { label: "Obstacles", keys: ["obstacleLayout", "obstacleAmount"] },
-    { label: "Flock", keys: ["boidCount", "initialFlocks", "maxSpeed"] },
-    { label: "Perception", keys: ["visualRadius", "separationRadius"] },
-    { label: "Steering", keys: ["alignment", "cohesion", "separation"] },
-  ],
-  "particle-life": [
-    { label: "Population", keys: ["particleCount", "species"] },
-    {
-      label: "Forces",
-      keys: ["rmax", "rmin", "forceScale", "matrixBias", "friction"],
-    },
-  ],
-  physarum: [
-    { label: "Agents", keys: ["agentCount", "moveSpeed", "turnSpeed"] },
-    { label: "Sensing", keys: ["sensorAngle", "sensorDistance"] },
-    { label: "Trail", keys: ["depositAmount", "evaporation"] },
-  ],
-  "gray-scott": [
-    { label: "Diffusion", keys: ["Du", "Dv"] },
-    { label: "Reaction", keys: ["F", "k"] },
-  ],
-  "belousov-zhabotinsky": [
-    { label: "Diffusion", keys: ["diffusionA", "diffusionB", "diffusionC"] },
-    { label: "Reaction", keys: ["feed", "kill"] },
-  ],
-  "game-of-life": [
-    {
-      label: "Rules",
-      keys: ["birthMin", "birthMax", "surviveMin", "surviveMax"],
-    },
-    { label: "Seeding", keys: ["seedDensity", "sparkRate"] },
-  ],
-  "diffusion-limited-aggregation": [
-    { label: "Growth", keys: ["walkersPerStep", "maxWalkSteps", "stickiness"] },
-    { label: "Seeding", keys: ["spawnRadius", "seedCount"] },
-  ],
-  "kuramoto-oscillators": [
-    { label: "Coupling", keys: ["coupling", "couplingMode"] },
-    { label: "Oscillators", keys: ["frequencySpread", "noise"] },
-    { label: "Simulation", keys: ["timestep", "initialPattern"] },
-  ],
-  lenia: [
-    { label: "Growth", keys: ["mu", "sigma", "muDrift"] },
-    { label: "Kernel & timing", keys: ["radius", "dt", "stepsPerFrame"] },
-  ],
-  "lorenz-attractor": [
-    { label: "Attractor", keys: ["attractor", "sigma", "rho", "beta"] },
-  ],
-  "ising-model": [
-    { label: "Physics", keys: ["temperature", "coupling", "externalField"] },
-  ],
-  mandelbrot: [
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-  "julia-set": [
-    { label: "Seed", keys: ["cRe", "cIm"] },
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-  "burning-ship": [
-    { label: "Navigation", keys: ["centerX", "centerY", "zoom"] },
-    { label: "Detail", keys: ["maxIterations", "autoIterations"] },
-  ],
-};
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
@@ -642,7 +564,6 @@ export async function renderSimView(
     defaultAutoCycle,
     fractalPaletteCycleUi: fractal,
     viewParamKeys: VIEW_PARAM_KEYS[slug] ?? [],
-    paramGroups: PARAM_GROUPS[slug] ?? [],
     callbacks: {
       onPlayPause: () => {
         if (renderer.isRunning()) {

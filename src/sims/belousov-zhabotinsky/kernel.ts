@@ -121,6 +121,7 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.08,
       step: 0.001,
+      group: "Reaction",
       info: "Rate at which fresh activator is replenished. Higher values push the medium towards sustained oscillation; too low and the fronts die out.",
     },
     {
@@ -131,6 +132,7 @@ export class BelousovZhabotinskyKernel implements SimKernel {
       min: 0,
       max: 0.12,
       step: 0.001,
+      group: "Reaction",
       info: "Rate at which inhibitor and catalyst decay away. Above roughly 0.04 the medium collapses to a flat, unchanging colour within a few hundred steps.",
     },
     {

@@ -132,7 +132,7 @@ export class GrayScottKernel implements SimKernel {
       max: 0.5,
       step: 0.001,
       info: "How far the U reactant spreads to neighbouring cells each step. Higher values widen the pattern's features and smooth out fine detail.",
-      group: "Reaction-diffusion",
+      group: "Diffusion",
     },
     {
       key: "Dv",
@@ -143,7 +143,7 @@ export class GrayScottKernel implements SimKernel {
       max: 0.5,
       step: 0.001,
       info: "How far the V reactant spreads to neighbouring cells each step. Pushing it close to Diffusion U flattens the pattern; keeping it well below U is what lets spots and stripes form.",
-      group: "Reaction-diffusion",
+      group: "Diffusion",
     },
     {
       key: "F",
@@ -154,7 +154,7 @@ export class GrayScottKernel implements SimKernel {
       max: 0.07,
       step: 0.0005,
       info: "Rate at which U is replenished across the field. Together with kill rate, this is what tips the pattern between spots, stripes, worms and waves.",
-      group: "Reaction-diffusion",
+      group: "Reaction",
     },
     {
       key: "k",
@@ -165,7 +165,7 @@ export class GrayScottKernel implements SimKernel {
       max: 0.07,
       step: 0.0005,
       info: "Rate at which V is removed from the field. Small changes here shift the pattern regime dramatically, from splitting spots to fixed stripes.",
-      group: "Reaction-diffusion",
+      group: "Reaction",
     },
     {
       key: "stencil",
