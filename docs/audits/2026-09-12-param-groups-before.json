@@ -1,0 +1,514 @@
+{
+  "abelian-sandpile": {
+    "sections": [],
+    "ungrouped": [
+      "initialPile",
+      "toppleThreshold",
+      "grainsPerStep",
+      "topplesPerStep"
+    ],
+    "view": []
+  },
+  "belousov-zhabotinsky": {
+    "sections": [
+      {
+        "keys": [
+          "diffusionA",
+          "diffusionB",
+          "diffusionC"
+        ],
+        "label": "Diffusion"
+      },
+      {
+        "keys": [
+          "feed",
+          "kill"
+        ],
+        "label": "Reaction"
+      }
+    ],
+    "ungrouped": [
+      "stepsPerFrame"
+    ],
+    "view": []
+  },
+  "boids": {
+    "sections": [
+      {
+        "keys": [
+          "obstacleLayout",
+          "obstacleAmount"
+        ],
+        "label": "Obstacles"
+      },
+      {
+        "keys": [
+          "boidCount",
+          "initialFlocks",
+          "maxSpeed"
+        ],
+        "label": "Flock"
+      },
+      {
+        "keys": [
+          "visualRadius",
+          "separationRadius"
+        ],
+        "label": "Perception"
+      },
+      {
+        "keys": [
+          "alignment",
+          "cohesion",
+          "separation"
+        ],
+        "label": "Steering"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "pointSize"
+    ]
+  },
+  "brians-brain": {
+    "sections": [],
+    "ungrouped": [
+      "birthCount",
+      "seedDensity",
+      "dyingValue"
+    ],
+    "view": []
+  },
+  "burning-ship": {
+    "sections": [
+      {
+        "keys": [
+          "centerX",
+          "centerY",
+          "zoom"
+        ],
+        "label": "Navigation"
+      },
+      {
+        "keys": [
+          "maxIterations",
+          "autoIterations"
+        ],
+        "label": "Detail"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "palettePhase",
+      "cycleSpeed"
+    ]
+  },
+  "clifford-dejong": {
+    "sections": [
+      {
+        "keys": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "label": "Coefficients"
+      },
+      {
+        "keys": [
+          "driftAmount",
+          "driftSpeed"
+        ],
+        "label": "Drift"
+      }
+    ],
+    "ungrouped": [
+      "map",
+      "pointsPerFrame"
+    ],
+    "view": [
+      "exposure",
+      "fade",
+      "colourMode",
+      "cycleSpeed"
+    ]
+  },
+  "cyclic-ca": {
+    "sections": [
+      {
+        "keys": [
+          "states",
+          "threshold",
+          "neighbourhood"
+        ],
+        "label": "Rule"
+      }
+    ],
+    "ungrouped": [
+      "stepsPerFrame"
+    ],
+    "view": []
+  },
+  "diffusion-limited-aggregation": {
+    "sections": [
+      {
+        "keys": [
+          "walkersPerStep",
+          "maxWalkSteps",
+          "stickiness"
+        ],
+        "label": "Growth"
+      },
+      {
+        "keys": [
+          "spawnRadius",
+          "seedCount"
+        ],
+        "label": "Seeding"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "colourByAge"
+    ]
+  },
+  "elementary-cellular-automata": {
+    "sections": [],
+    "ungrouped": [
+      "rule",
+      "seedMode",
+      "stepsPerFrame"
+    ],
+    "view": []
+  },
+  "game-of-life": {
+    "sections": [
+      {
+        "keys": [
+          "birthMin",
+          "birthMax",
+          "surviveMin",
+          "surviveMax"
+        ],
+        "label": "Rules"
+      },
+      {
+        "keys": [
+          "seedDensity",
+          "sparkRate"
+        ],
+        "label": "Seeding"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "ageShading"
+    ]
+  },
+  "gray-scott": {
+    "sections": [
+      {
+        "keys": [
+          "Du",
+          "Dv"
+        ],
+        "label": "Diffusion"
+      },
+      {
+        "keys": [
+          "F",
+          "k"
+        ],
+        "label": "Reaction"
+      },
+      {
+        "keys": [
+          "stencil",
+          "dt"
+        ],
+        "label": "Reaction-diffusion"
+      }
+    ],
+    "ungrouped": [
+      "stepsPerFrame"
+    ],
+    "view": []
+  },
+  "ising-model": {
+    "sections": [
+      {
+        "keys": [
+          "temperature",
+          "coupling",
+          "externalField"
+        ],
+        "label": "Physics"
+      }
+    ],
+    "ungrouped": [
+      "sweepsPerStep",
+      "initialState"
+    ],
+    "view": []
+  },
+  "julia-set": {
+    "sections": [
+      {
+        "keys": [
+          "cRe",
+          "cIm"
+        ],
+        "label": "Seed"
+      },
+      {
+        "keys": [
+          "centerX",
+          "centerY",
+          "zoom"
+        ],
+        "label": "Navigation"
+      },
+      {
+        "keys": [
+          "maxIterations",
+          "autoIterations"
+        ],
+        "label": "Detail"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "palettePhase",
+      "cycleSpeed"
+    ]
+  },
+  "kuramoto-oscillators": {
+    "sections": [
+      {
+        "keys": [
+          "coupling",
+          "couplingMode"
+        ],
+        "label": "Coupling"
+      },
+      {
+        "keys": [
+          "frequencySpread",
+          "noise"
+        ],
+        "label": "Oscillators"
+      },
+      {
+        "keys": [
+          "timestep",
+          "initialPattern"
+        ],
+        "label": "Simulation"
+      }
+    ],
+    "ungrouped": [],
+    "view": []
+  },
+  "lenia": {
+    "sections": [
+      {
+        "keys": [
+          "mu",
+          "sigma",
+          "muDrift"
+        ],
+        "label": "Growth"
+      },
+      {
+        "keys": [
+          "dt",
+          "radius",
+          "stepsPerFrame"
+        ],
+        "label": "Kernel & timing"
+      }
+    ],
+    "ungrouped": [],
+    "view": []
+  },
+  "logistic-mandelbrot": {
+    "sections": [
+      {
+        "keys": [
+          "realAxisSweep",
+          "sweepSpeed"
+        ],
+        "label": "Light beam"
+      },
+      {
+        "keys": [
+          "warmupIterations",
+          "sampleCount",
+          "plottedIterations"
+        ],
+        "label": "Sampling"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "geometryMode",
+      "surfaceOpacity",
+      "colourMode",
+      "exposure",
+      "edgeGlow",
+      "tailRefinement",
+      "boundaryDetail",
+      "pointDensity",
+      "autoRotate",
+      "continuousSpin",
+      "cycleSpeed",
+      "cascadeReveal",
+      "cascadeDuration",
+      "realSliceOnly",
+      "modelSource"
+    ]
+  },
+  "lorenz-attractor": {
+    "sections": [
+      {
+        "keys": [
+          "attractor",
+          "sigma",
+          "rho",
+          "beta"
+        ],
+        "label": "Attractor"
+      }
+    ],
+    "ungrouped": [
+      "stepsPerFrame"
+    ],
+    "view": [
+      "fade",
+      "ribbonWidth",
+      "colourByHeight",
+      "cycleSpeed"
+    ]
+  },
+  "mandelbrot": {
+    "sections": [
+      {
+        "keys": [
+          "centerX",
+          "centerY",
+          "zoom"
+        ],
+        "label": "Navigation"
+      },
+      {
+        "keys": [
+          "maxIterations",
+          "autoIterations"
+        ],
+        "label": "Detail"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "palettePhase",
+      "cycleSpeed"
+    ]
+  },
+  "markus-lyapunov": {
+    "sections": [
+      {
+        "keys": [
+          "centerX",
+          "centerY",
+          "zoom",
+          "warmupIterations",
+          "sampleIterations"
+        ],
+        "label": "Zoom and detail"
+      }
+    ],
+    "ungrouped": [
+      "sequence",
+      "rotationSpeed"
+    ],
+    "view": []
+  },
+  "particle-life": {
+    "sections": [
+      {
+        "keys": [
+          "particleCount",
+          "species"
+        ],
+        "label": "Population"
+      },
+      {
+        "keys": [
+          "rmax",
+          "rmin",
+          "forceScale",
+          "friction",
+          "matrixBias"
+        ],
+        "label": "Forces"
+      }
+    ],
+    "ungrouped": [],
+    "view": [
+      "pointSize"
+    ]
+  },
+  "physarum": {
+    "sections": [
+      {
+        "keys": [
+          "agentCount",
+          "turnSpeed",
+          "moveSpeed"
+        ],
+        "label": "Agents"
+      },
+      {
+        "keys": [
+          "sensorAngle",
+          "sensorDistance"
+        ],
+        "label": "Sensing"
+      },
+      {
+        "keys": [
+          "depositAmount",
+          "evaporation"
+        ],
+        "label": "Trail"
+      }
+    ],
+    "ungrouped": [
+      "stepsPerFrame"
+    ],
+    "view": []
+  },
+  "swarmalators": {
+    "sections": [
+      {
+        "keys": [
+          "A",
+          "B",
+          "J",
+          "K",
+          "frequencySpread",
+          "noise"
+        ],
+        "label": "Dynamics"
+      }
+    ],
+    "ungrouped": [
+      "particleCount",
+      "timestep",
+      "seed",
+      "trailPersistence",
+      "cameraDrift"
+    ],
+    "view": []
+  }
+}

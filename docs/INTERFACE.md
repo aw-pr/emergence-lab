@@ -208,6 +208,13 @@ export interface SimKernel {
    with no per-sim branching. Purely additive surface change; bumps the minor
    version because the descriptor shape gains members.
 
+   The kernel schema is now the sole source of parameter grouping for every
+   sim, with no app-side grouping table. After the existing View controls
+   claim their keys, sections follow first-appearance schema order and their
+   members retain schema order; the ungrouped remainder follows in Parameters.
+   This consolidation preserves the rendered grouping and does not change the
+   descriptor shape, so the interface version remains v1.3.0.
+
 ## Resolved design decisions (v1.1.0)
 
 5. **Optional `applyImpulse` for pointer interaction.** Kernels may expose an

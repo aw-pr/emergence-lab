@@ -54,7 +54,7 @@ export class KuramotoOscillatorsKernel {
       min: 0,
       max: 6,
       step: 0.05,
-      group: "Dynamics",
+      group: "Coupling",
       info: "How strongly each oscillator pulls its neighbours' phase toward its own. Higher values snap the field into synchronised patches faster; near zero, phases drift independently and the field looks like noise. Changing it resets the field.",
     },
     {
@@ -65,7 +65,7 @@ export class KuramotoOscillatorsKernel {
       min: 0,
       max: 2,
       step: 0.01,
-      group: "Dynamics",
+      group: "Oscillators",
       info: "Spread of each oscillator's natural, uncoupled cycling rate. At zero every oscillator would cycle identically if uncoupled; higher spread makes synchronisation harder to hold, keeping the field more turbulent. Changing it resets the field.",
     },
     {
@@ -76,7 +76,7 @@ export class KuramotoOscillatorsKernel {
       min: 0,
       max: 0.4,
       step: 0.005,
-      group: "Dynamics",
+      group: "Oscillators",
       info: "Random jitter added to every oscillator's phase each step. A little keeps synchronised patches from freezing solid; a lot dissolves vortices and waves into speckle. Changing it resets the field.",
     },
     {
@@ -87,6 +87,7 @@ export class KuramotoOscillatorsKernel {
       min: 0.005,
       max: 0.15,
       step: 0.005,
+      group: "Simulation",
       info: "Simulated time advanced per frame. Larger steps make patterns evolve and rotate faster but coarsen the integration, which can make tightly coupled regions look unstable. Changing it resets the field.",
     },
     {
@@ -95,6 +96,7 @@ export class KuramotoOscillatorsKernel {
       type: "enum",
       default: DEFAULT_MODE,
       options: ["local", "global"],
+      group: "Coupling",
       info: "Whether each oscillator couples only to its four grid neighbours (local, producing travelling waves and vortices) or to the field's overall average phase (global, pulling everything toward one shared rhythm). Changing it resets the field.",
     },
     {
@@ -103,6 +105,7 @@ export class KuramotoOscillatorsKernel {
       type: "enum",
       default: DEFAULT_PATTERN,
       options: ["vortices", "waves", "random"],
+      group: "Simulation",
       info: "Starting phase layout: a vortex/antivortex pair, diagonal travelling waves, or fully random phases. Only affects the field at the moment of reset; the dynamics afterwards are governed by coupling, not by which pattern it started from.",
     },
   ] as const satisfies readonly ParamDescriptor[];

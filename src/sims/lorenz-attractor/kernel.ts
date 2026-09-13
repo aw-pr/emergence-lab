@@ -301,6 +301,7 @@ export class LorenzAttractorKernel implements SimKernel {
       type: "enum",
       default: DEFAULT_ATTRACTOR,
       options: ATTRACTORS,
+      group: "Attractor",
       info: "Which chaotic system draws the trail: Lorenz's butterfly, Rössler's folding spiral, Thomas's coiled loop, Aizawa's spindle, or Halvorsen's three-armed spiral. Each has its own shape, integration speed and screen framing. Changing it resets the trail.",
     },
     {
@@ -311,7 +312,7 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 30,
       step: 0.1,
-      group: "Lorenz parameters",
+      group: "Attractor",
       info: "Lorenz's rate of exchange between the two convection-roll variables; only takes effect when Attractor is set to Lorenz, and does nothing observable on the other four systems. Higher values sharpen the butterfly's wing crossings. Changing it resets the trail.",
     },
     {
@@ -322,7 +323,7 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 60,
       step: 0.1,
-      group: "Lorenz parameters",
+      group: "Attractor",
       info: "Lorenz's driving strength, roughly the temperature difference behind the convection; only takes effect when Attractor is set to Lorenz. Below about 24 the wings collapse to a fixed point instead of chaos; higher values widen and speed up the butterfly. Changing it resets the trail.",
     },
     {
@@ -333,7 +334,7 @@ export class LorenzAttractorKernel implements SimKernel {
       min: 0,
       max: 10,
       step: 0.0001,
-      group: "Lorenz parameters",
+      group: "Attractor",
       info: "Lorenz's geometric damping factor; only takes effect when Attractor is set to Lorenz. Changing it subtly reshapes how tightly the wings curl. Changing it resets the trail.",
     },
     {

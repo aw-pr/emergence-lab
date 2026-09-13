@@ -80,6 +80,7 @@ export class MandelbrotKernel implements SimKernel {
       min: -2,
       max: 1,
       step: 0.001,
+      group: "Navigation",
       info: "Real-axis coordinate the view is centred on. Panning it slides the fractal sideways; changing it recomputes the whole image.",
     },
     {
@@ -90,6 +91,7 @@ export class MandelbrotKernel implements SimKernel {
       min: -1.5,
       max: 1.5,
       step: 0.001,
+      group: "Navigation",
       info: "Imaginary-axis coordinate the view is centred on. Panning it slides the fractal up or down; changing it recomputes the whole image.",
     },
     {
@@ -100,6 +102,7 @@ export class MandelbrotKernel implements SimKernel {
       min: 0.25,
       max: MAX_FRACTAL_ZOOM,
       step: 0.01,
+      group: "Navigation",
       info: "How far into the fractal the view is magnified. Higher values reveal finer boundary structure; changing it recomputes the whole image.",
     },
     {
@@ -110,6 +113,7 @@ export class MandelbrotKernel implements SimKernel {
       min: 16,
       max: MAX_BASE_ITERATIONS,
       step: 1,
+      group: "Detail",
       info: "Escape-time cutoff per pixel. Higher values sharpen fine boundary detail at the cost of more computation per frame; ignored while adaptive detail is on.",
     },
     {
@@ -117,6 +121,7 @@ export class MandelbrotKernel implements SimKernel {
       label: "Adaptive detail",
       type: "boolean",
       default: DEFAULT_AUTO_ITERATIONS,
+      group: "Detail",
       info: "Automatically raises the iteration limit as zoom increases, so deep zooms stay sharp without manually raising max iterations.",
     },
     {

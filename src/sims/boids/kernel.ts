@@ -386,6 +386,7 @@ export class BoidsKernel implements SimKernel {
       type: "enum",
       default: "reef",
       options: OBSTACLE_LAYOUTS,
+      group: "Obstacles",
       info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. Dropped boulders sit over every layout and survive layout changes. Custom provides an empty preset beneath them, while None leaves only the dropped boulders. Changing the layout resets the flock.",
     },
     {
@@ -396,6 +397,7 @@ export class BoidsKernel implements SimKernel {
       min: 0.1,
       max: 1,
       step: 0.05,
+      group: "Obstacles",
       info: "How much of the field the chosen obstacles occupy. Higher values add more obstacles and make each one larger, creating stronger breaks in the flow. Changing it resets the flock.",
     },
     {
@@ -406,6 +408,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 28000,
       step: 1,
+      group: "Flock",
       info: "How many boids fly in the flock. More boids make the flow denser and the emergent shapes richer, at the cost of frame rate. Changing it resets the flock.",
     },
     {
@@ -416,6 +419,7 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 12,
       step: 1,
+      group: "Flock",
       info: "How many coherent flocks the boids start in, arranged on a ring and already heading together, so the opening frames read as flocking rather than static. Zero (or one) scatters every boid uniformly at random and lets flocks assemble on their own. Changing it resets the flock.",
     },
     {
@@ -426,6 +430,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 64,
       step: 1,
+      group: "Perception",
       info: "How far each boid can see its neighbours. A larger radius pulls more of the flock into each boid's alignment and cohesion averaging, producing bigger, calmer schools; a small radius fragments the flock into many small clusters. Changing it resets the flock.",
     },
     {
@@ -436,6 +441,7 @@ export class BoidsKernel implements SimKernel {
       min: 1,
       max: 32,
       step: 1,
+      group: "Perception",
       info: "How close two boids must get before they push apart. Larger values keep boids more spread out within the flock; it only has an effect while smaller than the visual radius. Changing it resets the flock.",
     },
     {
@@ -446,6 +452,7 @@ export class BoidsKernel implements SimKernel {
       min: 0.25,
       max: 40,
       step: 0.05,
+      group: "Flock",
       info: "Top speed a boid can travel. Raising it makes the whole flock dart and streak faster across the field; lowering it produces a slow, drifting swarm. Changing it resets the flock.",
     },
     {
@@ -456,7 +463,7 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 0.25,
       step: 0.001,
-      group: "Flocking rules",
+      group: "Steering",
       info: "How strongly a boid steers to match its neighbours' heading. Higher values make the flock move in tight, unified streams; near zero, boids ignore each other's direction and the flock looks like scattered traffic. Changing it resets the flock.",
     },
     {
@@ -467,7 +474,7 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 0.05,
       step: 0.001,
-      group: "Flocking rules",
+      group: "Steering",
       info: "How strongly a boid steers toward the centre of its local neighbours. Higher values pull the flock into a single tight cluster; near zero, boids drift apart into loose, independent groups. Changing it resets the flock.",
     },
     {
@@ -478,7 +485,7 @@ export class BoidsKernel implements SimKernel {
       min: 0,
       max: 1,
       step: 0.001,
-      group: "Flocking rules",
+      group: "Steering",
       info: "How strongly a boid pushes away from neighbours that stray inside its separation radius. Higher values keep individual boids from overlapping, giving the flock a looser, more granular texture. Changing it resets the flock.",
     },
     {
