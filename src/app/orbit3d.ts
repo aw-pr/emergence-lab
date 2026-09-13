@@ -11,6 +11,8 @@ import {
   sampleAttractorCell,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { bakedFileFor } from "./bakedManifest.ts";
+import { resolveOrbitRefinement } from "./orbitRefinement.ts";
+export { REFINE_BUDGET_FRACTION } from "./orbitRefinement.ts";
 import {
   OrbitSampler,
   boundaryDistanceField,
@@ -609,7 +611,6 @@ const SURVIVING_CELL_ESTIMATE = 0.22;
 // finer sub-grid with a longer warmup, since convergence near the
 // accumulation points is critically slow and under-warmed orbits smear
 // between the true cascade branches.
-const REFINE_BUDGET_FRACTION = 0.3;
 const REFINE_PERIOD_THRESHOLD = 8;
 const REFINE_SUBDIVISION = 3;
 const HYBRID_CLOUD_REFINEMENT_OFFSETS = orbitSurfaceCloudRefinementOffsets(
@@ -1623,7 +1624,7 @@ export class Orbit3DPointCloud {
       bakedFile !== null,
       this.orbitSampler !== null,
     );
-    const {
+    let {
       pointBudget,
       maxSurvivingCells,
       refineActive,
@@ -1633,6 +1634,8 @@ export class Orbit3DPointCloud {
       refineSubCells,
       refineCandidateCap,
       refineWarmup,
+    } = cloudPlan;
+    const {
       boundaryDetailRequested,
       boundaryDetailActive,
       gpuPointBudget,
@@ -1700,6 +1703,29 @@ export class Orbit3DPointCloud {
     }
 
     this.samplingPath = "cpu-sampled-gpu-failed";
+    if (this.orbitSampler) {
+      ({
+        pointBudget,
+        maxSurvivingCells,
+        refineActive,
+        baseSlotCap,
+        sampleWidth,
+        sampleHeight,
+        refineSubCells,
+        refineCandidateCap,
+        refineWarmup,
+      } = orbitCloudBuildPlan(
+        inputWidth,
+        inputHeight,
+        sampleCount,
+        warmupIterations,
+        realSliceOnly,
+        params.tailRefinement,
+        params.boundaryDetail,
+        bakedFile !== null,
+        false,
+      ));
+    }
     this.pointBudget = pointBudget;
     if (boundaryDetailRequested) this.boundaryDetail = "degraded";
     this.boundaryDetailBaseCellCount = 0;
@@ -3648,10 +3674,11 @@ function orbitCloudBuildPlan(
     pointBudgetFor(inputWidth * inputHeight),
   );
   const maxSurvivingCells = Math.max(1, Math.floor(pointBudget / sampleCount));
-  const refineFraction =
-    typeof tailRefinement === "number" && Number.isFinite(tailRefinement)
-      ? Math.max(0, Math.min(0.6, tailRefinement))
-      : REFINE_BUDGET_FRACTION;
+  const refineFraction = resolveOrbitRefinement(
+    tailRefinement,
+    gpuSamplerAvailable,
+    realSliceOnly,
+  );
   const refineActive = !realSliceOnly && refineFraction > 0;
   const baseSlotCap = refineActive
     ? Math.max(1, Math.floor(maxSurvivingCells * (1 - refineFraction)))
