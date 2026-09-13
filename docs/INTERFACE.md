@@ -282,6 +282,48 @@ export interface SimKernel {
 - Call `destroy()` when swapping kernels or unmounting.
 - Do not import from `src/sims/**` directly. Kernels load dynamically.
 
+## Testing a pure `src/app` module
+
+`npm test` discovers tests and compiles sources by two different mechanisms,
+and only one of them is automatic. `scripts/run-kernel-tests.cjs` walks
+`src/sims`, `src/app` and `e2e/harness` and runs every `*.test.cjs` it finds,
+so **discovery needs nothing from you**. Compilation is the explicit `include`
+array in `tsconfig.test.json`, which `npm run build:test` emits to
+`.test-build/` and which `npm run typecheck` also typechecks. A new module is
+not in that array until someone puts it there.
+
+So there are two routes, and which one you take is fixed by what the module is:
+
+- **The module is TypeScript under `src/app`** (the normal case, e.g.
+  `orbitRefinement.ts`). Add its path to the `include` array in
+  `tsconfig.test.json`, and have the test `require("../../.test-build/app/<name>.js")`.
+  **A stage card that adds such a test must claim `tsconfig.test.json` in its
+  path claims**, or the worker will be blocked on an unclaimed file for a
+  one-line edit.
+- **The module is already plain CommonJS** (e.g. a script under `scripts/`,
+  as `paramGroups.test.cjs` does). Require it directly. No `include` entry,
+  no build step, nothing to claim.
+
+Two constraints are worth knowing before you try to widen this:
+
+- The `include` array cannot be a glob over `src/app`. The app build
+  (`tsconfig.json`) uses `moduleResolution: "Bundler"` with
+  `allowImportingTsExtensions`, so app modules import each other with explicit
+  `.ts` specifiers; the test build uses `moduleResolution: "Node16"`, which
+  rejects those with TS5097. Twenty of the thirty-seven modules under `src/app`
+  cannot compile under the test config at all. Only modules whose relative
+  imports are type-only (or absent) are eligible. Measured and recorded in
+  `docs/audits/2026-09-13-app-test-build-convention.md`.
+- `src/sims/**/kernel.ts` stays the first `include` entry. Kernel test coverage
+  does not depend on anyone remembering to list a file.
+
+If you forget the `include` entry, `npm test` now says so by name rather than
+failing with `MODULE_NOT_FOUND`: the runner checks every `.test-build/` require
+before it starts node:test and reports the missing source path.
+
+This section is a build convention, not part of the `SimKernel` shape, so it
+carries no contract version of its own.
+
 ## Changing this contract
 
 Bump the version, record the change under "Resolved design decisions", and
