@@ -83,6 +83,7 @@ out float v_sliceGlow;
 out float v_markerGlow;
 out float v_selfGlow;
 out float v_energy;
+out float v_beamGain;
 out float v_spread;
 
 // How fast a splat grows with the zoom magnification, and how much of its
@@ -146,6 +147,7 @@ void main() {
   v_energy = period > 0.5
     ? clamp(period / max(u_sampleCount, 1.0), 0.02, 1.0)
     : 1.0;
+  v_beamGain = period > 0.5 ? 1.5 : 1.0;
   // Refined sub-cell points carry a fractional weight so the refinement pass
   // raises local resolution without raising local brightness.
   float boundaryDetailOpacity = cellId >= u_boundaryDetailBaseCellCount
@@ -166,24 +168,18 @@ void main() {
     vec3 hue = texture(u_palette, vec2(t, 0.5)).rgb;
     v_colour = mix(hue, vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    // Cells with a detected period sit inside a black bulb of the 2D view:
-    // steady grey, no cycling, no glow. Only the complexity cells (chaotic
-    // band and the unresolved fringe at bulb boundaries) take the cycling
-    // palette and the self-glow.
+    // Periodic sheets carry a softer version of the cycling palette, while
+    // the chaotic band and unresolved fringe keep the full colour and glow.
     float complexity = period > 0.5 ? 0.0 : 1.0;
-    // Faithful to the picker palette: the dots march through the same ramp
-    // the plane's bands do, including its dark end, so they wink out and
-    // return as the dark band passes. Keyed on c-plane distance inside the
-    // escape boundary, a dot at the seam sits at fract(u_phase) — the same
-    // coordinate the plane's bands reach at the set's edge — so each colour
-    // locus rises from deep in the set, crosses the boundary, and flows on
-    // outward across the plane (inward when the palette cycle is reversed).
-    float band = a_boundary * 3.0;
+    // The height offset sends each colour upward through the cloud as the
+    // phase advances. It vanishes at z = 0, keeping the boundary phase aligned.
+    float band = a_boundary * 3.0 - position.z * 0.5;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
-    v_colour = mix(steady, mix(hue, vec3(1.0), 0.06) * 1.1, complexity);
-    // The beam borrows the cycling palette colour even over the steady bulb
+    vec3 cycling = mix(hue, vec3(1.0), 0.06) * 1.1;
+    v_colour = mix(mix(steady, cycling, 0.7), cycling, complexity);
+    // The beam borrows the cycling palette colour even over the softer bulb
     // cells, so a sweep through cycle mode lights everything in cycle colours.
     v_cycleHue = hue;
     v_selfGlow = complexity * 1.25;
@@ -272,6 +268,7 @@ uniform float u_fanActive;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_colour;
+out vec3 v_cycleHue;
 out float v_fanGlow;
 out float v_markerGlow;
 out float v_edgeFade;
@@ -316,6 +313,7 @@ void main() {
   gl_Position = u_viewProjection * vec4(v_world, 1.0);
 
   float height = clamp((a_position.z + 2.0) * 0.25, 0.0, 1.0);
+  v_cycleHue = vec3(0.0);
   if (u_colourMode == 0) {
     v_colour = mix(periodHue(int(a_period + 0.5)), vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
@@ -323,10 +321,11 @@ void main() {
     if (u_paletteReverse > 0.5) t = 1.0 - t;
     v_colour = mix(texture(u_palette, vec2(t, 0.5)).rgb, vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    float band = a_boundary * 3.0;
+    float band = a_boundary * 3.0 - a_position.z * 0.5;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 cycling = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
-    v_colour = mix(vec3(0.44, 0.47, 0.53), cycling, step(a_period, 0.5));
+    v_colour = mix(mix(vec3(0.44, 0.47, 0.53), cycling, 0.7), cycling, step(a_period, 0.5));
+    v_cycleHue = cycling;
   } else {
     float offAxis = clamp(abs(c.y), 0.0, 1.0);
     v_colour = mix(vec3(0.08, 0.38, 0.92), vec3(1.0, 0.35, 0.12), height)
@@ -356,9 +355,11 @@ uniform vec3 u_cameraPosition;
 uniform float u_opacity;
 uniform int u_opaqueMode;
 uniform int u_diagnosticMode;
+uniform float u_cycleBeam;
 in vec3 v_world;
 in vec3 v_normal;
 in vec3 v_colour;
+in vec3 v_cycleHue;
 in float v_fanGlow;
 in float v_markerGlow;
 in float v_edgeFade;
@@ -384,7 +385,13 @@ void main() {
   float fill = 0.5 + 0.5 * max(0.0, dot(normal, vec3(0.35, 0.2, -0.91)));
   float fresnel = pow(1.0 - clamp(dot(normal, viewDirection), 0.0, 1.0), 2.6);
   vec3 rim = mix(vec3(0.16, 0.82, 1.0), vec3(1.0), fresnel) * fresnel;
-  vec3 beam = mix(v_colour, vec3(0.48, 0.94, 1.0), 0.7)
+  float cyclePeak = max(max(v_cycleHue.r, v_cycleHue.g), max(v_cycleHue.b, 0.2));
+  vec3 beamColour = mix(
+    mix(v_colour, vec3(0.48, 0.94, 1.0), 0.7),
+    v_cycleHue * (0.65 / cyclePeak),
+    u_cycleBeam
+  );
+  vec3 beam = beamColour
     * (v_fanGlow * 0.34 + v_markerGlow * 0.75);
   vec3 energy = v_colour * (0.2 + key * 0.48 + fill * 0.14) + rim * 0.52 + beam;
   float edgeFade = smoothstep(0.0, 1.0, v_edgeFade);
@@ -413,6 +420,7 @@ in float v_sliceGlow;
 in float v_markerGlow;
 in float v_selfGlow;
 in float v_energy;
+in float v_beamGain;
 // Reciprocal footprint area of a depth-grown splat, so its light spreads
 // with its size instead of accumulating with it.
 in float v_spread;
@@ -427,16 +435,20 @@ void main() {
   float haze = 1.0 - smoothstep(0.08, 0.5, radius);
   float core = 1.0 - smoothstep(0.035, 0.25, radius);
   float sparkle = 1.0 - smoothstep(0.0, 0.09, radius);
+  float cyclePeak = max(max(v_cycleHue.r, v_cycleHue.g), max(v_cycleHue.b, 0.2));
+  vec3 cycleBeamHue = v_cycleHue * (0.65 / cyclePeak);
   vec3 fanColour = mix(
     mix(v_colour, vec3(0.45, 0.92, 1.0), 0.58),
-    v_cycleHue,
+    cycleBeamHue,
     u_cycleBeam
   );
   vec3 pointLight =
     v_colour * (haze * 0.026 + core * 0.046)
     + vec3(0.72, 0.9, 1.0) * haze * 0.008
     + vec3(1.0) * sparkle * 0.024;
-  vec3 fanLight = fanColour * v_fanGlow * (haze * 0.055 + core * 0.052);
+  float beamGain = mix(1.0, v_beamGain, u_cycleBeam);
+  vec3 fanLight = fanColour * v_fanGlow * beamGain
+    * (haze * 0.055 + core * 0.052);
   // Self-glow keeps the tint of the point's own palette colour so the cycling
   // bands stay legible; weights sit well below the marker light to avoid
   // blowing out the dense central mass under additive accumulation.
@@ -444,11 +456,12 @@ void main() {
     * (haze * 0.09 + core * 0.13 + sparkle * 0.09);
   vec3 sliceColour = mix(v_colour, vec3(0.78, 0.94, 1.0), 0.45);
   vec3 sliceLight = sliceColour * v_sliceGlow * (haze * 0.02 + core * 0.025);
-  vec3 markerLight = v_markerGlow * (
-    mix(vec3(0.18, 0.82, 1.0), v_cycleHue, u_cycleBeam) * haze * 0.7
-    + mix(vec3(0.72, 0.96, 1.0), mix(v_cycleHue, vec3(1.0), 0.3), u_cycleBeam)
+  vec3 markerLight = v_markerGlow * beamGain
+    * mix(1.0, 0.12, u_cycleBeam) * (
+    mix(vec3(0.18, 0.82, 1.0), cycleBeamHue, u_cycleBeam) * haze * 0.7
+    + mix(vec3(0.72, 0.96, 1.0), cycleBeamHue, u_cycleBeam)
       * core * 0.85
-    + vec3(1.0) * sparkle * 1.8
+    + mix(vec3(1.0), cycleBeamHue, u_cycleBeam) * sparkle * 1.8
   );
   outColor = vec4(
     (pointLight + fanLight + sliceLight + markerLight + selfLight)
@@ -519,11 +532,13 @@ const GROUND_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 uniform sampler2D u_texture;
+uniform sampler2D u_palette;
 uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
 uniform float u_markerRe;
 uniform float u_fanActive;
 uniform float u_cycleBeam;
+uniform float u_phase;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -540,11 +555,15 @@ void main() {
   // footprint here is just the matching full-width line, no trailing wake.
   float front = 1.0 - smoothstep(0.004, 0.018, abs(age));
   float fan = u_fanActive * front;
-  // In cycle mode the plane texture already carries the cycling palette, so
-  // brightening the plane's own colour keeps the footprint in cycle colours.
+  // The interior of the plane is dark, so use the current palette hue there
+  // rather than letting the beam disappear across the bulbs.
+  vec3 phaseColour = texture(u_palette, vec2(u_phase, 0.5)).rgb;
+  float interiorBlend = 1.0 - smoothstep(0.02, 0.1, luma);
+  vec3 cycleTint = mix(colour, phaseColour, interiorBlend);
+  float cyclePeak = max(max(cycleTint.r, cycleTint.g), max(cycleTint.b, 0.1));
   vec3 beamTint = mix(
     vec3(0.012, 0.052, 0.066),
-    colour * 0.055 + vec3(0.004, 0.005, 0.007),
+    cycleTint * (0.07 / cyclePeak),
     u_cycleBeam
   );
   vec3 fanLine = beamTint * fan;
@@ -886,6 +905,7 @@ interface SurfaceResources {
   visibleIterationsUniform: WebGLUniformLocation;
   markerReUniform: WebGLUniformLocation;
   fanActiveUniform: WebGLUniformLocation;
+  cycleBeamUniform: WebGLUniformLocation;
   cameraPositionUniform: WebGLUniformLocation;
   opacityUniform: WebGLUniformLocation;
   opaqueModeUniform: WebGLUniformLocation;
@@ -962,6 +982,7 @@ export class Orbit3DPointCloud {
   private readonly groundMarkerReUniform: WebGLUniformLocation;
   private readonly groundFanActiveUniform: WebGLUniformLocation;
   private readonly groundCycleBeamUniform: WebGLUniformLocation;
+  private readonly groundPhaseUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private readonly surface: SurfaceResources | null;
   private accumulationTexture: WebGLTexture | null = null;
@@ -1183,6 +1204,10 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.groundProgram, "u_cycleBeam"),
       "orbit3d ground cycle-beam uniform",
     );
+    this.groundPhaseUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_phase"),
+      "orbit3d ground phase uniform",
+    );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
       "orbit3d exposure uniform",
@@ -1190,6 +1215,7 @@ export class Orbit3DPointCloud {
     this.surface = createSurfaceResources(gl);
     gl.useProgram(this.groundProgram);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_texture"), 0);
+    gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_palette"), 3);
     gl.uniform2f(
       gl.getUniformLocation(this.groundProgram, "u_planeCentre"),
       GROUND_DOMAIN.centre[0],
@@ -3244,8 +3270,11 @@ export class Orbit3DPointCloud {
       gl.uniform1f(this.groundMarkerReUniform, this.marker.re);
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
       gl.uniform1f(this.groundCycleBeamUniform, cycleBeam);
+      gl.uniform1f(this.groundPhaseUniform, phase);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, palette);
       gl.bindVertexArray(this.groundVao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
@@ -3443,6 +3472,7 @@ export class Orbit3DPointCloud {
     );
     gl.uniform1f(surface.markerReUniform, this.marker.re);
     gl.uniform1f(surface.fanActiveUniform, fanActive ? 1 : 0);
+    gl.uniform1f(surface.cycleBeamUniform, colourMode === "cycle" ? 1 : 0);
     const eye = cameraEye(this.camera);
     gl.uniform3f(surface.cameraPositionUniform, eye[0], eye[1], eye[2]);
     gl.uniform1f(surface.opacityUniform, opacity);
@@ -3865,6 +3895,7 @@ function createSurfaceResources(
       visibleIterationsUniform: uniform("u_visibleIterations"),
       markerReUniform: uniform("u_markerRe"),
       fanActiveUniform: uniform("u_fanActive"),
+      cycleBeamUniform: uniform("u_cycleBeam"),
       cameraPositionUniform: uniform("u_cameraPosition"),
       opacityUniform: uniform("u_opacity"),
       opaqueModeUniform: uniform("u_opaqueMode"),
