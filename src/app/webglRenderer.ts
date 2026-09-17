@@ -23,6 +23,7 @@ import {
   type Orbit3DGroundPlane,
   type Orbit3DSurfaceDiagnosticMode,
 } from "./orbit3d.ts";
+import { boundaryDistanceField } from "./orbitSampler.ts";
 import {
   createKuramotoInitialFields,
   KURAMOTO_TAU,
@@ -523,6 +524,7 @@ uniform float u_modelPhase;
 uniform float u_palettePhase;
 uniform bool u_paletteReverse;
 uniform bool u_paletteCyclic;
+uniform bool u_escapeMaskOutput;
 
 in vec2 v_uv;
 out vec4 outColor;
@@ -557,8 +559,8 @@ vec2 complexCoordinate() {
   return u_center + (pixel / divisor - vec2(0.5)) * vec2(viewWidth, viewHeight);
 }
 
-float escapeValue(vec2 point) {
-  if (u_kind == 0 && mandelbrotMainBody(point)) return 0.0;
+vec2 escapeValue(vec2 point) {
+  if (u_kind == 0 && mandelbrotMainBody(point)) return vec2(0.0);
 
   vec2 z = u_kind == 1 ? point : vec2(0.0);
   float magnitudeSquared = dot(z, z);
@@ -583,14 +585,15 @@ float escapeValue(vec2 point) {
     }
   }
 
-  if (escapedAt < 0) return 0.0;
+  if (escapedAt < 0) return vec2(0.0);
   float magnitude = sqrt(max(magnitudeSquared, 4.000001));
   float smoothValue = float(escapedAt) + 1.0 - log2(max(log2(magnitude), 0.000001));
-  return clamp(smoothValue / float(max(u_maxIterations, 1)), 0.0, 1.0);
+  return vec2(clamp(smoothValue / float(max(u_maxIterations, 1)), 0.0, 1.0), 1.0);
 }
 
 void main() {
-  float value = escapeValue(complexCoordinate());
+  vec2 escape = escapeValue(complexCoordinate());
+  float value = escape.x;
   if (value > 0.001) value = fract(value + u_modelPhase);
   if (u_paletteReverse) value = 1.0 - value;
   float shifted = value;
@@ -599,7 +602,7 @@ void main() {
     else if (value > 0.001 && value < 0.999) shifted = fract(value + u_palettePhase);
   }
   vec3 colour = texture(u_palette, vec2(clamp(shifted, 0.0, 1.0), 0.5)).rgb;
-  outColor = vec4(colour, 1.0);
+  outColor = vec4(colour, u_escapeMaskOutput ? escape.y : 1.0);
 }
 `;
 
@@ -834,6 +837,7 @@ interface FractalUniformLocations {
   palettePhase: WebGLUniformLocation;
   paletteReverse: WebGLUniformLocation;
   paletteCyclic: WebGLUniformLocation;
+  escapeMaskOutput: WebGLUniformLocation;
 }
 
 class GpuKuramotoSimulation {
@@ -1203,6 +1207,8 @@ export class WebGLRendererBackend implements RendererBackend {
   private orbit3dBuildKey = "";
   private orbit3dGroundTexture: WebGLTexture | null = null;
   private orbit3dGroundFbo: WebGLFramebuffer | null = null;
+  private orbit3dInteriorDistanceTexture: WebGLTexture | null = null;
+  private orbit3dInteriorDistanceAttempted = false;
   private orbit3dGroundKey = "";
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
@@ -1707,6 +1713,7 @@ export class WebGLRendererBackend implements RendererBackend {
     ) {
       return {
         texture: this.orbit3dGroundTexture,
+        interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
         centre: GROUND_DOMAIN.centre,
         span: [width * scale, height * scale],
       };
@@ -1754,6 +1761,8 @@ export class WebGLRendererBackend implements RendererBackend {
     }
 
     gl.viewport(0, 0, width, height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
     gl.useProgram(this.fractalProgram);
     gl.uniform1i(this.fractalUniforms.kind, 0);
     gl.uniform2f(this.fractalUniforms.resolution, width, height);
@@ -1778,16 +1787,57 @@ export class WebGLRendererBackend implements RendererBackend {
       this.fractalUniforms.paletteCyclic,
       isCyclic(frame.colourOptions.preset) ? 1 : 0,
     );
+    gl.uniform1i(this.fractalUniforms.escapeMaskOutput, 1);
     gl.bindVertexArray(this.fractalVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
+    if (!this.orbit3dInteriorDistanceAttempted) {
+      this.buildOrbit3dInteriorDistance(width, height, scale);
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.orbit3dGroundKey = cycling ? "" : key;
     return {
       texture: this.orbit3dGroundTexture,
+      interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
       centre: GROUND_DOMAIN.centre,
       span: [width * scale, height * scale],
     };
+  }
+
+  private buildOrbit3dInteriorDistance(width: number, height: number, cellScale: number): void {
+    const gl = this.gl;
+    this.orbit3dInteriorDistanceAttempted = true;
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    if (gl.getError() !== gl.NO_ERROR) return;
+
+    const escaped = new Uint8Array(width * height);
+    for (let index = 0; index < escaped.length; index += 1) {
+      escaped[index] = pixels[index * 4 + 3] >= 128 ? 1 : 0;
+    }
+    const distances = boundaryDistanceField(escaped, width, height);
+    const encoded = new Uint8Array(escaped.length);
+    for (let index = 0; index < encoded.length; index += 1) {
+      encoded[index] = Math.round(Math.min(1, distances[index] * cellScale) * 255);
+    }
+
+    const texture = gl.createTexture();
+    if (!texture) return;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const unpackAlignment = gl.getParameter(gl.UNPACK_ALIGNMENT) as number;
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, encoded);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, unpackAlignment);
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(texture);
+      return;
+    }
+    this.orbit3dInteriorDistanceTexture = texture;
   }
 
   private drawGpuKuramoto(frame: RendererBackendFrame): void {
@@ -1979,6 +2029,7 @@ export class WebGLRendererBackend implements RendererBackend {
       this.fractalUniforms.paletteCyclic,
       isCyclic(frame.colourOptions.preset) ? 1 : 0,
     );
+    gl.uniform1i(this.fractalUniforms.escapeMaskOutput, 0);
   }
 
   private updateFractalPalette(options: ColourMapOptions): void {
@@ -2311,6 +2362,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.kuramoto?.destroy();
     this.orbit3d?.destroy();
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
+    if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
     if (this.orbit3dGroundFbo) gl.deleteFramebuffer(this.orbit3dGroundFbo);
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
@@ -2452,6 +2504,7 @@ export class WebGLRendererBackend implements RendererBackend {
       palettePhase: uniform("u_palettePhase"),
       paletteReverse: uniform("u_paletteReverse"),
       paletteCyclic: uniform("u_paletteCyclic"),
+      escapeMaskOutput: uniform("u_escapeMaskOutput"),
     };
   }
 

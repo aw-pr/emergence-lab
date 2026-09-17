@@ -46,6 +46,8 @@ import {
 } from "./orbitSurfaceComponents.ts";
 import { traceOrbitSurfaceComponentCatalogue } from "./orbitSurfaceCurves.ts";
 
+const CYCLE_DEPTH_SCALE = 1.5;
+
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -173,7 +175,7 @@ void main() {
     float complexity = period > 0.5 ? 0.0 : 1.0;
     // The height offset sends each colour upward through the cloud as the
     // phase advances. It vanishes at z = 0, keeping the boundary phase aligned.
-    float band = a_boundary * 3.0 - position.z * 0.5;
+    float band = -a_boundary * ${CYCLE_DEPTH_SCALE} - position.z * 0.5;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
@@ -321,7 +323,7 @@ void main() {
     if (u_paletteReverse > 0.5) t = 1.0 - t;
     v_colour = mix(texture(u_palette, vec2(t, 0.5)).rgb, vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    float band = a_boundary * 3.0 - a_position.z * 0.5;
+    float band = -a_boundary * ${CYCLE_DEPTH_SCALE} - a_position.z * 0.5;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 cycling = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     v_colour = mix(mix(vec3(0.44, 0.47, 0.53), cycling, 0.7), cycling, step(a_period, 0.5));
@@ -532,7 +534,10 @@ const GROUND_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 uniform sampler2D u_texture;
+uniform sampler2D u_interiorDistance;
 uniform sampler2D u_palette;
+uniform float u_hasInteriorDistance;
+uniform float u_paletteReverse;
 uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
 uniform float u_markerRe;
@@ -544,7 +549,14 @@ out vec4 outColor;
 
 void main() {
   vec2 uv = (v_complex - u_texCentre) / u_texSpan + 0.5;
-  vec3 colour = texture(u_texture, uv).rgb;
+  vec4 groundSample = texture(u_texture, uv);
+  vec3 colour = groundSample.rgb;
+  if (u_cycleBeam > 0.5 && u_hasInteriorDistance > 0.5) {
+    float band = -texture(u_interiorDistance, uv).r * ${CYCLE_DEPTH_SCALE};
+    if (u_paletteReverse > 0.5) band = -band;
+    vec3 interiorColour = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
+    colour = mix(colour, interiorColour, 1.0 - smoothstep(0.05, 0.95, groundSample.a));
+  }
   float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
   vec3 planeInk = pow(
     clamp(mix(vec3(luma), colour, 0.45), vec3(0.0), vec3(1.0)),
@@ -806,6 +818,7 @@ assertOrbit3DGeometry();
 
 export interface Orbit3DGroundPlane {
   texture: WebGLTexture;
+  interiorDistanceTexture: WebGLTexture | null;
   /** (re, im) at the texture's centre. */
   centre: readonly [number, number];
   /** (re, im) extent the texture covers edge to edge. */
@@ -983,6 +996,8 @@ export class Orbit3DPointCloud {
   private readonly groundFanActiveUniform: WebGLUniformLocation;
   private readonly groundCycleBeamUniform: WebGLUniformLocation;
   private readonly groundPhaseUniform: WebGLUniformLocation;
+  private readonly groundHasInteriorDistanceUniform: WebGLUniformLocation;
+  private readonly groundPaletteReverseUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private readonly surface: SurfaceResources | null;
   private accumulationTexture: WebGLTexture | null = null;
@@ -1208,6 +1223,14 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.groundProgram, "u_phase"),
       "orbit3d ground phase uniform",
     );
+    this.groundHasInteriorDistanceUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_hasInteriorDistance"),
+      "orbit3d ground interior-distance uniform",
+    );
+    this.groundPaletteReverseUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_paletteReverse"),
+      "orbit3d ground palette-reverse uniform",
+    );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
       "orbit3d exposure uniform",
@@ -1215,6 +1238,7 @@ export class Orbit3DPointCloud {
     this.surface = createSurfaceResources(gl);
     gl.useProgram(this.groundProgram);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_texture"), 0);
+    gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_interiorDistance"), 1);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_palette"), 3);
     gl.uniform2f(
       gl.getUniformLocation(this.groundProgram, "u_planeCentre"),
@@ -3271,8 +3295,12 @@ export class Orbit3DPointCloud {
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
       gl.uniform1f(this.groundCycleBeamUniform, cycleBeam);
       gl.uniform1f(this.groundPhaseUniform, phase);
+      gl.uniform1f(this.groundHasInteriorDistanceUniform, ground.interiorDistanceTexture ? 1 : 0);
+      gl.uniform1f(this.groundPaletteReverseUniform, paletteReverse ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, ground.interiorDistanceTexture ?? ground.texture);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, palette);
       gl.bindVertexArray(this.groundVao);
