@@ -8,5 +8,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/sims/**/kernel.ts", "src/app/qualityProfiles.ts"]
+  "include": ["src/sims/**/kernel.ts", "src/app/qualityProfiles.ts", "src/app/orbitRefinement.ts"]
 }

@@ -136,7 +136,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "colourMode",
       label: "Colour mode",
       type: "enum",
-      default: "period",
+      default: "cycle",
       options: ["period", "inside-out", "mono", "cycle"],
       info: "Chooses how attractor cells are coloured: by period, inside-out by escape depth, a single tone, or animated cycling. Changes the palette mapping instantly.",
     },
@@ -162,7 +162,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       info: "Strength of the glow drawn at cell boundaries. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
     // Share of the point budget spent re-sampling cascade tails on a finer
-    // sub-grid. Changing it rebuilds the cloud; 0 disables refinement.
+    // sub-grid. Zero leaves CPU sharpening automatic because it has no boundary tier.
     {
       key: "tailRefinement",
       label: "Tail refinement",
@@ -171,7 +171,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 0.6,
       step: 0.05,
-      info: "Share of the point budget spent re-sampling cascade tails on a finer sub-grid, sharpening the boundary. Changing it rebuilds the point cloud; 0 disables refinement.",
+      info: "Share of the point budget spent re-sampling cascade tails on a finer sub-grid, sharpening the boundary. Changing it rebuilds the point cloud; 0 means off on the GPU path, automatic (0.3) on the CPU fallback.",
     },
     // GPU-only live-build detail. The CPU fallback ignores this control and
     // retains the tail-refinement plan above rather than attempting 16M points.
@@ -236,7 +236,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "cycleSpeed",
       label: "Palette cycle speed",
       type: "number",
-      default: 0.151,
+      default: 0.06,
       min: 0,
       max: 5,
       step: 0.001,

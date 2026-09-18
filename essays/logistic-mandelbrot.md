@@ -64,9 +64,10 @@ in every direction, not just along the real line.
 - Orbit the camera around the full object to see off-axis bulbs hold their
   cycles as separate sheets exactly above their bulbs on the ground plane.
 - Switch the colour mode: period tints each bulb by the length of its cycle,
-  height grades the sheets by Re(z), mono keeps the plain additive glow, and
-  cycle continues the plane's palette bands into the cloud and moves both
-  together.
+  inside-out grades the sheets by attraction strength, and mono keeps the
+  plain additive glow. Cycle uses the escape-time palette outside the set,
+  extends its bands inward by distance from the boundary, and carries those
+  colours up through the attractor sheets by orbit height.
 
 ## Further reading
 
