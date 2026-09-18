@@ -231,7 +231,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "realAxisSweep",
       label: "Light beam sweep",
       type: "boolean",
-      default: true,
+      default: false,
       group: "Light beam",
       info: "Shows a tracer light sweeping along the real axis with a fading wake.",
     },
