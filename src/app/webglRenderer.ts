@@ -170,6 +170,27 @@ vec3 rampColour(int preset, float t) {
     return mixRgb(vec3(176.0, 82.0, 112.0), vec3(226.0, 217.0, 226.0), (x - 0.66) / 0.34) / 255.0;
   }
 
+  if (preset == 15) {
+    if (x <= 0.25) return mixRgb(vec3(6.0, 2.0, 6.0), vec3(87.0, 2.0, 49.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(87.0, 2.0, 49.0), vec3(168.0, 53.0, 62.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(168.0, 53.0, 62.0), vec3(223.0, 131.0, 88.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(223.0, 131.0, 88.0), vec3(255.0, 235.0, 210.0), (x - 0.75) / 0.25) / 255.0;
+  }
+
+  if (preset == 16) {
+    if (x <= 0.25) return mixRgb(vec3(7.0, 2.0, 3.0), vec3(72.0, 15.0, 80.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(72.0, 15.0, 80.0), vec3(93.0, 82.0, 180.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(93.0, 82.0, 180.0), vec3(87.0, 164.0, 233.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(87.0, 164.0, 233.0), vec3(209.0, 246.0, 253.0), (x - 0.75) / 0.25) / 255.0;
+  }
+
+  if (preset == 17) {
+    if (x <= 0.25) return mixRgb(vec3(0.0, 4.0, 6.0), vec3(0.0, 63.0, 39.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(0.0, 63.0, 39.0), vec3(57.0, 117.0, 0.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(57.0, 117.0, 0.0), vec3(180.0, 158.0, 48.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(180.0, 158.0, 48.0), vec3(245.0, 194.0, 153.0), (x - 0.75) / 0.25) / 255.0;
+  }
+
   if (x <= 0.28) return mixRgb(vec3(68.0, 1.0, 84.0), vec3(59.0, 82.0, 139.0), x / 0.28) / 255.0;
   if (x <= 0.55) return mixRgb(vec3(59.0, 82.0, 139.0), vec3(33.0, 145.0, 140.0), (x - 0.28) / 0.27) / 255.0;
   if (x <= 0.78) return mixRgb(vec3(33.0, 145.0, 140.0), vec3(94.0, 201.0, 98.0), (x - 0.55) / 0.23) / 255.0;
@@ -2727,6 +2748,12 @@ function presetIndex(preset: ColourPreset): number {
       return 13;
     case "lyapunov":
       return 14;
+    case "rosewood":
+      return 15;
+    case "dusk":
+      return 16;
+    case "verdigris":
+      return 17;
   }
 }
 

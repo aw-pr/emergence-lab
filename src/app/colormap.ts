@@ -21,6 +21,9 @@ export type ColourPreset =
   | "sand"
   | "ice"
   | "amber"
+  | "rosewood"
+  | "dusk"
+  | "verdigris"
   | "brian"
   | "binary"
   | "chemical"
@@ -63,6 +66,9 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "sand", label: "Avalanche glow" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
+  { value: "rosewood", label: "Rosewood" },
+  { value: "dusk", label: "Dusk" },
+  { value: "verdigris", label: "Verdigris" },
   { value: "brian", label: "Brian's Brain" },
   { value: "binary", label: "Binary" },
   { value: "chemical", label: "Chemical blend" },
@@ -169,6 +175,33 @@ const RAMPS: Record<
     [0.28, [92, 35, 8]],
     [0.62, [238, 156, 24]],
     [1, [255, 246, 184]],
+  ],
+  // Seam ramps from the 2026-09-19 cycle-palette sweep
+  // (scripts/sweep-cycle-palette.mjs): five OKLCH stops, dark floor to a
+  // bright ceiling, with a deliberate luminance seam at the wrap so palette
+  // cycling shows one hard band edge per lap. Rosewood is the warm pick
+  // (rose to amber, cream ceiling), Dusk the cool one (red through violet to
+  // sky), Verdigris the cool-to-warm one with a held-chroma ceiling.
+  rosewood: [
+    [0, [6, 2, 6]],
+    [0.25, [87, 2, 49]],
+    [0.5, [168, 53, 62]],
+    [0.75, [223, 131, 88]],
+    [1, [255, 235, 210]],
+  ],
+  dusk: [
+    [0, [7, 2, 3]],
+    [0.25, [72, 15, 80]],
+    [0.5, [93, 82, 180]],
+    [0.75, [87, 164, 233]],
+    [1, [209, 246, 253]],
+  ],
+  verdigris: [
+    [0, [0, 4, 6]],
+    [0.25, [0, 63, 39]],
+    [0.5, [57, 117, 0]],
+    [0.75, [180, 158, 48]],
+    [1, [245, 194, 153]],
   ],
   // Brian's Brain: dead=black, dying=amber, alive=white.
   brian: [
