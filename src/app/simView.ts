@@ -79,6 +79,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "autoRotate",
     "continuousSpin",
     "cycleSpeed",
+    "cycleBands",
     "cascadeReveal",
     "cascadeDuration",
     "realSliceOnly",

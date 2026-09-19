@@ -242,6 +242,19 @@ export class LogisticMandelbrotKernel implements SimKernel {
       step: 0.001,
       info: "Speed of the palette's colour cycling animation.",
     },
+    // Spatial band frequency for Cycle mode. A lap spans 1/cycleBands c-units
+    // of depth into the set; the cardioid is about 0.4 deep, so anything
+    // under 2.5 leaves every bulb holding less than one complete band.
+    {
+      key: "cycleBands",
+      label: "Colour bands per unit",
+      type: "number",
+      default: 1.5,
+      min: 0.5,
+      max: 8,
+      step: 0.25,
+      info: "Palette laps per unit of distance into the set in Cycle mode; higher packs more bands into each bulb. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
+    },
     {
       key: "cascadeReveal",
       label: "Cascade reveal",

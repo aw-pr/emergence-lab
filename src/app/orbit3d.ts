@@ -46,8 +46,6 @@ import {
 } from "./orbitSurfaceComponents.ts";
 import { traceOrbitSurfaceComponentCatalogue } from "./orbitSurfaceCurves.ts";
 
-const CYCLE_DEPTH_SCALE = 1.5;
-
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -63,6 +61,7 @@ uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
 uniform float u_paletteReverse;
+uniform float u_cycleBands;
 uniform float u_sampleCount;
 uniform float u_markerRe;
 uniform float u_fanActive;
@@ -175,7 +174,7 @@ void main() {
     float complexity = period > 0.5 ? 0.0 : 1.0;
     // The height offset sends each colour upward through the cloud as the
     // phase advances. It vanishes at z = 0, keeping the boundary phase aligned.
-    float band = -a_boundary * ${CYCLE_DEPTH_SCALE} - position.z * 0.5;
+    float band = -a_boundary * u_cycleBands - position.z * u_cycleBands / 3.0;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
@@ -264,6 +263,7 @@ uniform int u_colourMode;
 uniform sampler2D u_palette;
 uniform float u_phase;
 uniform float u_paletteReverse;
+uniform float u_cycleBands;
 uniform float u_visibleIterations;
 uniform float u_markerRe;
 uniform float u_fanActive;
@@ -323,7 +323,7 @@ void main() {
     if (u_paletteReverse > 0.5) t = 1.0 - t;
     v_colour = mix(texture(u_palette, vec2(t, 0.5)).rgb, vec3(1.0), 0.12) * 1.1;
   } else if (u_colourMode == 3) {
-    float band = -a_boundary * ${CYCLE_DEPTH_SCALE} - a_position.z * 0.5;
+    float band = -a_boundary * u_cycleBands - a_position.z * u_cycleBands / 3.0;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 cycling = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     v_colour = mix(mix(vec3(0.44, 0.47, 0.53), cycling, 0.7), cycling, step(a_period, 0.5));
@@ -544,6 +544,7 @@ uniform float u_markerRe;
 uniform float u_fanActive;
 uniform float u_cycleBeam;
 uniform float u_phase;
+uniform float u_cycleBands;
 in vec2 v_complex;
 out vec4 outColor;
 
@@ -552,7 +553,7 @@ void main() {
   vec4 groundSample = texture(u_texture, uv);
   vec3 colour = groundSample.rgb;
   if (u_cycleBeam > 0.5 && u_hasInteriorDistance > 0.5) {
-    float band = -texture(u_interiorDistance, uv).r * ${CYCLE_DEPTH_SCALE};
+    float band = -texture(u_interiorDistance, uv).r * u_cycleBands;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 interiorColour = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     colour = mix(colour, interiorColour, 1.0 - smoothstep(0.05, 0.95, groundSample.a));
@@ -919,6 +920,7 @@ interface SurfaceResources {
   markerReUniform: WebGLUniformLocation;
   fanActiveUniform: WebGLUniformLocation;
   cycleBeamUniform: WebGLUniformLocation;
+  cycleBandsUniform: WebGLUniformLocation;
   cameraPositionUniform: WebGLUniformLocation;
   opacityUniform: WebGLUniformLocation;
   opaqueModeUniform: WebGLUniformLocation;
@@ -986,6 +988,7 @@ export class Orbit3DPointCloud {
   private readonly markerReUniform: WebGLUniformLocation;
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly cycleBeamUniform: WebGLUniformLocation;
+  private readonly cycleBandsUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
@@ -998,6 +1001,7 @@ export class Orbit3DPointCloud {
   private readonly groundPhaseUniform: WebGLUniformLocation;
   private readonly groundHasInteriorDistanceUniform: WebGLUniformLocation;
   private readonly groundPaletteReverseUniform: WebGLUniformLocation;
+  private readonly groundCycleBandsUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
   private readonly surface: SurfaceResources | null;
   private accumulationTexture: WebGLTexture | null = null;
@@ -1183,6 +1187,10 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_cycleBeam"),
       "orbit3d cycle-beam uniform",
     );
+    this.cycleBandsUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_cycleBands"),
+      "orbit3d cycle-bands uniform",
+    );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
       "orbit3d marker view-projection uniform",
@@ -1230,6 +1238,10 @@ export class Orbit3DPointCloud {
     this.groundPaletteReverseUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_paletteReverse"),
       "orbit3d ground palette-reverse uniform",
+    );
+    this.groundCycleBandsUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_cycleBands"),
+      "orbit3d ground cycle-bands uniform",
     );
     this.exposureUniform = requireResource(
       gl.getUniformLocation(this.toneMapProgram, "u_exposure"),
@@ -3271,6 +3283,7 @@ export class Orbit3DPointCloud {
     surfaceOpacity = 0.4,
     edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
+    cycleBands = 1.5,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -3295,6 +3308,7 @@ export class Orbit3DPointCloud {
       gl.uniform1f(this.groundFanActiveUniform, fanActive ? 1 : 0);
       gl.uniform1f(this.groundCycleBeamUniform, cycleBeam);
       gl.uniform1f(this.groundPhaseUniform, phase);
+      gl.uniform1f(this.groundCycleBandsUniform, cycleBands);
       gl.uniform1f(this.groundHasInteriorDistanceUniform, ground.interiorDistanceTexture ? 1 : 0);
       gl.uniform1f(this.groundPaletteReverseUniform, paletteReverse ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
@@ -3316,6 +3330,7 @@ export class Orbit3DPointCloud {
       fanActive,
       surfaceOpacity,
       surfaceDiagnosticMode,
+      cycleBands,
     );
     gl.depthMask(true);
     gl.disable(gl.DEPTH_TEST);
@@ -3340,6 +3355,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
+    gl.uniform1f(this.cycleBandsUniform, cycleBands);
     gl.uniform1f(this.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.uniform1f(
@@ -3452,6 +3468,7 @@ export class Orbit3DPointCloud {
     fanActive: boolean,
     opacityValue: number,
     diagnosticMode: Orbit3DSurfaceDiagnosticMode,
+    cycleBands: number,
   ): boolean {
     const surface = this.surface;
     if (
@@ -3493,6 +3510,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(surface.colourModeUniform, COLOUR_MODE_INDEX[colourMode] ?? 0);
     gl.uniform1i(surface.paletteUniform, 3);
     gl.uniform1f(surface.phaseUniform, phase);
+    gl.uniform1f(surface.cycleBandsUniform, cycleBands);
     gl.uniform1f(surface.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(
       surface.visibleIterationsUniform,
@@ -3924,6 +3942,7 @@ function createSurfaceResources(
       markerReUniform: uniform("u_markerRe"),
       fanActiveUniform: uniform("u_fanActive"),
       cycleBeamUniform: uniform("u_cycleBeam"),
+      cycleBandsUniform: uniform("u_cycleBands"),
       cameraPositionUniform: uniform("u_cameraPosition"),
       opacityUniform: uniform("u_opacity"),
       opaqueModeUniform: uniform("u_opaqueMode"),

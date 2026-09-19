@@ -646,6 +646,7 @@ test("metadata matches the renderer contract", () => {
       "realAxisSweep",
       "sweepSpeed",
       "cycleSpeed",
+      "cycleBands",
       "cascadeReveal",
       "cascadeDuration",
       "warmupIterations",

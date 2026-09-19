@@ -362,6 +362,7 @@
       "autoRotate",
       "continuousSpin",
       "cycleSpeed",
+      "cycleBands",
       "cascadeReveal",
       "cascadeDuration",
       "realSliceOnly",
