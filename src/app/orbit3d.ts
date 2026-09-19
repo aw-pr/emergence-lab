@@ -178,8 +178,8 @@ void main() {
     if (u_paletteReverse > 0.5) band = -band;
     vec3 hue = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     vec3 steady = vec3(0.44, 0.47, 0.53);
-    vec3 cycling = mix(hue, vec3(1.0), 0.06) * 1.1;
-    v_colour = mix(mix(steady, cycling, 0.7), cycling, complexity);
+    vec3 cycling = hue * 1.1;
+    v_colour = mix(mix(steady, cycling, 0.85), cycling, complexity);
     // The beam borrows the cycling palette colour even over the softer bulb
     // cells, so a sweep through cycle mode lights everything in cycle colours.
     v_cycleHue = hue;
@@ -326,7 +326,7 @@ void main() {
     float band = -a_boundary * u_cycleBands - a_position.z * u_cycleBands / 3.0;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 cycling = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
-    v_colour = mix(mix(vec3(0.44, 0.47, 0.53), cycling, 0.7), cycling, step(a_period, 0.5));
+    v_colour = mix(mix(vec3(0.44, 0.47, 0.53), cycling, 0.85), cycling, step(a_period, 0.5));
     v_cycleHue = cycling;
   } else {
     float offAxis = clamp(abs(c.y), 0.0, 1.0);
@@ -444,10 +444,15 @@ void main() {
     cycleBeamHue,
     u_cycleBeam
   );
+  // In cycle mode the haze and sparkle highlights take the point's own hue
+  // direction instead of cool white: with eight samples stacking per cell,
+  // a white term a third the size of the colour term is enough to grey the
+  // sheet before the palette can show.
+  vec3 ownTint = v_colour / max(max(v_colour.r, v_colour.g), max(v_colour.b, 0.05));
   vec3 pointLight =
     v_colour * (haze * 0.026 + core * 0.046)
-    + vec3(0.72, 0.9, 1.0) * haze * 0.008
-    + vec3(1.0) * sparkle * 0.024;
+    + mix(vec3(0.72, 0.9, 1.0), ownTint * 0.86, u_cycleBeam) * haze * 0.008
+    + mix(vec3(1.0), ownTint, u_cycleBeam) * sparkle * 0.024;
   float beamGain = mix(1.0, v_beamGain, u_cycleBeam);
   vec3 fanLight = fanColour * v_fanGlow * beamGain
     * (haze * 0.055 + core * 0.052);
@@ -560,7 +565,7 @@ void main() {
   }
   float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
   vec3 planeInk = pow(
-    clamp(mix(vec3(luma), colour, 0.45), vec3(0.0), vec3(1.0)),
+    clamp(mix(vec3(luma), colour, mix(0.45, 0.9, u_cycleBeam)), vec3(0.0), vec3(1.0)),
     vec3(1.45)
   ) * 0.04;
   float age = v_complex.x - u_markerRe;
@@ -602,10 +607,23 @@ uniform float u_exposure;
 in vec2 v_uv;
 out vec4 outColor;
 
+// Hue-preserving tone map. The exponential curve runs on luminance only and
+// the colour is scaled by the mapped/source ratio, so a bright additive stack
+// keeps its hue instead of every channel racing to 1 and the sheet reading
+// white. A channel still above 1 is pulled toward the same-luminance grey
+// just far enough to reach the gamut edge, which keeps luminance exact and
+// only desaturates where the display genuinely cannot show the colour.
 void main() {
-  vec3 hdr = texture(u_accumulation, v_uv).rgb;
-  vec3 mapped = vec3(1.0) - exp(-hdr * u_exposure);
-  mapped = pow(mapped, vec3(1.0 / 2.2));
+  vec3 hdr = texture(u_accumulation, v_uv).rgb * u_exposure;
+  float lum = dot(hdr, vec3(0.2126, 0.7152, 0.0722));
+  float mappedLum = 1.0 - exp(-lum);
+  vec3 mapped = lum > 1e-6 ? hdr * (mappedLum / lum) : vec3(0.0);
+  float peak = max(mapped.r, max(mapped.g, mapped.b));
+  if (peak > 1.0) {
+    float toGrey = (peak - 1.0) / max(peak - mappedLum, 1e-6);
+    mapped = mix(mapped, vec3(mappedLum), clamp(toGrey, 0.0, 1.0));
+  }
+  mapped = pow(clamp(mapped, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
   vec3 background = vec3(0.002, 0.004, 0.012);
   outColor = vec4(background + mapped, 1.0);
 }
