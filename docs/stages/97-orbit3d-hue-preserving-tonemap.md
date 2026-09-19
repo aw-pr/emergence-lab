@@ -105,6 +105,30 @@ judged on the cloud.
   what stops an all-black frame passing the chroma targets, so it must not
   move.
 
+## Outcome (2026-09-19, worked directly by the orchestrator, not dispatched)
+
+Landed on `dev` the same day without an Autometta run, at operator request.
+Two departures from the card as written, recorded here rather than hidden:
+
+- **Scope widened beyond the tone map.** The luminance-mapped tone map alone
+  took cloud chroma from 0.020 to 0.027 on magma at 5 bands per unit. The
+  loss was mostly in `POINT_FRAGMENT_SHADER` (white sparkle and cool haze
+  highlights), the cycle branch of both vertex shaders (6% white admixture,
+  30% grey blend on periodic sheets) and `GROUND_FRAGMENT_SHADER` (55%
+  desaturated ink). All are now hue-preserving when `u_cycleBeam` is 1, so
+  only Cycle mode changes.
+- **Deliverable 2 not met as stated.** Whole-frame chroma rose 1.6× to 1.8×
+  (magma 0.023 → 0.037, rosewood 0.017 → 0.026), cloud-only 2×
+  (0.020 → 0.041), not 3×. Deliverable 3 met for verdigris (0.031) and not
+  for magma (0.071) or rosewood (0.061). The remaining loss is hue averaging
+  across stacked sheets and the achromatic ends of the seam ramps; see the
+  sweep record's appendix.
+
+Criterion 4 held: the four logistic-Mandelbrot smoke cases pass unchanged.
+Criterion 5 judged by the orchestrator from the frames, so this card still
+lacks a cross-family verification; card 96 can absorb that by re-running
+the browser sweep on the landed tree if the operator queues it.
+
 ## Out of scope
 
 - The interior scalar (distance versus multiplier).

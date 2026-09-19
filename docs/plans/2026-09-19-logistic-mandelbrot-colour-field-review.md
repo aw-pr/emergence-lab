@@ -81,8 +81,11 @@ intended reading and it holds.
    for a saturated ramp texel. `TONEMAP_FRAGMENT_SHADER` applies
    `1 - exp(-hdr * exposure)` per channel, so a bright additive stack pushes
    all three channels to 1 and the hue collapses before the palette can
-   show. This, not the ramp, is why the cycle reads as a brightness pulse
-   on the cloud. Stage card 97 proposes a hue-preserving tone map.
+   show. Later the same day this was measured more carefully: the tone map
+   was a minor part, and most of the loss was the point shader's white
+   sparkle and cool haze highlights, a white admixture into the cycle hue,
+   the grey blend on periodic sheets and the desaturated ground ink. All
+   are now hue-preserving in Cycle mode; see the sweep record's appendix.
 
 ## Can the interior be made faithful?
 

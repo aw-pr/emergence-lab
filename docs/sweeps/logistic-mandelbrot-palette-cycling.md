@@ -170,3 +170,58 @@ column shows.
 
 None. Three presets added to the picker; default palette, gamma, contrast
 and `cycleBands` unchanged. The operator picks from the frames.
+
+## Appendix: after the cycle-mode render fix (2026-09-19, later the same day)
+
+Card 97 was worked directly rather than queued. The hue-preserving tone
+map on its own moved cloud chroma from 0.020 to 0.027 on magma at 5 bands,
+so the tone map was a minor part of the loss. The rest was in the point
+shader: cool-white haze and sparkle highlights at about a third of the
+colour term, a 6% white admixture into the cycle hue, periodic sheets
+blended 30% toward grey, and the ground ink desaturated 55%. All four are
+now hue-preserving in Cycle mode only (`u_cycleBeam` gates them); the other
+colour modes render as before. Measured on the same frames:
+
+| palette | bands/unit | chroma before → after | whiteClip before → after | edges after |
+|---|---|---|---|---|
+| amber (shipped) | 1.5 | 0.012 → 0.020 | 0.077 → 0.043 | 0.176 |
+| amber (shipped) | 3 | 0.013 → 0.022 | 0.078 → 0.044 | 0.186 |
+| amber (shipped) | 5 | 0.013 → 0.021 | 0.076 → 0.044 | 0.193 |
+| amber k1.4 | 1.5 | 0.013 → 0.022 | 0.073 → 0.039 | 0.173 |
+| amber k1.4 | 3 | 0.015 → 0.025 | 0.068 → 0.040 | 0.184 |
+| amber k1.4 | 5 | 0.015 → 0.025 | 0.067 → 0.041 | 0.191 |
+| magma k1.8 | 1.5 | 0.020 → 0.035 | 0.113 → 0.067 | 0.261 |
+| magma k1.8 | 3 | 0.023 → 0.037 | 0.107 → 0.065 | 0.285 |
+| magma k1.8 | 5 | 0.023 → 0.037 | 0.105 → 0.071 | 0.300 |
+| rosewood | 1.5 | 0.017 → 0.027 | 0.074 → 0.069 | 0.177 |
+| rosewood | 3 | 0.017 → 0.027 | 0.070 → 0.062 | 0.186 |
+| rosewood | 5 | 0.017 → 0.026 | 0.069 → 0.061 | 0.193 |
+| dusk | 1.5 | 0.018 → 0.025 | 0.075 → 0.069 | 0.176 |
+| dusk | 3 | 0.018 → 0.026 | 0.071 → 0.062 | 0.185 |
+| dusk | 5 | 0.018 → 0.025 | 0.071 → 0.061 | 0.191 |
+| verdigris | 1.5 | 0.016 → 0.029 | 0.064 → 0.031 | 0.170 |
+| verdigris | 3 | 0.018 → 0.032 | 0.058 → 0.032 | 0.182 |
+| verdigris | 5 | 0.018 → 0.032 | 0.057 → 0.031 | 0.190 |
+
+Colour travel (3 bands per unit) rose for every palette: magma 11.35 →
+13.63, verdigris 8.26 → 10.17, amber 8.51 → 9.46.
+
+Cloud-only chroma (a 400×400 window on the cloud, excluding the ground)
+for magma at 5 bands: 0.020 → 0.041. A probe with the fully saturated turbo
+ramp on the old shaders gave 0.043, and lowering exposure to 0.25 on the old
+shaders left chroma at 0.021 with white clipping gone, which is what located
+the loss in the point shader rather than in clipping.
+
+Card 97's 3× target was not met; the gain is 1.6× to 1.8× whole-frame and
+2× on the cloud. What remains is hue averaging where sheets at different
+heights, hence different band phases, stack through the same pixel, and the
+achromatic floor and ceiling of every seam ramp. Neither is a shader defect.
+The four logistic-Mandelbrot smoke cases, including the zoom-clamp blow-out
+gate, pass unchanged.
+
+By eye on `frames/magma-k1-8-b5.png` and `frames/rosewood-b5.png`: the
+cardioid sheet and the period-2 disc now carry concentric colour bands, the
+sheets still read as stacked light, and the chaotic band still glows
+brighter than the periodic sheets. Amber at the shipped contrast 2.4 still
+reads cream with an amber fringe, which is the ramp's clipping, not the
+renderer.
