@@ -126,7 +126,8 @@ has run the sweep on the landed tree.
 
 ## Contract test
 
-- **Test file:** none.
+- **Test file:** None
+- **Assertions digest:** None
 
 ## Out of scope
 
