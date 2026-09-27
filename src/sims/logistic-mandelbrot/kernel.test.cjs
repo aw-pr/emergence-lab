@@ -694,7 +694,7 @@ test("metadata matches the renderer contract", () => {
   );
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
-  assert.equal(cycleSpeed?.default, 0.06);
+  assert.equal(cycleSpeed?.default, 0.1);
   assert.equal(cycleSpeed?.min, 0);
   assert.equal(cycleSpeed?.max, 5);
   assert.equal(cycleSpeed?.step, 0.001);
