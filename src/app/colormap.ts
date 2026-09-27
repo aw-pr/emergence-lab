@@ -268,10 +268,9 @@ export function defaultColourOptionsFor(
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
-      // Operator's pick from the 2026-09-19 cycle-palette sweep: magma at a
-      // moderate contrast keeps the wrap seam sharp while leaving most of
-      // each lap as visible bands, where contrast 2.4 clipped 58% of it flat.
-      return { ...base, preset: "magma", gamma: 1.2, contrast: 1.8 };
+      // Amber against the cycle colour mode: the warm ramp with a strong lift
+      // holds the plane's bands while the cycling dots stay legible.
+      return { ...base, preset: "amber", gamma: 1.65, contrast: 2.4 };
     case "markus-lyapunov":
       return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":

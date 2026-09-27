@@ -3301,7 +3301,7 @@ export class Orbit3DPointCloud {
     surfaceOpacity = 0.4,
     edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
-    cycleBands = 4,
+    cycleBands = 1.5,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;

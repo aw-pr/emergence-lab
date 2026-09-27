@@ -1638,7 +1638,7 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "surfaceOpacity", 0.4),
         numericParam(frame.params, "edgeGlow", 0),
         surfaceDiagnosticMode,
-        numericParam(frame.params, "cycleBands", 4),
+        numericParam(frame.params, "cycleBands", 1.5),
       )
     ) {
       return;

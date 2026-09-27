@@ -258,14 +258,13 @@ export class LogisticMandelbrotKernel implements SimKernel {
       info: "Speed of the palette's colour cycling animation.",
     },
     // Spatial band frequency for Cycle mode. A lap spans 1/cycleBands c-units
-    // of depth into the set; the cardioid is 0.52 deep and the period-2 disc
-    // 0.25 (card 96 measured both), so 4 gives the cardioid two complete
-    // bands and the disc one.
+    // of depth into the set; the cardioid is about 0.4 deep, so anything
+    // under 2.5 leaves every bulb holding less than one complete band.
     {
       key: "cycleBands",
       label: "Colour bands per unit",
       type: "number",
-      default: 4,
+      default: 1.5,
       min: 0.5,
       max: 8,
       step: 0.25,
