@@ -268,9 +268,9 @@ export function defaultColourOptionsFor(
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
-      // Amber against the cycle colour mode: the warm ramp with a strong lift
-      // holds the plane's bands while the cycling dots stay legible.
-      return { ...base, preset: "amber", gamma: 1.65, contrast: 2.4 };
+      // A seamless cyclic ramp lets the orbit's cycle phase wrap without
+      // introducing a stationary seam through the colour field.
+      return { ...base, preset: "twilight", gamma: 1.65, contrast: 2.4 };
     case "markus-lyapunov":
       return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
