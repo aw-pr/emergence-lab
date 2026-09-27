@@ -359,6 +359,7 @@
       "tailRefinement",
       "boundaryDetail",
       "pointDensity",
+      "zoomGrowth",
       "autoRotate",
       "continuousSpin",
       "cycleSpeed",

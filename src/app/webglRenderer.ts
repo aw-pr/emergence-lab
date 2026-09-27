@@ -1639,6 +1639,7 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "edgeGlow", 0),
         surfaceDiagnosticMode,
         numericParam(frame.params, "cycleBands", 1.5),
+        numericParam(frame.params, "zoomGrowth", 0),
       )
     ) {
       return;

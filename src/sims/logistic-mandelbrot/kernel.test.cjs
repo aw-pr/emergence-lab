@@ -641,6 +641,7 @@ test("metadata matches the renderer contract", () => {
       "tailRefinement",
       "boundaryDetail",
       "pointDensity",
+      "zoomGrowth",
       "autoRotate",
       "continuousSpin",
       "realAxisSweep",

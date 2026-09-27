@@ -197,6 +197,21 @@ export class LogisticMandelbrotKernel implements SimKernel {
       step: 0.05,
       info: "Fraction of built points actually drawn. Culled per frame in the vertex shader, so dragging it is instant with no rebuild.",
     },
+    // How much a splat grows with zoom magnification. 0 is the constant pixel
+    // size the cloud had before card 88: crisp dots that separate into a
+    // lattice past the sample pitch. 1 is card 92's square-root growth with
+    // its light spread over the larger footprint, which fills the lattice at
+    // the cost of resolving less. Resolved per frame, no rebuild.
+    {
+      key: "zoomGrowth",
+      label: "Splat growth on zoom",
+      type: "number",
+      default: 0,
+      min: 0,
+      max: 1,
+      step: 0.05,
+      info: "How much each point grows as you zoom in. 0 keeps points a constant pixel size, so they stay crisp and separate into a lattice up close; 1 grows them with the square root of the magnification to fill that lattice. Resolved per frame in the shader, no rebuild.",
+    },
     {
       key: "autoRotate",
       label: "Auto rotate",

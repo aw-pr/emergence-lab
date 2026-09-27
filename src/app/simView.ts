@@ -76,6 +76,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "tailRefinement",
     "boundaryDetail",
     "pointDensity",
+    "zoomGrowth",
     "autoRotate",
     "continuousSpin",
     "cycleSpeed",

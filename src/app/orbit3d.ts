@@ -71,6 +71,7 @@ uniform float u_boundaryDetailBaseCellCount;
 uniform float u_boundaryDetailOpacity;
 uniform float u_hybridMode;
 uniform float u_edgeGlow;
+uniform float u_zoomGrowth;
 // Prebaked clouds upload quantized attributes (u16 positions over the
 // sampler domain, u8 periods) as normalized ints; these remap them back.
 // Live builds upload raw floats and set offset 0 / scale 1.
@@ -87,11 +88,11 @@ out float v_energy;
 out float v_beamGain;
 out float v_spread;
 
-// How fast a splat grows with the zoom magnification, and how much of its
-// intensity it keeps while it grows. A flux exponent of 2.0 is exact
-// conservation: a splat twice as wide is a quarter as bright per pixel, so
-// the light the sheet emits is the same whatever the camera distance.
-const float POINT_GROWTH_EXPONENT = 0.5;
+// How much of its intensity a splat keeps while it grows with zoom. A flux
+// exponent of 2.0 is exact conservation: a splat twice as wide is a quarter
+// as bright per pixel, so the light the sheet emits is the same whatever the
+// camera distance. The growth exponent itself is u_zoomGrowth * 0.5: the
+// square-root growth card 92 settled on at 1, constant size at 0.
 const float POINT_FLUX_EXPONENT = 2.0;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
@@ -224,12 +225,13 @@ void main() {
   // splat already overlaps its neighbours there. Growing it linearly with the
   // magnification holds that overlap ratio fixed, which is invisible while
   // the splat is a dot and reads as a blur kernel once the same ratio means
-  // 32 px. Growing with POINT_GROWTH_EXPONENT closes the gaps the
+  // 32 px. Growing with a sub-linear exponent closes the gaps the
   // magnification opens while keeping the splat a small multiple of the
-  // sample pitch.
+  // sample pitch; at u_zoomGrowth 0 the splat never grows and the lattice
+  // shows instead.
   float unzoomedSize = clamp(baseSize, 1.8, 32.0);
   float sizedPoint = clamp(
-    baseSize * pow(max(1.0, depthScale), POINT_GROWTH_EXPONENT),
+    baseSize * pow(max(1.0, depthScale), u_zoomGrowth * 0.5),
     1.8,
     32.0
   );
@@ -1007,6 +1009,7 @@ export class Orbit3DPointCloud {
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly cycleBeamUniform: WebGLUniformLocation;
   private readonly cycleBandsUniform: WebGLUniformLocation;
+  private readonly zoomGrowthUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
@@ -1208,6 +1211,10 @@ export class Orbit3DPointCloud {
     this.cycleBandsUniform = requireResource(
       gl.getUniformLocation(this.pointProgram, "u_cycleBands"),
       "orbit3d cycle-bands uniform",
+    );
+    this.zoomGrowthUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_zoomGrowth"),
+      "orbit3d zoom-growth uniform",
     );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
@@ -3302,6 +3309,7 @@ export class Orbit3DPointCloud {
     edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
     cycleBands = 1.5,
+    zoomGrowth = 0,
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -3374,6 +3382,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
     gl.uniform1f(this.cycleBandsUniform, cycleBands);
+    gl.uniform1f(this.zoomGrowthUniform, Math.min(1, Math.max(0, zoomGrowth)));
     gl.uniform1f(this.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.uniform1f(
