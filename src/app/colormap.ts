@@ -268,9 +268,10 @@ export function defaultColourOptionsFor(
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
-      // A seamless cyclic ramp lets the orbit's cycle phase wrap without
-      // introducing a stationary seam through the colour field.
-      return { ...base, preset: "twilight", gamma: 1.65, contrast: 2.4 };
+      // Operator's pick from the 2026-09-19 cycle-palette sweep: magma at a
+      // moderate contrast keeps the wrap seam sharp while leaving most of
+      // each lap as visible bands, where contrast 2.4 clipped 58% of it flat.
+      return { ...base, preset: "magma", gamma: 1.2, contrast: 1.8 };
     case "markus-lyapunov":
       return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
