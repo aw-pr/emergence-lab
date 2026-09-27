@@ -147,6 +147,15 @@ vec3 rampColour(int preset, float t) {
     return mixRgb(vec3(251.0, 136.0, 97.0), vec3(252.0, 253.0, 191.0), (x - 0.75) / 0.25) / 255.0;
   }
 
+  if (preset == 18) {
+    if (x <= 0.18) return mixRgb(vec3(40.0, 16.0, 60.0), vec3(104.0, 28.0, 128.0), smoothstep(0.0, 0.18, x)) / 255.0;
+    if (x <= 0.36) return mixRgb(vec3(104.0, 28.0, 128.0), vec3(190.0, 58.0, 111.0), smoothstep(0.18, 0.36, x)) / 255.0;
+    if (x <= 0.52) return mixRgb(vec3(190.0, 58.0, 111.0), vec3(247.0, 139.0, 96.0), smoothstep(0.36, 0.52, x)) / 255.0;
+    if (x <= 0.64) return mixRgb(vec3(247.0, 139.0, 96.0), vec3(252.0, 235.0, 183.0), smoothstep(0.52, 0.64, x)) / 255.0;
+    if (x <= 0.8) return mixRgb(vec3(252.0, 235.0, 183.0), vec3(184.0, 78.0, 114.0), smoothstep(0.64, 0.8, x)) / 255.0;
+    return mixRgb(vec3(184.0, 78.0, 114.0), vec3(40.0, 16.0, 60.0), smoothstep(0.8, 1.0, x)) / 255.0;
+  }
+
   if (preset == 10) {
     if (x <= 0.14) return mixRgb(vec3(48.0, 18.0, 59.0), vec3(50.0, 100.0, 220.0), x / 0.14) / 255.0;
     if (x <= 0.29) return mixRgb(vec3(50.0, 100.0, 220.0), vec3(30.0, 175.0, 235.0), (x - 0.14) / 0.15) / 255.0;
@@ -287,11 +296,11 @@ vec3 singleChannelColour(float t) {
 }
 
 vec3 twoChannelColour(float c0, float c1) {
-  // Cyclic presets (twilight 11, phase 12) carry a hue channel: c1 picks the
+  // Cyclic presets carry a hue channel: c1 picks the
   // colour, c0 only says how brightly it burns. Fading towards black keeps an
   // empty cell black — mirrors the isCyclic branch in colormap.ts, which the
   // canvas renderer already honours.
-  if (u_preset == 11 || u_preset == 12) {
+  if (u_paletteCyclic) {
     vec3 hue = rampColour(u_preset, fract(c1));
     return hue * adjust(c0);
   }
@@ -2754,6 +2763,8 @@ function presetIndex(preset: ColourPreset): number {
       return 16;
     case "verdigris":
       return 17;
+    case "magma-cyclic":
+      return 18;
   }
 }
 

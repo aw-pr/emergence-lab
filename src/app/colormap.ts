@@ -15,6 +15,7 @@ export type ColourPreset =
   | "plasma"
   | "inferno"
   | "magma"
+  | "magma-cyclic"
   | "turbo"
   | "twilight"
   | "phase"
@@ -60,6 +61,7 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "plasma", label: "Plasma" },
   { value: "inferno", label: "Inferno" },
   { value: "magma", label: "Magma" },
+  { value: "magma-cyclic", label: "Magma (cyclic)" },
   { value: "turbo", label: "Turbo" },
   { value: "twilight", label: "Twilight (cyclic)" },
   { value: "phase", label: "Phase silk (cyclic)" },
@@ -81,11 +83,12 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
  * (fract) without a visible seam sweeping through the image. Consumed by the
  * renderer's palette-cycling path.
  */
-type CyclicPreset = "twilight" | "phase";
+type CyclicPreset = "twilight" | "phase" | "magma-cyclic";
 
 const CYCLIC_PRESETS: ReadonlySet<string> = new Set<CyclicPreset>([
   "twilight",
   "phase",
+  "magma-cyclic",
 ]);
 
 /** Narrows to the ramp presets, which is what lets callers hand a cyclic
@@ -137,6 +140,17 @@ const RAMPS: Record<
     [0.5, [182, 54, 121]],
     [0.75, [251, 136, 97]],
     [1, [252, 253, 191]],
+  ],
+  // A lifted purple floor preserves faint detail; rose closes the warm loop
+  // without retracing the outward ramp or snapping from cream to black.
+  "magma-cyclic": [
+    [0, [40, 16, 60]],
+    [0.18, [104, 28, 128]],
+    [0.36, [190, 58, 111]],
+    [0.52, [247, 139, 96]],
+    [0.64, [252, 235, 183]],
+    [0.8, [184, 78, 114]],
+    [1, [40, 16, 60]],
   ],
   turbo: [
     [0, [48, 18, 59]],
@@ -268,9 +282,9 @@ export function defaultColourOptionsFor(
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
-      // Amber against the cycle colour mode: the warm ramp with a strong lift
-      // holds the plane's bands while the cycling dots stay legible.
-      return { ...base, preset: "amber", gamma: 1.65, contrast: 2.4 };
+      // A seamless cyclic ramp lets the orbit's cycle phase wrap without
+      // introducing a stationary seam through the colour field.
+      return { ...base, preset: "magma-cyclic", gamma: 1.65, contrast: 2.4 };
     case "markus-lyapunov":
       return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
@@ -333,7 +347,11 @@ function rampColour(
     const [leftAt, leftColour] = stops[i - 1];
     if (x <= rightAt) {
       const localT = (x - leftAt) / (rightAt - leftAt || 1);
-      return mix(leftColour, rightColour, localT);
+      return mix(
+        leftColour,
+        rightColour,
+        preset === "magma-cyclic" ? smoothstep01(localT) : localT,
+      );
     }
   }
   return stops[stops.length - 1][1];

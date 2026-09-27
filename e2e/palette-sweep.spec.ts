@@ -32,9 +32,11 @@ interface PaletteCandidate {
   contrast: number;
 }
 
-/** Shipped default first, its contrast-relaxed form second, then the sweep's picks. */
+/** Shipped default first, matched references next, then the sweep's picks. */
 const CANDIDATES: PaletteCandidate[] = [
-  { label: "twilight (shipped)", preset: "twilight", gamma: 1.65, contrast: 2.4 },
+  { label: "magma cyclic (shipped)", preset: "magma-cyclic", gamma: 1.65, contrast: 2.4 },
+  { label: "twilight", preset: "twilight", gamma: 1.65, contrast: 2.4 },
+  { label: "magma", preset: "magma", gamma: 1.65, contrast: 2.4 },
   { label: "amber k1.4", preset: "amber", gamma: 1.2, contrast: 1.4 },
   { label: "magma k1.8", preset: "magma", gamma: 1.2, contrast: 1.8 },
   { label: "rosewood", preset: "rosewood", gamma: 1.65, contrast: 1.4 },
