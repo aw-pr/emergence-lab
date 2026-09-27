@@ -250,7 +250,7 @@ test("cyclic phase sampling does not draw a false midpoint seam", async ({ page 
 
 test("Kuramoto defaults to the softened cyclic phase palette", async ({ page }) => {
   await page.goto("/#/kuramoto-oscillators");
-  await expect(page.locator(".controls__colour select")).toHaveValue("phase");
+  await expect(page.getByRole("combobox", { name: "Palette", exact: true })).toHaveValue("phase");
 });
 
 for (const slug of ["mandelbrot", "julia-set"]) {
