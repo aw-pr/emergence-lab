@@ -145,3 +145,37 @@ Attempt 2 instructions, in addition to everything above:
    last turn. A partial result with a written envelope is better than none.
 6. Budget: attempt 1 spent 21.2M tokens (97.8% cached input). Keep context
    lean: read files by range, do not re-read large files or dump full logs.
+
+## Re-brief 2 (2026-09-30, attempt 3)
+
+Attempt 2 is preserved at `db7266a5076a1c478c21410a95117f8e06124195` on
+`wip/98-logistic-mandelbrot-inside-out-cycling-attempt-2`. The Sol verifier
+passed criteria 1-5 and failed only criterion 6: there is no reverse
+before/after browser time sequence, so "colour travels inwards in reverse"
+could not be judged visually. The single reverse screenshot in the controls
+test is taken after palette and bands also change. The reversal mathematics
+passed criterion 4; do not change the implementation.
+
+Attempt 3 instructions, in addition to everything above and Re-brief 1:
+
+1. Start from the preserved work: `git checkout db7266a5076a1c478c21410a95117f8e06124195 -- .`
+   in the run worktree, then restore the stage card to HEAD
+   (`git checkout HEAD -- docs/stages/98-logistic-mandelbrot-inside-out-cycling.md`).
+2. Add to `e2e/inside-out-cycling.spec.ts` a deterministic direction-of-travel
+   evidence test for cloud and hybrid, framing a view that shows the ground
+   and a period-2 bulb: with palette, bands, geometry and camera held fixed
+   (defaults except Inside-out mode), capture a time sequence of at least three
+   frames at speed 0.1 forward, then the same sequence with reverse on. Save the
+   frames under `e2e/artifacts/inside-out-cycling/reverse-sequence/` with
+   literal, ordered file names, and assert from production values (phase
+   uniform sign and palette coordinate at a fixed m) that forward and reverse
+   move in opposite directions. Frames alone are evidence for the visual
+   judgement, not a substitute for the assertion.
+3. The verifier also noted the render-timing test can pass when the unchanged
+   baseline is unavailable (`e2e/inside-out-cycling.spec.ts` around 439-477).
+   Make that case fail or report the criterion as unmet explicitly instead of
+   passing silently.
+4. List the new sequence paths in `docs/audits/98-inside-out-cycling.md` under
+   criterion 6, re-run the full new spec and criterion 1's commands in the
+   foreground, and write the envelope as your final action.
+5. Keep it small: this is an evidence and test-honesty fix, not a rework.
