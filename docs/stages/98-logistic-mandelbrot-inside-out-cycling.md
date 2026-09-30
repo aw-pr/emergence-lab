@@ -115,3 +115,33 @@ Worker returns changed paths, commands/results, numerical/cache decisions, evide
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes. Do not change auth routing to work around quota or browser failures. Resolve the named canonical model identities through the installed Autometta model resolver before admission; do not silently downgrade or substitute a family. Use the installed dispatch wrappers and their stdin/log handling, not handwritten agent commands.
+
+## Re-brief 1 (2026-09-30, attempt 2)
+
+Attempt 1 (Fable 5.1) completed nearly all implementation and is preserved at
+`934f551700729ea706b5e1abf4b2d60c2ab2e495` on
+`wip/98-logistic-mandelbrot-inside-out-cycling-attempt-1`. It stalled with no
+dispatch envelope: its final turn launched the remaining test chain as a
+background task and ended the turn to "wait for its completion notification".
+Headless `-p` dispatch exits when the turn ends, so no notification arrives.
+
+Attempt 2 instructions, in addition to everything above:
+
+1. Start from the preserved work: `git checkout 934f551700729ea706b5e1abf4b2d60c2ab2e495 -- .`
+   in the run worktree, then `git rm --cached test-results/.last-run.json`
+   (and delete it) because it was swept into the WIP commit and must not ship.
+   Do not re-implement from scratch; review the diff against the card and fix only
+   what is wrong or missing.
+2. **Run every command in the foreground and wait for it to exit.** Never use
+   `run_in_background`, `&`, `nohup` or a monitor, and never end a turn while a
+   command is outstanding. If a suite is slow, run it with a sufficient timeout.
+3. The attempt-1 evidence under ignored `e2e/artifacts/inside-out-cycling/` was
+   lost when the worktree was reaped. Regenerate the baseline and after evidence
+   yourself; do not cite attempt-1 artifact paths.
+4. Replace `SMOKE_PLACEHOLDER` in `docs/audits/98-inside-out-cycling.md` with
+   real results, re-run all criterion 1-5 commands plus the full new spec, and
+   update the audit's numbers from this attempt's runs.
+5. Write the dispatch envelope before finishing, as the final action of your
+   last turn. A partial result with a written envelope is better than none.
+6. Budget: attempt 1 spent 21.2M tokens (97.8% cached input). Keep context
+   lean: read files by range, do not re-read large files or dump full logs.
