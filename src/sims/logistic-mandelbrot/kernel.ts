@@ -138,7 +138,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "enum",
       default: "cycle",
       options: ["period", "inside-out", "mono", "cycle"],
-      info: "Chooses how attractor cells are coloured: by period, inside-out by escape depth, a single tone, or animated cycling. Changes the palette mapping instantly.",
+      info: "Chooses how attractor cells are coloured: by period; inside-out by attracting-cycle strength, with palette contours that ring each bulb centre and travel outward at the cycle speed (reverse turns them inward, speed 0 holds them, bands per unit sets their density; bounded cells with no detected period stay a neutral grey); a single tone; or Cycle's animated bands by boundary distance and height. Changes the palette mapping instantly.",
     },
     {
       key: "exposure",
@@ -255,7 +255,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 5,
       step: 0.001,
-      info: "Speed of the palette's colour cycling animation.",
+      info: "Speed of the palette's colour cycling animation in Cycle and Inside-out modes; 0 holds the colours still.",
     },
     // Spatial band frequency for Cycle mode. A lap spans 1/cycleBands c-units
     // of depth into the set; the cardioid is about 0.4 deep, so anything
@@ -268,7 +268,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.5,
       max: 8,
       step: 0.25,
-      info: "Palette laps per unit of distance into the set in Cycle mode; higher packs more bands into each bulb. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
+      info: "Palette laps per unit of distance into the set in Cycle mode, or per unit of cycle multiplier in Inside-out mode; higher packs more bands into each bulb. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
     {
       key: "cascadeReveal",

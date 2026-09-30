@@ -19,6 +19,7 @@ import {
   buildGpuOrbitCloud,
   reservoirSlot,
   type OrbitCloudBuffers,
+  type OrbitSampleResult,
 } from "./orbitSampler.ts";
 import {
   buildOrbitSurface,
@@ -45,6 +46,7 @@ import {
   type OrbitSurfaceComponentClassification,
 } from "./orbitSurfaceComponents.ts";
 import { traceOrbitSurfaceComponentCatalogue } from "./orbitSurfaceCurves.ts";
+import { INSIDE_OUT_GLSL } from "./orbitColour.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -71,6 +73,7 @@ uniform float u_boundaryDetailBaseCellCount;
 uniform float u_boundaryDetailOpacity;
 uniform float u_hybridMode;
 uniform float u_edgeGlow;
+uniform float u_zoomGrowth;
 // Prebaked clouds upload quantized attributes (u16 positions over the
 // sampler domain, u8 periods) as normalized ints; these remap them back.
 // Live builds upload raw floats and set offset 0 / scale 1.
@@ -86,12 +89,12 @@ out float v_selfGlow;
 out float v_energy;
 out float v_beamGain;
 out float v_spread;
-
-// How fast a splat grows with the zoom magnification, and how much of its
-// intensity it keeps while it grows. A flux exponent of 2.0 is exact
-// conservation: a splat twice as wide is a quarter as bright per pixel, so
-// the light the sheet emits is the same whatever the camera distance.
-const float POINT_GROWTH_EXPONENT = 0.5;
+${INSIDE_OUT_GLSL}
+// How much of its intensity a splat keeps while it grows with zoom. A flux
+// exponent of 2.0 is exact conservation: a splat twice as wide is a quarter
+// as bright per pixel, so the light the sheet emits is the same whatever the
+// camera distance. The growth exponent itself is u_zoomGrowth * 0.5: the
+// square-root growth card 92 settled on at 1, constant size at 0.
 const float POINT_FLUX_EXPONENT = 2.0;
 
 // Categorical hues for periods 1..7 drawn from the repo's ramp language
@@ -160,14 +163,16 @@ void main() {
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
     v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
-    // Inside-out fill: the attracting-cycle multiplier runs from 0 at each
-    // bulb's superattracting centre to 1 at its boundary, so sampling the
-    // shared fractal palette with it continues the 2D escape-time bands
-    // inward from the set's edge instead of ramping on sheet height.
-    float t = clamp(a_interior, 0.0, 1.0);
-    if (u_paletteReverse > 0.5) t = 1.0 - t;
-    vec3 hue = texture(u_palette, vec2(t, 0.5)).rgb;
-    v_colour = mix(hue, vec3(1.0), 0.12) * 1.1;
+    // Inside-out: contours of attracting-cycle strength. a_interior is the
+    // cycle multiplier of a resolved (periodic) cell; the shared signed phase
+    // walks the bands outward from each bulb centre. Reverse is already in
+    // the phase sign, so it is not applied again here. Cells with no detected
+    // period are unresolved and hold a steady neutral instead of a reading.
+    vec3 hue = period > 0.5
+      ? texture(u_palette, vec2(insideOutCoordinate(a_interior, u_cycleBands, u_phase), 0.5)).rgb
+      : INSIDE_OUT_NEUTRAL;
+    v_colour = mix(vec3(0.44, 0.47, 0.53), hue * 1.1, 0.85);
+    v_cycleHue = hue;
   } else if (u_colourMode == 3) {
     // Periodic sheets carry a softer version of the cycling palette, while
     // the chaotic band and unresolved fringe keep the full colour and glow.
@@ -224,12 +229,13 @@ void main() {
   // splat already overlaps its neighbours there. Growing it linearly with the
   // magnification holds that overlap ratio fixed, which is invisible while
   // the splat is a dot and reads as a blur kernel once the same ratio means
-  // 32 px. Growing with POINT_GROWTH_EXPONENT closes the gaps the
+  // 32 px. Growing with a sub-linear exponent closes the gaps the
   // magnification opens while keeping the splat a small multiple of the
-  // sample pitch.
+  // sample pitch; at u_zoomGrowth 0 the splat never grows and the lattice
+  // shows instead.
   float unzoomedSize = clamp(baseSize, 1.8, 32.0);
   float sizedPoint = clamp(
-    baseSize * pow(max(1.0, depthScale), POINT_GROWTH_EXPONENT),
+    baseSize * pow(max(1.0, depthScale), u_zoomGrowth * 0.5),
     1.8,
     32.0
   );
@@ -275,7 +281,7 @@ out float v_fanGlow;
 out float v_markerGlow;
 out float v_edgeFade;
 out float v_dissolve;
-
+${INSIDE_OUT_GLSL}
 vec3 periodHue(int p) {
   int index = (p - 1) % 7;
   if (index == 0) return vec3(0.129, 0.569, 0.549);
@@ -319,9 +325,11 @@ void main() {
   if (u_colourMode == 0) {
     v_colour = mix(periodHue(int(a_period + 0.5)), vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
-    float t = clamp(a_interior, 0.0, 1.0);
-    if (u_paletteReverse > 0.5) t = 1.0 - t;
-    v_colour = mix(texture(u_palette, vec2(t, 0.5)).rgb, vec3(1.0), 0.12) * 1.1;
+    vec3 hue = a_period > 0.5
+      ? texture(u_palette, vec2(insideOutCoordinate(a_interior, u_cycleBands, u_phase), 0.5)).rgb
+      : INSIDE_OUT_NEUTRAL;
+    v_colour = mix(vec3(0.44, 0.47, 0.53), hue * 1.1, 0.85);
+    v_cycleHue = hue;
   } else if (u_colourMode == 3) {
     float band = -a_boundary * u_cycleBands - a_position.z * u_cycleBands / 3.0;
     if (u_paletteReverse > 0.5) band = -band;
@@ -540,8 +548,14 @@ precision highp float;
 
 uniform sampler2D u_texture;
 uniform sampler2D u_interiorDistance;
+uniform sampler2D u_attraction;
 uniform sampler2D u_palette;
-uniform float u_hasInteriorDistance;
+// 0: escape colouring only; 1: Cycle's boundary-distance bands;
+// 2: Inside-out's attraction contours. Selected by colour mode, not by the
+// beam flag, so hue-retaining lighting cannot pick the distance mapping.
+uniform int u_interiorField;
+// 1 writes the pre-ink colour so a probe can read the palette lookup itself.
+uniform int u_diagnosticMode;
 uniform float u_paletteReverse;
 uniform vec2 u_texCentre;
 uniform vec2 u_texSpan;
@@ -552,16 +566,34 @@ uniform float u_phase;
 uniform float u_cycleBands;
 in vec2 v_complex;
 out vec4 outColor;
-
+${INSIDE_OUT_GLSL}
 void main() {
   vec2 uv = (v_complex - u_texCentre) / u_texSpan + 0.5;
   vec4 groundSample = texture(u_texture, uv);
   vec3 colour = groundSample.rgb;
-  if (u_cycleBeam > 0.5 && u_hasInteriorDistance > 0.5) {
+  float insideMask = 1.0 - smoothstep(0.05, 0.95, groundSample.a);
+  if (u_interiorField == 1) {
     float band = -texture(u_interiorDistance, uv).r * u_cycleBands;
     if (u_paletteReverse > 0.5) band = -band;
     vec3 interiorColour = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
-    colour = mix(colour, interiorColour, 1.0 - smoothstep(0.05, 0.95, groundSample.a));
+    colour = mix(colour, interiorColour, insideMask);
+  } else if (u_interiorField == 2) {
+    // R is the cycle multiplier, G the classification: 1 resolved, 0.5
+    // bounded but unresolved, 0 escaped (which keeps the escape colouring).
+    vec2 field = texture(u_attraction, uv).rg;
+    if (field.g > 0.75) {
+      vec3 attractionColour = texture(
+        u_palette,
+        vec2(insideOutCoordinate(field.r, u_cycleBands, u_phase), 0.5)
+      ).rgb;
+      colour = mix(colour, attractionColour, insideMask);
+    } else if (field.g > 0.25) {
+      colour = mix(colour, INSIDE_OUT_NEUTRAL, insideMask);
+    }
+  }
+  if (u_diagnosticMode == 1) {
+    outColor = vec4(colour, 1.0);
+    return;
   }
   float luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));
   vec3 planeInk = pow(
@@ -838,6 +870,8 @@ assertOrbit3DGeometry();
 export interface Orbit3DGroundPlane {
   texture: WebGLTexture;
   interiorDistanceTexture: WebGLTexture | null;
+  /** RG float field: R cycle multiplier, G classification (see orbitColour.ts). */
+  attractionTexture: WebGLTexture | null;
   /** (re, im) at the texture's centre. */
   centre: readonly [number, number];
   /** (re, im) extent the texture covers edge to edge. */
@@ -847,6 +881,25 @@ export interface Orbit3DGroundPlane {
 export type Orbit3DCameraPose = "default" | "side";
 
 export type Orbit3DColourMode = "period" | "inside-out" | "mono" | "cycle";
+
+/** "palette" makes the ground write its pre-ink colour for probes and evidence. */
+export type Orbit3DGroundDiagnosticMode = "off" | "palette";
+
+export function orbit3dGroundDiagnosticMode(value: string | null): Orbit3DGroundDiagnosticMode {
+  return value === "palette" ? "palette" : "off";
+}
+
+/**
+ * Production shader sources, exported so a probe can link the real vertex
+ * stage (where the palette lookup lives) against a pass-through fragment
+ * stage and read the colour back before lighting.
+ */
+export const ORBIT3D_SHADER_SOURCES = {
+  pointVertex: POINT_VERTEX_SHADER,
+  surfaceVertex: SURFACE_VERTEX_SHADER,
+  groundVertex: GROUND_VERTEX_SHADER,
+  groundFragment: GROUND_FRAGMENT_SHADER,
+} as const;
 
 export type Orbit3DGeometryMode = "cloud" | "hybrid";
 
@@ -1007,6 +1060,7 @@ export class Orbit3DPointCloud {
   private readonly fanActiveUniform: WebGLUniformLocation;
   private readonly cycleBeamUniform: WebGLUniformLocation;
   private readonly cycleBandsUniform: WebGLUniformLocation;
+  private readonly zoomGrowthUniform: WebGLUniformLocation;
   private readonly markerViewProjectionUniform: WebGLUniformLocation;
   private readonly markerPointSizeUniform: WebGLUniformLocation;
   private readonly markerColourUniform: WebGLUniformLocation;
@@ -1017,7 +1071,8 @@ export class Orbit3DPointCloud {
   private readonly groundFanActiveUniform: WebGLUniformLocation;
   private readonly groundCycleBeamUniform: WebGLUniformLocation;
   private readonly groundPhaseUniform: WebGLUniformLocation;
-  private readonly groundHasInteriorDistanceUniform: WebGLUniformLocation;
+  private readonly groundInteriorFieldUniform: WebGLUniformLocation;
+  private readonly groundDiagnosticModeUniform: WebGLUniformLocation;
   private readonly groundPaletteReverseUniform: WebGLUniformLocation;
   private readonly groundCycleBandsUniform: WebGLUniformLocation;
   private readonly exposureUniform: WebGLUniformLocation;
@@ -1209,6 +1264,10 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.pointProgram, "u_cycleBands"),
       "orbit3d cycle-bands uniform",
     );
+    this.zoomGrowthUniform = requireResource(
+      gl.getUniformLocation(this.pointProgram, "u_zoomGrowth"),
+      "orbit3d zoom-growth uniform",
+    );
     this.markerViewProjectionUniform = requireResource(
       gl.getUniformLocation(this.markerProgram, "u_viewProjection"),
       "orbit3d marker view-projection uniform",
@@ -1249,9 +1308,13 @@ export class Orbit3DPointCloud {
       gl.getUniformLocation(this.groundProgram, "u_phase"),
       "orbit3d ground phase uniform",
     );
-    this.groundHasInteriorDistanceUniform = requireResource(
-      gl.getUniformLocation(this.groundProgram, "u_hasInteriorDistance"),
-      "orbit3d ground interior-distance uniform",
+    this.groundInteriorFieldUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_interiorField"),
+      "orbit3d ground interior-field uniform",
+    );
+    this.groundDiagnosticModeUniform = requireResource(
+      gl.getUniformLocation(this.groundProgram, "u_diagnosticMode"),
+      "orbit3d ground diagnostic-mode uniform",
     );
     this.groundPaletteReverseUniform = requireResource(
       gl.getUniformLocation(this.groundProgram, "u_paletteReverse"),
@@ -1269,6 +1332,7 @@ export class Orbit3DPointCloud {
     gl.useProgram(this.groundProgram);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_texture"), 0);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_interiorDistance"), 1);
+    gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_attraction"), 2);
     gl.uniform1i(gl.getUniformLocation(this.groundProgram, "u_palette"), 3);
     gl.uniform2f(
       gl.getUniformLocation(this.groundProgram, "u_planeCentre"),
@@ -3287,6 +3351,18 @@ export class Orbit3DPointCloud {
   }
 
 
+  /**
+   * Runs the GPU orbit sampler over arbitrary c-coordinates for renderer-side
+   * fields such as the ground's attraction texture; null on the CPU fallback.
+   */
+  sampleCells(
+    coordinates: Float64Array,
+    warmupIterations: number,
+    sampleCount: number,
+  ): OrbitSampleResult | null {
+    return this.orbitSampler?.sample(coordinates, warmupIterations, sampleCount) ?? null;
+  }
+
   draw(
     width: number,
     height: number,
@@ -3302,6 +3378,8 @@ export class Orbit3DPointCloud {
     edgeGlow = 0,
     surfaceDiagnosticMode: Orbit3DSurfaceDiagnosticMode = "off",
     cycleBands = 1.5,
+    zoomGrowth = 0,
+    groundDiagnosticMode: Orbit3DGroundDiagnosticMode = "off",
   ): boolean {
     if (!this.available || !this.ensureAccumulationTarget(width, height)) return false;
     const gl = this.gl;
@@ -3311,7 +3389,10 @@ export class Orbit3DPointCloud {
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const viewProjection = cameraMatrix(this.targetWidth / this.targetHeight, this.camera);
-    const cycleBeam = colourMode === "cycle" ? 1 : 0;
+    // Both palette-driven modes light points in their own hue and lend the
+    // beam that hue; which scalar the ground bands follow is chosen below by
+    // mode, so this flag never selects a mapping.
+    const cycleBeam = colourMode === "cycle" || colourMode === "inside-out" ? 1 : 0;
 
     if (ground) {
       if (this.accumulationDepth) gl.enable(gl.DEPTH_TEST);
@@ -3327,12 +3408,22 @@ export class Orbit3DPointCloud {
       gl.uniform1f(this.groundCycleBeamUniform, cycleBeam);
       gl.uniform1f(this.groundPhaseUniform, phase);
       gl.uniform1f(this.groundCycleBandsUniform, cycleBands);
-      gl.uniform1f(this.groundHasInteriorDistanceUniform, ground.interiorDistanceTexture ? 1 : 0);
+      gl.uniform1i(
+        this.groundInteriorFieldUniform,
+        colourMode === "cycle" && ground.interiorDistanceTexture
+          ? 1
+          : colourMode === "inside-out" && ground.attractionTexture
+            ? 2
+            : 0,
+      );
+      gl.uniform1i(this.groundDiagnosticModeUniform, groundDiagnosticMode === "palette" ? 1 : 0);
       gl.uniform1f(this.groundPaletteReverseUniform, paletteReverse ? 1 : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ground.texture);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, ground.interiorDistanceTexture ?? ground.texture);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, ground.attractionTexture ?? ground.texture);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, palette);
       gl.bindVertexArray(this.groundVao);
@@ -3374,6 +3465,7 @@ export class Orbit3DPointCloud {
     gl.uniform1i(this.paletteUniform, 3);
     gl.uniform1f(this.phaseUniform, phase);
     gl.uniform1f(this.cycleBandsUniform, cycleBands);
+    gl.uniform1f(this.zoomGrowthUniform, Math.min(1, Math.max(0, zoomGrowth)));
     gl.uniform1f(this.paletteReverseUniform, paletteReverse ? 1 : 0);
     gl.uniform1f(this.sampleCountUniform, Math.max(1, this.sampleCount));
     gl.uniform1f(
@@ -3536,7 +3628,10 @@ export class Orbit3DPointCloud {
     );
     gl.uniform1f(surface.markerReUniform, this.marker.re);
     gl.uniform1f(surface.fanActiveUniform, fanActive ? 1 : 0);
-    gl.uniform1f(surface.cycleBeamUniform, colourMode === "cycle" ? 1 : 0);
+    gl.uniform1f(
+      surface.cycleBeamUniform,
+      colourMode === "cycle" || colourMode === "inside-out" ? 1 : 0,
+    );
     const eye = cameraEye(this.camera);
     gl.uniform3f(surface.cameraPositionUniform, eye[0], eye[1], eye[2]);
     gl.uniform1f(surface.opacityUniform, opacity);

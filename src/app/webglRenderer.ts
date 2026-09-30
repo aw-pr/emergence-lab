@@ -18,12 +18,22 @@ import {
   ORBIT_SURFACE_CLOUD_BAND_CELLS,
   ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
   Orbit3DPointCloud,
+  orbit3dGroundDiagnosticMode,
   orbit3dSurfaceDiagnosticMode,
   type Orbit3DColourMode,
+  type Orbit3DGroundDiagnosticMode,
   type Orbit3DGroundPlane,
   type Orbit3DSurfaceDiagnosticMode,
 } from "./orbit3d.ts";
 import { boundaryDistanceField } from "./orbitSampler.ts";
+import { classifyAttraction } from "./orbitColour.ts";
+import {
+  DEFAULT_SAMPLE_COUNT,
+  DEFAULT_WARMUP_ITERATIONS,
+  ESCAPED,
+  cellCoordinate,
+  sampleAttractorCell,
+} from "../sims/logistic-mandelbrot/model.ts";
 import {
   createKuramotoInitialFields,
   KURAMOTO_TAU,
@@ -1225,6 +1235,37 @@ class GpuKuramotoSimulation {
 const ORBIT3D_GROUND_TEXTURE_WIDTH = 1024;
 const ORBIT3D_GROUND_ITERATIONS = 160;
 
+/**
+ * Inside-out's ground field: the attracting-cycle multiplier and its
+ * classification at every ground texel, sampled once through the same orbit
+ * sampler as the cloud. The CPU fallback (no GPU sampler) runs synchronously,
+ * so it takes a coarser grid to keep that one-off build short.
+ */
+const ORBIT3D_ATTRACTION_FIELD_WIDTH = ORBIT3D_GROUND_TEXTURE_WIDTH;
+const ORBIT3D_ATTRACTION_FIELD_CPU_WIDTH = 256;
+
+export interface Orbit3DAttractionField {
+  width: number;
+  height: number;
+  /** (re, im) at the field's centre. */
+  centre: readonly [number, number];
+  /** (re, im) extent the field covers edge to edge; texel (x, y) is centred at
+   * centre + ((x + 0.5) / width - 0.5) * span, row 0 at imMin. */
+  span: readonly [number, number];
+  /** Interleaved (multiplier, classification) per texel, row-major from imMin. */
+  data: Float32Array;
+  source: "gpu" | "cpu";
+  /** Sampling inputs the field was built from. */
+  warmupIterations: number;
+  sampleCount: number;
+  buildMs: number;
+}
+
+/** Canvas expando the renderer keeps current for diagnostics and tests. */
+export interface Orbit3DDiagnosticCanvas extends HTMLCanvasElement {
+  orbit3dAttractionField?: Orbit3DAttractionField | null;
+}
+
 export class WebGLRendererBackend implements RendererBackend {
   readonly kind = "webgl2" as const;
   readonly maxTextureSize: number;
@@ -1240,6 +1281,10 @@ export class WebGLRendererBackend implements RendererBackend {
   private orbit3dInteriorDistanceTexture: WebGLTexture | null = null;
   private orbit3dInteriorDistanceAttempted = false;
   private orbit3dGroundKey = "";
+  private orbit3dAttractionTexture: WebGLTexture | null = null;
+  private orbit3dAttractionField: Orbit3DAttractionField | null = null;
+  private orbit3dAttractionKey = "";
+  private orbit3dAttractionBuilds = 0;
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -1618,10 +1663,10 @@ export class WebGLRendererBackend implements RendererBackend {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const exposure = numericParam(frame.params, "exposure", 1);
     const colourMode = orbit3dColourMode(frame.params);
-    const cycling =
-      colourMode === "cycle" && numericParam(frame.params, "cycleSpeed", 0) > 0;
+    // Cycle and Inside-out share the one signed time phase: speed sets its
+    // rate, reverse its sign, and speed zero pins it at zero.
     const phase =
-      colourMode === "cycle"
+      colourMode === "cycle" || colourMode === "inside-out"
         ? palettePhase(
             frame.params,
             frame.elapsedTime,
@@ -1631,7 +1676,8 @@ export class WebGLRendererBackend implements RendererBackend {
         : 0;
     const fanActive = frame.params.realAxisSweep === true;
     const surfaceDiagnosticMode = orbit3dSurfaceDiagnosticModeFromUrl();
-    const ground = this.ensureOrbit3dGround(frame, phase, cycling);
+    const groundDiagnosticMode = orbit3dGroundDiagnosticModeFromUrl();
+    const ground = this.ensureOrbit3dGround(frame, phase, colourMode);
     if (
       !this.orbit3d?.draw(
         this.displayWidth,
@@ -1648,6 +1694,8 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "edgeGlow", 0),
         surfaceDiagnosticMode,
         numericParam(frame.params, "cycleBands", 1.5),
+        numericParam(frame.params, "zoomGrowth", 0),
+        groundDiagnosticMode,
       )
     ) {
       return;
@@ -1657,6 +1705,15 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
     canvas.dataset.simulationRenderer = "gpu-orbit3d";
+    canvas.dataset.orbit3dPhase = phase.toFixed(6);
+    canvas.dataset.orbit3dAttractionBuilds = String(this.orbit3dAttractionBuilds);
+    const attraction = this.orbit3dAttractionField;
+    if (attraction) {
+      canvas.dataset.orbit3dAttractionSource = attraction.source;
+      canvas.dataset.orbit3dAttractionBuildMs = attraction.buildMs.toFixed(1);
+      canvas.dataset.orbit3dAttractionSize = `${attraction.width}x${attraction.height}`;
+    }
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dAttractionField = attraction;
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
     canvas.dataset.orbit3dCameraDistance = String(this.orbit3d.cameraReadout.distance);
     canvas.dataset.orbit3dCameraAzimuth = String(this.orbit3d.cameraReadout.azimuth);
@@ -1721,30 +1778,33 @@ export class WebGLRendererBackend implements RendererBackend {
   /**
    * Render (or fetch the cached) Mandelbrot ground-plane texture covering the
    * orbit3d c-domain, reusing the fractal escape-time program and palette.
-   * Re-rendered only when the palette configuration changes.
+   * Re-rendered only when the palette configuration or the escape-colouring
+   * phase changes, so a cycling mode redraws it each frame and a static one
+   * keeps it; switching colour mode changes the phase and refreshes it.
    */
   private ensureOrbit3dGround(
     frame: RendererBackendFrame,
     phase: number,
-    cycling: boolean,
+    colourMode: Orbit3DColourMode,
   ): Orbit3DGroundPlane | null {
     const gl = this.gl;
     this.updateFractalPalette(frame.colourOptions);
     const width = ORBIT3D_GROUND_TEXTURE_WIDTH;
     const scale = GROUND_DOMAIN.span[0] / width;
     const height = Math.round(GROUND_DOMAIN.span[1] / scale);
+    const attraction = colourMode === "inside-out"
+      ? this.ensureOrbit3dAttractionField(frame.params)
+      : null;
     const key = [
       this.fractalPaletteKey,
       frame.colourOptions.paletteCycleReverse ? 1 : 0,
+      phase.toFixed(6),
     ].join(":");
-    if (
-      !cycling &&
-      this.orbit3dGroundTexture &&
-      this.orbit3dGroundKey === key
-    ) {
+    if (this.orbit3dGroundTexture && this.orbit3dGroundKey === key) {
       return {
         texture: this.orbit3dGroundTexture,
         interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
+        attractionTexture: attraction,
         centre: GROUND_DOMAIN.centre,
         span: [width * scale, height * scale],
       };
@@ -1819,6 +1879,12 @@ export class WebGLRendererBackend implements RendererBackend {
       isCyclic(frame.colourOptions.preset) ? 1 : 0,
     );
     gl.uniform1i(this.fractalUniforms.escapeMaskOutput, 1);
+    // The orbit sampler binds its scratch textures on whichever unit is
+    // active and deletes them afterwards, which can leave the palette unit
+    // empty on the frame the attraction field is built; bind it here rather
+    // than trusting the binding to have survived since the palette upload.
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.fractalPaletteTexture);
     gl.bindVertexArray(this.fractalVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -1826,13 +1892,169 @@ export class WebGLRendererBackend implements RendererBackend {
       this.buildOrbit3dInteriorDistance(width, height, scale);
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.orbit3dGroundKey = cycling ? "" : key;
+    this.orbit3dGroundKey = key;
     return {
       texture: this.orbit3dGroundTexture,
       interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
+      attractionTexture: attraction,
       centre: GROUND_DOMAIN.centre,
       span: [width * scale, height * scale],
     };
+  }
+
+  /**
+   * Build (or fetch the cached) attraction field texture for Inside-out's
+   * ground. Keyed on the sampling inputs only, so time, palette, reverse and
+   * exposure never rebuild it; a change of warmup or sample count does, and
+   * the previous texture is released first.
+   */
+  private ensureOrbit3dAttractionField(
+    params: Record<string, number | boolean | string>,
+  ): WebGLTexture | null {
+    const warmupIterations = boundedInteger(
+      params.warmupIterations,
+      16,
+      2000,
+      DEFAULT_WARMUP_ITERATIONS,
+    );
+    const sampleCount = boundedInteger(params.sampleCount, 8, 96, DEFAULT_SAMPLE_COUNT);
+    const key = `${warmupIterations}:${sampleCount}`;
+    if (this.orbit3dAttractionTexture && this.orbit3dAttractionKey === key) {
+      return this.orbit3dAttractionTexture;
+    }
+    this.releaseOrbit3dAttractionField();
+    this.orbit3dAttractionKey = key;
+    const field = this.buildOrbit3dAttractionField(warmupIterations, sampleCount);
+    if (!field) return null;
+
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    if (!texture) return null;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Nearest: interpolating a multiplier across a classification edge would
+    // invent readings between a bulb and its exterior.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RG32F,
+      field.width,
+      field.height,
+      0,
+      gl.RG,
+      gl.FLOAT,
+      field.data,
+    );
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(texture);
+      return null;
+    }
+    this.orbit3dAttractionTexture = texture;
+    this.orbit3dAttractionField = field;
+    this.orbit3dAttractionBuilds += 1;
+    return texture;
+  }
+
+  private buildOrbit3dAttractionField(
+    warmupIterations: number,
+    sampleCount: number,
+  ): Orbit3DAttractionField | null {
+    const started = performance.now();
+    const groundScale = GROUND_DOMAIN.span[0] / ORBIT3D_GROUND_TEXTURE_WIDTH;
+    const groundHeight = Math.round(GROUND_DOMAIN.span[1] / groundScale);
+    const groundSpan = [
+      ORBIT3D_GROUND_TEXTURE_WIDTH * groundScale,
+      groundHeight * groundScale,
+    ] as const;
+    const build = (width: number, height: number) => {
+      const reMin = GROUND_DOMAIN.centre[0] - groundSpan[0] / 2;
+      const reMax = GROUND_DOMAIN.centre[0] + groundSpan[0] / 2;
+      const imMin = GROUND_DOMAIN.centre[1] - groundSpan[1] / 2;
+      const imMax = GROUND_DOMAIN.centre[1] + groundSpan[1] / 2;
+      const coordinates = new Float64Array(width * height * 2);
+      for (let y = 0; y < height; y += 1) {
+        const im = cellCoordinate(imMin, imMax, y, height);
+        for (let x = 0; x < width; x += 1) {
+          const cell = y * width + x;
+          coordinates[cell * 2] = cellCoordinate(reMin, reMax, x, width);
+          coordinates[cell * 2 + 1] = im;
+        }
+      }
+      return coordinates;
+    };
+
+    const gpuWidth = ORBIT3D_ATTRACTION_FIELD_WIDTH;
+    const gpuHeight = groundHeight;
+    const gpuCoordinates = build(gpuWidth, gpuHeight);
+    const sampled = this.orbit3d?.sampleCells(gpuCoordinates, warmupIterations, sampleCount);
+    if (sampled) {
+      const data = new Float32Array(sampled.cellCount * 2);
+      for (let cell = 0; cell < sampled.cellCount; cell += 1) {
+        const escaped = sampled.escaped[cell] === 1;
+        const period = escaped ? 0 : sampled.periods[cell];
+        data[cell * 2] = period > 0 ? sampled.interiors[cell] : 0;
+        data[cell * 2 + 1] = classifyAttraction(escaped, period);
+      }
+      return {
+        width: gpuWidth,
+        height: gpuHeight,
+        centre: GROUND_DOMAIN.centre,
+        span: groundSpan,
+        data,
+        source: "gpu",
+        warmupIterations,
+        sampleCount,
+        buildMs: performance.now() - started,
+      };
+    }
+
+    const width = ORBIT3D_ATTRACTION_FIELD_CPU_WIDTH;
+    const height = Math.max(1, Math.round((groundSpan[1] / groundSpan[0]) * width));
+    const coordinates = build(width, height);
+    const cells = width * height;
+    const data = new Float32Array(cells * 2);
+    const samples = new Float32Array(sampleCount);
+    const measure = { interior: 1 };
+    for (let cell = 0; cell < cells; cell += 1) {
+      measure.interior = 1;
+      const result = sampleAttractorCell(
+        coordinates[cell * 2],
+        coordinates[cell * 2 + 1],
+        warmupIterations,
+        sampleCount,
+        samples,
+        0,
+        measure,
+      );
+      const escaped = result === ESCAPED;
+      const period = escaped ? 0 : result;
+      data[cell * 2] = period > 0 ? measure.interior : 0;
+      data[cell * 2 + 1] = classifyAttraction(escaped, period);
+    }
+    return {
+      width,
+      height,
+      centre: GROUND_DOMAIN.centre,
+      span: groundSpan,
+      data,
+      source: "cpu",
+      warmupIterations,
+      sampleCount,
+      buildMs: performance.now() - started,
+    };
+  }
+
+  private releaseOrbit3dAttractionField(): void {
+    if (this.orbit3dAttractionTexture) {
+      this.gl.deleteTexture(this.orbit3dAttractionTexture);
+    }
+    this.orbit3dAttractionTexture = null;
+    this.orbit3dAttractionField = null;
+    this.orbit3dAttractionKey = "";
   }
 
   private buildOrbit3dInteriorDistance(width: number, height: number, cellScale: number): void {
@@ -2395,6 +2617,8 @@ export class WebGLRendererBackend implements RendererBackend {
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
     if (this.orbit3dGroundFbo) gl.deleteFramebuffer(this.orbit3dGroundFbo);
+    this.releaseOrbit3dAttractionField();
+    (gl.canvas as Orbit3DDiagnosticCanvas).orbit3dAttractionField = null;
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);
@@ -2897,6 +3121,23 @@ function orbit3dSurfaceDiagnosticModeFromUrl(): Orbit3DSurfaceDiagnosticMode {
   );
 }
 
+function orbit3dGroundDiagnosticModeFromUrl(): Orbit3DGroundDiagnosticMode {
+  return orbit3dGroundDiagnosticMode(
+    new URLSearchParams(window.location.search).get("groundDiagnostic"),
+  );
+}
+
+function boundedInteger(
+  value: number | boolean | string | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.round(value)))
+    : fallback;
+}
+
 function fractalKind(kernel: SimKernel): number {
   if (kernel.name === "Mandelbrot") return 0;
   if (kernel.name === "Julia Set") return 1;
@@ -2964,7 +3205,12 @@ function particleGlyphRadius(
   return Math.max(1.5, Math.min(8, size / 2));
 }
 
-function palettePhase(
+/**
+ * Signed palette phase shared by the fractal, Cycle and Inside-out paths:
+ * speed sets the rate, reverse flips the sign once, speed zero pins it at
+ * zero. Exported so the phase a probe drives can be traced to this rule.
+ */
+export function palettePhase(
   params: Record<string, number | boolean | string>,
   elapsedTime: number,
   colourOptions: ColourMapOptions,

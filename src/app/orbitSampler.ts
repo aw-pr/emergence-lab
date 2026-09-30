@@ -313,7 +313,7 @@ export interface GpuOrbitCloudOptions {
   boundaryDetailActive: boolean;
 }
 
-interface OrbitSampleResult {
+export interface OrbitSampleResult {
   cellCount: number;
   sampleCount: number;
   coordinates: Float64Array;

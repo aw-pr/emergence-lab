@@ -64,10 +64,24 @@ in every direction, not just along the real line.
 - Orbit the camera around the full object to see off-axis bulbs hold their
   cycles as separate sheets exactly above their bulbs on the ground plane.
 - Switch the colour mode: period tints each bulb by the length of its cycle,
-  inside-out grades the sheets by attraction strength, and mono keeps the
-  plain additive glow. Cycle uses the escape-time palette outside the set,
-  extends its bands inward by distance from the boundary, and carries those
-  colours up through the attractor sheets by orbit height.
+  and mono keeps the plain additive glow. Cycle uses the escape-time palette
+  outside the set, extends its bands inward by distance from the boundary,
+  and carries those colours up through the attractor sheets by orbit height.
+- Inside-out colours by attracting-cycle strength instead. Every detected
+  period-q cycle has a multiplier |∏ 2z_j| over one full cycle: 0 at the
+  bulb's superattracting centre, rising towards 1 where the cycle only just
+  attracts near the bulb edge. The palette is read at that value, so
+  contours ring each bulb centre, and every sheet stacked over a c shares
+  the colour of the ground beneath it because height plays no part. The
+  cycle speed moves the contours outward from the centres; reverse sends
+  them inward; speed 0 holds them still; bands per unit sets how many
+  contours fit between centre and edge. The multiplier is per complete
+  cycle, so it does not put bulbs of different period on one convergence-
+  time scale. Outside the set the ground keeps its escape-time colouring,
+  and a bounded cell whose period the sampler could not resolve is shown
+  in a steady neutral rather than as a reading. With a noncyclic palette
+  the contours carry that palette's end-to-end seam, which is a feature of
+  the palette, not of the dynamics.
 
 ## Further reading
 
