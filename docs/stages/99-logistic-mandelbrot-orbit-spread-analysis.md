@@ -130,3 +130,37 @@ Verifier writes the schema-valid `state/verifiers/99-logistic-mandelbrot-orbit-s
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes; do not change auth routing to work around quota. The verifier needs no browser and no network, so the codex seat runs in its default sandbox.
+
+## Re-brief 1 (2026-10-02, attempt 2)
+
+Attempt 1 is preserved at `68a13332dbc83736a5af51821eedb78c3067d07f` on
+`wip/99-logistic-mandelbrot-orbit-spread-analysis-attempt-1`. The Sol verifier
+passed criteria 1, 2, 3, 4, 6 and 7, independently reproducing the closed
+forms, three estimator rows and all 492 lap-fraction figures. It failed only
+criterion 5, on two lines of `## Decisions for the implementation card`. The
+measurements stand; do not redo the study or change any reported number.
+
+Attempt 2 instructions, in addition to everything above:
+
+1. Start from the preserved work: `git checkout 68a13332dbc83736a5af51821eedb78c3067d07f -- scripts/analyze-orbit-spread.mjs docs/audits/2026-10-02-orbit-spread-colouring.md`
+   in the run worktree.
+2. **Open risk (b) contradicts its own citation.** It recommends testing
+   unresolved cells "to a 0.08-lap tolerance" while citing a worst case of
+   0.0763 height units, which is 0.1145 lap at 1.5 bands. Restate the
+   recommended tolerance so it covers the cited worst case, give it in both
+   height units and laps, and check every other tolerance or threshold in the
+   audit for the same unit slip.
+3. **Decision 2 (GPU sampler channel) cites source lines, not a JSON key or
+   audit table**, and the line it cites for the RGBA32F format belongs to the
+   sample array, not the metadata target. Re-read `src/app/orbitSampler.ts`
+   and cite the metadata target's own allocation and format, the shader line
+   that leaves channel w unused, and the readback that consumes only x, y and
+   z. Put the channel facts and the float32 precision figures in an audit
+   table, or emit them from the script under a named JSON key, and cite that.
+   If you change the script's output, the determinism check of criterion 2
+   must still pass.
+4. Confirm each of the seven decision lines cites a JSON key or an audit
+   table and that the cited number supports the stated value.
+5. Re-run criterion 1's and criterion 2's commands and the preview command in
+   the foreground, then write the envelope as your final action. Keep it
+   small: this is a two-line correction, not a rework.
