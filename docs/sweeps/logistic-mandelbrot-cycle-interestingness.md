@@ -360,3 +360,127 @@ also reports.
 - **Whole-frame metrics.** Every reading is over the full 1280×720 canvas,
   ground plane and chrome included (the tiny legend chips are in frame).
   Crops are not offered; the sweep can add them to the scorer's options.
+
+## Sweep
+
+Stage 102 ran the unchanged stage-101 scorer over **324** coarse candidates:
+2 colour modes × 6 palettes (`magma-cyclic`, `twilight`, `phase`, `magma`,
+`amber`, `rosewood`) × 3 band settings × 3 speeds × 3 gamma/contrast
+pairs. Every candidate used a fresh browser context at the default pose. The
+raw overall top twenty contained only one Inside-out candidate and all twenty
+used speed 0.2, demonstrating both biases named in the card. The three-pose
+set was therefore sampled as the coarse top three in every mode/speed cell,
+plus the next-best remaining candidate in each mode: twenty total, with the
+default, bifurcation-curtain and period2-bulb-ground scores averaged below.
+This is the smallest measured adjustment that permits a three-per-mode,
+multi-speed shortlist rather than letting the scorer pre-decide both mode and
+speed.
+
+Each capture used the production GPU renderer at shipped quality, parked
+camera, reveal and beam off, and 11 frames 700 ms apart. The initial coarse
+command completed the 324 candidates before a deliberately strict balance
+assertion exposed the one-Inside-out top twenty; two resume commands refined
+the balanced and then speed-stratified sets without re-rendering completed
+candidates. Total sweep wall-clock was about **102 minutes** (1.4 h + 11.1
+min + 6.6 min), all in the foreground. The final machine-readable report is
+`e2e/artifacts/logistic-mandelbrot-cycle-sweep/ranked.json`; the matching
+table is `e2e/artifacts/logistic-mandelbrot-cycle-sweep/ranked.md`, and every
+candidate has its own JSON under that directory's `candidates/` folder.
+
+### Three-pose ranked top twenty
+
+All numeric components are means over the three poses. `neon` is reported for
+every candidate as required; the per-pose values remain in each candidate
+JSON.
+
+| # | id | mode | palette | bands | speed | gamma | contrast | score | field | coverage | autocorr | entropy | flux | lit | edges | chroma | hueSpread | whiteClip | neon | travel | chromaTerm | edgeTerm | travelTerm | colourScore | laps | contact sheet |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | cycle-magma-b5-s0p2-g1p2-c1p4 | cycle | magma | 5 | 0.2 | 1.2 | 1.4 | **0.643** | 0.673 | 0.275 | 0.993 | 0.385 | 0.0184 | 0.233 | 0.157 | 0.033 | 0.194 | 0.130 | 0.002 | 9.50 | 0.411 | 0.524 | 0.982 | 0.616 | 2.15 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b5-s0p2-g1p2-c1p4-contact-sheet.png` |
+| 2 | cycle-magma-b3-s0p2-g1p2-c1p8 | cycle | magma | 3 | 0.2 | 1.2 | 1.8 | **0.642** | 0.678 | 0.268 | 0.993 | 0.380 | 0.0215 | 0.225 | 0.160 | 0.031 | 0.201 | 0.127 | 0.001 | 10.21 | 0.386 | 0.534 | 0.987 | 0.611 | 2.10 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b3-s0p2-g1p2-c1p8-contact-sheet.png` |
+| 3 | cycle-magma-b3-s0p2-g1p2-c1p4 | cycle | magma | 3 | 0.2 | 1.2 | 1.4 | **0.641** | 0.675 | 0.275 | 0.993 | 0.386 | 0.0190 | 0.234 | 0.154 | 0.033 | 0.196 | 0.126 | 0.002 | 9.29 | 0.410 | 0.512 | 0.980 | 0.612 | 2.10 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b3-s0p2-g1p2-c1p4-contact-sheet.png` |
+| 4 | cycle-magma-b1p5-s0p2-g1p2-c1p4 | cycle | magma | 1.5 | 0.2 | 1.2 | 1.4 | **0.640** | 0.676 | 0.273 | 0.993 | 0.383 | 0.0199 | 0.234 | 0.150 | 0.033 | 0.208 | 0.125 | 0.002 | 9.20 | 0.411 | 0.501 | 0.978 | 0.608 | 2.12 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b1p5-s0p2-g1p2-c1p4-contact-sheet.png` |
+| 5 | inside-out-magma-b1p5-s0p2-g1p2-c1p8 | inside-out | magma | 1.5 | 0.2 | 1.2 | 1.8 | **0.628** | 0.666 | 0.263 | 0.992 | 0.368 | 0.0190 | 0.224 | 0.144 | 0.031 | 0.206 | 0.076 | 0.000 | 9.25 | 0.391 | 0.480 | 0.978 | 0.594 | 2.19 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b1p5-s0p2-g1p2-c1p8-contact-sheet.png` |
+| 6 | inside-out-magma-b5-s0p2-g1p2-c1p4 | inside-out | magma | 5 | 0.2 | 1.2 | 1.4 | **0.627** | 0.657 | 0.266 | 0.992 | 0.369 | 0.0157 | 0.228 | 0.145 | 0.033 | 0.192 | 0.069 | 0.001 | 8.26 | 0.413 | 0.483 | 0.968 | 0.601 | 2.10 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b5-s0p2-g1p2-c1p4-contact-sheet.png` |
+| 7 | inside-out-magma-b3-s0p2-g1p2-c1p8 | inside-out | magma | 3 | 0.2 | 1.2 | 1.8 | **0.626** | 0.662 | 0.262 | 0.992 | 0.368 | 0.0176 | 0.221 | 0.149 | 0.030 | 0.216 | 0.075 | 0.000 | 8.80 | 0.381 | 0.496 | 0.975 | 0.594 | 2.11 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b3-s0p2-g1p2-c1p8-contact-sheet.png` |
+| 8 | inside-out-magma-b5-s0p2-g1p2-c1p8 | inside-out | magma | 5 | 0.2 | 1.2 | 1.8 | **0.623** | 0.659 | 0.263 | 0.992 | 0.368 | 0.0177 | 0.222 | 0.150 | 0.030 | 0.213 | 0.073 | 0.000 | 8.76 | 0.377 | 0.500 | 0.971 | 0.592 | 2.05 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b5-s0p2-g1p2-c1p8-contact-sheet.png` |
+| 9 | cycle-magma-b1p5-s0p1-g1p2-c1p4 | cycle | magma | 1.5 | 0.1 | 1.2 | 1.4 | **0.618** | 0.655 | 0.274 | 0.993 | 0.384 | 0.0115 | 0.236 | 0.150 | 0.035 | 0.190 | 0.122 | 0.003 | 5.44 | 0.437 | 0.501 | 0.875 | 0.587 | 1.06 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b1p5-s0p1-g1p2-c1p4-contact-sheet.png` |
+| 10 | cycle-magma-b1p5-s0p1-g1p2-c1p8 | cycle | magma | 1.5 | 0.1 | 1.2 | 1.8 | **0.618** | 0.655 | 0.267 | 0.993 | 0.379 | 0.0122 | 0.228 | 0.155 | 0.033 | 0.193 | 0.121 | 0.002 | 5.80 | 0.408 | 0.518 | 0.893 | 0.586 | 1.07 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b1p5-s0p1-g1p2-c1p8-contact-sheet.png` |
+| 11 | cycle-magma-b5-s0p1-g1p2-c1p4 | cycle | magma | 5 | 0.1 | 1.2 | 1.4 | **0.617** | 0.650 | 0.276 | 0.993 | 0.386 | 0.0099 | 0.236 | 0.157 | 0.034 | 0.188 | 0.124 | 0.002 | 5.41 | 0.426 | 0.523 | 0.873 | 0.589 | 1.06 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b5-s0p1-g1p2-c1p4-contact-sheet.png` |
+| 12 | inside-out-magma-b1p5-s0p1-g1p2-c1p4 | inside-out | magma | 1.5 | 0.1 | 1.2 | 1.4 | **0.597** | 0.642 | 0.270 | 0.992 | 0.373 | 0.0097 | 0.232 | 0.136 | 0.034 | 0.200 | 0.068 | 0.001 | 4.80 | 0.430 | 0.454 | 0.833 | 0.558 | 1.08 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b1p5-s0p1-g1p2-c1p4-contact-sheet.png` |
+| 13 | inside-out-magma-b3-s0p1-g1p2-c1p4 | inside-out | magma | 3 | 0.1 | 1.2 | 1.4 | **0.593** | 0.639 | 0.270 | 0.992 | 0.373 | 0.0090 | 0.232 | 0.138 | 0.034 | 0.196 | 0.069 | 0.001 | 4.65 | 0.421 | 0.458 | 0.822 | 0.552 | 1.06 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b3-s0p1-g1p2-c1p4-contact-sheet.png` |
+| 14 | inside-out-magma-b5-s0p1-g1p2-c1p4 | inside-out | magma | 5 | 0.1 | 1.2 | 1.4 | **0.592** | 0.637 | 0.270 | 0.992 | 0.373 | 0.0086 | 0.232 | 0.139 | 0.033 | 0.195 | 0.070 | 0.001 | 4.61 | 0.416 | 0.465 | 0.818 | 0.551 | 1.06 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b5-s0p1-g1p2-c1p4-contact-sheet.png` |
+| 15 | cycle-magma-b5-s0p06-g1p2-c1p4 | cycle | magma | 5 | 0.06 | 1.2 | 1.4 | **0.558** | 0.634 | 0.283 | 0.993 | 0.391 | 0.0047 | 0.243 | 0.150 | 0.033 | 0.191 | 0.119 | 0.002 | 2.79 | 0.413 | 0.502 | 0.600 | 0.496 | 0.66 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b5-s0p06-g1p2-c1p4-contact-sheet.png` |
+| 16 | cycle-magma-cyclic-b1p5-s0p06-g1p2-c1p8 | cycle | magma-cyclic | 1.5 | 0.06 | 1.2 | 1.8 | **0.554** | 0.635 | 0.282 | 0.993 | 0.384 | 0.0055 | 0.247 | 0.130 | 0.037 | 0.162 | 0.102 | 0.001 | 2.65 | 0.466 | 0.433 | 0.573 | 0.488 | 0.63 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-cyclic-b1p5-s0p06-g1p2-c1p8-contact-sheet.png` |
+| 17 | cycle-magma-cyclic-b3-s0p06-g1p2-c1p8 | cycle | magma-cyclic | 3 | 0.06 | 1.2 | 1.8 | **0.549** | 0.632 | 0.281 | 0.993 | 0.383 | 0.0050 | 0.247 | 0.129 | 0.038 | 0.154 | 0.102 | 0.001 | 2.52 | 0.469 | 0.429 | 0.552 | 0.482 | 0.63 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-cyclic-b3-s0p06-g1p2-c1p8-contact-sheet.png` |
+| 18 | inside-out-magma-cyclic-b1p5-s0p06-g1p2-c1p8 | inside-out | magma-cyclic | 1.5 | 0.06 | 1.2 | 1.8 | **0.547** | 0.628 | 0.279 | 0.992 | 0.372 | 0.0053 | 0.243 | 0.114 | 0.038 | 0.162 | 0.043 | 0.000 | 2.65 | 0.472 | 0.381 | 0.580 | 0.477 | 0.64 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-cyclic-b1p5-s0p06-g1p2-c1p8-contact-sheet.png` |
+| 19 | inside-out-magma-cyclic-b3-s0p06-g1p2-c1p8 | inside-out | magma-cyclic | 3 | 0.06 | 1.2 | 1.8 | **0.545** | 0.627 | 0.279 | 0.991 | 0.371 | 0.0051 | 0.243 | 0.116 | 0.038 | 0.161 | 0.041 | 0.000 | 2.62 | 0.469 | 0.386 | 0.575 | 0.476 | 0.65 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-cyclic-b3-s0p06-g1p2-c1p8-contact-sheet.png` |
+| 20 | inside-out-magma-cyclic-b5-s0p06-g1p2-c1p8 | inside-out | magma-cyclic | 5 | 0.06 | 1.2 | 1.8 | **0.545** | 0.627 | 0.279 | 0.991 | 0.372 | 0.0049 | 0.243 | 0.117 | 0.037 | 0.164 | 0.041 | 0.000 | 2.62 | 0.466 | 0.391 | 0.575 | 0.476 | 0.63 | `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-cyclic-b5-s0p06-g1p2-c1p8-contact-sheet.png` |
+
+### Speed bias and coarse top five per speed
+
+At the fixed capture interval, higher speed raises both travel and the field
+composite's liveliness. Every raw-overall top-twenty candidate used 0.2, so
+“fastest wins” is a scorer property, not a visual finding. The default-pose
+top fives were:
+
+| mode | speed | top five, in order (score) |
+|---|---:|---|
+| cycle | 0.06 | `cycle-magma-cyclic-b1p5-s0p06-g1p2-c1p8` (0.585); `cycle-magma-b5-s0p06-g1p2-c1p4` (0.583); `cycle-magma-cyclic-b3-s0p06-g1p2-c1p8` (0.582); `cycle-magma-cyclic-b5-s0p06-g1p2-c1p8` (0.579); `cycle-magma-b5-s0p06-g1p2-c1p8` (0.579) |
+| cycle | 0.1 | `cycle-magma-b1p5-s0p1-g1p2-c1p8` (0.634); `cycle-magma-b1p5-s0p1-g1p2-c1p4` (0.633); `cycle-magma-b5-s0p1-g1p2-c1p4` (0.631); `cycle-magma-b3-s0p1-g1p2-c1p4` (0.629); `cycle-magma-b5-s0p1-g1p2-c1p8` (0.628) |
+| cycle | 0.2 | `cycle-magma-b3-s0p2-g1p2-c1p4` (0.647); `cycle-magma-b1p5-s0p2-g1p2-c1p4` (0.647); `cycle-magma-b3-s0p2-g1p2-c1p8` (0.647); `cycle-magma-b5-s0p2-g1p2-c1p4` (0.645); `cycle-magma-b1p5-s0p2-g1p2-c1p8` (0.645) |
+| inside-out | 0.06 | `inside-out-magma-cyclic-b5-s0p06-g1p2-c1p8` (0.550); `inside-out-magma-cyclic-b1p5-s0p06-g1p2-c1p8` (0.550); `inside-out-magma-cyclic-b3-s0p06-g1p2-c1p8` (0.549); `inside-out-magma-cyclic-b3-s0p06-g1p2-c1p4` (0.544); `inside-out-magma-cyclic-b1p5-s0p06-g1p2-c1p4` (0.544) |
+| inside-out | 0.1 | `inside-out-magma-b1p5-s0p1-g1p2-c1p4` (0.601); `inside-out-magma-b5-s0p1-g1p2-c1p4` (0.594); `inside-out-magma-b3-s0p1-g1p2-c1p4` (0.594); `inside-out-magma-b1p5-s0p1-g1p2-c1p8` (0.594); `inside-out-magma-b5-s0p1-g1p2-c1p8` (0.592) |
+| inside-out | 0.2 | `inside-out-magma-b1p5-s0p2-g1p2-c1p8` (0.631); `inside-out-magma-b5-s0p2-g1p2-c1p8` (0.626); `inside-out-magma-b5-s0p2-g1p2-c1p4` (0.625); `inside-out-magma-b3-s0p2-g1p2-c1p8` (0.625); `inside-out-magma-b3-s0p2-g1p2-c1p4` (0.622) |
+
+### Robustness
+
+For each scorer colour weight, the sweep multiplied that weight alone by
+0.8 or 1.2, renormalised all three weights to sum to one, and recomputed each
+three-pose score from the exported field, colour and travel terms without
+re-rendering.
+
+| shifted weight | direction | chroma | edges | travel | original top-five survivors |
+|---|---:|---:|---:|---:|---:|
+| chroma | -20% | 0.348 | 0.326 | 0.326 | 5 |
+| chroma | +20% | 0.444 | 0.278 | 0.278 | 4 |
+| edges | -20% | 0.426 | 0.255 | 0.319 | 5 |
+| edges | +20% | 0.377 | 0.340 | 0.283 | 5 |
+| travel | -20% | 0.426 | 0.319 | 0.255 | 4 |
+| travel | +20% | 0.377 | 0.283 | 0.340 | 5 |
+
+**The ranking is not robust.** A +20% chroma shift and a -20% travel shift
+each replace one member of the original top five. The top four Cycle entries
+survive every perturbation, but the fifth position switches between the two
+highest Inside-out candidates.
+
+### Shipped default and shortlist
+
+At the coarse default pose, the shipped cyclic-Magma settings rank **55 of
+162** in Cycle mode at 0.601 and **56 of 162** in Inside-out mode at 0.568.
+That is a within-mode rank; the speed-stratified three-pose table is not a
+full 324-candidate rerank.
+
+For neon flags, candidates are compared at the coarse default pose with the
+same-mode shipped default rerendered at that pose: 0.001565 in Cycle and
+0.00002296 in Inside-out. A flag means more than twice that reading. This
+keeps the comparison pose-for-pose and avoids treating rounded `0.000` as an
+exact zero.
+
+**Cycle shortlist** (speeds 0.06, 0.2 and 0.1):
+
+1. `cycle-magma-cyclic-b1p5-s0p06-g1p2-c1p8` — the slow, unflagged option; its seamless ramp keeps one soft dark-to-rose ring on the bulb while the cloud shifts gently rather than flashing. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-cyclic-b1p5-s0p06-g1p2-c1p8-contact-sheet.png`.
+2. `cycle-magma-b5-s0p2-g1p2-c1p4` — the metric leader; five tight nested ground rings and rapid pale-purple travel make it the busiest, brightest option, and its default-pose neon 0.002679 remains below the 0.003130 flag limit. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b5-s0p2-g1p2-c1p4-contact-sheet.png`.
+3. `cycle-magma-b1p5-s0p1-g1p2-c1p4` — the shipped-speed compromise; a single broad ground band passes from black through cream while the sheet colours change at a readable pace. **Neon flag:** 0.005359 exceeds the 0.003130 limit. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/cycle-magma-b1p5-s0p1-g1p2-c1p4-contact-sheet.png`.
+
+**Inside-out shortlist** (speeds 0.06, 0.2 and 0.1):
+
+1. `inside-out-magma-cyclic-b5-s0p06-g1p2-c1p8` — the slow, unflagged option; five restrained lavender bands remain visible on the sheets while the bulb stays a broad, nearly flat pool of colour. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-cyclic-b5-s0p06-g1p2-c1p8-contact-sheet.png`.
+2. `inside-out-magma-b1p5-s0p2-g1p2-c1p8` — the highest-scoring Inside-out option; the cloud sweeps quickly from violet through cream while the ground disc changes as one broad field. **Neon flag:** default-pose 0.000586 exceeds the 0.00004593 limit. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b1p5-s0p2-g1p2-c1p8-contact-sheet.png`.
+3. `inside-out-magma-b1p5-s0p1-g1p2-c1p4` — the shipped-speed option; its rose-to-cream cloud transition is slower and easier to follow, with a darker broad ground disc. **Neon flag:** 0.001748 exceeds the 0.00004593 limit. Contact sheet: `e2e/artifacts/logistic-mandelbrot-cycle-sweep/inside-out-magma-b1p5-s0p1-g1p2-c1p4-contact-sheet.png`.
+
+### Decision for the operator
+
+Review the three Cycle sheets and three Inside-out sheets above. The scorer's
+top is fast non-cyclic Magma, but the ordering is speed-biased and not robust;
+the slower cyclic-Magma entries deliberately remain in the shortlist as the
+low-neon visual counter-cases. **No default changes in this stage.**
