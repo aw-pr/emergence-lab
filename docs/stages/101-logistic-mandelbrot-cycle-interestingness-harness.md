@@ -99,3 +99,43 @@ Worker returns changed paths, commands with exit codes, the baseline table, and 
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex seat for the browser.
+
+## Re-brief 1 (2026-10-03, attempt 2)
+
+Attempt 1 is preserved at `8530f239ec21dc5af67ddc78acf3f6d09086bbdc` on
+`wip/101-logistic-mandelbrot-cycle-interestingness-harness-attempt-1`. The
+Sol verifier passed criteria 2, 3, 5 and 6 and independently reproduced the
+baseline, sensitivity and repeat figures. It failed criteria 1 and 4 on the
+letter of two lines this card got wrong; the work itself is not in question.
+
+Orchestrator corrections, which attempt 2 and its verifier apply:
+
+1. **Criterion 1, contract gate.** This card declares no contract test, so
+   `scripts/check-contract-test-gate.sh --worktree` has nothing to inspect
+   and exits 2 with `no relevant changed files to inspect`. That is the
+   correct outcome for this card and satisfies the criterion; exit 1 (a
+   violation) does not. Card 96's audit recorded the same outcome.
+2. **Criterion 4, contrast.** The card's expectation was wrong: card 96's
+   chroma rise for "amber k1.4" came from lowering gamma to 1.2 at the same
+   time, and attempt 1 showed that at the shipped gamma 1.65, contrast 1.4
+   lowers chroma slightly in both modes (0.0422 to 0.0394 cycle, 0.0381 to
+   0.0360 inside-out), with gamma 1.2 restoring it. The clause now reads:
+   contrast 1.4 against 2.4 changes mean chroma by more than 0.001 in each
+   mode, the direction is recorded as measured, and a supplementary
+   gamma 1.2 / contrast 1.4 candidate is reported so the gamma and contrast
+   effects are separated. Attempt 1's spec already does this.
+3. **Deliverable 2, `tsconfig.test.json`.** Attempt 1 found the include is
+   impossible (`rootDir` is `src`, TS6059) and used the `e2e/harness` test
+   convention `metrics.test.cjs` already follows. That is accepted; leave
+   `tsconfig.test.json` unchanged and drop it from the path claims'
+   expectations.
+
+Attempt 2 instructions:
+
+1. Start from the preserved work: `git checkout 8530f239ec21dc5af67ddc78acf3f6d09086bbdc -- e2e/harness/cycleScore.ts e2e/harness/cycleScore.test.cjs e2e/cycle-interestingness.spec.ts docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`
+   in the run worktree. Do not change the scorer, the spec or the numbers.
+2. In the sweep document, state the contrast finding and the gamma
+   separation plainly in the sensitivity section if attempt 1 did not already.
+3. Re-run criterion 1's commands, the unit test, and the whole spec in the
+   foreground; refresh the artefact paths in the write-up if they moved.
+4. Write the envelope as the final action. Keep it small.
