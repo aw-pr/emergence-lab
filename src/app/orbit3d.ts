@@ -48,6 +48,7 @@ import {
 } from "./orbitSurfaceComponents.ts";
 import { traceOrbitSurfaceComponentCatalogue } from "./orbitSurfaceCurves.ts";
 import { INSIDE_OUT_GLSL } from "./orbitColour.ts";
+import { deriveQuantizedCentres } from "./prebakedCentre.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -115,6 +116,7 @@ vec3 periodHue(int p) {
 
 void main() {
   vec3 position = u_posOffset + a_position * u_posScale;
+  float centre = u_posOffset.z + a_centre * u_posScale.z;
   float period = a_period * u_periodScale;
   vec3 world = vec3(
     (position.x + 0.5) * 0.78,
@@ -171,7 +173,7 @@ void main() {
     // a centre, so the chaotic band is coloured like the sheets.
     vec3 hue = texture(
       u_palette,
-      vec2(spreadPaletteCoordinate(position.z, a_centre, u_cycleBands, u_phase), 0.5)
+      vec2(spreadPaletteCoordinate(position.z, centre, u_cycleBands, u_phase), 0.5)
     ).rgb;
     v_colour = mix(vec3(0.44, 0.47, 0.53), hue * 1.1, 0.85);
     v_cycleHue = hue;
@@ -787,6 +789,11 @@ interface PrebakedCloud {
   interiors: Uint8Array;
   boundaries: Uint8Array;
   weights: Uint8Array;
+  /**
+   * Column centres derived from the samples at load (the bake carries none),
+   * quantized like the z coordinate so the shader dequantizes both alike.
+   */
+  centres: Uint16Array;
 }
 
 function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
@@ -809,14 +816,17 @@ function parsePrebaked(buffer: ArrayBuffer): PrebakedCloud | null {
   // Views into the fetched buffer, uploaded as-is: the shader dequantizes
   // via u_posOffset/u_posScale/u_periodScale, so a 32M-point cloud costs
   // ~10 bytes per point on the GPU instead of ~28.
+  const positions = new Uint16Array(buffer, 16, count * 3);
+  const periods = new Uint8Array(buffer, 16 + count * 6, count);
   return {
     cellCount,
     sampleCount,
-    positions: new Uint16Array(buffer, 16, count * 3),
-    periods: new Uint8Array(buffer, 16 + count * 6, count),
+    positions,
+    periods,
     interiors: new Uint8Array(buffer, 16 + count * 7, count),
     boundaries: new Uint8Array(buffer, 16 + count * 8, count),
     weights: new Uint8Array(buffer, 16 + count * 9, count),
+    centres: deriveQuantizedCentres(positions, periods, cellCount, sampleCount),
   };
 }
 
@@ -1613,15 +1623,15 @@ export class Orbit3DPointCloud {
       quantized,
     );
     attribute(this.periodBuffer, "a_period", 1, scalarType, quantized);
-    // Prebaked clouds (ELPC v1) carry no column centre, so a quantized cloud
-    // reads a constant centre of 0 and Inside-out bands by |height| there.
-    const centreLocation = gl.getAttribLocation(this.pointProgram, "a_centre");
-    if (quantized) {
-      gl.disableVertexAttribArray(centreLocation);
-      gl.vertexAttrib1f(centreLocation, 0);
-    } else {
-      attribute(this.centreBuffer, "a_centre", 1, gl.FLOAT, false);
-    }
+    // The centre shares the z coordinate's quantization, so the shader
+    // dequantizes it with u_posOffset.z / u_posScale.z alongside a_position.
+    attribute(
+      this.centreBuffer,
+      "a_centre",
+      1,
+      quantized ? gl.UNSIGNED_SHORT : gl.FLOAT,
+      quantized,
+    );
     attribute(this.boundaryBuffer, "a_boundary", 1, scalarType, quantized);
     attribute(this.weightBuffer, "a_weight", 1, scalarType, quantized);
     this.quantizedAttributes = quantized;
@@ -1638,6 +1648,7 @@ export class Orbit3DPointCloud {
     };
     upload(this.pointBuffer, cloud.positions);
     upload(this.periodBuffer, cloud.periods);
+    upload(this.centreBuffer, cloud.centres);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
     requireNoGlError(gl, "prebaked orbit3d upload");

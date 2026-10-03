@@ -12,6 +12,7 @@
     "src/sims/**/kernel.ts",
     "src/app/qualityProfiles.ts",
     "src/app/orbitRefinement.ts",
-    "src/app/orbitColour.ts"
+    "src/app/orbitColour.ts",
+    "src/app/prebakedCentre.ts"
   ]
 }
