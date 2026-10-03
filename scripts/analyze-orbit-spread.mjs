@@ -20,7 +20,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 
@@ -1582,7 +1582,7 @@ const report = {
 
 if (previewDir) {
   log("previews");
-  writePreviews(join(repoRoot, previewDir), report, windows);
+  writePreviews(resolve(repoRoot, previewDir), report, windows);
 }
 
 log("done");
