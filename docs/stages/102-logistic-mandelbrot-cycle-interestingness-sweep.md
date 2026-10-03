@@ -89,3 +89,25 @@ Worker returns changed paths, commands with exit codes, candidate count, wall-cl
 ## Family-specific notes
 
 Codex worker: `Requires GUI: true` widens the sandbox so the worker can launch headless Chromium with the repo's GPU flags; the operator confirmed the codex seat drives the GPU as of 2026-09-20 (card 96). Claude verifier: subscription CLI route; resolve `claude-opus-5-5` through the installed model resolver, no family substitution.
+
+## Orchestrator note (2026-10-03, before dispatch)
+
+Two biases in card 101's scorer, read from `e2e/harness/cycleScore.ts`, that
+this sweep must report around rather than be led by:
+
+1. **Speed.** `travelTerm` and the composite's liveliness both rise with
+   `cycleSpeed` at the fixed capture interval, so the overall ranking will
+   favour 0.2. The operator set 0.1 deliberately (`d40a1dfb4`). In addition
+   to the overall top twenty, report the top five **per speed** in each mode,
+   and draw the shortlist of three per mode from at least two different
+   speeds, saying which. Treat "fastest wins" as a scorer property, not a
+   finding.
+2. **Neon.** `chromaTerm` carries 0.4 of the colour score and `neon` is
+   reported but not penalised; the operator's brief for card 96 excluded acid
+   colours. Report `colour.neon` for every top-twenty candidate and flag any
+   shortlisted candidate whose neon share exceeds twice the shipped default's
+   reading at the same pose. A flagged candidate may stay on the shortlist
+   with the flag shown; it may not be the first-listed one.
+
+Both are reporting requirements; the scorer stays unchanged, per the
+constraints above.
