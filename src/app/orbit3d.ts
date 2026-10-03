@@ -9,6 +9,7 @@ import {
   SAMPLE_CLIP,
   cellCoordinate,
   sampleAttractorCell,
+  type AttractorCellMeasure,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { bakedFileFor } from "./bakedManifest.ts";
 import { resolveOrbitRefinement } from "./orbitRefinement.ts";
@@ -53,7 +54,7 @@ precision highp float;
 
 in vec3 a_position;
 in float a_period;
-in float a_interior;
+in float a_centre;
 in float a_boundary;
 in float a_weight;
 uniform mat4 u_viewProjection;
@@ -163,14 +164,15 @@ void main() {
     vec3 hue = p <= 0 ? vec3(0.44, 0.47, 0.53) : periodHue(p);
     v_colour = mix(hue, vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
-    // Inside-out: contours of attracting-cycle strength. a_interior is the
-    // cycle multiplier of a resolved (periodic) cell; the shared signed phase
-    // walks the bands outward from each bulb centre. Reverse is already in
-    // the phase sign, so it is not applied again here. Cells with no detected
-    // period are unresolved and hold a steady neutral instead of a reading.
-    vec3 hue = period > 0.5
-      ? texture(u_palette, vec2(insideOutCoordinate(a_interior, u_cycleBands, u_phase), 0.5)).rgb
-      : INSIDE_OUT_NEUTRAL;
+    // Inside-out: the point's height distance from its column's centre
+    // height, mirrored, so the shared signed phase carries each band out of
+    // the centre upward and downward along the sheets. Reverse is already in
+    // the phase sign, so it is not applied again here. Every bounded cell has
+    // a centre, so the chaotic band is coloured like the sheets.
+    vec3 hue = texture(
+      u_palette,
+      vec2(spreadPaletteCoordinate(position.z, a_centre, u_cycleBands, u_phase), 0.5)
+    ).rgb;
     v_colour = mix(vec3(0.44, 0.47, 0.53), hue * 1.1, 0.85);
     v_cycleHue = hue;
   } else if (u_colourMode == 3) {
@@ -258,7 +260,7 @@ precision highp float;
 in vec3 a_position;
 in vec3 a_normal;
 in float a_period;
-in float a_interior;
+in float a_centre;
 in float a_boundary;
 in float a_rank;
 in float a_edgeFade;
@@ -325,9 +327,10 @@ void main() {
   if (u_colourMode == 0) {
     v_colour = mix(periodHue(int(a_period + 0.5)), vec3(1.0), 0.2) * 1.1;
   } else if (u_colourMode == 1) {
-    vec3 hue = a_period > 0.5
-      ? texture(u_palette, vec2(insideOutCoordinate(a_interior, u_cycleBands, u_phase), 0.5)).rgb
-      : INSIDE_OUT_NEUTRAL;
+    vec3 hue = texture(
+      u_palette,
+      vec2(spreadPaletteCoordinate(a_position.z, a_centre, u_cycleBands, u_phase), 0.5)
+    ).rgb;
     v_colour = mix(vec3(0.44, 0.47, 0.53), hue * 1.1, 0.85);
     v_cycleHue = hue;
   } else if (u_colourMode == 3) {
@@ -578,17 +581,17 @@ void main() {
     vec3 interiorColour = texture(u_palette, vec2(fract(band + u_phase), 0.5)).rgb;
     colour = mix(colour, interiorColour, insideMask);
   } else if (u_interiorField == 2) {
-    // R is the cycle multiplier, G the classification: 1 resolved, 0.5
-    // bounded but unresolved, 0 escaped (which keeps the escape colouring).
-    vec2 field = texture(u_attraction, uv).rg;
-    if (field.g > 0.75) {
+    // R centre height, G RMS deviation about it, B classification: 1
+    // resolved, 0.5 bounded but unresolved, 0 escaped (which keeps the escape
+    // colouring). Both bounded classes read fract(bands * spread - phase),
+    // the spread coordinate with the spread as the height and 0 as centre.
+    vec4 field = texture(u_attraction, uv);
+    if (field.b > 0.25) {
       vec3 attractionColour = texture(
         u_palette,
-        vec2(insideOutCoordinate(field.r, u_cycleBands, u_phase), 0.5)
+        vec2(spreadPaletteCoordinate(field.g, 0.0, u_cycleBands, u_phase), 0.5)
       ).rgb;
       colour = mix(colour, attractionColour, insideMask);
-    } else if (field.g > 0.25) {
-      colour = mix(colour, INSIDE_OUT_NEUTRAL, insideMask);
     }
   }
   if (u_diagnosticMode == 1) {
@@ -870,7 +873,10 @@ assertOrbit3DGeometry();
 export interface Orbit3DGroundPlane {
   texture: WebGLTexture;
   interiorDistanceTexture: WebGLTexture | null;
-  /** RG float field: R cycle multiplier, G classification (see orbitColour.ts). */
+  /**
+   * RGBA float field: R centre height, G RMS deviation, B classification
+   * (see orbitColour.ts), A period.
+   */
   attractionTexture: WebGLTexture | null;
   /** (re, im) at the texture's centre. */
   centre: readonly [number, number];
@@ -975,7 +981,7 @@ interface SurfaceResources {
   positionBuffer: WebGLBuffer;
   normalBuffer: WebGLBuffer;
   periodBuffer: WebGLBuffer;
-  interiorBuffer: WebGLBuffer;
+  centreBuffer: WebGLBuffer;
   boundaryBuffer: WebGLBuffer;
   rankBuffer: WebGLBuffer;
   edgeFadeBuffer: WebGLBuffer;
@@ -1031,7 +1037,7 @@ export class Orbit3DPointCloud {
   private readonly toneMapVao: WebGLVertexArrayObject;
   private readonly pointBuffer: WebGLBuffer;
   private readonly periodBuffer: WebGLBuffer;
-  private readonly interiorBuffer: WebGLBuffer;
+  private readonly centreBuffer: WebGLBuffer;
   private readonly boundaryBuffer: WebGLBuffer;
   private readonly weightBuffer: WebGLBuffer;
   private readonly markerBuffer: WebGLBuffer;
@@ -1147,7 +1153,7 @@ export class Orbit3DPointCloud {
     );
     this.pointBuffer = requireResource(gl.createBuffer(), "orbit3d point buffer");
     this.periodBuffer = requireResource(gl.createBuffer(), "orbit3d period buffer");
-    this.interiorBuffer = requireResource(gl.createBuffer(), "orbit3d interior buffer");
+    this.centreBuffer = requireResource(gl.createBuffer(), "orbit3d centre buffer");
     this.boundaryBuffer = requireResource(gl.createBuffer(), "orbit3d boundary buffer");
     this.weightBuffer = requireResource(gl.createBuffer(), "orbit3d weight buffer");
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
@@ -1607,7 +1613,15 @@ export class Orbit3DPointCloud {
       quantized,
     );
     attribute(this.periodBuffer, "a_period", 1, scalarType, quantized);
-    attribute(this.interiorBuffer, "a_interior", 1, scalarType, quantized);
+    // Prebaked clouds (ELPC v1) carry no column centre, so a quantized cloud
+    // reads a constant centre of 0 and Inside-out bands by |height| there.
+    const centreLocation = gl.getAttribLocation(this.pointProgram, "a_centre");
+    if (quantized) {
+      gl.disableVertexAttribArray(centreLocation);
+      gl.vertexAttrib1f(centreLocation, 0);
+    } else {
+      attribute(this.centreBuffer, "a_centre", 1, gl.FLOAT, false);
+    }
     attribute(this.boundaryBuffer, "a_boundary", 1, scalarType, quantized);
     attribute(this.weightBuffer, "a_weight", 1, scalarType, quantized);
     this.quantizedAttributes = quantized;
@@ -1624,7 +1638,6 @@ export class Orbit3DPointCloud {
     };
     upload(this.pointBuffer, cloud.positions);
     upload(this.periodBuffer, cloud.periods);
-    upload(this.interiorBuffer, cloud.interiors);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
     requireNoGlError(gl, "prebaked orbit3d upload");
@@ -1875,13 +1888,13 @@ export class Orbit3DPointCloud {
     this.boundaryDetailBaseCellCount = 0;
     const positions = new Float32Array(pointBudget * 3);
     const periods = new Float32Array(pointBudget);
-    const interiors = new Float32Array(pointBudget);
+    const centres = new Float32Array(pointBudget);
     const boundaries = new Float32Array(pointBudget);
     const weights = new Float32Array(pointBudget).fill(1);
     const orbitSamples = new Float32Array(sampleCount);
     const escapeMask = new Uint8Array(sampleWidth * sampleHeight);
     const slotCell = new Int32Array(maxSurvivingCells);
-    const measure = { interior: 1 };
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
     const refineCandidates = new Int32Array(refineCandidateCap);
     let cell = 0;
     let survivorsSeen = 0;
@@ -1926,7 +1939,7 @@ export class Orbit3DPointCloud {
               positions[offset + 1] = cIm;
               positions[offset + 2] = orbitSamples[sample];
               periods[sample * maxSurvivingCells + slot] = result;
-              interiors[sample * maxSurvivingCells + slot] = measure.interior;
+              centres[sample * maxSurvivingCells + slot] = measure.centre;
             }
           }
           if (
@@ -1993,7 +2006,7 @@ export class Orbit3DPointCloud {
           positions[offset + 1] = subIm;
           positions[offset + 2] = orbitSamples[sample];
           periods[sample * maxSurvivingCells + target] = result;
-          interiors[sample * maxSurvivingCells + target] = measure.interior;
+          centres[sample * maxSurvivingCells + target] = measure.centre;
           weights[sample * maxSurvivingCells + target] = REFINE_POINT_WEIGHT;
         }
       }
@@ -2012,7 +2025,7 @@ export class Orbit3DPointCloud {
           sample * maxSurvivingCells,
           sample * maxSurvivingCells + survivingCells,
         );
-        interiors.copyWithin(
+        centres.copyWithin(
           sample * survivingCells,
           sample * maxSurvivingCells,
           sample * maxSurvivingCells + survivingCells,
@@ -2050,10 +2063,10 @@ export class Orbit3DPointCloud {
         periods.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.centreBuffer);
       gl.bufferData(
         gl.ARRAY_BUFFER,
-        interiors.subarray(0, completedPointCount),
+        centres.subarray(0, completedPointCount),
         gl.STATIC_DRAW,
       );
       gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
@@ -2134,10 +2147,11 @@ export class Orbit3DPointCloud {
     const classifiedCycleIm = new Float64Array(cellCount);
     const classifiedMultiplierAngles = new Float64Array(cellCount);
     const interiors = new Float32Array(cellCount);
+    const centres = new Float32Array(cellCount);
     const boundaries = new Float32Array(cellCount);
     const dissolves = new Float32Array(cellCount).fill(1);
     const escaped = new Uint8Array(cellCount);
-    const measure = { interior: 1 };
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
     const refinedCells: OrbitSurfaceRefinedCell[] = [];
     const refinedCellIndices = new Set<number>();
     const refinedLeavesByCell = new Map<number, OrbitSurfaceRefinedCell[]>();
@@ -2150,7 +2164,7 @@ export class Orbit3DPointCloud {
     const bandAcceptedCounts = new Uint8Array(cellCount);
     let contourSampleValues = new Float32Array(0);
     let contourPeriods = new Int16Array(0);
-    let contourInteriors = new Float32Array(0);
+    let contourCentres = new Float32Array(0);
     let contourEscaped = new Uint8Array(0);
     const contourSamples = new Map<number, number>();
     let contourSampleCount = 0;
@@ -2254,6 +2268,7 @@ export class Orbit3DPointCloud {
             if (result > 0) sheetPeriodicCellCount += 1;
             periods[cell] = result;
             interiors[cell] = measure.interior;
+            centres[cell] = measure.centre;
             if (lastClassification) {
               classifiedPeriods[cell] = lastClassification.period;
               classifiedCycleRe[cell] = lastClassification.cycle.re;
@@ -2425,7 +2440,7 @@ export class Orbit3DPointCloud {
               transitionEdges.length / 4 * ORBIT_SURFACE_CONTOUR_BISECTION_STEPS;
             contourSampleValues = new Float32Array(contourCapacity * sampleCount);
             contourPeriods = new Int16Array(contourCapacity);
-            contourInteriors = new Float32Array(contourCapacity);
+            contourCentres = new Float32Array(contourCapacity);
             contourEscaped = new Uint8Array(contourCapacity);
             phase = "contour-sample";
             continue;
@@ -2481,7 +2496,7 @@ export class Orbit3DPointCloud {
       cIm: number,
       values: Float32Array,
       offset: number,
-      measure: { interior: number },
+      measure: AttractorCellMeasure,
     ): number => {
       const result = sampleAttractorCell(
         cRe,
@@ -2510,6 +2525,9 @@ export class Orbit3DPointCloud {
       ) {
         lastClassification = classification;
         measure.interior = Math.max(0, Math.min(1, classification.multiplier));
+        // The window now holds the exact cycle, so take the centre and spread
+        // from it rather than from the sampler's partly converged orbit.
+        measureCycleSpread(values, offset, classification.period, measure);
         return classification.period;
       }
       return result;
@@ -2654,7 +2672,7 @@ export class Orbit3DPointCloud {
           samples,
           sampleOffset: index * sampleCount,
           period: periods[index],
-          interior: interiors[index],
+          interior: centres[index],
           boundary: boundaries[index],
           dissolve: dissolves[index],
           escaped: escaped[index] !== 0,
@@ -2675,7 +2693,7 @@ export class Orbit3DPointCloud {
         samples: contourSampleValues,
         sampleOffset: contourIndex * sampleCount,
         period: contourPeriods[contourIndex],
-        interior: contourInteriors[contourIndex],
+        interior: contourCentres[contourIndex],
         boundary: boundaryAtGrid(x, y),
         dissolve: dissolveAtGrid(x, y, contourPeriods[contourIndex]),
         escaped: contourEscaped[contourIndex] !== 0,
@@ -2706,6 +2724,7 @@ export class Orbit3DPointCloud {
       if (prepared) return prepared;
       const values = new Float32Array(sampleCount);
       measure.interior = 1;
+      measure.centre = 0;
       const cRe = gridCoordinate(RE_MIN, RE_MAX, x, sampleWidth);
       const cIm = y === Math.floor(sampleHeight / 2)
         ? 0
@@ -2714,7 +2733,7 @@ export class Orbit3DPointCloud {
       const sample: OrbitSurfaceSample = {
         samples: values,
         period: result === ESCAPED ? 0 : result,
-        interior: result === ESCAPED ? 1 : measure.interior,
+        interior: result === ESCAPED ? 0 : measure.centre,
         boundary: boundaryAtGrid(x, y),
         dissolve: dissolveAtGrid(x, y, result === ESCAPED ? 0 : result),
         escaped: result === ESCAPED,
@@ -2756,7 +2775,7 @@ export class Orbit3DPointCloud {
         measure,
       );
       contourPeriods[contourSampleCount] = result === ESCAPED ? 0 : result;
-      contourInteriors[contourSampleCount] = result === ESCAPED ? 1 : measure.interior;
+      contourCentres[contourSampleCount] = result === ESCAPED ? 0 : measure.centre;
       contourEscaped[contourSampleCount] = result === ESCAPED ? 1 : 0;
       contourSamples.set(surfacePointId(x, y), contourSampleCount);
       contourSampleCount += 1;
@@ -2945,7 +2964,9 @@ export class Orbit3DPointCloud {
             sampleCount,
             samples,
             periods,
-            interiors,
+            // The surface's per-vertex scalar channel carries the column
+            // centre: the sheet shader reads a_centre, never the multiplier.
+            interiors: centres,
             boundaries,
             dissolves,
             escaped,
@@ -2991,7 +3012,7 @@ export class Orbit3DPointCloud {
       const fullPointCount = pointSiteCount * pointSampleCount;
       const positions = new Float32Array(fullPointCount * 3);
       const pointPeriods = new Float32Array(fullPointCount);
-      const pointInteriors = new Float32Array(fullPointCount);
+      const pointCentres = new Float32Array(fullPointCount);
       const pointBoundaries = new Float32Array(fullPointCount);
       const pointWeights = new Float32Array(fullPointCount).fill(1);
       for (let slot = 0; slot < boundedCount; slot += 1) {
@@ -3002,7 +3023,7 @@ export class Orbit3DPointCloud {
           samples,
           sampleOffset: sourceCell * sampleCount,
           period: periods[sourceCell],
-          interior: interiors[sourceCell],
+          interior: centres[sourceCell],
           boundary: boundaries[sourceCell],
           escaped: false,
         }, periodicDistances[sourceCell], 1);
@@ -3050,7 +3071,7 @@ export class Orbit3DPointCloud {
           positions[offset + 1] = cIm;
           positions[offset + 2] = sampled.samples[sampleOffset + sample];
           pointPeriods[point] = sampled.period;
-          pointInteriors[point] = sampled.interior;
+          pointCentres[point] = sampled.interior;
           pointBoundaries[point] = sampled.boundary;
           if (sampled.period === 0) {
             pointWeights[point] = cloudBandCoverage(periodicDistance) * siteWeight;
@@ -3060,7 +3081,7 @@ export class Orbit3DPointCloud {
 
       let submittedPositions: Float32Array = positions;
       let submittedPeriods: Float32Array = pointPeriods;
-      let submittedInteriors: Float32Array = pointInteriors;
+      let submittedCentres: Float32Array = pointCentres;
       let submittedBoundaries: Float32Array = pointBoundaries;
       let submittedWeights: Float32Array = pointWeights;
       let submittedSiteCount = pointSiteCount;
@@ -3159,7 +3180,7 @@ export class Orbit3DPointCloud {
 
             submittedPositions = resolvedCloud.positions;
             submittedPeriods = resolvedCloud.periods;
-            submittedInteriors = resolvedCloud.interiors;
+            submittedCentres = resolvedCloud.centres;
             submittedBoundaries = resolvedCloud.boundaries;
             submittedWeights = resolvedCloud.weights;
             submittedSiteCount = resolvedCloud.survivingCells;
@@ -3198,7 +3219,7 @@ export class Orbit3DPointCloud {
                 resolvedCloud.positions[positionOffset + 2] =
                   item.sample.samples[sampleOffset + sample];
                 resolvedCloud.periods[point] = 0;
-                resolvedCloud.interiors[point] = item.sample.interior;
+                resolvedCloud.centres[point] = item.sample.interior;
                 resolvedCloud.boundaries[point] = item.sample.boundary;
                 resolvedCloud.weights[point] = coverage * siteWeight;
               }
@@ -3217,8 +3238,8 @@ export class Orbit3DPointCloud {
       gl.bufferData(gl.ARRAY_BUFFER, submittedPositions, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.periodBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, submittedPeriods, gl.STATIC_DRAW);
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.interiorBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, submittedInteriors, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.centreBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, submittedCentres, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.boundaryBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, submittedBoundaries, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
@@ -3246,7 +3267,7 @@ export class Orbit3DPointCloud {
       this.finalisationMs = performance.now() - finalisationStart;
       this.peakGeometryBytes = submittedPositions.byteLength
         + submittedPeriods.byteLength
-        + submittedInteriors.byteLength
+        + submittedCentres.byteLength
         + submittedBoundaries.byteLength
         + submittedWeights.byteLength
         + (mesh ? orbitSurfaceMeshBytes(mesh) : 0);
@@ -3268,7 +3289,7 @@ export class Orbit3DPointCloud {
     };
     upload(this.pointBuffer, cloud.positions);
     upload(this.periodBuffer, cloud.periods);
-    upload(this.interiorBuffer, cloud.interiors);
+    upload(this.centreBuffer, cloud.centres);
     upload(this.boundaryBuffer, cloud.boundaries);
     upload(this.weightBuffer, cloud.weights);
     requireNoGlError(gl, "GPU orbit3d upload");
@@ -3327,7 +3348,7 @@ export class Orbit3DPointCloud {
     gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, surface.periodBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.periods, gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, surface.interiorBuffer);
+    gl.bindBuffer(gl.ARRAY_BUFFER, surface.centreBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.interiors, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, surface.boundaryBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.boundaries, gl.STATIC_DRAW);
@@ -3700,7 +3721,7 @@ export class Orbit3DPointCloud {
     gl.deleteVertexArray(this.toneMapVao);
     gl.deleteBuffer(this.pointBuffer);
     gl.deleteBuffer(this.periodBuffer);
-    gl.deleteBuffer(this.interiorBuffer);
+    gl.deleteBuffer(this.centreBuffer);
     gl.deleteBuffer(this.boundaryBuffer);
     gl.deleteBuffer(this.weightBuffer);
     gl.deleteBuffer(this.markerBuffer);
@@ -3962,6 +3983,28 @@ function surfaceGridSizeFor(cellCount: number): number {
   return SURFACE_GRID_SIZES.extreme;
 }
 
+/**
+ * Centre and RMS deviation of one exact cycle already written into `values`
+ * at `offset`, for cells whose window the analytic classifier replaced.
+ */
+function measureCycleSpread(
+  values: Float32Array,
+  offset: number,
+  period: number,
+  measure: AttractorCellMeasure,
+): void {
+  let mean = 0;
+  for (let step = 0; step < period; step += 1) mean += values[offset + step];
+  mean /= Math.max(1, period);
+  let squares = 0;
+  for (let step = 0; step < period; step += 1) {
+    const delta = values[offset + step] - mean;
+    squares += delta * delta;
+  }
+  measure.centre = mean;
+  measure.spread = Math.sqrt(squares / Math.max(1, period));
+}
+
 function gridCoordinate(
   min: number,
   max: number,
@@ -3979,7 +4022,7 @@ function createSurfaceResources(
   let positionBuffer: WebGLBuffer | null = null;
   let normalBuffer: WebGLBuffer | null = null;
   let periodBuffer: WebGLBuffer | null = null;
-  let interiorBuffer: WebGLBuffer | null = null;
+  let centreBuffer: WebGLBuffer | null = null;
   let boundaryBuffer: WebGLBuffer | null = null;
   let rankBuffer: WebGLBuffer | null = null;
   let edgeFadeBuffer: WebGLBuffer | null = null;
@@ -3997,9 +4040,9 @@ function createSurfaceResources(
       "orbit3d surface normal buffer",
     );
     periodBuffer = requireResource(gl.createBuffer(), "orbit3d surface period buffer");
-    interiorBuffer = requireResource(
+    centreBuffer = requireResource(
       gl.createBuffer(),
-      "orbit3d surface interior buffer",
+      "orbit3d surface centre buffer",
     );
     boundaryBuffer = requireResource(
       gl.createBuffer(),
@@ -4020,7 +4063,7 @@ function createSurfaceResources(
     bindSurfaceAttribute("a_position", positionBuffer, 3);
     bindSurfaceAttribute("a_normal", normalBuffer, 3);
     bindSurfaceAttribute("a_period", periodBuffer, 1);
-    bindSurfaceAttribute("a_interior", interiorBuffer, 1);
+    bindSurfaceAttribute("a_centre", centreBuffer, 1);
     bindSurfaceAttribute("a_boundary", boundaryBuffer, 1);
     bindSurfaceAttribute("a_rank", rankBuffer, 1);
     bindSurfaceAttribute("a_edgeFade", edgeFadeBuffer, 1);
@@ -4039,7 +4082,7 @@ function createSurfaceResources(
       positionBuffer,
       normalBuffer,
       periodBuffer,
-      interiorBuffer,
+      centreBuffer,
       boundaryBuffer,
       rankBuffer,
       edgeFadeBuffer,
@@ -4069,7 +4112,7 @@ function createSurfaceResources(
     if (positionBuffer) gl.deleteBuffer(positionBuffer);
     if (normalBuffer) gl.deleteBuffer(normalBuffer);
     if (periodBuffer) gl.deleteBuffer(periodBuffer);
-    if (interiorBuffer) gl.deleteBuffer(interiorBuffer);
+    if (centreBuffer) gl.deleteBuffer(centreBuffer);
     if (boundaryBuffer) gl.deleteBuffer(boundaryBuffer);
     if (rankBuffer) gl.deleteBuffer(rankBuffer);
     if (edgeFadeBuffer) gl.deleteBuffer(edgeFadeBuffer);
@@ -4102,7 +4145,7 @@ function releaseSurfaceResources(
   gl.deleteBuffer(surface.positionBuffer);
   gl.deleteBuffer(surface.normalBuffer);
   gl.deleteBuffer(surface.periodBuffer);
-  gl.deleteBuffer(surface.interiorBuffer);
+  gl.deleteBuffer(surface.centreBuffer);
   gl.deleteBuffer(surface.boundaryBuffer);
   gl.deleteBuffer(surface.rankBuffer);
   gl.deleteBuffer(surface.edgeFadeBuffer);

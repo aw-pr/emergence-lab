@@ -7,6 +7,7 @@ import {
   RE_MAX,
   RE_MIN,
   SAMPLE_CLIP,
+  SPREAD_WINDOW_ITERATIONS,
   cellCoordinate,
   periodDetectionWindow,
 } from "../sims/logistic-mandelbrot/model.ts";
@@ -182,6 +183,9 @@ uniform int u_cellCount;
 uniform int u_width;
 uniform int u_sampleCount;
 uniform int u_detectionCount;
+uniform int u_spreadWindow;
+// x: period, or -1 for an escaped or out-of-range cell. y: cycle multiplier.
+// z: centre height (mean Re(z)). w: RMS deviation about the centre.
 layout(location = 0) out vec4 outMetadata;
 
 ${DOUBLE_SINGLE_GLSL}
@@ -216,7 +220,7 @@ void main() {
   int index = pixel.y * u_width + pixel.x;
   vec4 packedState = texelFetch(u_state, pixel, 0);
   if (index >= u_cellCount || packedState.x > 2.0) {
-    outMetadata = vec4(0.0, 1.0, 1.0, 0.0);
+    outMetadata = vec4(-1.0, 1.0, 0.0, 0.0);
     return;
   }
 
@@ -264,26 +268,46 @@ void main() {
     }
   }
 
+  // One walk from the post-sample state serves the multiplier (one cycle,
+  // periodic cells only) and the centre and spread: exactly one cycle when a
+  // period is known, else u_spreadWindow iterates. Welford's update keeps the
+  // spread of a near-constant orbit from cancelling to float noise. The same
+  // iterates the CPU oracle in model.ts measures.
   float interior = 1.0;
-  if (period > 0) {
+  float mean = 0.0;
+  float squares = 0.0;
+  float count = 0.0;
+  {
     vec2 zr = packedState.xy;
     vec2 zi = packedState.zw;
     float multiplier = 1.0;
-    for (int step = 0; step < ${MAX_DETECTABLE_PERIOD}; step += 1) {
-      if (step >= period) break;
+    int steps = period > 0 ? period : u_spreadWindow;
+    for (int step = 0; step < ${SPREAD_WINDOW_ITERATIONS}; step += 1) {
+      if (step >= steps) break;
       orbitStep(zr, zi, cr, ci);
-      multiplier *= 2.0 * length(vec2(dsValue(zr), dsValue(zi)));
+      float x = dsValue(zr);
+      if (period > 0) {
+        multiplier *= 2.0 * length(vec2(x, dsValue(zi)));
+      } else if (orbitEscaped(zr, zi)) {
+        break;
+      }
+      count += 1.0;
+      float delta = x - mean;
+      mean += delta / count;
+      squares += delta * (x - mean);
     }
-    interior = clamp(multiplier, 0.0, 1.0);
+    if (period > 0) interior = clamp(multiplier, 0.0, 1.0);
   }
-  outMetadata = vec4(float(period), interior, 0.0, 0.0);
+  float spread = count > 0.0 ? sqrt(max(squares, 0.0) / count) : 0.0;
+  outMetadata = vec4(float(period), interior, mean, spread);
 }
 `;
 
 export interface OrbitCloudBuffers {
   positions: Float32Array;
   periods: Float32Array;
-  interiors: Float32Array;
+  /** Centre height of each point's column (AttractorCellMeasure.centre). */
+  centres: Float32Array;
   boundaries: Float32Array;
   weights: Float32Array;
   survivingCells: number;
@@ -320,6 +344,10 @@ export interface OrbitSampleResult {
   samples: Float32Array;
   periods: Float32Array;
   interiors: Float32Array;
+  /** Mean Re(z) per cell: one exact cycle, or SPREAD_WINDOW_ITERATIONS iterates. */
+  centres: Float32Array;
+  /** RMS deviation of Re(z) about `centres` per cell. */
+  spreads: Float32Array;
   escaped: Uint8Array;
 }
 
@@ -574,6 +602,10 @@ export class OrbitSampler {
       gl.getUniformLocation(this.periodProgram, "u_detectionCount"),
       periodDetectionWindow(sampleCount),
     );
+    gl.uniform1i(
+      gl.getUniformLocation(this.periodProgram, "u_spreadWindow"),
+      SPREAD_WINDOW_ITERATIONS,
+    );
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return source;
   }
@@ -601,11 +633,23 @@ export class OrbitSampler {
 
     const periods = new Float32Array(cellCount);
     const interiors = new Float32Array(cellCount);
+    const centres = new Float32Array(cellCount);
+    const spreads = new Float32Array(cellCount);
     const escaped = new Uint8Array(cellCount);
     for (let cell = 0; cell < cellCount; cell += 1) {
-      periods[cell] = metadata[cell * 4];
+      // The escape flag shares the period channel as a negative sentinel so
+      // z and w are free for the centre and spread; escaped cells read
+      // period 0 as before.
+      const period = metadata[cell * 4];
+      if (period < 0) {
+        escaped[cell] = 1;
+        interiors[cell] = 1;
+        continue;
+      }
+      periods[cell] = period;
       interiors[cell] = metadata[cell * 4 + 1];
-      escaped[cell] = metadata[cell * 4 + 2] > 0.5 ? 1 : 0;
+      centres[cell] = metadata[cell * 4 + 2];
+      spreads[cell] = metadata[cell * 4 + 3];
     }
 
     const samples = new Float32Array(cellCount * sampleCount);
@@ -641,7 +685,17 @@ export class OrbitSampler {
       targets.stateTextures[finalStateIndex],
       0,
     );
-    return { cellCount, sampleCount, coordinates, samples, periods, interiors, escaped };
+    return {
+      cellCount,
+      sampleCount,
+      coordinates,
+      samples,
+      periods,
+      interiors,
+      centres,
+      spreads,
+      escaped,
+    };
   }
 
   private releaseTargets(targets: SampleTargets): void {
@@ -843,7 +897,7 @@ export function buildGpuOrbitCloud(
   const pointCount = survivingCells * sampleCount;
   const positions = new Float32Array(pointCount * 3);
   const periods = new Float32Array(pointCount);
-  const interiors = new Float32Array(pointCount);
+  const centres = new Float32Array(pointCount);
   const boundaries = new Float32Array(pointCount);
   const weights = new Float32Array(pointCount).fill(1);
   const slotCells = new Int32Array(survivingCells);
@@ -874,7 +928,7 @@ export function buildGpuOrbitCloud(
       positions[position + 1] = base.coordinates[cell * 2 + 1];
       positions[position + 2] = base.samples[sample * base.cellCount + cell];
       periods[point] = base.periods[cell];
-      interiors[point] = base.interiors[cell];
+      centres[point] = base.centres[cell];
       boundaries[point] = Math.min(1, distances[cell] * cellScale);
     }
     if (baselineRefine.sample) {
@@ -890,7 +944,7 @@ export function buildGpuOrbitCloud(
             sample * baselineRefine.sample.cellCount + job
           ];
         periods[point] = baselineRefine.sample.periods[job];
-        interiors[point] = baselineRefine.sample.interiors[job];
+        centres[point] = baselineRefine.sample.centres[job];
         boundaries[point] = Math.min(
           1,
           distances[slotCells[refineStart + slot]] * cellScale,
@@ -908,7 +962,7 @@ export function buildGpuOrbitCloud(
       positions[position + 2] =
         refine.sample.samples[sample * refine.sample.cellCount + job];
       periods[point] = refine.sample.periods[job];
-      interiors[point] = refine.sample.interiors[job];
+      centres[point] = refine.sample.centres[job];
       boundaries[point] = Math.min(
         1,
         distances[slotCells[boundaryDetailBaseCells + slot]] * cellScale,
@@ -919,7 +973,7 @@ export function buildGpuOrbitCloud(
   return {
     positions,
     periods,
-    interiors,
+    centres,
     boundaries,
     weights,
     survivingCells,

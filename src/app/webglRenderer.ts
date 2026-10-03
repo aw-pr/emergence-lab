@@ -33,6 +33,7 @@ import {
   ESCAPED,
   cellCoordinate,
   sampleAttractorCell,
+  type AttractorCellMeasure,
 } from "../sims/logistic-mandelbrot/model.ts";
 import {
   createKuramotoInitialFields,
@@ -1236,13 +1237,15 @@ const ORBIT3D_GROUND_TEXTURE_WIDTH = 1024;
 const ORBIT3D_GROUND_ITERATIONS = 160;
 
 /**
- * Inside-out's ground field: the attracting-cycle multiplier and its
+ * Inside-out's ground field: each column's centre height, RMS spread and
  * classification at every ground texel, sampled once through the same orbit
  * sampler as the cloud. The CPU fallback (no GPU sampler) runs synchronously,
  * so it takes a coarser grid to keep that one-off build short.
  */
 const ORBIT3D_ATTRACTION_FIELD_WIDTH = ORBIT3D_GROUND_TEXTURE_WIDTH;
 const ORBIT3D_ATTRACTION_FIELD_CPU_WIDTH = 256;
+/** Texel layout of Orbit3DAttractionField.data and its RGBA32F texture. */
+export const ATTRACTION_FIELD_CHANNELS = 4;
 
 export interface Orbit3DAttractionField {
   width: number;
@@ -1252,7 +1255,11 @@ export interface Orbit3DAttractionField {
   /** (re, im) extent the field covers edge to edge; texel (x, y) is centred at
    * centre + ((x + 0.5) / width - 0.5) * span, row 0 at imMin. */
   span: readonly [number, number];
-  /** Interleaved (multiplier, classification) per texel, row-major from imMin. */
+  /**
+   * Interleaved (centre, spread, classification, period) per texel, row-major
+   * from imMin: the column's mean height, its RMS deviation about that mean,
+   * the orbitColour.ts classification and the detected period (0 if none).
+   */
   data: Float32Array;
   source: "gpu" | "cpu";
   /** Sampling inputs the field was built from. */
@@ -1932,7 +1939,7 @@ export class WebGLRendererBackend implements RendererBackend {
     if (!texture) return null;
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    // Nearest: interpolating a multiplier across a classification edge would
+    // Nearest: interpolating a spread across a classification edge would
     // invent readings between a bulb and its exterior.
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -1941,11 +1948,11 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
-      gl.RG32F,
+      gl.RGBA32F,
       field.width,
       field.height,
       0,
-      gl.RG,
+      gl.RGBA,
       gl.FLOAT,
       field.data,
     );
@@ -1992,12 +1999,15 @@ export class WebGLRendererBackend implements RendererBackend {
     const gpuCoordinates = build(gpuWidth, gpuHeight);
     const sampled = this.orbit3d?.sampleCells(gpuCoordinates, warmupIterations, sampleCount);
     if (sampled) {
-      const data = new Float32Array(sampled.cellCount * 2);
+      const data = new Float32Array(sampled.cellCount * ATTRACTION_FIELD_CHANNELS);
       for (let cell = 0; cell < sampled.cellCount; cell += 1) {
         const escaped = sampled.escaped[cell] === 1;
         const period = escaped ? 0 : sampled.periods[cell];
-        data[cell * 2] = period > 0 ? sampled.interiors[cell] : 0;
-        data[cell * 2 + 1] = classifyAttraction(escaped, period);
+        const offset = cell * ATTRACTION_FIELD_CHANNELS;
+        data[offset] = escaped ? 0 : sampled.centres[cell];
+        data[offset + 1] = escaped ? 0 : sampled.spreads[cell];
+        data[offset + 2] = classifyAttraction(escaped, period);
+        data[offset + 3] = period;
       }
       return {
         width: gpuWidth,
@@ -2016,11 +2026,10 @@ export class WebGLRendererBackend implements RendererBackend {
     const height = Math.max(1, Math.round((groundSpan[1] / groundSpan[0]) * width));
     const coordinates = build(width, height);
     const cells = width * height;
-    const data = new Float32Array(cells * 2);
+    const data = new Float32Array(cells * ATTRACTION_FIELD_CHANNELS);
     const samples = new Float32Array(sampleCount);
-    const measure = { interior: 1 };
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
     for (let cell = 0; cell < cells; cell += 1) {
-      measure.interior = 1;
       const result = sampleAttractorCell(
         coordinates[cell * 2],
         coordinates[cell * 2 + 1],
@@ -2032,8 +2041,11 @@ export class WebGLRendererBackend implements RendererBackend {
       );
       const escaped = result === ESCAPED;
       const period = escaped ? 0 : result;
-      data[cell * 2] = period > 0 ? measure.interior : 0;
-      data[cell * 2 + 1] = classifyAttraction(escaped, period);
+      const offset = cell * ATTRACTION_FIELD_CHANNELS;
+      data[offset] = escaped ? 0 : measure.centre;
+      data[offset + 1] = escaped ? 0 : measure.spread;
+      data[offset + 2] = classifyAttraction(escaped, period);
+      data[offset + 3] = period;
     }
     return {
       width,

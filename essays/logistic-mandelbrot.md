@@ -67,21 +67,26 @@ in every direction, not just along the real line.
   and mono keeps the plain additive glow. Cycle uses the escape-time palette
   outside the set, extends its bands inward by distance from the boundary,
   and carries those colours up through the attractor sheets by orbit height.
-- Inside-out colours by attracting-cycle strength instead. Every detected
-  period-q cycle has a multiplier |∏ 2z_j| over one full cycle: 0 at the
-  bulb's superattracting centre, rising towards 1 where the cycle only just
-  attracts near the bulb edge. The palette is read at that value, so
-  contours ring each bulb centre, and every sheet stacked over a c shares
-  the colour of the ground beneath it because height plays no part. The
-  cycle speed moves the contours outward from the centres; reverse sends
-  them inward; speed 0 holds them still; bands per unit sets how many
-  contours fit between centre and edge. The multiplier is per complete
-  cycle, so it does not put bulbs of different period on one convergence-
-  time scale. Outside the set the ground keeps its escape-time colouring,
-  and a bounded cell whose period the sampler could not resolve is shown
-  in a steady neutral rather than as a reading. With a noncyclic palette
-  the contours carry that palette's end-to-end seam, which is a feature of
-  the palette, not of the dynamics.
+- Inside-out colours by distance from each column's centre instead. Every
+  bounded c has a centre height h0(c), the mean of Re(z) over the attractor:
+  over exactly one cycle when a period is detected, otherwise over a long run
+  of iterates through the chaotic band. Each point reads the palette at
+  fract(bands · |Re(z) − h0| − phase), so colour depends only on how far the
+  point sits above or below its column's centre, mirrored: the two branches
+  of a period-2 cycle are equally far from h0 = −1/2 and share a hue, and a
+  period-1 sheet sits at distance zero, so the whole cardioid takes one
+  colour that changes with the phase. The cycle speed carries each band out
+  of the centre upward and downward along the sheets; reverse brings them
+  back in; speed 0 holds them still; bands per unit is the number of palette
+  laps per unit of height distance. The chaotic band is coloured the same
+  way, running through several laps between its extremes, and the vertical
+  seams in it are the attractor's own crises, where the mean jumps. Under the
+  sheets the ground reads fract(bands · spread − phase), the column's RMS
+  deviation about its centre, so it is one flat phase-cycling colour under
+  the cardioid and matches the sheets above it over the period-2 bulb;
+  outside the set it keeps its escape-time colouring. With a noncyclic
+  palette the bands carry that palette's end-to-end seam, which is a
+  feature of the palette, not of the dynamics.
 
 ## Further reading
 

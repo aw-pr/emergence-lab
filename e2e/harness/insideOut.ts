@@ -6,14 +6,17 @@
  * into the page, and the production shader sources linked against a
  * pass-through fragment stage so the palette lookup can be read back before
  * lighting. Nothing re-implements the mapping; the expected values come from
- * the pure oracle in src/app/orbitColour.ts and the analytic cycle formulas.
+ * the pure oracle in src/app/orbitColour.ts, closed-form cycles and an
+ * independent float64 orbit.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
-import { insideOutPaletteCoordinate } from "../../src/app/orbitColour.ts";
+import { spreadPaletteCoordinate } from "../../src/app/orbitColour.ts";
 import { decodePng, toOklab, type DecodedImage } from "./frame.ts";
 
 export const SLUG = "logistic-mandelbrot";
-export const ARTIFACT_DIR = "e2e/artifacts/inside-out-cycling";
+export const ARTIFACT_DIR = "e2e/artifacts/inside-out-spread";
+/** Channels per texel of the renderer's attraction field (webglRenderer.ts). */
+export const ATTRACTION_FIELD_CHANNELS = 4;
 export const DEFAULT_CYCLE_BANDS = 1.5;
 /** Ground plane orbit value (orbit3d MARKER_PLANE_ORBIT_VALUE). */
 export const GROUND_PLANE_HEIGHT = -2.08;
@@ -99,8 +102,10 @@ export interface AttractionTexel {
   /** Actual texel-centre coordinate the field sampled. */
   re: number;
   im: number;
-  multiplier: number;
+  centre: number;
+  spread: number;
   classification: number;
+  period: number;
 }
 
 export interface AttractionFieldSummary {
@@ -141,38 +146,76 @@ export function attractionTexel(canvas: Locator, re: number, im: number): Promis
       const imMin = field.centre[1] - field.span[1] / 2;
       const x = Math.max(0, Math.min(field.width - 1, Math.floor(((re - reMin) / field.span[0]) * field.width)));
       const y = Math.max(0, Math.min(field.height - 1, Math.floor(((im - imMin) / field.span[1]) * field.height)));
-      const cell = y * field.width + x;
+      const offset = (y * field.width + x) * 4;
       return {
         x,
         y,
         re: reMin + ((x + 0.5) / field.width) * field.span[0],
         im: imMin + ((y + 0.5) / field.height) * field.span[1],
-        multiplier: field.data[cell * 2],
-        classification: field.data[cell * 2 + 1],
+        centre: field.data[offset],
+        spread: field.data[offset + 1],
+        classification: field.data[offset + 2],
+        period: field.data[offset + 3],
       };
     },
     [re, im] as const,
   );
 }
 
-/** Whole-field classification and multiplier planes for evidence images. */
+/**
+ * Whole-field planes for evidence images: R classification, G spread over
+ * [0, 1.5], B centre over [-2, 2].
+ */
 export function attractionFieldPlanes(canvas: Locator): Promise<{ width: number; height: number; rgb: number[] } | null> {
   return canvas.evaluate((element) => {
     const field = (element as HTMLCanvasElement & { orbit3dAttractionField?: any }).orbit3dAttractionField;
     if (!field) return null;
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
     const rgb: number[] = new Array(field.width * field.height * 3);
     for (let cell = 0; cell < field.width * field.height; cell += 1) {
-      rgb[cell * 3] = Math.round(field.data[cell * 2] * 255);
-      rgb[cell * 3 + 1] = Math.round(field.data[cell * 2 + 1] * 255);
-      rgb[cell * 3 + 2] = 0;
+      const offset = cell * 4;
+      rgb[cell * 3] = clamp(field.data[offset + 2] * 255);
+      rgb[cell * 3 + 1] = clamp((field.data[offset + 1] / 1.5) * 255);
+      rgb[cell * 3 + 2] = clamp(((field.data[offset] + 2) / 4) * 255);
     }
     return { width: field.width, height: field.height, rgb };
   });
 }
 
+/** Every texel of the renderer's field whose classification is bounded, with its spread, by row. */
+export function attractionFieldRow(canvas: Locator, im: number): Promise<AttractionTexel[]> {
+  return canvas.evaluate(
+    (element, im) => {
+      const field = (element as HTMLCanvasElement & { orbit3dAttractionField?: any }).orbit3dAttractionField;
+      if (!field) throw new Error("attraction field is not built");
+      const reMin = field.centre[0] - field.span[0] / 2;
+      const imMin = field.centre[1] - field.span[1] / 2;
+      const y = Math.max(0, Math.min(field.height - 1, Math.floor(((im - imMin) / field.span[1]) * field.height)));
+      const row = [];
+      for (let x = 0; x < field.width; x += 1) {
+        const offset = (y * field.width + x) * 4;
+        row.push({
+          x,
+          y,
+          re: reMin + ((x + 0.5) / field.width) * field.span[0],
+          im: imMin + ((y + 0.5) / field.height) * field.span[1],
+          centre: field.data[offset],
+          spread: field.data[offset + 1],
+          classification: field.data[offset + 2],
+          period: field.data[offset + 3],
+        });
+      }
+      return row;
+    },
+    im,
+  );
+}
+
 export interface SampledCell {
   period: number;
   multiplier: number;
+  centre: number;
+  spread: number;
   escaped: boolean;
 }
 
@@ -198,6 +241,8 @@ export async function gpuSample(
       return cells.map((_, index) => ({
         period: sampled.periods[index],
         multiplier: sampled.interiors[index],
+        centre: sampled.centres[index],
+        spread: sampled.spreads[index],
         escaped: sampled.escaped[index] === 1,
       }));
     },
@@ -234,8 +279,33 @@ export function paletteLookup(table: Rgb[], u: number): Rgb {
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 }
 
-export function expectedInsideOutColour(table: Rgb[], multiplier: number, bands: number, phase: number): Rgb {
-  return paletteLookup(table, insideOutPaletteCoordinate(multiplier, bands, phase));
+export function expectedSpreadColour(table: Rgb[], height: number, centre: number, bands: number, phase: number): Rgb {
+  return paletteLookup(table, spreadPaletteCoordinate(height, centre, bands, phase));
+}
+
+/** Mean and RMS deviation of Re(z) over `count` iterates after `warmup`, in float64, never fed to production. */
+export function referenceOrbit(cRe: number, cIm: number, warmup: number, count: number): { mean: number; rms: number; escaped: boolean } {
+  let zr = 0;
+  let zi = 0;
+  const step = () => {
+    const nextR = zr * zr - zi * zi + cRe;
+    zi = 2 * zr * zi + cIm;
+    zr = nextR;
+  };
+  for (let i = 0; i < warmup; i += 1) {
+    step();
+    if (zr * zr + zi * zi > 4) return { mean: NaN, rms: NaN, escaped: true };
+  }
+  let mean = 0;
+  let squares = 0;
+  for (let i = 0; i < count; i += 1) {
+    step();
+    if (zr * zr + zi * zi > 4) return { mean: NaN, rms: NaN, escaped: true };
+    const delta = zr - mean;
+    mean += delta / (i + 1);
+    squares += delta * (zr - mean);
+  }
+  return { mean, rms: Math.sqrt(squares / count), escaped: false };
 }
 
 export function rgbDistance(a: Rgb, b: Rgb): number {
@@ -246,7 +316,11 @@ export interface ShaderProbeCase {
   stage: "point" | "surface" | "ground";
   colourMode: "period" | "inside-out" | "mono" | "cycle";
   period: number;
-  multiplier: number;
+  /** Point and sheet: the column's centre height (a_centre). Ground: field R. */
+  centre: number;
+  /** Ground only: the column's RMS deviation (field G). */
+  spread?: number;
+  /** Point and sheet: the vertex height. Ground: the plane height (no colour effect). */
   height: number;
   boundary: number;
   phase: number;
@@ -373,7 +447,7 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
           // c = (-0.5, 0) lands at NDC x = 0; the height moves it along y.
           gl.vertexAttrib3f(attr(program, "a_position"), -0.5, 0, item.height);
           gl.vertexAttrib1f(attr(program, "a_period"), item.period);
-          gl.vertexAttrib1f(attr(program, "a_interior"), item.multiplier);
+          gl.vertexAttrib1f(attr(program, "a_centre"), item.centre);
           gl.vertexAttrib1f(attr(program, "a_boundary"), item.boundary);
           gl.vertexAttrib1f(attr(program, "a_weight"), 1);
           gl.drawArrays(gl.POINTS, 0, 1);
@@ -390,7 +464,7 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
           gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
           gl.vertexAttrib3f(attr(program, "a_normal"), 0, 0, 1);
           gl.vertexAttrib1f(attr(program, "a_period"), item.period);
-          gl.vertexAttrib1f(attr(program, "a_interior"), item.multiplier);
+          gl.vertexAttrib1f(attr(program, "a_centre"), item.centre);
           gl.vertexAttrib1f(attr(program, "a_boundary"), item.boundary);
           gl.vertexAttrib1f(attr(program, "a_rank"), 0);
           gl.vertexAttrib1f(attr(program, "a_edgeFade"), 1);
@@ -417,8 +491,10 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
           gl.activeTexture(gl.TEXTURE1);
           gl.bindTexture(gl.TEXTURE_2D, escape);
           const classification = item.escaped ? 0 : item.period > 0 ? 1 : 0.5;
+          // Same layout as the renderer's field: centre, spread, class, period.
           const attraction = texture2d(
-            2, gl.RG32F, gl.RG, gl.FLOAT, 1, 1, new Float32Array([item.multiplier, classification]), false,
+            2, gl.RGBA32F, gl.RGBA, gl.FLOAT, 1, 1,
+            new Float32Array([item.centre, item.spread ?? 0, classification, item.period]), false,
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
           gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);

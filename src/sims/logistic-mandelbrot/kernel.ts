@@ -138,7 +138,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       type: "enum",
       default: "cycle",
       options: ["period", "inside-out", "mono", "cycle"],
-      info: "Chooses how attractor cells are coloured: by period; inside-out by attracting-cycle strength, with palette contours that ring each bulb centre and travel outward at the cycle speed (reverse turns them inward, speed 0 holds them, bands per unit sets their density; bounded cells with no detected period stay a neutral grey); a single tone; or Cycle's animated bands by boundary distance and height. Changes the palette mapping instantly.",
+      info: "Chooses how attractor cells are coloured: by period; inside-out by each point's height distance from its column's centre height (the orbit's mean), so colour bands leave the centre and travel up and down the sheets at the cycle speed (reverse brings them back in, speed 0 holds them, bands per unit sets their density); a period-1 sheet sits at distance zero and takes one colour that changes with the phase, and the chaotic band is coloured like the sheets; a single tone; or Cycle's animated bands by boundary distance and height. Changes the palette mapping instantly.",
     },
     {
       key: "exposure",
@@ -268,7 +268,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0.5,
       max: 8,
       step: 0.25,
-      info: "Palette laps per unit of distance into the set in Cycle mode, or per unit of cycle multiplier in Inside-out mode; higher packs more bands into each bulb. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
+      info: "Palette laps per unit of distance into the set in Cycle mode, or per unit of height distance from the column's centre in Inside-out mode (the ground reads laps per unit of the column's RMS spread); higher packs more bands into each column. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
     {
       key: "cascadeReveal",
