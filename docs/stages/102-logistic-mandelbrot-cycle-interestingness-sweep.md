@@ -111,3 +111,32 @@ this sweep must report around rather than be led by:
 
 Both are reporting requirements; the scorer stays unchanged, per the
 constraints above.
+
+## Re-brief 1 (2026-10-03, verifier re-run)
+
+The worker's envelope is `pass` and stands; this re-brief changes only how the
+verifier checks criterion 2. Attempt 1's verifier ran the sweep command without
+`CYCLE_SWEEP_RESUME=1`, which deletes `e2e/artifacts/logistic-mandelbrot-cycle-sweep/`
+first, then re-rendered 320 of 324 coarse candidates before its 60-minute
+timebox (plus grace) expired. A full fresh sweep takes about 1.7 hours and
+cannot fit a verifier timebox. The worker's tracked write-up is unchanged.
+
+Verifier instructions for this re-run:
+
+1. Do **not** run the sweep without the resume flag, and do not delete
+   `e2e/artifacts/logistic-mandelbrot-cycle-sweep/`. The 320 candidate JSONs
+   there were rendered by the previous verifier, not the worker, so they are
+   independent evidence.
+2. Criterion 2: complete the sweep with
+   `CYCLE_SWEEP=1 CYCLE_SWEEP_RESUME=1 npx playwright test e2e/cycle-interestingness.sweep.spec.ts --workers=1 --timeout=0`
+   in the foreground. It renders only missing candidates plus the refinement
+   and three-pose stages. Confirm the candidate count, no skips, and recompute
+   the ranking from the per-candidate JSON. Compare the regenerated top twenty
+   and the shipped-default ranks with the write-up in
+   `docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`. Small score
+   drift is expected; a different top-five membership or shortlist is a FAIL
+   unless within the 0.03 tolerance criterion 3 allows.
+3. Criteria 1 and 3-6 stand as written. Criterion 3's three re-renders are the
+   rendering reproduction check.
+4. Run every command in the foreground and write the verifier artefact as your
+   final action, with a partial verdict if time runs short rather than none.
