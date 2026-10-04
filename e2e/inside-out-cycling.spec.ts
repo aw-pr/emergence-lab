@@ -744,14 +744,14 @@ test.describe("controls and cache", () => {
     await captureCanvas(canvas, artifact("controls-back-to-cycle.png"));
 
     await page.getByRole("button", { name: "Reset to defaults", exact: true }).click();
-    await expect(page.locator('[data-param-key="colourMode"]')).toHaveValue("cycle");
+    await expect(page.locator('[data-param-key="colourMode"]')).toHaveValue("inside-out");
     await expect(palette).toHaveValue("magma-cyclic");
     await expect(direction).toHaveValue("forward");
     const snapshot = await paramSnapshot(page);
     expect(snapshot.cycleSpeed).toBe("0.1");
     expect(snapshot.cycleBands).toBe("1.5");
     expect(snapshot.geometryMode).toBe("cloud");
-    expect(snapshot.colourMode).toBe("cycle");
+    expect(snapshot.colourMode).toBe("inside-out");
     expect(errors).toEqual([]);
   });
 

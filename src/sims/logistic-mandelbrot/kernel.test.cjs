@@ -675,8 +675,10 @@ test("metadata matches the renderer contract", () => {
   }
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
-  assert.equal(colourMode?.default, "cycle");
+  assert.equal(colourMode?.default, "inside-out");
   assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
+  const exposure = kernel.paramSchema.find((d) => d.key === "exposure");
+  assert.equal(exposure?.default, 3);
 
   const geometryMode = kernel.paramSchema.find((d) => d.key === "geometryMode");
   assert.deepEqual(geometryMode?.options, ["cloud", "hybrid"]);
