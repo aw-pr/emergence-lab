@@ -17,7 +17,9 @@ export const SLUG = "logistic-mandelbrot";
 export const ARTIFACT_DIR = "e2e/artifacts/inside-out-spread";
 /** Channels per texel of the renderer's attraction field (webglRenderer.ts). */
 export const ATTRACTION_FIELD_CHANNELS = 4;
-export const DEFAULT_CYCLE_BANDS = 1.5;
+/** Band density the probes and frozen scenes use, independent of the shipped default. */
+export const PROBE_CYCLE_BANDS = 1.5;
+export const SHIPPED_CYCLE_BANDS = 4;
 /** Ground plane orbit value (orbit3d MARKER_PLANE_ORBIT_VALUE). */
 export const GROUND_PLANE_HEIGHT = -2.08;
 
@@ -36,6 +38,8 @@ export function frozenParams(overrides: SimParams = {}): SimParams {
     geometryMode: "cloud",
     colourMode: "inside-out",
     cycleSpeed: 0,
+    cycleBands: PROBE_CYCLE_BANDS,
+    edgeGlow: 0,
     ...overrides,
   };
 }

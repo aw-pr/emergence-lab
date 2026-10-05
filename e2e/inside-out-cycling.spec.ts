@@ -28,7 +28,8 @@ import {
 import { encodeRgbPng, frameDifference } from "./harness/frame.ts";
 import {
   ARTIFACT_DIR,
-  DEFAULT_CYCLE_BANDS,
+  PROBE_CYCLE_BANDS,
+  SHIPPED_CYCLE_BANDS,
   GROUND_PLANE_HEIGHT,
   PROBE_ESCAPE_COLOUR,
   attractionFieldPlanes,
@@ -165,7 +166,7 @@ const probe = (
   height: 0,
   boundary: 0.3,
   phase: 0,
-  bands: DEFAULT_CYCLE_BANDS,
+  bands: PROBE_CYCLE_BANDS,
   reverse: false,
   ...overrides,
 });
@@ -299,21 +300,21 @@ test.describe("spread", () => {
         for (const sign of [1, -1]) {
           cases.push(probe(stage, { centre, height: centre + sign * distance, period: 2 }));
           labels.push(`${stage} d=${distance} ${sign > 0 ? "above" : "below"}`);
-          expected.push(expectedSpreadColour(table, centre + sign * distance, centre, DEFAULT_CYCLE_BANDS, 0));
+          expected.push(expectedSpreadColour(table, centre + sign * distance, centre, PROBE_CYCLE_BANDS, 0));
         }
       }
       // Shifting height and centre together leaves the distance, so the colour.
       cases.push(probe(stage, { centre: 0.1, height: 0.3, period: 1 }));
       labels.push(`${stage} d=0.2 at centre 0.1`);
-      expected.push(expectedSpreadColour(table, 0.3, 0.1, DEFAULT_CYCLE_BANDS, 0));
+      expected.push(expectedSpreadColour(table, 0.3, 0.1, PROBE_CYCLE_BANDS, 0));
       cases.push(probe(stage, { centre: -1.1, height: -0.9, period: 0 }));
       labels.push(`${stage} d=0.2 at centre -1.1`);
-      expected.push(expectedSpreadColour(table, -0.9, -1.1, DEFAULT_CYCLE_BANDS, 0));
+      expected.push(expectedSpreadColour(table, -0.9, -1.1, PROBE_CYCLE_BANDS, 0));
       // A period-1 sheet sits at its own centre: distance zero at any height.
       for (const height of [-1.5, 0.2, 1.4]) {
         cases.push(probe(stage, { centre: height, height, period: 1 }));
         labels.push(`${stage} d=0 at height ${height}`);
-        expected.push(expectedSpreadColour(table, height, height, DEFAULT_CYCLE_BANDS, 0));
+        expected.push(expectedSpreadColour(table, height, height, PROBE_CYCLE_BANDS, 0));
       }
       // Cycle mode is untouched: its own height term still moves the colour.
       cases.push(probe(stage, { colourMode: "cycle", centre: 0, height: 0 }));
@@ -345,8 +346,8 @@ test.describe("spread", () => {
       let visiblePairs = 0;
       for (let a = 0; a < distances.length; a += 1) {
         for (let b = a + 1; b < distances.length; b += 1) {
-          const ca = spreadPaletteCoordinate(centre + distances[a], centre, DEFAULT_CYCLE_BANDS, 0);
-          const cb = spreadPaletteCoordinate(centre + distances[b], centre, DEFAULT_CYCLE_BANDS, 0);
+          const ca = spreadPaletteCoordinate(centre + distances[a], centre, PROBE_CYCLE_BANDS, 0);
+          const cb = spreadPaletteCoordinate(centre + distances[b], centre, PROBE_CYCLE_BANDS, 0);
           expect(Math.abs(ca - cb), `${stage} d=${distances[a]} and d=${distances[b]} coordinates differ`).toBeGreaterThan(0.04);
           if (visible(ca) && visible(cb)) {
             visiblePairs += 1;
@@ -378,7 +379,7 @@ test.describe("spread", () => {
     for (const z of sheets) {
       const { x, y } = await projectToCanvas(page, re, 0, z, frame.width, frame.height);
       const rgb = meanWindow(frame, x, y, 2);
-      samples.push({ z, x, y, rgb, ...hueOf(rgb), coordinate: spreadPaletteCoordinate(z, -0.5, DEFAULT_CYCLE_BANDS, 0) });
+      samples.push({ z, x, y, rgb, ...hueOf(rgb), coordinate: spreadPaletteCoordinate(z, -0.5, PROBE_CYCLE_BANDS, 0) });
     }
     writeFileSync(artifact("real-route-period2-sheets.json"), JSON.stringify(samples, null, 2));
     for (const sample of samples) {
@@ -429,13 +430,13 @@ test.describe("phase and ground", () => {
         for (const stage of ["point", "surface"] as const) {
           for (const scalar of pointScalars) {
             cases.push(probe(stage, { centre: scalar.centre, height: scalar.height, period: scalar.period, phase, reverse }));
-            expected.push(expectedSpreadColour(table, scalar.height, scalar.centre, DEFAULT_CYCLE_BANDS, phase));
+            expected.push(expectedSpreadColour(table, scalar.height, scalar.centre, PROBE_CYCLE_BANDS, phase));
             labels.push(`${stage} reverse=${reverse} phase=${phase} ${scalar.key}`);
           }
         }
         for (const scalar of groundScalars) {
           cases.push(probe("ground", { centre: -0.5, spread: scalar.spread, period: scalar.period, phase, reverse }));
-          expected.push(expectedSpreadColour(table, scalar.spread, 0, DEFAULT_CYCLE_BANDS, phase));
+          expected.push(expectedSpreadColour(table, scalar.spread, 0, PROBE_CYCLE_BANDS, phase));
           labels.push(`ground reverse=${reverse} phase=${phase} ${scalar.key}`);
         }
       }
@@ -463,14 +464,14 @@ test.describe("phase and ground", () => {
       for (const phase of PHASES) {
         expect(rgbDistance(at(`${stage} reverse=false phase=${phase} d=0.5`), at(`${stage} reverse=false phase=${phase} d=0.5 below`))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
         // A period-1 sheet reads fract(-phase), the same as the ground under the cardioid.
-        expect(rgbDistance(at(`${stage} reverse=false phase=${phase} d=0`), paletteLookup(table, spreadPaletteCoordinate(0, 0, DEFAULT_CYCLE_BANDS, phase)))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
+        expect(rgbDistance(at(`${stage} reverse=false phase=${phase} d=0`), paletteLookup(table, spreadPaletteCoordinate(0, 0, PROBE_CYCLE_BANDS, phase)))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
         expect(rgbDistance(at(`${stage} reverse=false phase=${phase} d=0`), at(`ground reverse=false phase=${phase} cardioid texel`))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
         // Points 0.5 from the centre and ground with spread 0.5 share a coordinate.
         expect(rgbDistance(at(`${stage} reverse=false phase=${phase} d=0.5`), at(`ground reverse=false phase=${phase} spread 0.5`))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
       }
     }
     for (const phase of PHASES) {
-      expect(rgbDistance(at(`ground reverse=false phase=${phase} cardioid texel`), paletteLookup(table, spreadPaletteCoordinate(0, 0, DEFAULT_CYCLE_BANDS, phase))), `cardioid ground at phase ${phase} is fract(-phase)`).toBeLessThanOrEqual(COLOUR_TOLERANCE);
+      expect(rgbDistance(at(`ground reverse=false phase=${phase} cardioid texel`), paletteLookup(table, spreadPaletteCoordinate(0, 0, PROBE_CYCLE_BANDS, phase))), `cardioid ground at phase ${phase} is fract(-phase)`).toBeLessThanOrEqual(COLOUR_TOLERANCE);
       expect(rgbDistance(at(`point reverse=false phase=${phase} d=0.5`), at(`surface reverse=false phase=${phase} d=0.5`))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
     }
     expect(rgbDistance(at("ground reverse=false phase=0 cardioid texel"), at("ground reverse=false phase=1 cardioid texel"))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
@@ -543,7 +544,7 @@ test.describe("phase and ground", () => {
     // a bounded texel with no detected period is coloured like any other.
     expect(rgbDistance(probes[0], PROBE_ESCAPE_COLOUR)).toBeLessThanOrEqual(COLOUR_TOLERANCE);
     expect(rgbDistance(probes[1], PROBE_ESCAPE_COLOUR)).toBeLessThanOrEqual(COLOUR_TOLERANCE);
-    expect(rgbDistance(probes[2], expectedSpreadColour(table, 1.2, 0, DEFAULT_CYCLE_BANDS, 0.3))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
+    expect(rgbDistance(probes[2], expectedSpreadColour(table, 1.2, 0, PROBE_CYCLE_BANDS, 0.3))).toBeLessThanOrEqual(COLOUR_TOLERANCE);
     expect(rgbDistance(probes[2], OLD_NEUTRAL)).toBeGreaterThan(10);
 
     // Real route: with the ground writing its pre-ink colour, exterior pixels
@@ -617,16 +618,16 @@ test.describe("chaotic", () => {
         for (const height of heights) {
           cases.push(probe(stage, { period: 0, centre: sampled.centre, height, phase }));
           labels.push(`${stage} phase=${phase} height=${height}`);
-          expected.push(expectedSpreadColour(table, height, sampled.centre, DEFAULT_CYCLE_BANDS, phase));
+          expected.push(expectedSpreadColour(table, height, sampled.centre, PROBE_CYCLE_BANDS, phase));
         }
       }
     }
     cases.push(probe("ground", { period: 0, centre: texel.centre, spread: texel.spread, phase: 0 }));
     labels.push("ground chaotic texel phase=0");
-    expected.push(expectedSpreadColour(table, texel.spread, 0, DEFAULT_CYCLE_BANDS, 0));
+    expected.push(expectedSpreadColour(table, texel.spread, 0, PROBE_CYCLE_BANDS, 0));
     cases.push(probe("ground", { period: 0, centre: texel.centre, spread: texel.spread, phase: 0.3 }));
     labels.push("ground chaotic texel phase=0.3");
-    expected.push(expectedSpreadColour(table, texel.spread, 0, DEFAULT_CYCLE_BANDS, 0.3));
+    expected.push(expectedSpreadColour(table, texel.spread, 0, PROBE_CYCLE_BANDS, 0.3));
     const colours = await probeShaderColours(page, cases);
     writeFileSync(
       artifact("chaotic-lookups.json"),
@@ -637,7 +638,7 @@ test.describe("chaotic", () => {
       expect(rgbDistance(rgb, OLD_NEUTRAL), `${labels[i]} is not the old neutral`).toBeGreaterThan(6);
     });
     const at = (label: string) => colours[labels.indexOf(label)];
-    const coordinate = (height: number, phase: number) => spreadPaletteCoordinate(height, sampled.centre, DEFAULT_CYCLE_BANDS, phase);
+    const coordinate = (height: number, phase: number) => spreadPaletteCoordinate(height, sampled.centre, PROBE_CYCLE_BANDS, phase);
     // Every height has its own coordinate, and the phase moves each one.
     for (let a = 0; a < heights.length; a += 1) {
       for (let b = a + 1; b < heights.length; b += 1) {
@@ -665,7 +666,7 @@ test.describe("chaotic", () => {
     }
     // The chaotic ground texel: spread about 1.16, coordinate 0.74 at phase 0
     // (flat) and 0.44 at phase 0.3 (visible), so the phase changes its colour.
-    expect(Math.abs(spreadPaletteCoordinate(texel.spread, 0, DEFAULT_CYCLE_BANDS, 0) - spreadPaletteCoordinate(texel.spread, 0, DEFAULT_CYCLE_BANDS, 0.3))).toBeCloseTo(0.3, 6);
+    expect(Math.abs(spreadPaletteCoordinate(texel.spread, 0, PROBE_CYCLE_BANDS, 0) - spreadPaletteCoordinate(texel.spread, 0, PROBE_CYCLE_BANDS, 0.3))).toBeCloseTo(0.3, 6);
     expect(rgbDistance(at("ground chaotic texel phase=0"), at("ground chaotic texel phase=0.3"))).toBeGreaterThan(10);
 
     // No Inside-out pixel source carries the stage 98 neutral or its mapping.
@@ -749,7 +750,7 @@ test.describe("controls and cache", () => {
     await expect(direction).toHaveValue("forward");
     const snapshot = await paramSnapshot(page);
     expect(snapshot.cycleSpeed).toBe("0.1");
-    expect(snapshot.cycleBands).toBe("1.5");
+    expect(snapshot.cycleBands).toBe(String(SHIPPED_CYCLE_BANDS));
     expect(snapshot.geometryMode).toBe("cloud");
     expect(snapshot.colourMode).toBe("inside-out");
     expect(errors).toEqual([]);
@@ -951,7 +952,7 @@ test.describe("direction of travel", () => {
           frames.push({
             path,
             phase,
-            coordinate: spreadPaletteCoordinate(FIXED_DISTANCE, 0, DEFAULT_CYCLE_BANDS, phase),
+            coordinate: spreadPaletteCoordinate(FIXED_DISTANCE, 0, PROBE_CYCLE_BANDS, phase),
             motion: previous ? frameDifference(previous, image) : 0,
           });
           previous = image;
@@ -973,7 +974,7 @@ test.describe("direction of travel", () => {
       await page.waitForTimeout(600);
       const reverse = await capture("reverse");
       const snapshot = await paramSnapshot(page);
-      expect(snapshot.cycleBands).toBe(String(DEFAULT_CYCLE_BANDS));
+      expect(snapshot.cycleBands).toBe(String(view.preset ? SHIPPED_CYCLE_BANDS : PROBE_CYCLE_BANDS));
       expect(snapshot.cycleSpeed).toBe("0.1");
       expect(snapshot.colourMode).toBe("inside-out");
       expect(snapshot.geometryMode).toBe(view.geometryMode);
@@ -988,7 +989,7 @@ test.describe("direction of travel", () => {
         zoomTo: view.zoomTo,
         camera: { azimuth, distance },
         fixedDistance: FIXED_DISTANCE,
-        bands: DEFAULT_CYCLE_BANDS,
+        bands: PROBE_CYCLE_BANDS,
         forward,
         reverse,
         forwardPhaseSteps: steps(forward, "phase"),
