@@ -42,7 +42,9 @@ their centres at load (`src/app/prebakedCentre.ts`). The shipped Magma at
 gamma 1.65 / contrast 2.4 is flat across about 58% of a lap, so the period-1
 sheet reads pale; that is a tuning question for the interestingness run
 (stages 101-102, `docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`),
-which hands the operator a shortlist and changes no default.
+which hands the operator a shortlist and changes no default. Stages 103
+(packed cells for the orbit cloud) and 104 (a hierarchical Inside-out centre,
+gated on 103) were queued on 2026-10-06.
 
 Gray-Scott stays the priority kernel for future refinement.
 
