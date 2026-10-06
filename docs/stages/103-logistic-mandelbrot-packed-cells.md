@@ -202,3 +202,34 @@ Attempt 2 instructions, in addition to everything above:
    final action; a partial result with an envelope is better than none.
 6. Budget: attempt 1 spent 11.1M worker tokens. Keep context lean: read files
    by range and do not dump full logs.
+
+## Re-brief 2 (2026-10-06, attempt 3)
+
+Attempt 2 was killed after its headless worker process hung (main thread
+blocked in `openat`, all sockets closed, no transcript writes for 15 minutes);
+the hang is a harness fault, not a fault in the work. Its tree is preserved at
+`1fe55a6f10b7ec9bf0ef00cd821643d60d48516a` on
+`wip/103-logistic-mandelbrot-packed-cells-attempt-2`. By its own notes it had
+rewritten the GPU base-tier builder, rebaked `lm-tiny.elpc` (26,015 cells),
+rewritten the frame-timing helper in the shared harness, and had the contract
+gate and `npm run verify` clean. Its last cost run read warm render 9.3 to 9.6 ms
+on the tree under test against 52.1 to 52.5 ms on the baseline, and build 606 to
+613 ms against 644 to 677 ms. Those figures are unverified.
+
+Attempt 3 instructions, in addition to everything above and Re-brief 1:
+
+1. Start from the preserved work: `git checkout 1fe55a6f10b7ec9bf0ef00cd821643d60d48516a -- .`
+   in the run worktree, then restore this card to HEAD
+   (`git checkout HEAD -- docs/stages/103-logistic-mandelbrot-packed-cells.md`).
+   Review the diff against `4bc8e7d82` rather than re-deriving it.
+2. The rewritten timing helper must measure both trees the same way. In the
+   audit, state what changed in it and why, and show that the baseline's
+   figure is not merely a pacing floor the tree under test escapes by a
+   different method (for example, the same helper on the baseline at a
+   lighter preset). A 5x render improvement needs that explanation for the
+   verifier to accept it.
+3. Re-run every criterion's command, then the whole spec once, and update the
+   audit from this attempt's runs. Regenerate all evidence; do not cite paths
+   from earlier attempts.
+4. Keep the session short: no exploratory re-reading of files already
+   understood from the diff. Write the dispatch envelope as the final action.
