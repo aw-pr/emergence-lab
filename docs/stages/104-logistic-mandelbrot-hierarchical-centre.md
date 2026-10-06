@@ -112,8 +112,8 @@ On dev at `fad66fdaf`, 2026-10-06, with the stub module and the frozen test comm
 
 ## Budget
 
-- **Worker wall-clock:** 120 minutes
-- **Verifier wall-clock:** 75 minutes
+- **Worker wall-clock:** 1440 minutes (operator 2026-10-06: no timebox; provider session limits bound spend)
+- **Verifier wall-clock:** 1440 minutes (operator 2026-10-06: no timebox; provider session limits bound spend)
 - Planning evidence, `state/cost-log.jsonl` read 2026-10-06: worker median 2.7M tokens, p95 14.4M; verifier median 2.0M, p95 6.7M. Plan 5M for the worker and 4M for the verifier; one p95 outlier on each side brings the pair to about 21M. With card 103's plan the two cards sit at about 42M against the 130M resting cap. Serial, gated on 103.
 - Stop with an explicit partial result if the timebox cannot cover the remaining checks. A retry needs a re-brief.
 
