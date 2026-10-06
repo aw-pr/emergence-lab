@@ -14,6 +14,7 @@
     "src/app/orbitRefinement.ts",
     "src/app/orbitColour.ts",
     "src/app/prebakedCentre.ts",
-    "src/app/orbitPacking.ts"
+    "src/app/orbitPacking.ts",
+    "src/app/orbitHierarchy.ts"
   ]
 }
