@@ -141,3 +141,64 @@ Verifier writes the schema-valid `state/verifiers/103-logistic-mandelbrot-packed
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes; do not change auth routing to work around quota or browser failures. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex seat so it can launch the browser. The Claude worker runs browser checks headless through Playwright with the same config and needs no widening.
+
+## Re-brief 1 (2026-10-06, attempt 2)
+
+Attempt 1 (Fable 5.1) is preserved at `4bc8e7d82a7e44414541cfac0de4faec3dfd503d`
+on `wip/103-logistic-mandelbrot-packed-cells-attempt-1`, with its audit at
+`docs/audits/103-packed-cells.md`. The Sol verifier passed criteria 1, 3, 5, 7
+and 8 and failed 2, 4, 6 and 9. Three of those four failures are card errors;
+one is a real defect. The packed layout itself is accepted: the plane no longer
+thins (criterion 3: baseline 0.343 to 0.207 at tail 0.6, tree under test
+unchanged).
+
+Card amendments, which supersede the criteria text above where they differ:
+
+- **Criterion 2.** Withdraw "and larger at 0.6 than at 0.3". The card assumed
+  the unchanged tree was capacity-bound; attempt 1 measured that it refines
+  every candidate cell at every preset, so freed budget cannot raise the count.
+  Refined sub-cells must still be non-decreasing from 0 to 0.3 to 0.6, and every
+  other clause of criterion 2 stands.
+- **Criterion 4.** Replace the 1.3 times bar with: the tree under test holds at
+  least as many refined sub-cells as the baseline at every preset (ratio at
+  least 1.00), and the audit keeps the five-preset table and the
+  candidate-bound finding. Do not add a second refinement level or widen the
+  subdivision: making tail refinement spend capacity is a follow-up card and an
+  operator decision.
+- **Criterion 6.** The sentence "the period-4 point reads about half the
+  period-1 point's" contradicts its own rule. The rule is energy = period over
+  8 samples: with stacked energy on, period 1 reads 1/8 and period 4 reads 4/8
+  of full, so period 4 reads four times period 1, within 5%. Attempt 1's
+  measured [32, 128] satisfies the corrected criterion; keep that test.
+
+Attempt 2 instructions, in addition to everything above:
+
+1. Start from the preserved work: `git checkout 4bc8e7d82a7e44414541cfac0de4faec3dfd503d -- .`
+   in the run worktree, then restore this card to HEAD
+   (`git checkout HEAD -- docs/stages/103-logistic-mandelbrot-packed-cells.md`).
+   Do not re-implement the layout. Update the base-grid and refinement-capacity
+   assertions in `e2e/packed-cells.spec.ts` to the amended criteria 2 and 4.
+2. **Criterion 9 is the work of this attempt.** Sol measured warm render at
+   1.72 times the baseline's (attempt 1 measured 1.25 to 1.56) and build time at
+   1.39 times with a refined ratio of 1.00. Profile and fix the render
+   regression until warm render is within 20% of the baseline's. The
+   candidates attempt 1 listed are the per-vertex hide branch at the top of
+   the point shader, the per-frame dataset writes, and whether the baseline's
+   53.4 ms is a pacing floor. If you conclude the gap is a measurement artefact,
+   show it with a second independent timing on both trees (GPU time through
+   `EXT_disjoint_timer_query_webgl2` where available, or a fixed-frame-count
+   draw loop) and record both; the verifier judges. Then either bring build
+   time within 20% of the baseline's or explain the rise in the audit for
+   verifier approval, as the criterion already says.
+3. The evidence under ignored `e2e/artifacts/packed-cells/` was lost with the
+   attempt-1 worktree (a copy is kept outside the run for the operator).
+   Serve the baseline on 5174 yourself by the audit 100 recipe and regenerate
+   every artifact this attempt cites; do not cite attempt-1 paths.
+4. Run the whole spec once, `npx playwright test e2e/packed-cells.spec.ts --workers=1`,
+   which attempt 1 did not reach, and update the audit's numbers from this
+   attempt's runs.
+5. Run every command in the foreground and wait for it to exit. Never end a
+   turn while a command is outstanding. Write the dispatch envelope as the
+   final action; a partial result with an envelope is better than none.
+6. Budget: attempt 1 spent 11.1M worker tokens. Keep context lean: read files
+   by range and do not dump full logs.
