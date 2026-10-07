@@ -146,3 +146,17 @@ Attempt 2 instructions, in addition to everything above:
    read files by range, avoid re-reading, and do not dump full logs. Write the
    dispatch envelope as the final action; a partial result with an envelope
    is better than none.
+
+## Re-brief 2 (2026-10-07, attempt 3)
+
+Attempt 2 was again stopped by the operator's Codex quota guard (five-hour
+window at 91%), not by a fault in the work. Its tree is preserved at
+`28d588c134d59b5264ced9d16ff31b091d4d8c0a` on
+`wip/104-logistic-mandelbrot-hierarchical-centre-attempt-2`, unverified.
+
+Attempt 3 instructions, in addition to everything above and Re-brief 1:
+start from `git checkout 28d588c134d59b5264ced9d16ff31b091d4d8c0a -- .`, restore
+this card to HEAD, review the diff against `75f4c241b` rather than
+re-deriving it, and keep to Re-brief 1's economy rule. If the window is
+likely to run out before the criteria are all checked, write a partial
+envelope naming what is left rather than stopping without one.
