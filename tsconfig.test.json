@@ -17,6 +17,7 @@
     "src/app/orbitPacking.ts",
     "src/app/orbitHierarchy.ts",
     "src/app/orbitRefineLevels.ts",
-    "src/app/paramPersistence.ts"
+    "src/app/paramPersistence.ts",
+    "src/app/resolutionPreset.ts"
   ]
 }
