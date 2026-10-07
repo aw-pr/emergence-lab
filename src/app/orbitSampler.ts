@@ -12,6 +12,12 @@ import {
   periodDetectionWindow,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { SlotPacker, admissionOrder, distinctPointCount } from "./orbitPacking.ts";
+import {
+  isRefineCandidate,
+  refinePointWeight,
+  splitLevelRows,
+  subCellCentres,
+} from "./orbitRefineLevels.ts";
 
 const SAMPLE_BATCH_SIZE = 4;
 const MAX_WARMUP_ITERATIONS = 20000;
@@ -480,6 +486,19 @@ export interface OrbitCloudBuffers {
   refinedSubCells: number;
   /** Rows the refinement tiers occupy. */
   refinedRows: number;
+  /** Rows the Tail refinement setting granted to levels 1 and 2 together. */
+  refineRowBudget: number;
+  refinedL1SubCells: number;
+  refinedL1Rows: number;
+  refinedL2SubCells: number;
+  refinedL2Rows: number;
+  /** Sub-cells of the raised boundary-detail tier (0 when it is inactive). */
+  refinedDetailSubCells: number;
+  /** The jobs each tail level sampled, read back by the diagnostic hook. */
+  refineJobs: {
+    level1: OrbitRefineJobRecord | null;
+    level2: OrbitRefineJobRecord | null;
+  };
   /** Occupied rows per orbit sample index, for the visible-point count. */
   rowsBySampleIndex: Uint32Array;
   /** Bytes of the cloud's own CPU-side arrays (attributes and layout tables). */
@@ -498,20 +517,72 @@ export interface GpuOrbitCloudOptions {
   maxSlots: number;
   /** Slots the base tier may occupy: the planner's base row budget over sampleCount. */
   baseSlotCap: number;
-  /** Slots the detail-0 cloud may occupy; the baseline refinement tier fills up to here. */
-  baselineMaxSlots: number;
-  baselineRefineActive: boolean;
-  baselineRefineCandidateCap: number;
-  baselineRefineWarmup: number;
-  baselineRefineSubdivision: number;
-  baselineRefinePointWeight: number;
+  /** Tail refinement, levels 1 and 2: the detail-0 refinement. */
   refineActive: boolean;
+  /** Rows both levels may occupy together, from the detail-0 point budget. */
+  refineRowBudget: number;
+  /** Level-1 candidate cap, derived from the row budget. */
   refineCandidateCap: number;
+  /** Level-2 candidate cap, derived from the rows level 1 leaves. */
+  refineCandidateCapFor: (rows: number, subCells: number) => number;
   refineWarmup: number;
   refineSubdivision: number;
-  refinePeriodThreshold: number;
-  refinePointWeight: number;
+  /** The raised boundary-detail tier, stored after level 2. */
   boundaryDetailActive: boolean;
+  boundaryDetailCandidateCap: number;
+  boundaryDetailWarmup: number;
+  boundaryDetailSubdivision: number;
+  boundaryDetailPointWeight: number;
+}
+
+/**
+ * The jobs one tail-refinement level sampled, kept so a diagnostic can read
+ * the geometry the builder actually used. Job `sampled[i]` (or `i` when
+ * `sampled` is null) has centre `coordinates[2 * job]` and parent
+ * `parentIndices[job]`, whose centre is `parentCoordinates[2 * parent]`.
+ */
+export interface OrbitRefineJobRecord {
+  /** Jobs this level sampled. */
+  total: number;
+  /** Sampled job indices in sampling order; null when every job 0..total-1 was sampled in order. */
+  sampled: Int32Array | null;
+  coordinates: Float64Array;
+  parentIndices: Int32Array;
+  parentCoordinates: Float64Array;
+  parentWidth: number;
+  parentHeight: number;
+}
+
+export interface OrbitRefineJobReadout {
+  re: number;
+  im: number;
+  parentRe: number;
+  parentIm: number;
+  parentWidth: number;
+  parentHeight: number;
+}
+
+/** The first `count` jobs of a level's record, as the diagnostic hook reports them. */
+export function readRefineJobs(
+  record: OrbitRefineJobRecord | null,
+  count: number,
+): { total: number; jobs: OrbitRefineJobReadout[] } {
+  if (!record) return { total: 0, jobs: [] };
+  const jobs: OrbitRefineJobReadout[] = [];
+  const limit = Math.max(0, Math.min(Math.floor(count), record.total));
+  for (let index = 0; index < limit; index += 1) {
+    const job = record.sampled === null ? index : record.sampled[index];
+    const parent = record.parentIndices[job];
+    jobs.push({
+      re: record.coordinates[job * 2],
+      im: record.coordinates[job * 2 + 1],
+      parentRe: record.parentCoordinates[parent * 2],
+      parentIm: record.parentCoordinates[parent * 2 + 1],
+      parentWidth: record.parentWidth,
+      parentHeight: record.parentHeight,
+    });
+  }
+  return { total: record.total, jobs };
 }
 
 export interface OrbitSampleResult {
@@ -961,6 +1032,9 @@ export const MAX_SAMPLE_JOBS_PER_CALL = 1 << 22;
 /** Seed of the admission order that decides which refined sub-cells are kept. */
 const REFINEMENT_ADMISSION_SEED = 0x103_01;
 
+/** Seed of the admission order that decides which level-2 sub-cells are kept. */
+const LEVEL2_ADMISSION_SEED = 0x105_01;
+
 /** Seed of the admission order that decides which base cells are kept when the base slot cap binds. */
 const BASE_ADMISSION_SEED = 0x103;
 
@@ -1040,12 +1114,20 @@ function emptyPackedTier(sampleCount: number): PackedTier {
 
 interface RefinementTier {
   packed: PackedTier;
+  /** Jobs sampled: candidates times sub-cells. */
+  jobs: number;
+  /** Interleaved (re, im) of every job, the array the sampler was given. */
+  coordinates: Float64Array;
   /** Rows per job: 0 for an escaped sub-cell, else its distinct points. */
   rowsPerJob: Uint8Array;
   /** Sampled batches covering the jobs in order, with their first job index. */
   batches: SampleBatch[];
-  /** Parent cell of each job, for the boundary distance. */
+  /** Base cell of each job, for the boundary distance. */
   parents: Int32Array;
+  /** Index of each job's parent in the level it was subdivided from. */
+  parentIndices: Int32Array;
+  /** Whether each bounded job sampled as a level-2 tail; null when no level follows. */
+  nextLevelMask: Uint8Array | null;
   subCells: number;
   rows: number;
   samplerBytes: number;
@@ -1055,9 +1137,13 @@ interface RefinementTier {
 function emptyTier(sampleCount: number): RefinementTier {
   return {
     packed: emptyPackedTier(sampleCount),
+    jobs: 0,
+    coordinates: new Float64Array(0),
     rowsPerJob: new Uint8Array(0),
     batches: [],
     parents: new Int32Array(0),
+    parentIndices: new Int32Array(0),
+    nextLevelMask: null,
     subCells: 0,
     rows: 0,
     samplerBytes: 0,
@@ -1088,19 +1174,17 @@ export function buildGpuOrbitCloud(
     realSliceOnly,
     maxSlots,
     baseSlotCap,
-    baselineMaxSlots,
-    baselineRefineActive,
-    baselineRefineCandidateCap,
-    baselineRefineWarmup,
-    baselineRefineSubdivision,
-    baselineRefinePointWeight,
     refineActive,
+    refineRowBudget,
     refineCandidateCap,
+    refineCandidateCapFor,
     refineWarmup,
     refineSubdivision,
-    refinePeriodThreshold,
-    refinePointWeight,
     boundaryDetailActive,
+    boundaryDetailCandidateCap,
+    boundaryDetailWarmup,
+    boundaryDetailSubdivision,
+    boundaryDetailPointWeight,
   } = options;
   const baseCellCount = sampleWidth * sampleHeight;
   const baseCoordinates = new Float64Array(baseCellCount * 2);
@@ -1134,7 +1218,7 @@ export function buildGpuOrbitCloud(
       boundedCandidates += 1;
       const period = sample.periods[local];
       baseRowsPerCell[cell] = distinctPointCount(period, sampleCount);
-      if (period === 0 || period >= refinePeriodThreshold) tailMask[cell] = 1;
+      if (isRefineCandidate(period, 1)) tailMask[cell] = 1;
     }
   }
 
@@ -1150,15 +1234,17 @@ export function buildGpuOrbitCloud(
   );
   const baseSlots = baseTier.packer.slotCount;
 
-  // Refinement candidates: cascade tails (deep or undetected period) and,
-  // with boundary detail, both sides of the escape edge. Reservoir-capped as
-  // before; the caps derive from the rows the base tier was planned to leave.
-  const baselineRefineCandidates = new Int32Array(
-    boundaryDetailActive && baselineRefineActive ? baselineRefineCandidateCap : 0,
+  // Refinement candidates: cascade tails (deep or undetected period) for
+  // level 1 and, with boundary detail, tails plus both sides of the escape
+  // edge for the raised tier. Reservoir-capped; the level-1 cap derives from
+  // the refinement row budget, the raised tier's from the rows the base tier
+  // was planned to leave under the raised budget.
+  const tailCandidates = new Int32Array(refineActive ? refineCandidateCap : 0);
+  const detailCandidates = new Int32Array(
+    boundaryDetailActive ? boundaryDetailCandidateCap : 0,
   );
-  const refineCandidates = new Int32Array(refineActive ? refineCandidateCap : 0);
-  let baselineInterestingSeen = 0;
-  let interestingSeen = 0;
+  let tailSeen = 0;
+  let detailSeen = 0;
   for (let cell = 0; cell < baseCellCount; cell += 1) {
     const escaped = escapeMask[cell] === 1;
     const boundaryBand =
@@ -1166,61 +1252,71 @@ export function buildGpuOrbitCloud(
       isEscapeEdgeCell(escapeMask, sampleWidth, sampleHeight, cell);
     if (escaped && !boundaryBand) continue;
     const tailCandidate = !escaped && tailMask[cell] === 1;
-    if (boundaryDetailActive && baselineRefineActive && tailCandidate) {
-      const candidateSlot = reservoirSlot(
-        baselineInterestingSeen,
-        baselineRefineCandidateCap,
-      );
-      baselineInterestingSeen += 1;
-      if (candidateSlot >= 0) baselineRefineCandidates[candidateSlot] = cell;
+    if (refineActive && tailCandidate) {
+      const candidateSlot = reservoirSlot(tailSeen, refineCandidateCap);
+      tailSeen += 1;
+      if (candidateSlot >= 0) tailCandidates[candidateSlot] = cell;
     }
-    if (refineActive && (tailCandidate || boundaryBand)) {
-      const candidateSlot = reservoirSlot(interestingSeen, refineCandidateCap);
-      interestingSeen += 1;
-      if (candidateSlot >= 0) refineCandidates[candidateSlot] = cell;
+    if (boundaryDetailActive && (tailCandidate || boundaryBand)) {
+      const candidateSlot = reservoirSlot(detailSeen, boundaryDetailCandidateCap);
+      detailSeen += 1;
+      if (candidateSlot >= 0) detailCandidates[candidateSlot] = cell;
     }
   }
 
+  const cellWidth = (RE_MAX - RE_MIN) / sampleWidth;
+  const cellHeight = (IM_MAX - IM_MIN) / sampleHeight;
+  // Subdivide each candidate of a parent level from its own centre and size,
+  // sample the sub-cells and pack the survivors. Level 1 and the raised tier
+  // subdivide base cells; level 2 subdivides level-1 jobs, so `parentCells`
+  // maps a parent back to the base cell its boundary distance comes from.
   const refineTier = (
+    parentCoordinates: Float64Array,
+    parentCells: Int32Array | null,
     candidates: Int32Array,
     candidatesSeen: number,
     capacitySlots: number,
     warmup: number,
     subdivision: number,
+    parentWidth: number,
+    parentHeight: number,
+    seed: number,
+    nextLevel: boolean,
   ): RefinementTier | null => {
     const candidateCount = Math.min(candidatesSeen, candidates.length);
     const subCells = subdivision * subdivision;
     const jobs = candidateCount * subCells;
     if (jobs === 0 || capacitySlots <= 0) return emptyTier(sampleCount);
     const parents = new Int32Array(jobs);
+    const parentIndices = parentCells === null ? parents : new Int32Array(jobs);
     const coordinates = new Float64Array(jobs * 2);
-    const cellWidth = (RE_MAX - RE_MIN) / sampleWidth;
-    const cellHeight = (IM_MAX - IM_MIN) / sampleHeight;
-    for (let job = 0; job < jobs; job += 1) {
-      const parent = candidates[(job / subCells) | 0];
-      const sub = job % subCells;
-      const px = parent % sampleWidth;
-      const py = (parent - px) / sampleWidth;
-      const centreRe = cellCoordinate(RE_MIN, RE_MAX, px, sampleWidth);
-      const centreIm = py === Math.floor(sampleHeight / 2)
-        ? 0
-        : cellCoordinate(IM_MIN, IM_MAX, py, sampleHeight);
-      const sx = sub % subdivision;
-      const sy = (sub - sx) / subdivision;
-      parents[job] = parent;
-      coordinates[job * 2] =
-        centreRe + ((sx + 0.5) / subdivision - 0.5) * cellWidth;
-      coordinates[job * 2 + 1] =
-        centreIm + ((sy + 0.5) / subdivision - 0.5) * cellHeight;
+    for (let candidate = 0; candidate < candidateCount; candidate += 1) {
+      const parent = candidates[candidate];
+      const first = candidate * subCells;
+      coordinates.set(
+        subCellCentres(
+          parentCoordinates[parent * 2],
+          parentCoordinates[parent * 2 + 1],
+          parentWidth,
+          parentHeight,
+          subdivision,
+        ),
+        first * 2,
+      );
+      parents.fill(parentCells === null ? parent : parentCells[parent], first, first + subCells);
+      if (parentCells !== null) parentIndices.fill(parent, first, first + subCells);
     }
     const batches = sampleInBatches(sampler, coordinates, warmup, sampleCount);
     if (!batches) return null;
     const rowsPerJob = new Uint8Array(jobs);
+    const nextLevelMask = nextLevel ? new Uint8Array(jobs) : null;
     let storable = 0;
     for (const { first, sample } of batches) {
       for (let local = 0; local < sample.cellCount; local += 1) {
         if (sample.escaped[local] === 1) continue;
-        rowsPerJob[first + local] = distinctPointCount(sample.periods[local], sampleCount);
+        const period = sample.periods[local];
+        rowsPerJob[first + local] = distinctPointCount(period, sampleCount);
+        if (nextLevelMask && isRefineCandidate(period, 2)) nextLevelMask[first + local] = 1;
         storable += 1;
       }
     }
@@ -1231,50 +1327,111 @@ export function buildGpuOrbitCloud(
       storable,
       capacitySlots,
       sampleCount,
-      REFINEMENT_ADMISSION_SEED,
+      seed,
     );
     return {
       packed,
+      jobs,
+      coordinates,
       rowsPerJob,
       batches,
       parents,
+      parentIndices,
+      nextLevelMask,
       subCells: packed.stored,
       rows: packed.packer.rowCount,
       samplerBytes: batches.reduce((sum, batch) => sum + sampleResultBytes(batch.sample), 0),
-      layoutBytes: packed.bytes + rowsPerJob.byteLength + parents.byteLength,
+      layoutBytes: packed.bytes
+        + rowsPerJob.byteLength
+        + parents.byteLength
+        + (parentIndices === parents ? 0 : parentIndices.byteLength)
+        + (nextLevelMask?.byteLength ?? 0),
     };
   };
 
-  let baselineRefine = emptyTier(sampleCount);
-  if (boundaryDetailActive && baselineRefineActive) {
-    // The detail-0 refinement sits in front of the raised tier so a fully
-    // gated draw submits the genuine baseline cloud.
-    const built = refineTier(
-      baselineRefineCandidates,
-      baselineInterestingSeen,
-      Math.max(0, baselineMaxSlots - baseSlots),
-      baselineRefineWarmup,
-      baselineRefineSubdivision,
-    );
-    if (!built) return null;
-    baselineRefine = built;
-  }
-  const boundaryDetailBaseSlots = baseSlots + baselineRefine.packed.packer.slotCount;
-  let refine = emptyTier(sampleCount);
+  // Level 1: the tails tier, packed first within the refinement row budget.
+  // Level 2: the level-1 sub-cells that still sampled as tails, within the
+  // rows level 1 left. Both sit in front of the raised tier so a fully
+  // gated draw submits the genuine detail-0 cloud.
+  const refineSlotCap = refineActive ? Math.floor(refineRowBudget / sampleCount) : 0;
+  let level1 = emptyTier(sampleCount);
   if (refineActive) {
     const built = refineTier(
-      refineCandidates,
-      interestingSeen,
-      Math.max(0, maxSlots - boundaryDetailBaseSlots),
+      baseCoordinates,
+      null,
+      tailCandidates,
+      tailSeen,
+      refineSlotCap,
       refineWarmup,
       refineSubdivision,
+      cellWidth,
+      cellHeight,
+      REFINEMENT_ADMISSION_SEED,
+      true,
     );
     if (!built) return null;
-    refine = built;
+    level1 = built;
   }
-  samplerBytes += baselineRefine.samplerBytes + refine.samplerBytes;
+  const level1Slots = level1.packed.packer.slotCount;
+  let level2 = emptyTier(sampleCount);
+  let level2Candidates = new Int32Array(0);
+  if (refineActive && level1.jobs > 0 && level1.nextLevelMask) {
+    const level2Rows = splitLevelRows(refineRowBudget, level1.rows).level2;
+    const level2SlotCap = Math.min(
+      Math.floor(level2Rows / sampleCount),
+      refineSlotCap - level1Slots,
+    );
+    const level2SubCells = refineSubdivision * refineSubdivision;
+    const level2CandidateCap = level2SlotCap > 0
+      ? refineCandidateCapFor(level2Rows, level2SubCells)
+      : 0;
+    level2Candidates = new Int32Array(level2CandidateCap);
+    let level2Seen = 0;
+    for (let job = 0; job < level1.jobs && level2CandidateCap > 0; job += 1) {
+      if (level1.nextLevelMask[job] !== 1) continue;
+      const candidateSlot = reservoirSlot(level2Seen, level2CandidateCap);
+      level2Seen += 1;
+      if (candidateSlot >= 0) level2Candidates[candidateSlot] = job;
+    }
+    const built = refineTier(
+      level1.coordinates,
+      level1.parents,
+      level2Candidates,
+      level2Seen,
+      level2SlotCap,
+      refineWarmup,
+      refineSubdivision,
+      cellWidth / refineSubdivision,
+      cellHeight / refineSubdivision,
+      LEVEL2_ADMISSION_SEED,
+      false,
+    );
+    if (!built) return null;
+    level2 = built;
+  }
+  const level2Slots = level2.packed.packer.slotCount;
+  const boundaryDetailBaseSlots = baseSlots + level1Slots + level2Slots;
+  let detail = emptyTier(sampleCount);
+  if (boundaryDetailActive) {
+    const built = refineTier(
+      baseCoordinates,
+      null,
+      detailCandidates,
+      detailSeen,
+      Math.max(0, maxSlots - boundaryDetailBaseSlots),
+      boundaryDetailWarmup,
+      boundaryDetailSubdivision,
+      cellWidth,
+      cellHeight,
+      REFINEMENT_ADMISSION_SEED,
+      false,
+    );
+    if (!built) return null;
+    detail = built;
+  }
+  samplerBytes += level1.samplerBytes + level2.samplerBytes + detail.samplerBytes;
 
-  const slotCount = boundaryDetailBaseSlots + refine.packed.packer.slotCount;
+  const slotCount = boundaryDetailBaseSlots + detail.packed.packer.slotCount;
   const pointCount = slotCount * sampleCount;
   const positions = new Float32Array(pointCount * 3);
   const periods = new Float32Array(pointCount);
@@ -1331,20 +1488,28 @@ export function buildGpuOrbitCloud(
   };
   writeTier(baseTier, baseRowsPerCell, 0, base, null, 1);
   writeTier(
-    baselineRefine.packed,
-    baselineRefine.rowsPerJob,
+    level1.packed,
+    level1.rowsPerJob,
     baseSlots,
-    baselineRefine.batches,
-    baselineRefine.parents,
-    baselineRefinePointWeight,
+    level1.batches,
+    level1.parents,
+    refinePointWeight(1),
   );
   writeTier(
-    refine.packed,
-    refine.rowsPerJob,
+    level2.packed,
+    level2.rowsPerJob,
+    baseSlots + level1Slots,
+    level2.batches,
+    level2.parents,
+    refinePointWeight(2),
+  );
+  writeTier(
+    detail.packed,
+    detail.rowsPerJob,
     boundaryDetailBaseSlots,
-    refine.batches,
-    refine.parents,
-    refinePointWeight,
+    detail.batches,
+    detail.parents,
+    boundaryDetailPointWeight,
   );
 
   const buildBytes = positions.byteLength
@@ -1358,10 +1523,29 @@ export function buildGpuOrbitCloud(
     + baseRowsPerCell.byteLength
     + baseTier.bytes
     + distances.byteLength
-    + baselineRefineCandidates.byteLength
-    + refineCandidates.byteLength
-    + baselineRefine.layoutBytes
-    + refine.layoutBytes;
+    + tailCandidates.byteLength
+    + detailCandidates.byteLength
+    + level1.layoutBytes
+    + level2Candidates.byteLength
+    + level2.layoutBytes
+    + detail.layoutBytes;
+  const jobRecord = (
+    tier: RefinementTier,
+    parentCoordinates: Float64Array,
+    parentWidth: number,
+    parentHeight: number,
+  ): OrbitRefineJobRecord | null =>
+    tier.jobs === 0
+      ? null
+      : {
+          total: tier.jobs,
+          sampled: null,
+          coordinates: tier.coordinates,
+          parentIndices: tier.parentIndices,
+          parentCoordinates,
+          parentWidth,
+          parentHeight,
+        };
   return {
     positions,
     periods,
@@ -1376,8 +1560,23 @@ export function buildGpuOrbitCloud(
     boundedCandidates,
     baseCells: baseTier.stored,
     baseRows: baseTier.packer.rowCount,
-    refinedSubCells: baselineRefine.subCells + refine.subCells,
-    refinedRows: baselineRefine.rows + refine.rows,
+    refinedSubCells: level1.subCells + level2.subCells + detail.subCells,
+    refinedRows: level1.rows + level2.rows + detail.rows,
+    refineRowBudget: refineActive ? refineRowBudget : 0,
+    refinedL1SubCells: level1.subCells,
+    refinedL1Rows: level1.rows,
+    refinedL2SubCells: level2.subCells,
+    refinedL2Rows: level2.rows,
+    refinedDetailSubCells: detail.subCells,
+    refineJobs: {
+      level1: jobRecord(level1, baseCoordinates, cellWidth, cellHeight),
+      level2: jobRecord(
+        level2,
+        level1.coordinates,
+        cellWidth / refineSubdivision,
+        cellHeight / refineSubdivision,
+      ),
+    },
     rowsBySampleIndex,
     buildBytes,
     samplerBytes,

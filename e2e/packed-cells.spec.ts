@@ -160,7 +160,7 @@ test.describe("base grid", () => {
 });
 
 test.describe("plane coverage", () => {
-  test("the cardioid lattice keeps its density at tail refinement 0.6 on both live paths, and thins on the baseline", async ({ page }) => {
+  test("the cardioid lattice keeps its density at tail refinement 0.6 on both live paths, and on the served baseline", async ({ page }) => {
     test.setTimeout(1_500_000);
     await requireBaseline(page);
     const measure = async (
@@ -198,7 +198,11 @@ test.describe("plane coverage", () => {
     }
     expect(Math.abs(gpu6.fraction / gpu0.fraction - 1), "GPU extreme 0.6 vs 0").toBeLessThanOrEqual(0.02);
     expect(Math.abs(cpu6.fraction / cpu3.fraction - 1), "CPU ultra 0.6 vs 0.3").toBeLessThanOrEqual(0.02);
-    expect(base6.fraction / base0.fraction, "baseline thins at 0.6").toBeLessThan(0.8);
+    // Card 103's baseline was the stacked tree, which lost 40% of its lit
+    // cores at 0.6. A baseline cut after card 103 is packed, and under card
+    // 105's rule the slider never touches the base grid on either tree, so
+    // the served baseline keeps its lattice exactly as the tree under test.
+    expect(Math.abs(base6.fraction / base0.fraction - 1), "baseline keeps its lattice at 0.6").toBeLessThanOrEqual(0.02);
   });
 });
 

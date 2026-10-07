@@ -161,10 +161,11 @@ export class LogisticMandelbrotKernel implements SimKernel {
       step: 0.05,
       info: "Strength of the glow drawn at cell boundaries. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
-    // Share of the point budget that caps the base tier's rows; the rest
-    // re-samples cascade tails on a finer sub-grid. The base grid stores each
-    // cell's distinct points once, so the cap does not thin it. Zero leaves
-    // CPU sharpening automatic because it has no boundary tier.
+    // Share of the point budget spent re-sampling cascade tails at two
+    // levels of detail (3 by 3, then 3 by 3 again where a sub-cell is still a
+    // tail). The base grid stores each cell's distinct points once and does
+    // not change with the setting. Zero leaves CPU sharpening automatic
+    // because it has no boundary tier.
     {
       key: "tailRefinement",
       label: "Tail refinement",
@@ -173,7 +174,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 0.6,
       step: 0.05,
-      info: "Share of the point budget that caps the base grid; the rest of the budget re-samples cascade tails on a finer sub-grid, sharpening the boundary. Each cell stores only its distinct points, so raising this no longer thins the plane. Changing it rebuilds the point cloud; 0 means off on the GPU path, automatic (0.3) on the CPU fallback.",
+      info: "Share of the point budget spent re-sampling cascade tails at two levels of detail: each tail cell on a 3 by 3 sub-grid, then each sub-cell that is still a tail on a 3 by 3 sub-grid of its own. The base grid does not change with it. Changing it rebuilds the point cloud; 0 means off on the GPU path, automatic (0.3) on the CPU fallback.",
     },
     // GPU-only live-build detail. The CPU fallback ignores this control and
     // retains the tail-refinement plan above rather than attempting 16M points.

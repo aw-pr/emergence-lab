@@ -25,15 +25,28 @@
 /** Refinement levels the live builders run. */
 export type RefineLevel = 1 | 2;
 
+/** The slider's ceiling: refinement never takes more than this share of the budget. */
+export const MAX_REFINE_FRACTION = 0.6;
+
+const PERIOD_THRESHOLD_BY_LEVEL: Readonly<Record<RefineLevel, number>> = { 1: 8, 2: 16 };
+const POINT_WEIGHT_BY_LEVEL: Readonly<Record<RefineLevel, number>> = { 1: 0.15, 2: 0.06 };
+
+function checkLevel(level: number): RefineLevel {
+  if (level !== 1 && level !== 2) {
+    throw new RangeError(`orbitRefineLevels: level must be 1 or 2, got ${level}`);
+  }
+  return level;
+}
+
 /**
  * Whether a sampled cell is refined at `level`: a bounded cell whose
  * detected period is 0 (none found) or at least the level's threshold
  * (8 at level 1, 16 at level 2). An escaped cell (period -1) never is.
  */
 export function isRefineCandidate(period: number, level: RefineLevel): boolean {
-  void period;
-  void level;
-  throw new Error("card 105: isRefineCandidate is not implemented");
+  const threshold = PERIOD_THRESHOLD_BY_LEVEL[checkLevel(level)];
+  if (period < 0) return false;
+  return period === 0 || period >= threshold;
 }
 
 /**
@@ -48,12 +61,17 @@ export function subCellCentres(
   cellHeight: number,
   subdivision: number,
 ): Float64Array {
-  void centreRe;
-  void centreIm;
-  void cellWidth;
-  void cellHeight;
-  void subdivision;
-  throw new Error("card 105: subCellCentres is not implemented");
+  const centres = new Float64Array(subdivision * subdivision * 2);
+  let cursor = 0;
+  for (let sy = 0; sy < subdivision; sy += 1) {
+    const im = centreIm + ((sy + 0.5) / subdivision - 0.5) * cellHeight;
+    for (let sx = 0; sx < subdivision; sx += 1) {
+      centres[cursor] = centreRe + ((sx + 0.5) / subdivision - 0.5) * cellWidth;
+      centres[cursor + 1] = im;
+      cursor += 2;
+    }
+  }
+  return centres;
 }
 
 /**
@@ -61,9 +79,8 @@ export function subCellCentres(
  * times the setting clamped to [0, 0.6], rounded down.
  */
 export function refinementRowBudget(pointBudget: number, fraction: number): number {
-  void pointBudget;
-  void fraction;
-  throw new Error("card 105: refinementRowBudget is not implemented");
+  const clamped = Math.max(0, Math.min(MAX_REFINE_FRACTION, fraction));
+  return Math.floor(pointBudget * clamped);
 }
 
 /**
@@ -74,13 +91,17 @@ export function splitLevelRows(
   budgetRows: number,
   level1Rows: number,
 ): { level1: number; level2: number } {
-  void budgetRows;
-  void level1Rows;
-  throw new Error("card 105: splitLevelRows is not implemented");
+  if (!Number.isFinite(budgetRows) || budgetRows < 0) {
+    throw new RangeError(`splitLevelRows: budget must be a non-negative number, got ${budgetRows}`);
+  }
+  if (!Number.isFinite(level1Rows) || level1Rows < 0) {
+    throw new RangeError(`splitLevelRows: level-1 rows must be a non-negative number, got ${level1Rows}`);
+  }
+  const level1 = Math.min(budgetRows, level1Rows);
+  return { level1, level2: budgetRows - level1 };
 }
 
 /** Per-point weight of a refined point: 0.15 at level 1, 0.06 at level 2. */
 export function refinePointWeight(level: RefineLevel): number {
-  void level;
-  throw new Error("card 105: refinePointWeight is not implemented");
+  return POINT_WEIGHT_BY_LEVEL[checkLevel(level)];
 }

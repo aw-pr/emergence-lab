@@ -7,7 +7,7 @@
  */
 import { expect, type Locator, type Page } from "@playwright/test";
 import { decodePng, type DecodedImage } from "./frame.ts";
-import { SLUG, type SimParams } from "./insideOut.ts";
+import { SLUG, projectToCanvas, type SimParams } from "./insideOut.ts";
 
 export const PACKED_ARTIFACT_DIR = "e2e/artifacts/packed-cells";
 export const CURRENT_ORIGIN = "http://localhost:5173";
@@ -77,6 +77,14 @@ export interface CloudStats {
   slots: number;
   refinedSubCells: number;
   refinedRows: number;
+  /** Card 105's per-level figures; NaN on a tree that does not publish them. */
+  refineRowBudget: number;
+  refinedL1SubCells: number;
+  refinedL1Rows: number;
+  refinedL2SubCells: number;
+  refinedL2Rows: number;
+  refinedDetailSubCells: number;
+  detailBaseSlots: number;
   visiblePoints: number;
   buildBytes: number;
   samplerBytes: number;
@@ -103,6 +111,13 @@ export async function cloudStats(canvas: Locator): Promise<CloudStats> {
     slots: n("orbit3dSlots"),
     refinedSubCells: n("orbit3dRefinedSubCells"),
     refinedRows: n("orbit3dRefinedRows"),
+    refineRowBudget: n("orbit3dRefineRowBudget"),
+    refinedL1SubCells: n("orbit3dRefinedL1SubCells"),
+    refinedL1Rows: n("orbit3dRefinedL1Rows"),
+    refinedL2SubCells: n("orbit3dRefinedL2SubCells"),
+    refinedL2Rows: n("orbit3dRefinedL2Rows"),
+    refinedDetailSubCells: n("orbit3dRefinedDetailSubCells"),
+    detailBaseSlots: n("orbit3dDetailBaseSlots"),
     visiblePoints: n("orbit3dVisiblePoints"),
     buildBytes: n("orbit3dBuildBytes"),
     samplerBytes: n("orbit3dSamplerBytes"),
@@ -150,6 +165,52 @@ export function meanLuma(image: DecodedImage): number {
   const pixels = image.width * image.height;
   for (let index = 0; index < pixels; index += 1) sum += luma(image.rgba, index * 4);
   return pixels === 0 ? 0 : sum / pixels;
+}
+
+/** Mean 8-bit luma over a rectangle of the frame. */
+export function meanLumaRect(image: DecodedImage, rect: PixelRect): number {
+  let sum = 0;
+  let total = 0;
+  const x0 = Math.max(0, Math.round(rect.x));
+  const y0 = Math.max(0, Math.round(rect.y));
+  const x1 = Math.min(image.width, Math.round(rect.x + rect.width));
+  const y1 = Math.min(image.height, Math.round(rect.y + rect.height));
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      sum += luma(image.rgba, (y * image.width + x) * 4);
+      total += 1;
+    }
+  }
+  return total === 0 ? 0 : sum / total;
+}
+
+/** One job of a tail-refinement level, as `orbit3dReadRefineJobs` reports it. */
+export interface RefineJob {
+  re: number;
+  im: number;
+  parentRe: number;
+  parentIm: number;
+  parentWidth: number;
+  parentHeight: number;
+}
+
+/** The renderer's `orbit3dReadRefineJobs(level, count)` hook: the jobs a level sampled in the last build. */
+export async function readRefineJobs(
+  canvas: Locator,
+  level: 1 | 2,
+  count: number,
+): Promise<{ total: number; jobs: RefineJob[] }> {
+  return canvas.evaluate(
+    (element, [level, count]) => {
+      const reader = (element as HTMLCanvasElement & {
+        orbit3dReadRefineJobs?: (level: 1 | 2, count: number) => { total: number; jobs: RefineJob[] };
+      }).orbit3dReadRefineJobs;
+      if (!reader) throw new Error("no refine-jobs readback on the canvas");
+      const read = reader(level as 1 | 2, count as number);
+      return { total: read.total, jobs: read.jobs.map((job) => ({ ...job })) };
+    },
+    [level, count] as const,
+  );
 }
 
 export async function screenshot(canvas: Locator, path?: string): Promise<DecodedImage> {
@@ -231,6 +292,81 @@ export async function topDown(page: Page, canvas: Locator): Promise<void> {
 export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * Card 103's cardioid pose: the camera tilted to its top-down clamp, then
+ * dollied at the viewport centre, which the default orbit target puts over
+ * the cardioid interior at c = (-0.5, 0), deep enough that the sample
+ * lattice resolves at splat growth 0. The lit fraction is measured in a
+ * 240 px square around the centre with the 8-bit luma threshold below.
+ */
+export const CARDIOID_C = { re: -0.5, im: 0 };
+export const CARDIOID_DOLLY_STEPS = Number(process.env.PACKED_CELLS_POSE_STEPS ?? 40);
+export const CARDIOID_RECT_SIZE = 240;
+export const CARDIOID_LIT_THRESHOLD = Number(process.env.PACKED_CELLS_LIT_THRESHOLD ?? 40);
+
+export async function cardioidPose(
+  page: Page,
+  canvas: Locator,
+): Promise<{ rect: PixelRect; distance: number; azimuth: number; pointer: { x: number; y: number } }> {
+  const box = (await canvas.boundingBox())!;
+  await topDown(page, canvas);
+  const target = { x: box.width / 2, y: box.height / 2 };
+  const pose = await dollyAt(page, canvas, target.x, target.y, CARDIOID_DOLLY_STEPS);
+  return {
+    rect: {
+      x: target.x - CARDIOID_RECT_SIZE / 2,
+      y: target.y - CARDIOID_RECT_SIZE / 2,
+      width: CARDIOID_RECT_SIZE,
+      height: CARDIOID_RECT_SIZE,
+    },
+    ...pose,
+    pointer: target,
+  };
+}
+
+/**
+ * Card 104's real-axis evidence pose: dolly 20 wheel steps toward c = -1.36
+ * at orbit height 0.2 (the period-4 window on the real axis), then a
+ * right-drag from that anchor to (0.5, 0.92) of the viewport, which frames
+ * the period-4 to period-8 cascade and the chaotic points beyond it.
+ */
+export const REAL_AXIS_POSE = { re: -1.36, im: 0, height: 0.2, steps: 20, dragTo: [0.5, 0.92] as const };
+
+export async function realAxisPose(
+  page: Page,
+  canvas: Locator,
+): Promise<{ anchor: { x: number; y: number }; distance: number; azimuth: number }> {
+  const box = (await canvas.boundingBox())!;
+  const anchor = await projectToCanvas(page, REAL_AXIS_POSE.re, REAL_AXIS_POSE.im, REAL_AXIS_POSE.height, box.width, box.height);
+  await canvas.evaluate(
+    (element, { x, y, steps }) => {
+      const rect = element.getBoundingClientRect();
+      for (let step = 0; step < steps; step += 1) {
+        element.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + x,
+            clientY: rect.top + y,
+            deltaY: -100,
+          }),
+        );
+      }
+    },
+    { x: anchor.x, y: anchor.y, steps: REAL_AXIS_POSE.steps },
+  );
+  await page.mouse.move(box.x + anchor.x, box.y + anchor.y);
+  await page.mouse.down({ button: "right" });
+  const [dragX, dragY] = REAL_AXIS_POSE.dragTo;
+  await page.mouse.move(box.x + box.width * dragX, box.y + box.height * dragY, { steps: 8 });
+  await page.mouse.up({ button: "right" });
+  await page.waitForTimeout(300);
+  await waitForCameraRest(canvas);
+  await page.waitForTimeout(800);
+  const stats = await cloudStats(canvas);
+  return { anchor, distance: stats.cameraDistance, azimuth: stats.cameraAzimuth };
 }
 
 /** Header of an ELPC v1 bake: cell and sample counts. */

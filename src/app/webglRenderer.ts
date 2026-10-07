@@ -1277,6 +1277,13 @@ export interface Orbit3DDiagnosticCanvas extends HTMLCanvasElement {
    * (Orbit3DPointCloud.readSampleIndices). Empty for a stacked cloud.
    */
   orbit3dReadSampleIndices?: (count: number) => Float32Array;
+  /**
+   * Read back the jobs a tail-refinement level sampled in the last live
+   * build: how many, and for the first `count` each job's centre and its
+   * parent's centre and size, from the arrays the builder sampled
+   * (Orbit3DPointCloud.readRefineJobs). Empty for a prebaked cloud.
+   */
+  orbit3dReadRefineJobs?: (level: 1 | 2, count: number) => ReturnType<Orbit3DPointCloud["readRefineJobs"]>;
   orbit3dReadPoints?: (first: number, count: number) => ReturnType<Orbit3DPointCloud["readPoints"]>;
   orbit3dReadSurface?: () => ReturnType<Orbit3DPointCloud["readSurface"]>;
 }
@@ -1619,11 +1626,19 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dSlots;
     delete canvas.dataset.orbit3dRefinedSubCells;
     delete canvas.dataset.orbit3dRefinedRows;
+    delete canvas.dataset.orbit3dRefineRowBudget;
+    delete canvas.dataset.orbit3dRefinedL1SubCells;
+    delete canvas.dataset.orbit3dRefinedL1Rows;
+    delete canvas.dataset.orbit3dRefinedL2SubCells;
+    delete canvas.dataset.orbit3dRefinedL2Rows;
+    delete canvas.dataset.orbit3dRefinedDetailSubCells;
+    delete canvas.dataset.orbit3dDetailBaseSlots;
     delete canvas.dataset.orbit3dVisiblePoints;
     delete canvas.dataset.orbit3dLayout;
     delete canvas.dataset.orbit3dBuildBytes;
     delete canvas.dataset.orbit3dSamplerBytes;
     delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadRefineJobs;
     delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints;
     delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface;
     delete canvas.dataset.orbit3dCameraDistance;
@@ -1747,6 +1762,8 @@ export class WebGLRendererBackend implements RendererBackend {
     const orbit3d = this.orbit3d;
     (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices = (count) =>
       orbit3d.readSampleIndices(count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadRefineJobs = (level, count) =>
+      orbit3d.readRefineJobs(level, count);
     (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints = (first, count) => orbit3d.readPoints(first, count);
     (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface = () => orbit3d.readSurface();
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
@@ -1757,6 +1774,13 @@ export class WebGLRendererBackend implements RendererBackend {
     canvas.dataset.orbit3dSlots = String(stats.slotCount);
     canvas.dataset.orbit3dRefinedSubCells = String(stats.refinedSubCells);
     canvas.dataset.orbit3dRefinedRows = String(stats.refinedRows);
+    canvas.dataset.orbit3dRefineRowBudget = String(stats.refineRowBudget);
+    canvas.dataset.orbit3dRefinedL1SubCells = String(stats.refinedL1SubCells);
+    canvas.dataset.orbit3dRefinedL1Rows = String(stats.refinedL1Rows);
+    canvas.dataset.orbit3dRefinedL2SubCells = String(stats.refinedL2SubCells);
+    canvas.dataset.orbit3dRefinedL2Rows = String(stats.refinedL2Rows);
+    canvas.dataset.orbit3dRefinedDetailSubCells = String(stats.refinedDetailSubCells);
+    canvas.dataset.orbit3dDetailBaseSlots = String(stats.detailBaseSlots);
     canvas.dataset.orbit3dVisiblePoints = String(stats.visiblePoints);
     canvas.dataset.orbit3dLayout = stats.layout;
     canvas.dataset.orbit3dBuildBytes = String(stats.buildBytes);
