@@ -160,3 +160,13 @@ this card to HEAD, review the diff against `75f4c241b` rather than
 re-deriving it, and keep to Re-brief 1's economy rule. If the window is
 likely to run out before the criteria are all checked, write a partial
 envelope naming what is left rather than stopping without one.
+
+## Re-brief 3 (2026-10-07, attempt 4)
+
+Attempt 3 was stopped by the Codex quota guard (five-hour window at 91%)
+after about sixteen minutes. Its tree is preserved at
+`909dacedc0e27b91de87f5e39bc08db1d6756c77` on
+`wip/104-logistic-mandelbrot-hierarchical-centre-attempt-3`, unverified.
+Start from `git checkout 909dacedc0e27b91de87f5e39bc08db1d6756c77 -- .`,
+restore this card to HEAD, review the diff against `28d588c13`, and follow
+Re-briefs 1 and 2.
