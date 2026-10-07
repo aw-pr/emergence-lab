@@ -10,7 +10,7 @@
  * ground, chaotic, controls and cache, direction of travel. Artefacts land
  * under e2e/artifacts/inside-out-spread/ (git-ignored).
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
   ESCAPED,
@@ -42,6 +42,7 @@ import {
   frameTiming,
   frozenParams,
   gpuSample,
+  hierarchyVertices,
   hueDifference,
   hueOf,
   meanWindow,
@@ -59,6 +60,8 @@ import {
   type Rgb,
   type ShaderProbeCase,
 } from "./harness/insideOut.ts";
+
+import { openPacked } from "./harness/packedCells.ts";
 
 const WARMUP = 1500;
 const SAMPLES = 8;
@@ -757,120 +760,33 @@ test.describe("controls and cache", () => {
   });
 
   test("cloud build, field build and warm render time against the unchanged baseline", async ({ page }) => {
-    test.setTimeout(600_000);
-    const baseUrl = process.env.INSIDE_OUT_BASELINE_URL ?? "http://localhost:5174";
-    const params = frozenParams({ cycleSpeed: 0.1 });
-    const SAMPLE_COUNT = 3;
-    type Timing = Awaited<ReturnType<typeof frameTiming>>;
-    type Run = { cloudBuildMs: number; fieldBuildMs: number; points: string; renders: Timing[] };
-    type Measured = { runs: Run[] };
-    // Three matched page loads each: the cloud build is wall-clock from
-    // navigation to the complete attribute; the field build is the renderer's
-    // own figure; the warm render timing is taken on the last load.
-    const measure = async (origin: string, label: string): Promise<Measured> => {
-      const runs: Run[] = [];
-      for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
-        const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
-        const target = await context.newPage();
-        await target.addInitScript(
-          ([values]) => localStorage.setItem("el:values:logistic-mandelbrot", JSON.stringify(values)),
-          [params] as const,
-        );
-        const started = Date.now();
-        await target.goto(`${origin}/#/logistic-mandelbrot`, { timeout: 15_000 });
-        const canvas = target.locator(".sim-view__canvas");
-        await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
-        await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
-        const cloudBuildMs = Date.now() - started;
-        await target.waitForTimeout(1000);
-        const dataset = await canvasDataset(canvas);
-        expect(dataset.orbit3dSampler, `${label} sample ${sample} uses the GPU sampler`).toBe("gpu-sampled");
-        expect(dataset.orbit3dAttractionSource, `${label} sample ${sample} field source`).toBe("gpu");
-        const renders: Timing[] = [];
-        if (sample === SAMPLE_COUNT - 1) {
-          for (let run = 0; run < SAMPLE_COUNT; run += 1) renders.push(await frameTiming(target));
-        }
-        runs.push({
-          cloudBuildMs,
-          fieldBuildMs: Number(dataset.orbit3dAttractionBuildMs),
-          points: dataset.orbit3dPoints,
-          renders,
-        });
-        await context.close();
-      }
-      return { runs };
-    };
-    const current = await measure("http://localhost:5173", "current");
-    await page.goto("about:blank");
-    let baseline: Measured | null = null;
-    try {
-      baseline = await measure(baseUrl, "baseline");
-    } catch (error) {
-      baseline = null;
-      console.log(`baseline server unavailable at ${baseUrl}: ${(error as Error).message.split("\n")[0]}`);
-    }
-    const summarise = (measured: Measured) => {
-      const last = measured.runs[measured.runs.length - 1];
-      return {
-        cloudBuildMs: measured.runs.map((r) => r.cloudBuildMs),
-        fieldBuildMs: measured.runs.map((r) => r.fieldBuildMs),
-        renderMedianMs: last.renders.map((r) => r.medianMs),
-        renderP90Ms: last.renders.map((r) => r.p90Ms),
-        renderMethod: last.renders.map((r) => r.method),
-        intervalMedianMs: last.renders.map((r) => r.intervalMedianMs),
-        points: measured.runs.map((r) => r.points),
-      };
-    };
-    const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
-    const report = {
-      current: summarise(current),
-      baseline: baseline ? summarise(baseline) : null,
-      verdict: baseline ? "compared" : "unmet",
-    };
-    console.log(JSON.stringify(report));
-    writeFileSync(artifact("render-timing.json"), JSON.stringify(report, null, 2));
-    expect(
-      baseline,
-      `criterion 6 timing comparison unmet: no unchanged baseline served at ${baseUrl} (see docs/audits/100-inside-out-spread-colouring.md, "Serving the baseline")`,
-    ).not.toBeNull();
-    const cur = report.current;
-    const base = report.baseline!;
-    expect(cur.renderMedianMs.length).toBe(SAMPLE_COUNT);
-    expect(base.renderMedianMs.length).toBe(SAMPLE_COUNT);
-    expect(new Set(cur.points).size).toBe(1);
-    // A packed cloud (card 103) stores each cell's distinct points once, so it
-    // submits fewer points than the stacked baseline by design; equality was
-    // retired for an upper bound.
-    expect(Number(cur.points[0])).toBeLessThanOrEqual(Number(base.points[0]));
-    // A sustained regression above 20% in build or render time needs an
-    // explanation and verifier approval; the medians of three matched samples
-    // are the sustained figures.
-    expect(median(cur.cloudBuildMs), `cloud build ${cur.cloudBuildMs} vs ${base.cloudBuildMs}`).toBeLessThanOrEqual(median(base.cloudBuildMs) * 1.2 + 50);
-    expect(median(cur.fieldBuildMs), `field build ${cur.fieldBuildMs} vs ${base.fieldBuildMs}`).toBeLessThanOrEqual(median(base.fieldBuildMs) * 1.2 + 5);
-    expect(median(cur.renderMedianMs), `render ${cur.renderMedianMs} vs ${base.renderMedianMs}`).toBeLessThanOrEqual(median(base.renderMedianMs) * 1.2 + 1);
-    expect(median(cur.fieldBuildMs)).toBeLessThan(2000);
+    await compareBuildCosts(page, artifact("render-timing.json"));
   });
 });
 
+interface DirectionView {
+  id: string;
+  geometryMode: "cloud" | "hybrid";
+  preset: string | null;
+  zoomTo: { re: number; im: number; steps: number; height?: number; dragTo?: [number, number] } | null;
+}
+
 test.describe("direction of travel", () => {
-  const SEQUENCE_DIR = `${ARTIFACT_DIR}/reverse-sequence`;
-  const FRAMES = 4;
-  const FRAME_GAP_MS = 1000;
-  /** A fixed height distance from a column's centre whose colour the phase carries. */
-  const FIXED_DISTANCE = 0.5;
-
-  /** Signed lap delta between two phases on the unit circle, in (-0.5, 0.5]. */
-  const lapDelta = (from: number, to: number) => ((to - from + 1.5) % 1) - 0.5;
-
-  const VIEWS = [
+  directionEvidenceTests([
     { id: "cloud-default", geometryMode: "cloud", preset: null, zoomTo: null },
     { id: "hybrid-default", geometryMode: "hybrid", preset: null, zoomTo: null },
     { id: "bifurcation-curtain", geometryMode: "cloud", preset: "bifurcation-curtain", zoomTo: null },
     { id: "period2-bulb-ground", geometryMode: "cloud", preset: null, zoomTo: { re: -1, im: 0, steps: 4 } },
-  ] as const;
+  ], `${ARTIFACT_DIR}/reverse-sequence`);
+});
 
+function directionEvidenceTests(VIEWS: readonly DirectionView[], SEQUENCE_DIR: string, hierarchy = false) {
+  const FRAMES = 4;
+  const FRAME_GAP_MS = 1000;
+  const FIXED_DISTANCE = 0.5;
+  const lapDelta = (from: number, to: number) => ((to - from + 1.5) % 1) - 0.5;
   for (const view of VIEWS) {
-    test(`${view.id}: forward and reverse sequences move a fixed-distance colour in opposite directions`, async ({ page }) => {
+    test(`${hierarchy ? "hierarchy: evidence " : ""}${view.id}: forward and reverse sequences move a fixed-distance colour in opposite directions`, async ({ page }) => {
       mkdirSync(SEQUENCE_DIR, { recursive: true });
       // Defaults except Inside-out mode and a parked camera. The default pose
       // looks down on the whole set from above the ground plane, so the ground,
@@ -917,7 +833,10 @@ test.describe("direction of travel", () => {
       }
       if (view.zoomTo) {
         const box = (await canvas.boundingBox())!;
-        const target = await projectToCanvas(page, view.zoomTo.re, view.zoomTo.im, GROUND_PLANE_HEIGHT, box.width, box.height);
+        // The dolly translates along the pointer ray, so the point under the
+        // pointer keeps its screen position however far the wheel zooms; a
+        // right-drag pan would only move it 1:1 at the orbit target's depth.
+        const target = await projectToCanvas(page, view.zoomTo.re, view.zoomTo.im, view.zoomTo.height ?? GROUND_PLANE_HEIGHT, box.width, box.height);
         const before = Number((await canvasDataset(canvas)).orbit3dCameraDistance);
         await canvas.evaluate((element, { x, y, steps }) => {
           const rect = element.getBoundingClientRect();
@@ -928,6 +847,15 @@ test.describe("direction of travel", () => {
             }));
           }
         }, { x: target.x, y: target.y, steps: view.zoomTo.steps });
+        if (hierarchy) {
+          // Pan last: a right-drag moves content 1:1 only near the orbit
+          // target's depth, which the dolly has just brought to the anchor.
+          await page.mouse.move(box.x + target.x, box.y + target.y);
+          await page.mouse.down({ button: "right" });
+          const [dragX, dragY] = view.zoomTo.dragTo ?? [0.5, 0.5];
+          await page.mouse.move(box.x + box.width * dragX, box.y + box.height * dragY, { steps: 8 });
+          await page.mouse.up({ button: "right" });
+        }
         await page.waitForTimeout(300);
         await waitForCameraRest();
         expect(Number((await canvasDataset(canvas)).orbit3dCameraDistance)).toBeLessThan(before * 0.6);
@@ -957,7 +885,7 @@ test.describe("direction of travel", () => {
           frames.push({
             path,
             phase,
-            coordinate: spreadPaletteCoordinate(FIXED_DISTANCE, 0, PROBE_CYCLE_BANDS, phase),
+            coordinate: spreadPaletteCoordinate(FIXED_DISTANCE, 0, view.preset ? SHIPPED_CYCLE_BANDS : PROBE_CYCLE_BANDS, phase),
             motion: previous ? frameDifference(previous, image) : 0,
           });
           previous = image;
@@ -994,7 +922,7 @@ test.describe("direction of travel", () => {
         zoomTo: view.zoomTo,
         camera: { azimuth, distance },
         fixedDistance: FIXED_DISTANCE,
-        bands: PROBE_CYCLE_BANDS,
+        bands: view.preset ? SHIPPED_CYCLE_BANDS : PROBE_CYCLE_BANDS,
         forward,
         reverse,
         forwardPhaseSteps: steps(forward, "phase"),
@@ -1022,4 +950,310 @@ test.describe("direction of travel", () => {
       }
     });
   }
+}
+
+async function compareBuildCosts(page: Page, outputPath: string) {
+    test.setTimeout(600_000);
+    const baseUrl = process.env.INSIDE_OUT_BASELINE_URL ?? "http://localhost:5174";
+    const params = frozenParams({ cycleSpeed: 0.1 });
+    const SAMPLE_COUNT = 3;
+    type Timing = Awaited<ReturnType<typeof frameTiming>>;
+    type Run = { cloudBuildMs: number; fieldBuildMs: number; points: string; renders: Timing[] };
+    type Measured = { runs: Run[] };
+    // Interleave matched loads to limit clock/pacing drift between trees.
+    // Each load contributes one warm render window, with identical GPU timers.
+    const measure = async (origin: string, label: string, sample: number): Promise<Run> => {
+        const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
+        try {
+        const target = await context.newPage();
+        await target.addInitScript(
+          ([values]) => localStorage.setItem("el:values:logistic-mandelbrot", JSON.stringify(values)),
+          [params] as const,
+        );
+        const started = Date.now();
+        await target.goto(`${origin}/#/logistic-mandelbrot`, { timeout: 15_000 });
+        const canvas = target.locator(".sim-view__canvas");
+        await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-orbit3d");
+        await expect(canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 120_000 });
+        const cloudBuildMs = Date.now() - started;
+        await target.waitForTimeout(1000);
+        const dataset = await canvasDataset(canvas);
+        expect(dataset.orbit3dSampler, `${label} sample ${sample} uses the GPU sampler`).toBe("gpu-sampled");
+        expect(dataset.orbit3dAttractionSource, `${label} sample ${sample} field source`).toBe("gpu");
+        return {
+          cloudBuildMs,
+          fieldBuildMs: Number(dataset.orbit3dAttractionBuildMs),
+          points: dataset.orbit3dPoints,
+          renders: [await frameTiming(target)],
+        };
+        } finally {
+          await context.close();
+        }
+    };
+    await page.goto("about:blank");
+    const current: Measured = { runs: [] };
+    let baseline: Measured | null = { runs: [] };
+    for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
+      current.runs.push(await measure("http://localhost:5173", "current", sample));
+      if (baseline) {
+        try {
+          baseline.runs.push(await measure(baseUrl, "baseline", sample));
+        } catch (error) {
+          baseline = null;
+          console.log(`baseline server unavailable at ${baseUrl}: ${(error as Error).message.split("\n")[0]}`);
+        }
+      }
+    }
+    const summarise = (measured: Measured) => {
+      const renders = measured.runs.flatMap((run) => run.renders);
+      return {
+        cloudBuildMs: measured.runs.map((r) => r.cloudBuildMs),
+        fieldBuildMs: measured.runs.map((r) => r.fieldBuildMs),
+        renderMedianMs: renders.map((r) => r.medianMs),
+        renderP90Ms: renders.map((r) => r.p90Ms),
+        renderMethod: renders.map((r) => r.method),
+        intervalMedianMs: renders.map((r) => r.intervalMedianMs),
+        points: measured.runs.map((r) => r.points),
+      };
+    };
+    const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    const report = {
+      current: summarise(current),
+      baseline: baseline ? summarise(baseline) : null,
+      verdict: baseline ? "compared" : "unmet",
+    };
+    console.log(JSON.stringify(report));
+    writeFileSync(outputPath, JSON.stringify(report, null, 2));
+    expect(
+      baseline,
+      `criterion 6 timing comparison unmet: no unchanged baseline served at ${baseUrl} (see docs/audits/100-inside-out-spread-colouring.md, "Serving the baseline")`,
+    ).not.toBeNull();
+    const cur = report.current;
+    const base = report.baseline!;
+    expect(cur.renderMedianMs.length).toBe(SAMPLE_COUNT);
+    expect(base.renderMedianMs.length).toBe(SAMPLE_COUNT);
+    expect(new Set(cur.points).size).toBe(1);
+    // A packed cloud (card 103) stores each cell's distinct points once, so it
+    // submits fewer points than the stacked baseline by design; equality was
+    // retired for an upper bound.
+    expect(Number(cur.points[0])).toBeLessThanOrEqual(Number(base.points[0]));
+    // A sustained regression above 20% in build or render time needs an
+    // explanation and verifier approval; the medians of three matched samples
+    // are the sustained figures.
+    expect(median(cur.cloudBuildMs), `cloud build ${cur.cloudBuildMs} vs ${base.cloudBuildMs}`).toBeLessThanOrEqual(median(base.cloudBuildMs) * 1.2 + 50);
+    expect(median(cur.fieldBuildMs), `field build ${cur.fieldBuildMs} vs ${base.fieldBuildMs}`).toBeLessThanOrEqual(median(base.fieldBuildMs) * 1.2 + 5);
+    expect(median(cur.renderMedianMs), `render ${cur.renderMedianMs} vs ${base.renderMedianMs}`).toBeLessThanOrEqual(median(base.renderMedianMs) * 1.2 + 1);
+    expect(median(cur.fieldBuildMs)).toBeLessThan(2000);
+    return report;
+}
+
+const HIERARCHY_DIR = "e2e/artifacts/hierarchical-centre";
+function hierarchyArtifact(name: string): string {
+  mkdirSync(HIERARCHY_DIR, { recursive: true });
+  return `${HIERARCHY_DIR}/${name}`;
+}
+
+function cpuHierarchy(re: number, im: number, sampleCount = SAMPLES) {
+  const samples = new Float32Array(sampleCount);
+  const sampleCentres = new Float32Array(sampleCount);
+  const measure = { interior: 1, centre: 0, spread: 0, sampleCentres };
+  const period = sampleAttractorCell(re, im, WARMUP, sampleCount, samples, 0, measure);
+  return { period, samples: [...samples], sampleCentres: [...sampleCentres], centre: measure.centre };
+}
+
+/** Independently iterate a converged cycle and enumerate every proposed group. */
+function referenceParents(re: number, im: number, period: number, sample0: number, sampleCount = SAMPLES): number[] {
+  if (period === 0) return Array(sampleCount).fill(referenceOrbit(re, im, WARMUP + sampleCount, SPREAD_WINDOW_ITERATIONS).mean);
+  let zr = 0;
+  let zi = 0;
+  const heights: number[] = [];
+  for (let i = 0; i < 20000 + period; i += 1) {
+    const next = zr * zr - zi * zi + re;
+    zi = 2 * zr * zi + im;
+    zr = next;
+    if (i >= 20000) heights.push(zr);
+  }
+  // Brent convergence exits can stop at different phases of the same cycle.
+  const start = heights.reduce((best, h, k) => Math.abs(h - sample0) < Math.abs(heights[best] - sample0) ? k : best, 0);
+  if (period === 1) return Array(sampleCount).fill(heights[0]);
+  const proposals: { s: number; centres: number[]; cost: number }[] = [];
+  for (let s = 2; s <= period; s += 1) {
+    if (period % s !== 0) continue;
+    const centres = heights.map((_, k) => {
+      let total = 0;
+      for (let j = 0; j < s; j += 1) total += heights[(k + j * period / s) % period];
+      return total / s;
+    });
+    proposals.push({ s, centres, cost: heights.reduce((sum, h, k) => sum + (h - centres[k]) ** 2, 0) / period });
+  }
+  proposals.sort((a, b) => Math.abs(a.cost - b.cost) <= 1e-12 * Math.max(a.cost, b.cost) ? b.s - a.s : a.cost - b.cost);
+  return Array.from({ length: sampleCount }, (_, i) => proposals[0].centres[(start + i) % period]);
+}
+
+function assertHierarchyVertices(readback: Awaited<ReturnType<typeof hierarchyVertices>>, period: 2 | 4) {
+  const { points } = readback;
+  expect(points.length).toBeGreaterThanOrEqual(period);
+  const cells = new Map<number, typeof points>();
+  for (const point of points) {
+    expect(point.period).toBe(period);
+    const group = cells.get(point.re) ?? [];
+    group.push(point);
+    cells.set(point.re, group);
+  }
+  for (const group of cells.values()) {
+    const ordered = [...group].sort((a, b) => a.height - b.height);
+    // A mesh may reuse a vertex at a contour; distinct heights must still cover one cycle.
+    const distinct = ordered.filter((p, i) => i === 0 || Math.abs(p.height - ordered[i - 1].height) > 1e-5);
+    expect(distinct.length).toBe(period);
+    for (let k = 0; k < distinct.length; k += 1) {
+      const expected = period === 2 ? -0.5 : (distinct[k - k % 2].height + distinct[k - k % 2 + 1].height) / 2;
+      expect(Math.abs(distinct[k].centre - expected)).toBeLessThanOrEqual(2e-3);
+    }
+    for (const point of ordered) {
+      const match = distinct.find((p) => Math.abs(p.height - point.height) <= 1e-5)!;
+      expect(Math.abs(point.centre - match.centre)).toBeLessThanOrEqual(2e-3);
+    }
+  }
+}
+
+test.describe("hierarchy", () => {
+  test("hierarchy: sampler CPU, GPU and independent float64 parents agree sample by sample", async ({ page }) => {
+    page.on("console", (message) => { if (message.type() === "error") console.log(message.text()); });
+    await page.goto("/");
+    const cells = [[-0.5, 0], [-1, 0], [-1.3, 0], [-1.26, 0], [-1.375, 0], [-1.14, 0.245], [-0.12, 0.74], [-1.9, 0]];
+    let longCell: number | undefined;
+    for (let i = 0; i <= 200; i += 1) {
+      const re = -1.4 + i * 0.0001;
+      if (cpuHierarchy(re, 0).period > SAMPLES) { longCell = re; break; }
+    }
+    expect(longCell).toBeDefined();
+    cells.push([longCell!, 0]);
+    const cpu = cells.map(([re, im]) => cpuHierarchy(re, im));
+    const gpu = await gpuSample(page, cells.map(([re, im]) => [re, im] as const), WARMUP, SAMPLES);
+    const rows = cells.map(([re, im], i) => ({ re, im, cpu: cpu[i], gpu: gpu[i], reference: referenceParents(re, im, cpu[i].period, cpu[i].samples[0]) }));
+    writeFileSync(hierarchyArtifact("sampler.json"), JSON.stringify(rows, null, 2));
+    expect(cpu.map((cell) => cell.period).slice(0, 8)).toEqual([1, 2, 4, 4, 8, 6, 3, 0]);
+    expect(cpu[8].period).toBeGreaterThan(8);
+    for (const row of rows) {
+      expect(row.gpu.period).toBe(row.cpu.period);
+      expect(row.gpu.sampleCentres).toHaveLength(SAMPLES);
+      for (let k = 0; k < SAMPLES; k += 1) {
+        const centre = row.cpu.sampleCentres[k];
+        expect(Math.abs(centre - row.reference[k]), `CPU ${row.re}+${row.im}i sample ${k}`).toBeLessThanOrEqual(1e-3);
+        expect(Math.abs(row.gpu.sampleCentres[k] - centre), `GPU ${row.re}+${row.im}i sample ${k}`).toBeLessThanOrEqual(row.cpu.period === 0 ? 0.1 : 1e-3);
+        if ([4, 8, 6].includes(row.cpu.period)) expect(Math.abs(centre - row.cpu.centre)).toBeGreaterThan(0.3);
+        if ([1, 2, 3].includes(row.cpu.period)) expect(Math.abs(centre - row.cpu.centre)).toBeLessThanOrEqual(1e-3);
+      }
+    }
+    // Escaped output is zeroed even when the caller reuses populated buffers.
+    const escaped = await gpuSample(page, [[1, 0]], WARMUP, SAMPLES);
+    expect(escaped[0].sampleCentres).toEqual(Array(SAMPLES).fill(0));
+    const measure = { interior: 1, centre: 1, spread: 1, sampleCentres: new Float32Array(SAMPLES).fill(7) };
+    expect(sampleAttractorCell(1, 0, WARMUP, SAMPLES, new Float32Array(SAMPLES), 0, measure)).toBe(ESCAPED);
+    expect([...measure.sampleCentres]).toEqual(Array(SAMPLES).fill(0));
+  });
+
+  test("hierarchy: sampler extra batches and metadata-only sampling preserve every centre", async ({ page }) => {
+    await page.goto("/");
+    const cells = [[-0.5, 0], [-1, 0], [-1.3, 0], [-1.375, 0], [-1.14, 0.245], [-0.12, 0.74], [-1.4, 0], [-1.9, 0]] as const;
+    const windows = [];
+    for (const sampleCount of [1, 12, 64, 96]) {
+      const gpu = await gpuSample(page, cells, WARMUP, sampleCount);
+      const rows = cells.map(([re, im], i) => {
+        const cpu = cpuHierarchy(re, im, sampleCount);
+        const reference = referenceParents(re, im, cpu.period, cpu.samples[0], sampleCount);
+        return { re, im, cpu, gpu: gpu[i], reference };
+      });
+      windows.push({ sampleCount, rows });
+      for (const row of rows) {
+        expect(row.gpu.period).toBe(row.cpu.period);
+        expect(row.gpu.sampleCentres).toHaveLength(sampleCount);
+        for (let k = 0; k < sampleCount; k += 1) {
+          expect(Math.abs(row.cpu.sampleCentres[k] - row.reference[k])).toBeLessThanOrEqual(1e-3);
+          expect(Math.abs(row.gpu.sampleCentres[k] - row.cpu.sampleCentres[k])).toBeLessThanOrEqual(row.cpu.period === 0 ? 0.1 : 1e-3);
+        }
+      }
+    }
+    const metadata = await page.evaluate(async ({ cells, warmup }) => {
+      const { OrbitSampler } = await import("/src/app/orbitSampler.ts");
+      const gl = document.createElement("canvas").getContext("webgl2")!;
+      const sampler = OrbitSampler.create(gl)!;
+      const coordinates = new Float64Array(cells.flat());
+      const full = sampler.sample(coordinates, warmup, 8)!;
+      const field = sampler.sampleMetadata(coordinates, warmup, 8)!;
+      sampler.destroy();
+      return ["periods", "interiors", "centres", "spreads", "escaped"].map((key) => ({
+        key, full: Array.from((full as any)[key]) as number[], field: Array.from((field as any)[key]) as number[],
+      }));
+    }, { cells, warmup: WARMUP });
+    writeFileSync(hierarchyArtifact("sampler-windows.json"), JSON.stringify({ windows, metadata }, null, 2));
+    for (const row of metadata) expect(row.field, row.key).toEqual(row.full);
+  });
+
+  for (const cpu of [false, true]) {
+    test(`hierarchy: cloud ${cpu ? "CPU" : "GPU"} uploaded centres follow each sample`, async ({ page }) => {
+      const { canvas } = await openPacked(page, { preset: "balanced", cpu, params: frozenParams({ tailRefinement: 0 }) });
+      const dataset = await canvasDataset(canvas);
+      expect(dataset.orbit3dSampler).toBe(cpu ? "cpu-sampled" : "gpu-sampled");
+      const four = await hierarchyVertices(canvas, "cloud", -1.3);
+      const two = await hierarchyVertices(canvas, "cloud", -1);
+      writeFileSync(hierarchyArtifact(`cloud-${cpu ? "cpu" : "gpu"}.json`), JSON.stringify({ dataset, four, two }, null, 2));
+      assertHierarchyVertices(four, 4);
+      assertHierarchyVertices(two, 2);
+    });
+  }
+
+  test("hierarchy: sheet sorted vertices retain the parent of their original cycle rank", async ({ page }) => {
+    const { canvas } = await openPacked(page, { preset: "balanced", params: frozenParams({ geometryMode: "hybrid", surfaceOpacity: 1, tailRefinement: 0 }) });
+    const four = await hierarchyVertices(canvas, "sheet", -1.3);
+    const two = await hierarchyVertices(canvas, "sheet", -1);
+    writeFileSync(hierarchyArtifact("sheet.json"), JSON.stringify({ dataset: await canvasDataset(canvas), four, two }, null, 2));
+    assertHierarchyVertices(four, 4);
+    assertHierarchyVertices(two, 2);
+  });
+
+  test("hierarchy: colour uses the parent distance while ground keeps column spread", async ({ page }) => {
+    const canvas = await openSim(page, frozenParams());
+    const sampled = await gpuSample(page, [[-1.3, 0], [-1, 0]], WARMUP, SAMPLES);
+    const { table } = await paletteTable(page);
+    const cases: ShaderProbeCase[] = [];
+    for (const cell of sampled) {
+      for (const stage of ["point", "surface"] as const) {
+        for (let k = 0; k < cell.period; k += 1) cases.push(probe(stage, { period: cell.period, height: cell.samples[k], centre: cell.sampleCentres[k] }));
+      }
+    }
+    const ground = await attractionTexel(canvas, -1.3, 0);
+    cases.push(probe("ground", { period: ground.period, centre: ground.centre, spread: ground.spread, height: GROUND_PLANE_HEIGHT }));
+    const rgb = await probeShaderColours(page, cases);
+    const expected = cases.map((item) => paletteLookup(table, spreadPaletteCoordinate(item.stage === "ground" ? item.spread! : item.height, item.stage === "ground" ? 0 : item.centre, PROBE_CYCLE_BANDS, 0)));
+    writeFileSync(hierarchyArtifact("colour.json"), JSON.stringify({ sampled, ground, cases, rgb, expected }, null, 2));
+    for (let i = 0; i < cases.length; i += 1) {
+      for (let channel = 0; channel < 3; channel += 1) expect(Math.abs(rgb[i][channel] - expected[i][channel])).toBeLessThanOrEqual(2);
+    }
+    for (const offset of [0, 4]) {
+      expect(rgbDistance(rgb[offset], rgb[offset + 2])).toBeLessThanOrEqual(2);
+      expect(rgbDistance(rgb[offset + 1], rgb[offset + 3])).toBeLessThanOrEqual(2);
+    }
+    const period2Colour = paletteLookup(table, spreadPaletteCoordinate(0.5, 0, PROBE_CYCLE_BANDS, 0));
+    for (let i = 8; i < 12; i += 1) expect(rgbDistance(rgb[i], period2Colour)).toBeLessThanOrEqual(2);
+    const measure = { interior: 1, centre: 0, spread: 0 };
+    expect(sampleAttractorCell(ground.re, ground.im, WARMUP, SAMPLES, new Float32Array(SAMPLES), 0, measure)).toBe(4);
+    expect(Math.abs(ground.centre - measure.centre)).toBeLessThan(1e-3);
+    expect(Math.abs(ground.spread - measure.spread)).toBeLessThan(1e-3);
+  });
+
+  test("hierarchy: cost cloud, attraction field and render against card 103", async ({ page }) => {
+    const report = await compareBuildCosts(page, hierarchyArtifact("cost.json"));
+    expect(report.current.points).toEqual(report.baseline!.points);
+  });
+});
+
+
+test.describe("hierarchy", () => {
+  directionEvidenceTests([
+    { id: "real-axis-cloud", geometryMode: "cloud", preset: null, zoomTo: { re: -1.36, im: 0, height: 0.2, steps: 20, dragTo: [0.5, 0.92] } },
+    { id: "real-axis-hybrid", geometryMode: "hybrid", preset: null, zoomTo: { re: -1.36, im: 0, height: 0.2, steps: 20, dragTo: [0.5, 0.92] } },
+    { id: "bifurcation-curtain", geometryMode: "cloud", preset: "bifurcation-curtain", zoomTo: null },
+    { id: "period6-satellite", geometryMode: "hybrid", preset: null, zoomTo: { re: -1.14, im: 0.245, height: 0.2, steps: 20 } },
+  ], HIERARCHY_DIR, true);
 });

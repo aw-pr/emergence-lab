@@ -1,11 +1,10 @@
 /**
- * Column centres for a prebaked (ELPC v1) point cloud.
+ * Parent cycle centres for a prebaked (ELPC v1) point cloud.
  *
  * The bake carries no centre, but it carries every plotted sample of every
- * column, so the centre Inside-out needs (the mean height of the orbit at
- * that c) can be recovered at load time. For a column with a detected period
- * q the mean of its first q samples is the exact cycle mean; a column with no
- * detected period takes the mean of its whole window, which for a 64-sample
+ * column, so Inside-out's parent centres can be recovered at load time by
+ * grouping one complete cycle. A period exceeding the stored window, or no
+ * detected period, takes the mean of its whole window, which for a 64-sample
  * bake is within about 0.05 height units of the long-run mean (card 99,
  * running-mean error at N = 64). Nothing is re-baked and the format is
  * unchanged.
@@ -17,6 +16,8 @@
  * scale, and they are expanded per point because vertex attributes are.
  * Pure: no DOM, no WebGL.
  */
+
+import { cycleHierarchy } from "./orbitHierarchy.js";
 
 const Z_STRIDE = 3;
 const Z_OFFSET = 2;
@@ -35,13 +36,18 @@ export function deriveQuantizedCentres(
   for (let cell = 0; cell < cellCount; cell += 1) {
     const period = periods[cell];
     const window = period > 0 && period <= sampleCount ? period : sampleCount;
+    const heights = new Float64Array(window);
     let sum = 0;
     for (let sample = 0; sample < window; sample += 1) {
-      sum += positions[(sample * cellCount + cell) * Z_STRIDE + Z_OFFSET];
+      heights[sample] = positions[(sample * cellCount + cell) * Z_STRIDE + Z_OFFSET];
+      sum += heights[sample];
     }
     const centre = Math.round(sum / window);
+    const parents = period > 0 && period <= sampleCount
+      ? cycleHierarchy(heights, period).centres
+      : null;
     for (let sample = 0; sample < sampleCount; sample += 1) {
-      centres[sample * cellCount + cell] = centre;
+      centres[sample * cellCount + cell] = parents ? Math.round(parents[sample % period]) : centre;
     }
   }
   return centres;

@@ -216,6 +216,8 @@ export function attractionFieldRow(canvas: Locator, im: number): Promise<Attract
 }
 
 export interface SampledCell {
+  samples: number[];
+  sampleCentres: number[];
   period: number;
   multiplier: number;
   centre: number;
@@ -243,6 +245,8 @@ export async function gpuSample(
       sampler.destroy();
       if (!sampled) throw new Error("GPU sampling failed");
       return cells.map((_, index) => ({
+        samples: Array.from({ length: sampleCount }, (_, sample) => sampled.samples[sample * sampled.cellCount + index]),
+        sampleCentres: Array.from({ length: sampleCount }, (_, sample) => sampled.sampleCentres[sample * sampled.cellCount + index]),
         period: sampled.periods[index],
         multiplier: sampled.interiors[index],
         centre: sampled.centres[index],
@@ -778,4 +782,35 @@ export function period1Multiplier(re: number, im: number): number {
 /** |4 z1 z2| = 4 |c + 1| for the period-2 cycle. */
 export function period2Multiplier(re: number, im: number): number {
   return 4 * Math.hypot(re + 1, im);
+}
+
+/** Filter uploaded attributes in the page so diagnostic reads do not copy a whole cloud over IPC. */
+export async function hierarchyVertices(canvas: Locator, kind: "cloud" | "sheet", re: number): Promise<{
+  halfCell: number;
+  points: { re: number; im: number; height: number; centre: number; period: number; sample: number }[];
+}> {
+  return canvas.evaluate((element, { kind, re }) => {
+    const target = element as import("../../src/app/webglRenderer.ts").Orbit3DDiagnosticCanvas;
+    const points: { re: number; im: number; height: number; centre: number; period: number; sample: number }[] = [];
+    const surface = kind === "sheet" ? target.orbit3dReadSurface?.() : null;
+    const width = surface?.width ?? Math.sqrt(Number(target.dataset.orbit3dCandidateCells));
+    const halfCell = 1.5 / width;
+    const total = surface ? surface.periods.length : Number(target.dataset.orbit3dPoints);
+    for (let first = 0; first < total; first += 65536) {
+      const data = surface ?? target.orbit3dReadPoints?.(first, Math.min(65536, total - first));
+      if (!data) throw new Error(`missing ${kind} buffer readback`);
+      for (let i = 0; i < data.periods.length; i += 1) {
+        const sample = "sampleIndices" in data ? data.sampleIndices[i] : -1;
+        if (sample >= 8) continue;
+        const x = data.positions[i * 3];
+        const y = data.positions[i * 3 + 1];
+        const cr = surface ? -2 + ((x + 0.5) / surface.width) * 3 : x;
+        const ci = surface ? (y === Math.floor(surface.height / 2) ? 0 : -1 + ((y + 0.5) / surface.height) * 2) : y;
+        if (Math.abs(cr - re) > halfCell + 1e-7 || Math.abs(ci) > 1e-7) continue;
+        points.push({ re: cr, im: ci, height: data.positions[i * 3 + 2], centre: data.centres[i], period: data.periods[i], sample });
+      }
+      if (surface) break;
+    }
+    return { halfCell, points };
+  }, { kind, re });
 }

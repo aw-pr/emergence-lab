@@ -66,3 +66,43 @@ test("quantization round-trips within one step", () => {
     assert.ok(Math.abs(dequantizeHeight(quantizeHeight(z, CLIP), CLIP) - z) <= 4 / 65535);
   }
 });
+
+const { cycleHierarchy } = require("../../.test-build/app/orbitHierarchy.js");
+
+function bakedOrbit(re, im, period) {
+  let zr = 0;
+  let zi = 0;
+  const heights = [];
+  for (let i = 0; i < 20064; i += 1) {
+    const next = zr * zr - zi * zi + re;
+    zi = 2 * zr * zi + im;
+    zr = next;
+    if (i >= 20000) heights.push(zr);
+  }
+  return { heights, period };
+}
+
+test("64-sample bakes preserve each period-4 and period-6 parent in sample-major order", () => {
+  const columns = [bakedOrbit(-1.3, 0, 4), bakedOrbit(-1.14, 0.245, 6), bakedOrbit(-1, 0, 2)];
+  const { positions, periods, cellCount, sampleCount } = cloud(columns);
+  const centres = deriveQuantizedCentres(positions, periods, cellCount, sampleCount);
+  columns.forEach((column, cell) => {
+    const expected = cycleHierarchy(column.heights, column.period);
+    assert.equal(expected.multiplicity, cell === 1 ? 3 : 2);
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const actual = dequantizeHeight(centres[sample * cellCount + cell], CLIP);
+      assert.ok(Math.abs(actual - expected.centres[sample % column.period]) < 1e-4);
+      if (column.period === 2) assert.ok(Math.abs(actual + 0.5) < 1e-4);
+    }
+  });
+});
+
+test("chaotic and incompletely baked cycles keep the window mean at every sample", () => {
+  const columns = [bakedOrbit(-1.9, 0, 0), { heights: [0.1, -1.3, 0.4, -1.1], period: 8 }];
+  for (const column of columns) {
+    const { positions, periods, cellCount, sampleCount } = cloud([column]);
+    const centres = deriveQuantizedCentres(positions, periods, cellCount, sampleCount);
+    const expected = column.heights.reduce((sum, h) => sum + h, 0) / sampleCount;
+    for (const centre of centres) assert.ok(Math.abs(dequantizeHeight(centre, CLIP) - expected) < 1e-4);
+  }
+});

@@ -1277,6 +1277,8 @@ export interface Orbit3DDiagnosticCanvas extends HTMLCanvasElement {
    * (Orbit3DPointCloud.readSampleIndices). Empty for a stacked cloud.
    */
   orbit3dReadSampleIndices?: (count: number) => Float32Array;
+  orbit3dReadPoints?: (first: number, count: number) => ReturnType<Orbit3DPointCloud["readPoints"]>;
+  orbit3dReadSurface?: () => ReturnType<Orbit3DPointCloud["readSurface"]>;
 }
 
 export class WebGLRendererBackend implements RendererBackend {
@@ -1622,6 +1624,8 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.orbit3dBuildBytes;
     delete canvas.dataset.orbit3dSamplerBytes;
     delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface;
     delete canvas.dataset.orbit3dCameraDistance;
     delete canvas.dataset.orbit3dCameraAzimuth;
     delete canvas.dataset.orbit3dBoundaryDetailOpacity;
@@ -1743,6 +1747,8 @@ export class WebGLRendererBackend implements RendererBackend {
     const orbit3d = this.orbit3d;
     (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices = (count) =>
       orbit3d.readSampleIndices(count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints = (first, count) => orbit3d.readPoints(first, count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface = () => orbit3d.readSurface();
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
     canvas.dataset.orbit3dCandidateCells = String(stats.candidateCells);
     canvas.dataset.orbit3dBoundedCandidates = String(stats.boundedCandidates);

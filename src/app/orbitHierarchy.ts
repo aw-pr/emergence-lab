@@ -36,7 +36,36 @@ export function cycleHierarchy(
   heights: ArrayLike<number>,
   period: number,
 ): CycleHierarchy {
-  void heights;
-  void period;
-  throw new Error("card 104: cycleHierarchy is not implemented");
+  if (!Number.isInteger(period) || period < 1 || heights.length < period) {
+    throw new RangeError("a cycle needs a positive integer period and one full cycle of heights");
+  }
+  const centres = new Float64Array(period);
+  if (period === 1) {
+    centres[0] = heights[0];
+    return { multiplicity: 1, centres };
+  }
+  const parents = new Float64Array(period);
+  let multiplicity = 1;
+  let bestCost = Infinity;
+  for (let s = 2; s <= period; s += 1) {
+    if (period % s !== 0) continue;
+    const stride = period / s;
+    let cost = 0;
+    for (let group = 0; group < stride; group += 1) {
+      let sum = 0;
+      for (let k = group; k < period; k += stride) sum += heights[k];
+      const parent = sum / s;
+      for (let k = group; k < period; k += stride) {
+        parents[k] = parent;
+        cost += (heights[k] - parent) ** 2;
+      }
+    }
+    cost /= period;
+    if (cost <= bestCost || Math.abs(cost - bestCost) <= 1e-12 * Math.max(cost, bestCost)) {
+      bestCost = cost;
+      multiplicity = s;
+      centres.set(parents);
+    }
+  }
+  return { multiplicity, centres };
 }

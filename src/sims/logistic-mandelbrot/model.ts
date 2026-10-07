@@ -14,6 +14,8 @@
  * Everything here is pure and deterministic: no DOM, no WebGL, no RNG.
  */
 
+import { cycleHierarchy } from "../../app/orbitHierarchy.js";
+
 export const RE_MIN = -2;
 export const RE_MAX = 1;
 export const IM_MIN = -1;
@@ -120,6 +122,8 @@ export interface AttractorCellMeasure {
   centre: number;
   /** RMS deviation of Re(z) about `centre` over the same iterates. */
   spread: number;
+  /** Parent centre of each plotted sample, when the caller supplies a full window. */
+  sampleCentres?: Float32Array;
 }
 
 /** Centre of grid cell `index` along an axis spanning [min, max]. */
@@ -312,6 +316,18 @@ export function sampleAttractorCell(
     measureOut.interior = Math.max(0, Math.min(1, multiplier));
     measureOut.centre = mean;
     measureOut.spread = count > 0 ? Math.sqrt(Math.max(0, squares) / count) : 0;
+    const sampleCentres = measureOut.sampleCentres;
+    if (sampleCentres && sampleCentres.length >= sampleCount) {
+      if (period > 0) {
+        const heights = detectionCount <= sampleCount
+          ? samplesOut.subarray(offset, offset + period)
+          : detectionWindow;
+        const parents = cycleHierarchy(heights, period).centres;
+        for (let i = 0; i < sampleCount; i += 1) sampleCentres[i] = parents[i % period];
+      } else {
+        sampleCentres.fill(mean, 0, sampleCount);
+      }
+    }
   }
   return period;
 }
@@ -321,6 +337,7 @@ function clearMeasure(measureOut?: AttractorCellMeasure): void {
   measureOut.interior = 1;
   measureOut.centre = 0;
   measureOut.spread = 0;
+  measureOut.sampleCentres?.fill(0);
 }
 
 /** Sample every cell of a c-grid in one pass. */

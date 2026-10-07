@@ -67,12 +67,12 @@ in every direction, not just along the real line.
   and mono keeps the plain additive glow. Cycle uses the escape-time palette
   outside the set, extends its bands inward by distance from the boundary,
   and carries those colours up through the attractor sheets by orbit height.
-- Inside-out colours by distance from each column's centre instead. Every
-  bounded c has a centre height h0(c), the mean of Re(z) over the attractor:
-  over exactly one cycle when a period is detected, otherwise over a long run
-  of iterates through the chaotic band. Each point reads the palette at
+- Inside-out colours by distance from each point's parent cycle point: the
+  mean of the cycle group it was born from, so bands leave each satellite
+  bulb at its own root. Primary bulbs use the column's cycle mean and chaotic
+  columns use a long running mean; call this centre height h0. Each point reads the palette at
   fract(bands · |Re(z) − h0| − phase), so colour depends only on how far the
-  point sits above or below its column's centre, mirrored: the two branches
+  point sits above or below its parent centre, mirrored: the two branches
   of a period-2 cycle are equally far from h0 = −1/2 and share a hue, and a
   period-1 sheet sits at distance zero, so the whole cardioid takes one
   colour that changes with the phase. The cycle speed carries each band out

@@ -20,7 +20,7 @@ import {
   buildGpuOrbitCloud,
   reservoirSlot,
   type OrbitCloudBuffers,
-  type OrbitSampleResult,
+  type OrbitMetadataResult,
 } from "./orbitSampler.ts";
 import {
   buildOrbitSurface,
@@ -54,6 +54,7 @@ import {
   distinctPointCount,
   estimatePackedRowsPerCell,
 } from "./orbitPacking.ts";
+import { cycleHierarchy } from "./orbitHierarchy.ts";
 import { deriveQuantizedCentres } from "./prebakedCentre.ts";
 
 const POINT_VERTEX_SHADER = `#version 300 es
@@ -822,7 +823,7 @@ interface PrebakedCloud {
   boundaries: Uint8Array;
   weights: Uint8Array;
   /**
-   * Column centres derived from the samples at load (the bake carries none),
+   * Parent centres derived from the samples at load (the bake carries none),
    * quantized like the z coordinate so the shader dequantizes both alike.
    */
   centres: Uint16Array;
@@ -1785,6 +1786,58 @@ export class Orbit3DPointCloud {
     return out;
   }
 
+  /** Uploaded live attributes only; no CPU copy survives the build. */
+  readPoints(first: number, count: number): {
+    positions: Float32Array; periods: Float32Array; centres: Float32Array;
+    sampleIndices: Float32Array;
+  } {
+    const start = Math.max(0, Math.min(this.fullPointCount, Math.floor(first)));
+    const length = this.quantizedAttributes || this.building ? 0
+      : Math.max(0, Math.min(Math.floor(count), this.fullPointCount - start));
+    return {
+      positions: this.readFloatAttribute(this.pointBuffer, start, length, 3),
+      periods: this.readFloatAttribute(this.periodBuffer, start, length),
+      centres: this.readFloatAttribute(this.centreBuffer, start, length),
+      sampleIndices: this.layout === "packed"
+        ? this.readFloatAttribute(this.sampleIndexBuffer, start, length)
+        : new Float32Array(0),
+    };
+  }
+
+  /** Sheet positions retain grid coordinates; width and height map them to c. */
+  readSurface(): {
+    positions: Float32Array; periods: Float32Array; centres: Float32Array;
+    width: number; height: number;
+  } {
+    const gl = this.gl;
+    const surface = this.surface;
+    let count = 0;
+    if (surface && !this.building && this.triangleCount > 0) {
+      const previous = gl.getParameter(gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
+      gl.bindBuffer(gl.ARRAY_BUFFER, surface.periodBuffer);
+      count = Number(gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE)) / 4;
+      gl.bindBuffer(gl.ARRAY_BUFFER, previous);
+    }
+    return {
+      positions: surface ? this.readFloatAttribute(surface.positionBuffer, 0, count, 3) : new Float32Array(0),
+      periods: surface ? this.readFloatAttribute(surface.periodBuffer, 0, count) : new Float32Array(0),
+      centres: surface ? this.readFloatAttribute(surface.centreBuffer, 0, count) : new Float32Array(0),
+      width: this.surfaceGridWidth,
+      height: this.surfaceGridHeight,
+    };
+  }
+
+  private readFloatAttribute(buffer: WebGLBuffer, first: number, count: number, components = 1): Float32Array {
+    const out = new Float32Array(count * components);
+    if (out.length === 0) return out;
+    const gl = this.gl;
+    const previous = gl.getParameter(gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.getBufferSubData(gl.ARRAY_BUFFER, first * components * 4, out);
+    gl.bindBuffer(gl.ARRAY_BUFFER, previous);
+    return out;
+  }
+
   private resetLayoutStats(): void {
     this.candidateCells = 0;
     this.boundedCandidates = 0;
@@ -2084,7 +2137,7 @@ export class Orbit3DPointCloud {
     const escapeMask = new Uint8Array(candidateCount);
     const order = admissionOrder(candidateCount);
     const basePacker = new SlotPacker(sampleCount);
-    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0, sampleCentres: new Float32Array(sampleCount) };
     const refineCandidates = new Int32Array(refineActive ? refineCandidateCap : 0);
     let cursor = 0;
     let boundedSeen = 0;
@@ -2107,7 +2160,6 @@ export class Orbit3DPointCloud {
       cRe: number,
       cIm: number,
       period: number,
-      centre: number,
       weight: number,
       cell: number,
     ): void => {
@@ -2118,7 +2170,7 @@ export class Orbit3DPointCloud {
         positions[offset + 1] = cIm;
         positions[offset + 2] = orbitSamples[k];
         periods[point] = period;
-        centres[point] = centre;
+        centres[point] = measure.sampleCentres![k];
         boundaries[point] = cell;
         weights[point] = weight;
         sampleIndices[point] = k;
@@ -2162,7 +2214,7 @@ export class Orbit3DPointCloud {
             admitting = false;
           } else {
             const { slot, row } = basePacker.place(rows);
-            writeCell(slot, row, rows, cRe, cIm, result, measure.centre, 1, cell);
+            writeCell(slot, row, rows, cRe, cIm, result, 1, cell);
             baseCells += 1;
           }
         }
@@ -2244,7 +2296,6 @@ export class Orbit3DPointCloud {
           subRe,
           subIm,
           result,
-          measure.centre,
           REFINE_POINT_WEIGHT,
           parent,
         );
@@ -2373,6 +2424,7 @@ export class Orbit3DPointCloud {
       this.orbitSampler !== null,
     );
     const samples = new Float32Array(cellCount * sampleCount);
+    const sampleCentres = new Float32Array(cellCount * sampleCount);
     const periods = new Int16Array(cellCount);
     const classifiedPeriods = new Int16Array(cellCount);
     const classifiedCycleRe = new Float64Array(cellCount);
@@ -2383,7 +2435,7 @@ export class Orbit3DPointCloud {
     const boundaries = new Float32Array(cellCount);
     const dissolves = new Float32Array(cellCount).fill(1);
     const escaped = new Uint8Array(cellCount);
-    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0, sampleCentres: new Float32Array(sampleCount) };
     const refinedCells: OrbitSurfaceRefinedCell[] = [];
     const refinedCellIndices = new Set<number>();
     const refinedLeavesByCell = new Map<number, OrbitSurfaceRefinedCell[]>();
@@ -2397,6 +2449,7 @@ export class Orbit3DPointCloud {
     let contourSampleValues = new Float32Array(0);
     let contourPeriods = new Int16Array(0);
     let contourCentres = new Float32Array(0);
+    let contourSampleCentres = new Float32Array(0);
     let contourEscaped = new Uint8Array(0);
     const contourSamples = new Map<number, number>();
     let contourSampleCount = 0;
@@ -2501,6 +2554,7 @@ export class Orbit3DPointCloud {
             periods[cell] = result;
             interiors[cell] = measure.interior;
             centres[cell] = measure.centre;
+            sampleCentres.set(measure.sampleCentres!, cell * sampleCount);
             if (lastClassification) {
               classifiedPeriods[cell] = lastClassification.period;
               classifiedCycleRe[cell] = lastClassification.cycle.re;
@@ -2673,6 +2727,7 @@ export class Orbit3DPointCloud {
             contourSampleValues = new Float32Array(contourCapacity * sampleCount);
             contourPeriods = new Int16Array(contourCapacity);
             contourCentres = new Float32Array(contourCapacity);
+            contourSampleCentres = new Float32Array(contourCapacity * sampleCount);
             contourEscaped = new Uint8Array(contourCapacity);
             phase = "contour-sample";
             continue;
@@ -2760,6 +2815,8 @@ export class Orbit3DPointCloud {
         // The window now holds the exact cycle, so take the centre and spread
         // from it rather than from the sampler's partly converged orbit.
         measureCycleSpread(values, offset, classification.period, measure);
+        const parents = cycleHierarchy(values.subarray(offset, offset + classification.period), classification.period).centres;
+        for (let i = 0; i < sampleCount; i += 1) measure.sampleCentres![i] = parents[i % classification.period];
         return classification.period;
       }
       return result;
@@ -2902,6 +2959,7 @@ export class Orbit3DPointCloud {
         const index = y * sampleWidth + x;
         return {
           samples,
+          sampleCentres,
           sampleOffset: index * sampleCount,
           period: periods[index],
           interior: centres[index],
@@ -2923,6 +2981,7 @@ export class Orbit3DPointCloud {
       if (contourIndex === undefined) return null;
       return {
         samples: contourSampleValues,
+        sampleCentres: contourSampleCentres,
         sampleOffset: contourIndex * sampleCount,
         period: contourPeriods[contourIndex],
         interior: contourCentres[contourIndex],
@@ -2964,6 +3023,7 @@ export class Orbit3DPointCloud {
       const result = sampleClassifiedCell(cRe, cIm, values, 0, measure);
       const sample: OrbitSurfaceSample = {
         samples: values,
+        sampleCentres: measure.sampleCentres!.slice(),
         period: result === ESCAPED ? 0 : result,
         interior: result === ESCAPED ? 0 : measure.centre,
         boundary: boundaryAtGrid(x, y),
@@ -3006,6 +3066,7 @@ export class Orbit3DPointCloud {
         contourSampleCount * sampleCount,
         measure,
       );
+      contourSampleCentres.set(measure.sampleCentres!, contourSampleCount * sampleCount);
       contourPeriods[contourSampleCount] = result === ESCAPED ? 0 : result;
       contourCentres[contourSampleCount] = result === ESCAPED ? 0 : measure.centre;
       contourEscaped[contourSampleCount] = result === ESCAPED ? 1 : 0;
@@ -3195,9 +3256,10 @@ export class Orbit3DPointCloud {
             height: sampleHeight,
             sampleCount,
             samples,
+            sampleCentres,
             periods,
-            // The surface's per-vertex scalar channel carries the column
-            // centre: the sheet shader reads a_centre, never the multiplier.
+            // The sheet shader reads sorted per-sample centres; interiors
+            // remains the column-mean fallback for legacy surface callers.
             interiors: centres,
             boundaries,
             dissolves,
@@ -3253,6 +3315,7 @@ export class Orbit3DPointCloud {
         const y = (sourceCell - x) / sampleWidth;
         writePointSite(slot, x, y, {
           samples,
+          sampleCentres,
           sampleOffset: sourceCell * sampleCount,
           period: periods[sourceCell],
           interior: centres[sourceCell],
@@ -3303,7 +3366,7 @@ export class Orbit3DPointCloud {
           positions[offset + 1] = cIm;
           positions[offset + 2] = sampled.samples[sampleOffset + sample];
           pointPeriods[point] = sampled.period;
-          pointCentres[point] = sampled.interior;
+          pointCentres[point] = sampled.sampleCentres?.[sampleOffset + sample] ?? sampled.interior;
           pointBoundaries[point] = sampled.boundary;
           if (sampled.period === 0) {
             pointWeights[point] = cloudBandCoverage(periodicDistance) * siteWeight;
@@ -3471,7 +3534,7 @@ export class Orbit3DPointCloud {
                 resolvedCloud.positions[positionOffset + 2] =
                   item.sample.samples[sampleOffset + sample];
                 resolvedCloud.periods[point] = 0;
-                resolvedCloud.centres[point] = item.sample.interior;
+                resolvedCloud.centres[point] = item.sample.sampleCentres?.[sampleOffset + sample] ?? item.sample.interior;
                 resolvedCloud.boundaries[point] = item.sample.boundary;
                 resolvedCloud.weights[point] = coverage * siteWeight;
                 if (resolvedCloud.sampleIndices[point] >= sampleCount) {
@@ -3677,8 +3740,8 @@ export class Orbit3DPointCloud {
     coordinates: Float64Array,
     warmupIterations: number,
     sampleCount: number,
-  ): OrbitSampleResult | null {
-    return this.orbitSampler?.sample(coordinates, warmupIterations, sampleCount) ?? null;
+  ): OrbitMetadataResult | null {
+    return this.orbitSampler?.sampleMetadata(coordinates, warmupIterations, sampleCount) ?? null;
   }
 
   draw(

@@ -172,6 +172,29 @@ void main() {
 }
 `;
 
+const ORBIT_SAMPLE_GLSL = `
+float orbitSample(ivec2 pixel, int sampleIndex) {
+  vec4 batch = texelFetch(
+    u_samples,
+    ivec3(pixel, sampleIndex / ${SAMPLE_BATCH_SIZE}),
+    0
+  );
+  int lane = sampleIndex % ${SAMPLE_BATCH_SIZE};
+  if (lane == 0) return batch.x;
+  if (lane == 1) return batch.y;
+  if (lane == 2) return batch.z;
+  return batch.w;
+}
+`;
+
+const HIERARCHY_ARITHMETIC_GLSL = `
+vec2 dsDivideScalar(vec2 value, float divisor) {
+  float quotient = value.x / divisor;
+  vec2 remainder = dsSub(value, dsMul(vec2(quotient, 0.0), vec2(divisor, 0.0)));
+  return dsAdd(vec2(quotient, 0.0), vec2(dsValue(remainder) / divisor, 0.0));
+}
+`;
+
 const PERIOD_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -185,11 +208,16 @@ uniform int u_width;
 uniform int u_sampleCount;
 uniform int u_detectionCount;
 uniform int u_spreadWindow;
+uniform bool u_sampleCentres;
 // x: period, or -1 for an escaped or out-of-range cell. y: cycle multiplier.
 // z: centre height (mean Re(z)). w: RMS deviation about the centre.
 layout(location = 0) out vec4 outMetadata;
+layout(location = 1) out vec4 outHierarchy;
+layout(location = 2) out vec4 outCentres0;
+layout(location = 3) out vec4 outCentres1;
 
 ${DOUBLE_SINGLE_GLSL}
+${HIERARCHY_ARITHMETIC_GLSL}
 
 // Iterates past the plot window, computed here rather than stored in
 // u_samples: the sample texture array is sized by the point budget, so
@@ -198,18 +226,7 @@ ${DOUBLE_SINGLE_GLSL}
 // CPU oracle appends in model.ts sampleAttractorCell.
 float tailSamples[${PERIOD_DETECTION_SAMPLES}];
 
-float orbitSample(ivec2 pixel, int sampleIndex) {
-  vec4 batch = texelFetch(
-    u_samples,
-    ivec3(pixel, sampleIndex / ${SAMPLE_BATCH_SIZE}),
-    0
-  );
-  int lane = sampleIndex % ${SAMPLE_BATCH_SIZE};
-  if (lane == 0) return batch.x;
-  if (lane == 1) return batch.y;
-  if (lane == 2) return batch.z;
-  return batch.w;
-}
+${ORBIT_SAMPLE_GLSL}
 
 float detectionSample(ivec2 pixel, int index) {
   if (index < u_sampleCount) return orbitSample(pixel, index);
@@ -222,6 +239,9 @@ void main() {
   vec4 packedState = texelFetch(u_state, pixel, 0);
   if (index >= u_cellCount || packedState.x > 2.0) {
     outMetadata = vec4(-1.0, 1.0, 0.0, 0.0);
+    outHierarchy = vec4(0.0);
+    outCentres0 = vec4(0.0);
+    outCentres1 = vec4(0.0);
     return;
   }
 
@@ -301,6 +321,122 @@ void main() {
   }
   float spread = count > 0.0 ? sqrt(max(squares, 0.0) / count) : 0.0;
   outMetadata = vec4(float(period), interior, mean, spread);
+  if (!u_sampleCentres) return;
+
+  // Same divisor search and relative tie rule as cycleHierarchy. Double-single
+  // sums keep the 1e-12 tie threshold meaningful even though outputs are float32.
+  int multiplicity = 1;
+  vec2 bestCost = vec2(1e30, 0.0);
+  for (int s = 2; s <= ${MAX_DETECTABLE_PERIOD}; s += 1) {
+    if (s > period) break;
+    if (period % s != 0) continue;
+    int stride = period / s;
+    vec2 cost = vec2(0.0);
+    for (int group = 0; group < ${MAX_DETECTABLE_PERIOD / 2}; group += 1) {
+      if (group >= stride) break;
+      vec2 sum = vec2(0.0);
+      for (int j = 0; j < ${MAX_DETECTABLE_PERIOD}; j += 1) {
+        if (j >= s) break;
+        sum = dsAdd(sum, vec2(detectionSample(pixel, group + j * stride), 0.0));
+      }
+      vec2 parent = dsDivideScalar(sum, float(s));
+      for (int j = 0; j < ${MAX_DETECTABLE_PERIOD}; j += 1) {
+        if (j >= s) break;
+        vec2 delta = dsSub(vec2(detectionSample(pixel, group + j * stride), 0.0), parent);
+        cost = dsAdd(cost, dsMul(delta, delta));
+      }
+    }
+    cost = dsDivideScalar(cost, float(period));
+    float difference = dsValue(dsSub(cost, bestCost));
+    if (difference <= 0.0 || abs(difference) <= 1e-12 * max(dsValue(cost), dsValue(bestCost))) {
+      bestCost = cost;
+      multiplicity = s;
+    }
+  }
+  outHierarchy = vec4(float(multiplicity), 0.0, 0.0, 0.0);
+  vec4 centres0 = vec4(mean);
+  vec4 centres1 = vec4(mean);
+  if (period > 0) {
+    int stride = period / multiplicity;
+    for (int i = 0; i < 8; i += 1) {
+      if (i >= u_sampleCount) break;
+      int group = i % stride;
+      vec2 sum = vec2(0.0);
+      for (int j = 0; j < ${MAX_DETECTABLE_PERIOD}; j += 1) {
+        if (j >= multiplicity) break;
+        sum = dsAdd(sum, vec2(detectionSample(pixel, group + j * stride), 0.0));
+      }
+      float parent = dsValue(dsDivideScalar(sum, float(multiplicity)));
+      if (i < 4) centres0[i] = parent;
+      else centres1[i - 4] = parent;
+    }
+  }
+  outCentres0 = centres0;
+  outCentres1 = centres1;
+}
+`;
+
+const CENTRE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2DArray;
+
+uniform sampler2D u_coords;
+uniform sampler2D u_state;
+uniform sampler2DArray u_samples;
+uniform sampler2D u_metadata;
+uniform sampler2D u_hierarchy;
+uniform int u_sampleCount;
+uniform int u_sampleOffset;
+layout(location = 0) out vec4 outCentres;
+
+${DOUBLE_SINGLE_GLSL}
+${HIERARCHY_ARITHMETIC_GLSL}
+${ORBIT_SAMPLE_GLSL}
+
+void main() {
+  ivec2 pixel = ivec2(gl_FragCoord.xy);
+  vec4 metadata = texelFetch(u_metadata, pixel, 0);
+  outCentres = vec4(0.0);
+  if (metadata.x < 0.0) return;
+  int period = int(metadata.x);
+  if (period == 0) {
+    outCentres = vec4(metadata.z);
+    return;
+  }
+  float heights[${MAX_DETECTABLE_PERIOD}];
+  for (int i = 0; i < ${MAX_DETECTABLE_PERIOD}; i += 1) {
+    if (i >= min(period, u_sampleCount)) break;
+    heights[i] = orbitSample(pixel, i);
+  }
+  // The metadata search used the entire detection window. Recreate only the
+  // unplotted part of its first cycle, never another warmup or spread walk.
+  if (period > u_sampleCount) {
+    vec4 state = texelFetch(u_state, pixel, 0);
+    vec4 coordinate = texelFetch(u_coords, pixel, 0);
+    vec2 zr = state.xy;
+    vec2 zi = state.zw;
+    for (int i = 0; i < ${MAX_DETECTABLE_PERIOD}; i += 1) {
+      if (u_sampleCount + i >= period) break;
+      orbitStep(zr, zi, coordinate.xy, coordinate.zw);
+      heights[u_sampleCount + i] = clamp(dsValue(zr), -${SAMPLE_CLIP.toFixed(1)}, ${SAMPLE_CLIP.toFixed(1)});
+    }
+  }
+  int multiplicity = int(texelFetch(u_hierarchy, pixel, 0).x);
+  int stride = period / multiplicity;
+  vec4 centres = vec4(0.0);
+  for (int lane = 0; lane < ${SAMPLE_BATCH_SIZE}; lane += 1) {
+    int sampleIndex = u_sampleOffset + lane;
+    if (sampleIndex >= u_sampleCount) break;
+    int group = sampleIndex % stride;
+    vec2 sum = vec2(0.0);
+    for (int j = 0; j < ${MAX_DETECTABLE_PERIOD}; j += 1) {
+      if (j >= multiplicity) break;
+      sum = dsAdd(sum, vec2(heights[group + j * stride], 0.0));
+    }
+    centres[lane] = dsValue(dsDivideScalar(sum, float(multiplicity)));
+  }
+  outCentres = centres;
 }
 `;
 
@@ -321,7 +457,7 @@ export interface OrbitCloudBuffers {
    * render time at 5.5M points).
    */
   periods: Float32Array;
-  /** Centre height of each point's column (AttractorCellMeasure.centre). */
+  /** Parent cycle centre of each point. */
   centres: Float32Array;
   boundaries: Float32Array;
   weights: Float32Array;
@@ -383,6 +519,8 @@ export interface OrbitSampleResult {
   sampleCount: number;
   coordinates: Float64Array;
   samples: Float32Array;
+  /** Parent centres, sample-major like samples, including unplotted cycle parents. */
+  sampleCentres: Float32Array;
   periods: Float32Array;
   interiors: Float32Array;
   /** Mean Re(z) per cell: one exact cycle, or SPREAD_WINDOW_ITERATIONS iterates. */
@@ -391,6 +529,8 @@ export interface OrbitSampleResult {
   spreads: Float32Array;
   escaped: Uint8Array;
 }
+
+export type OrbitMetadataResult = Omit<OrbitSampleResult, "samples" | "sampleCentres">;
 
 interface SampleTargets {
   width: number;
@@ -401,6 +541,8 @@ interface SampleTargets {
   stateTextures: [WebGLTexture, WebGLTexture];
   sampleTexture: WebGLTexture;
   metadataTexture: WebGLTexture;
+  hierarchyTexture: WebGLTexture | null;
+  centreTexture: WebGLTexture | null;
   framebuffer: WebGLFramebuffer;
 }
 
@@ -409,6 +551,7 @@ export class OrbitSampler {
   private readonly warmupProgram: WebGLProgram;
   private readonly sampleProgram: WebGLProgram;
   private readonly periodProgram: WebGLProgram;
+  private readonly centreProgram: WebGLProgram;
   private readonly vao: WebGLVertexArrayObject;
 
   static create(gl: WebGL2RenderingContext): OrbitSampler | null {
@@ -434,10 +577,25 @@ export class OrbitSampler {
     this.warmupProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, WARMUP_FRAGMENT_SHADER);
     this.sampleProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, SAMPLE_FRAGMENT_SHADER);
     this.periodProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, PERIOD_FRAGMENT_SHADER);
+    this.centreProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, CENTRE_FRAGMENT_SHADER);
     this.vao = requireResource(gl.createVertexArray(), "orbit sampler VAO");
   }
 
   sample(coordinates: Float64Array, warmupIterations: number, sampleCount: number): OrbitSampleResult | null {
+    return this.sampleInternal(coordinates, warmupIterations, sampleCount, false);
+  }
+
+  /** The ground needs the column measures, without any per-point readback. */
+  sampleMetadata(coordinates: Float64Array, warmupIterations: number, sampleCount: number): OrbitMetadataResult | null {
+    return this.sampleInternal(coordinates, warmupIterations, sampleCount, true);
+  }
+
+  private sampleInternal(
+    coordinates: Float64Array,
+    warmupIterations: number,
+    sampleCount: number,
+    metadataOnly: boolean,
+  ): OrbitSampleResult | null {
     if (
       coordinates.length === 0 ||
       coordinates.length % 2 !== 0 ||
@@ -449,7 +607,7 @@ export class OrbitSampler {
     const cellCount = coordinates.length / 2;
     let targets: SampleTargets | null = null;
     try {
-      targets = this.createTargets(coordinates, sampleCount);
+      targets = this.createTargets(coordinates, sampleCount, metadataOnly);
       const finalStateIndex = this.runSampler(
         targets,
         cellCount,
@@ -485,9 +643,10 @@ export class OrbitSampler {
     gl.deleteProgram(this.warmupProgram);
     gl.deleteProgram(this.sampleProgram);
     gl.deleteProgram(this.periodProgram);
+    gl.deleteProgram(this.centreProgram);
   }
 
-  private createTargets(coordinates: Float64Array, sampleCount: number): SampleTargets {
+  private createTargets(coordinates: Float64Array, sampleCount: number, metadataOnly: boolean): SampleTargets {
     const gl = this.gl;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (gl.getError() === gl.NO_ERROR) break;
@@ -522,6 +681,13 @@ export class OrbitSampler {
       createTexture2D(gl, width, height, null),
     ];
     const metadataTexture = createTexture2D(gl, width, height, null);
+    const hierarchyTexture = metadataOnly ? null : createTexture2D(gl, width, height, null);
+    const centreTexture = metadataOnly ? null : requireResource(gl.createTexture(), "orbit centre array texture");
+    if (centreTexture) {
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, centreTexture);
+      setNearestTextureParameters(gl, gl.TEXTURE_2D_ARRAY);
+      gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA32F, width, height, Math.max(2, batchCount), 0, gl.RGBA, gl.FLOAT, null);
+    }
     const sampleTexture = requireResource(gl.createTexture(), "orbit sample array texture");
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, sampleTexture);
     setNearestTextureParameters(gl, gl.TEXTURE_2D_ARRAY);
@@ -547,6 +713,8 @@ export class OrbitSampler {
       stateTextures,
       sampleTexture,
       metadataTexture,
+      hierarchyTexture,
+      centreTexture,
       framebuffer,
     };
   }
@@ -621,14 +789,18 @@ export class OrbitSampler {
       targets.metadataTexture,
       0,
     );
-    gl.framebufferTextureLayer(
+    gl.framebufferTexture2D(
       gl.FRAMEBUFFER,
       gl.COLOR_ATTACHMENT1,
-      null,
-      0,
+      gl.TEXTURE_2D,
+      targets.hierarchyTexture,
       0,
     );
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, targets.centreTexture, 0, 0);
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, targets.centreTexture, 0, 1);
+    gl.drawBuffers(targets.centreTexture
+      ? [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]
+      : [gl.COLOR_ATTACHMENT0]);
     requireCompleteFramebuffer(gl);
     gl.useProgram(this.periodProgram);
     bindTexture(gl, this.periodProgram, "u_coords", targets.coordinateTexture, 0);
@@ -639,6 +811,7 @@ export class OrbitSampler {
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_cellCount"), cellCount);
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_width"), targets.width);
     gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_sampleCount"), sampleCount);
+    gl.uniform1i(gl.getUniformLocation(this.periodProgram, "u_sampleCentres"), targets.centreTexture ? 1 : 0);
     gl.uniform1i(
       gl.getUniformLocation(this.periodProgram, "u_detectionCount"),
       periodDetectionWindow(sampleCount),
@@ -648,6 +821,25 @@ export class OrbitSampler {
       SPREAD_WINDOW_ITERATIONS,
     );
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (!targets.centreTexture || !targets.hierarchyTexture) return source;
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, null, 0, 0);
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, null, 0, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.useProgram(this.centreProgram);
+    bindTexture(gl, this.centreProgram, "u_coords", targets.coordinateTexture, 0);
+    bindTexture(gl, this.centreProgram, "u_state", targets.stateTextures[source], 1);
+    gl.uniform1i(gl.getUniformLocation(this.centreProgram, "u_samples"), 2);
+    bindTexture(gl, this.centreProgram, "u_metadata", targets.metadataTexture, 3);
+    bindTexture(gl, this.centreProgram, "u_hierarchy", targets.hierarchyTexture, 4);
+    gl.uniform1i(gl.getUniformLocation(this.centreProgram, "u_sampleCount"), sampleCount);
+    for (let batch = 2; batch < targets.batchCount; batch += 1) {
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, targets.centreTexture, 0, batch);
+      gl.uniform1i(gl.getUniformLocation(this.centreProgram, "u_sampleOffset"), batch * SAMPLE_BATCH_SIZE);
+      requireCompleteFramebuffer(gl);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     return source;
   }
 
@@ -693,27 +885,33 @@ export class OrbitSampler {
       spreads[cell] = metadata[cell * 4 + 3];
     }
 
-    const samples = new Float32Array(cellCount * sampleCount);
-    const packed = new Float32Array(targets.pixelCount * SAMPLE_BATCH_SIZE);
-    for (let batch = 0; batch < targets.batchCount; batch += 1) {
-      gl.framebufferTextureLayer(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        targets.sampleTexture,
-        0,
-        batch,
-      );
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-      requireCompleteFramebuffer(gl);
-      gl.readPixels(0, 0, targets.width, targets.height, gl.RGBA, gl.FLOAT, packed);
-      for (let lane = 0; lane < SAMPLE_BATCH_SIZE; lane += 1) {
-        const sample = batch * SAMPLE_BATCH_SIZE + lane;
-        if (sample >= sampleCount) break;
-        const targetOffset = sample * cellCount;
-        for (let cell = 0; cell < cellCount; cell += 1) {
-          samples[targetOffset + cell] = escaped[cell] === 1
-            ? 0
-            : packed[cell * SAMPLE_BATCH_SIZE + lane];
+    const samples = new Float32Array(targets.centreTexture ? cellCount * sampleCount : 0);
+    const sampleCentres = new Float32Array(samples.length);
+    const packed = new Float32Array(targets.centreTexture ? targets.pixelCount * SAMPLE_BATCH_SIZE : 0);
+    const outputs = targets.centreTexture
+      ? [[targets.sampleTexture, samples], [targets.centreTexture, sampleCentres]] as const
+      : [];
+    for (const [texture, output] of outputs) {
+      for (let batch = 0; batch < targets.batchCount; batch += 1) {
+        gl.framebufferTextureLayer(
+          gl.FRAMEBUFFER,
+          gl.COLOR_ATTACHMENT0,
+          texture,
+          0,
+          batch,
+        );
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+        requireCompleteFramebuffer(gl);
+        gl.readPixels(0, 0, targets.width, targets.height, gl.RGBA, gl.FLOAT, packed);
+        for (let lane = 0; lane < SAMPLE_BATCH_SIZE; lane += 1) {
+          const sample = batch * SAMPLE_BATCH_SIZE + lane;
+          if (sample >= sampleCount) break;
+          const targetOffset = sample * cellCount;
+          for (let cell = 0; cell < cellCount; cell += 1) {
+            output[targetOffset + cell] = escaped[cell] === 1
+              ? 0
+              : packed[cell * SAMPLE_BATCH_SIZE + lane];
+          }
         }
       }
     }
@@ -731,6 +929,7 @@ export class OrbitSampler {
       sampleCount,
       coordinates,
       samples,
+      sampleCentres,
       periods,
       interiors,
       centres,
@@ -747,6 +946,8 @@ export class OrbitSampler {
     gl.deleteTexture(targets.stateTextures[1]);
     gl.deleteTexture(targets.sampleTexture);
     gl.deleteTexture(targets.metadataTexture);
+    gl.deleteTexture(targets.hierarchyTexture);
+    gl.deleteTexture(targets.centreTexture);
   }
 }
 
@@ -867,6 +1068,7 @@ function emptyTier(sampleCount: number): RefinementTier {
 function sampleResultBytes(result: OrbitSampleResult): number {
   return result.coordinates.byteLength
     + result.samples.byteLength
+    + result.sampleCentres.byteLength
     + result.periods.byteLength
     + result.interiors.byteLength
     + result.centres.byteLength
@@ -1108,7 +1310,6 @@ export function buildGpuOrbitCloud(
       const re = sample.coordinates[local * 2];
       const im = sample.coordinates[local * 2 + 1];
       const period = sample.periods[local];
-      const centre = sample.centres[local];
       const boundary = Math.min(
         1,
         distances[parents === null ? item : parents[item]] * cellScale,
@@ -1120,7 +1321,7 @@ export function buildGpuOrbitCloud(
         positions[position + 1] = im;
         positions[position + 2] = sample.samples[k * sample.cellCount + local];
         periods[point] = period;
-        centres[point] = centre;
+        centres[point] = sample.sampleCentres[k * sample.cellCount + local];
         boundaries[point] = boundary;
         weights[point] = weight;
         sampleIndices[point] = k;
