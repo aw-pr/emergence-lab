@@ -4,8 +4,8 @@
 
 - **Authored:** 2026-10-06
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** GPT-6 Astra <gpt-6-astra@local>
-- **Verifier:** Claude Opus 5.5 <claude-opus-5-5@local>
+- **Worker:** Claude Fable 5.1 <claude-fable-5-1@local>
+- **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
 - **Base branch:** dev
 - **Run branch:** autometta/104-logistic-mandelbrot-hierarchical-centre
 - **Worker effort:** xhigh
@@ -14,7 +14,7 @@
 - **Verifier panel:** false
 - **Gate:** stage-completed: 103-logistic-mandelbrot-packed-cells
 - **Dispatch:** serial
-- **Pairing rationale:** the work is numerical (a divisor search over cycle heights carried identically through a float64 oracle, a GLSL sampler pass, a quantized prebaked derive and the sheet builder), so the frontier codex tier takes the worker seat; `Requires GUI` lets it run its own Playwright checks. Opus 5.5 verifies across the family boundary, where the judgement-heavy part is the rendered evidence. Worker families alternate with card 103 (Claude there, codex here). Serial and gated: this card edits `orbit3d.ts`, `orbitSampler.ts` and `prebakedCentre.ts` after card 103 has reshaped them.
+- **Pairing rationale:** seats swapped 2026-10-07 at operator decision. Astra spent about 90% of a Codex five-hour window per fifteen minutes across three quota-stopped attempts, so the implementation moves to the Claude side, where spend is not capped for this run, and Sol verifies across the family boundary as it did for card 103. `Requires GUI` stays for the codex verifier's Playwright checks. Serial and gated: this card edits `orbit3d.ts`, `orbitSampler.ts` and `prebakedCentre.ts` after card 103 has reshaped them.
 
 ## Objective
 
@@ -125,7 +125,7 @@ Verifier writes the schema-valid `state/verifiers/104-logistic-mandelbrot-hierar
 
 ## Family-specific notes
 
-Both roles use the repo's subscription CLI routes; do not change auth routing to work around quota or browser failures. The codex worker runs under the widened sandbox `Requires GUI: true` grants and launches headless Chromium through Playwright with the repo's GPU flags (`playwright.config.ts`); redirect stdin from `/dev/null` for any non-interactive subcommand. The Claude verifier needs no widening.
+Both roles use the repo's subscription CLI routes; do not change auth routing to work around quota or browser failures. The codex verifier runs under the widened sandbox `Requires GUI: true` grants and launches headless Chromium through Playwright with the repo's GPU flags (`playwright.config.ts`); redirect stdin from `/dev/null` for any non-interactive subcommand. The Claude worker runs browser checks headless through Playwright with the same config and needs no widening.
 
 ## Re-brief 1 (2026-10-07, attempt 2)
 
