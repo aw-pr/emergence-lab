@@ -16,6 +16,7 @@
     "src/app/prebakedCentre.ts",
     "src/app/orbitPacking.ts",
     "src/app/orbitHierarchy.ts",
-    "src/app/orbitRefineLevels.ts"
+    "src/app/orbitRefineLevels.ts",
+    "src/app/paramPersistence.ts"
   ]
 }
