@@ -1271,6 +1271,12 @@ export interface Orbit3DAttractionField {
 /** Canvas expando the renderer keeps current for diagnostics and tests. */
 export interface Orbit3DDiagnosticCanvas extends HTMLCanvasElement {
   orbit3dAttractionField?: Orbit3DAttractionField | null;
+  /**
+   * Read back the packed cloud's uploaded sample-index attribute for the
+   * first `count` slots of every row, straight from the GPU buffer
+   * (Orbit3DPointCloud.readSampleIndices). Empty for a stacked cloud.
+   */
+  orbit3dReadSampleIndices?: (count: number) => Float32Array;
 }
 
 export class WebGLRendererBackend implements RendererBackend {
@@ -1369,6 +1375,7 @@ export class WebGLRendererBackend implements RendererBackend {
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
+    this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
@@ -1603,6 +1610,18 @@ export class WebGLRendererBackend implements RendererBackend {
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.orbit3dPoints;
+    delete canvas.dataset.orbit3dCandidateCells;
+    delete canvas.dataset.orbit3dBoundedCandidates;
+    delete canvas.dataset.orbit3dBaseCells;
+    delete canvas.dataset.orbit3dBaseRows;
+    delete canvas.dataset.orbit3dSlots;
+    delete canvas.dataset.orbit3dRefinedSubCells;
+    delete canvas.dataset.orbit3dRefinedRows;
+    delete canvas.dataset.orbit3dVisiblePoints;
+    delete canvas.dataset.orbit3dLayout;
+    delete canvas.dataset.orbit3dBuildBytes;
+    delete canvas.dataset.orbit3dSamplerBytes;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices;
     delete canvas.dataset.orbit3dCameraDistance;
     delete canvas.dataset.orbit3dCameraAzimuth;
     delete canvas.dataset.orbit3dBoundaryDetailOpacity;
@@ -1721,7 +1740,21 @@ export class WebGLRendererBackend implements RendererBackend {
       canvas.dataset.orbit3dAttractionSize = `${attraction.width}x${attraction.height}`;
     }
     (canvas as Orbit3DDiagnosticCanvas).orbit3dAttractionField = attraction;
+    const orbit3d = this.orbit3d;
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices = (count) =>
+      orbit3d.readSampleIndices(count);
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
+    canvas.dataset.orbit3dCandidateCells = String(stats.candidateCells);
+    canvas.dataset.orbit3dBoundedCandidates = String(stats.boundedCandidates);
+    canvas.dataset.orbit3dBaseCells = String(stats.baseCells);
+    canvas.dataset.orbit3dBaseRows = String(stats.baseRows);
+    canvas.dataset.orbit3dSlots = String(stats.slotCount);
+    canvas.dataset.orbit3dRefinedSubCells = String(stats.refinedSubCells);
+    canvas.dataset.orbit3dRefinedRows = String(stats.refinedRows);
+    canvas.dataset.orbit3dVisiblePoints = String(stats.visiblePoints);
+    canvas.dataset.orbit3dLayout = stats.layout;
+    canvas.dataset.orbit3dBuildBytes = String(stats.buildBytes);
+    canvas.dataset.orbit3dSamplerBytes = String(stats.samplerBytes);
     canvas.dataset.orbit3dCameraDistance = String(this.orbit3d.cameraReadout.distance);
     canvas.dataset.orbit3dCameraAzimuth = String(this.orbit3d.cameraReadout.azimuth);
     canvas.dataset.orbit3dBoundaryDetailOpacity = String(this.orbit3d.boundaryDetailOpacity);
@@ -3137,6 +3170,19 @@ function orbit3dGroundDiagnosticModeFromUrl(): Orbit3DGroundDiagnosticMode {
   return orbit3dGroundDiagnosticMode(
     new URLSearchParams(window.location.search).get("groundDiagnostic"),
   );
+}
+
+/**
+ * `?orbit3dSampler=cpu` forces the logistic-Mandelbrot live build onto the
+ * CPU sampling path (reported as `data-orbit3d-sampler="cpu-sampled"`), so
+ * that path can be exercised on a machine whose GPU sampler works. Inert
+ * when absent; any other value is ignored.
+ */
+function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("orbit3dSampler") === "cpu"
+    ? "cpu"
+    : null;
 }
 
 function boundedInteger(

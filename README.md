@@ -137,6 +137,17 @@ Total points ≈ cells × samples, so at a fixed `--points` budget raising
 the *c* plane. Periodic cells only have *p* distinct heights however many
 samples are taken; the chaotic bands are where extra samples show.
 
+The live build and a bake lay their points out differently. Since card 103
+the live build packs each cell's distinct points once: a period-*p* cell
+occupies min(*p*, samples) rows of a slot, periodic cells share slots, and
+Plotted iterations hides rows in the shader, so the base grid covers the whole
+candidate pool at every Tail refinement setting and
+`data-orbit3d-layout="packed"` is reported. A bake stays stacked (every cell
+stores all of its samples, `data-orbit3d-layout="stacked"`), and the renderer
+draws it exactly as before: the same point count, the same Plotted iterations
+prefix and the same brightness, with the stacked energy factor applied in the
+shader.
+
 Each run writes the quantized `.elpc` binary and merges an entry into
 `public/baked/index.json`. The app fetches that manifest at mount and turns it
 into the **Model source** dropdown in the View controls — `live` plus one

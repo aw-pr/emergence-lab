@@ -332,6 +332,15 @@ export interface ShaderProbeCase {
   reverse: boolean;
   /** Ground only: the escape texture's mask (true = escaped). */
   escaped?: boolean;
+  /** Point only: a_sampleIndex (default 0) against u_visibleIterations (default 8). */
+  sampleIndex?: number;
+  visibleIterations?: number;
+  /** Point only: u_stackedEnergy (default off, the packed-cloud setting). */
+  stackedEnergy?: boolean;
+  /** Point only: a_weight (default 1). */
+  weight?: number;
+  /** Point only: read v_energy (grey) instead of the palette hue. */
+  read?: "hue" | "energy";
 }
 
 export const PROBE_ESCAPE_COLOUR: Rgb = [40, 80, 120];
@@ -387,8 +396,15 @@ in vec3 v_cycleHue;
 out vec4 outColor;
 void main() { outColor = vec4(v_cycleHue, 1.0); }
 `;
+      const ENERGY_PASS_THROUGH = `#version 300 es
+precision highp float;
+in float v_energy;
+out vec4 outColor;
+void main() { outColor = vec4(vec3(v_energy), 1.0); }
+`;
       const programs = {
         point: link(ORBIT3D_SHADER_SOURCES.pointVertex, PASS_THROUGH),
+        pointEnergy: link(ORBIT3D_SHADER_SOURCES.pointVertex, ENERGY_PASS_THROUGH),
         surface: link(ORBIT3D_SHADER_SOURCES.surfaceVertex, PASS_THROUGH),
         ground: link(ORBIT3D_SHADER_SOURCES.groundVertex, ORBIT3D_SHADER_SOURCES.groundFragment),
       };
@@ -422,7 +438,9 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
         gl.disable(gl.BLEND);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        const program = programs[item.stage];
+        const program = item.stage === "point" && item.read === "energy"
+          ? programs.pointEnergy
+          : programs[item.stage];
         gl.useProgram(program);
         gl.uniform1i(loc(program, "u_palette"), 3);
         gl.uniform1i(loc(program, "u_colourMode"), COLOUR_MODE[item.colourMode]);
@@ -438,6 +456,8 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
           gl.uniform1f(loc(program, "u_pointSize"), 8);
           gl.uniform1f(loc(program, "u_cameraZoomOffset"), 0);
           gl.uniform1f(loc(program, "u_sampleCount"), 8);
+          gl.uniform1f(loc(program, "u_visibleIterations"), item.visibleIterations ?? 8);
+          gl.uniform1f(loc(program, "u_stackedEnergy"), item.stackedEnergy ? 1 : 0);
           gl.uniform1f(loc(program, "u_drawDensity"), 1);
           gl.uniform1f(loc(program, "u_cellCount"), 1);
           gl.uniform1f(loc(program, "u_boundaryDetailBaseCellCount"), 1);
@@ -453,7 +473,8 @@ void main() { outColor = vec4(v_cycleHue, 1.0); }
           gl.vertexAttrib1f(attr(program, "a_period"), item.period);
           gl.vertexAttrib1f(attr(program, "a_centre"), item.centre);
           gl.vertexAttrib1f(attr(program, "a_boundary"), item.boundary);
-          gl.vertexAttrib1f(attr(program, "a_weight"), 1);
+          gl.vertexAttrib1f(attr(program, "a_weight"), item.weight ?? 1);
+          gl.vertexAttrib1f(attr(program, "a_sampleIndex"), item.sampleIndex ?? 0);
           gl.drawArrays(gl.POINTS, 0, 1);
           readY = Math.floor(((item.height * 0.56 + 1) / 2) * SIZE);
         } else if (item.stage === "surface") {
@@ -584,26 +605,152 @@ export function hueDifference(a: number, b: number): number {
 }
 
 /** Warm-cache frame interval statistics from requestAnimationFrame. */
-export async function frameTiming(page: Page, frames = 90, warmup = 15): Promise<{ medianMs: number; meanMs: number; p90Ms: number; samples: number }> {
+export interface FrameTiming {
+  /** Render time per frame (see `method`): median, mean and 90th percentile, ms. */
+  medianMs: number;
+  meanMs: number;
+  p90Ms: number;
+  samples: number;
+  /**
+   * `gpu-timer`: the GPU time of each frame's draw calls, bracketed with
+   * EXT_disjoint_timer_query_webgl2. `interval`: the requestAnimationFrame
+   * interval, where that extension is unavailable.
+   */
+  method: "gpu-timer" | "interval";
+  /** The requestAnimationFrame interval, always recorded alongside. */
+  intervalMedianMs: number;
+  intervalMeanMs: number;
+  intervalP90Ms: number;
+  /** True when the GPU reported a disjoint event during the timer queries. */
+  disjoint: boolean;
+}
+
+/**
+ * Warm render time over `frames` frames after `warmup` frames.
+ *
+ * Two figures are taken per frame. The requestAnimationFrame interval is
+ * the cadence the page sees. The render time is the GPU time of the frame's
+ * draw calls, bracketed with one EXT_disjoint_timer_query_webgl2 query from
+ * the sim canvas's first draw call after a tick to the next tick, which is
+ * what drawing the frame costs. When the GPU is the bottleneck the two
+ * agree, because the compositor waits on the swap. When the GPU finishes
+ * early, headless Chromium on macOS paces BeginFrames erratically (card 103
+ * traced gaps of 33 to 145 ms with the GPU busy 11 ms and every thread
+ * idle), so the interval then measures the compositor rather than the
+ * renderer. `medianMs` is the GPU time where the extension exists and the
+ * interval otherwise; `method` says which, and the interval is always
+ * reported.
+ */
+export async function frameTiming(page: Page, frames = 90, warmup = 15): Promise<FrameTiming> {
   return page.evaluate(
     ({ frames, warmup }) =>
-      new Promise<{ medianMs: number; meanMs: number; p90Ms: number; samples: number }>((resolve) => {
+      new Promise<FrameTiming>((resolve) => {
+        const canvas = document.querySelector(".sim-view__canvas") as HTMLCanvasElement | null;
+        const gl = (canvas?.getContext("webgl2") ?? null) as WebGL2RenderingContext | null;
+        const ext = gl?.getExtension("EXT_disjoint_timer_query_webgl2") ?? null;
+        const proto = WebGL2RenderingContext.prototype;
+        const original = {
+          drawArrays: proto.drawArrays,
+          drawElements: proto.drawElements,
+          drawArraysInstanced: proto.drawArraysInstanced,
+          drawElementsInstanced: proto.drawElementsInstanced,
+        };
+        let open: WebGLQuery | null = null;
+        const pending: Array<{ query: WebGLQuery; frame: number }> = [];
+        const gpuByFrame = new Map<number, number>();
+        let disjoint = false;
+        let count = 0;
+        const begin = (): void => {
+          if (!gl || !ext || open) return;
+          open = gl.createQuery();
+          if (open) gl.beginQuery(ext.TIME_ELAPSED_EXT, open);
+        };
+        const wrap = <T extends (...args: never[]) => void>(fn: T): T =>
+          function (this: WebGL2RenderingContext, ...args: never[]) {
+            if (this === gl) begin();
+            return fn.apply(this, args);
+          } as unknown as T;
+        if (gl && ext) {
+          proto.drawArrays = wrap(original.drawArrays);
+          proto.drawElements = wrap(original.drawElements);
+          proto.drawArraysInstanced = wrap(original.drawArraysInstanced);
+          proto.drawElementsInstanced = wrap(original.drawElementsInstanced);
+        }
+        const restore = (): void => {
+          proto.drawArrays = original.drawArrays;
+          proto.drawElements = original.drawElements;
+          proto.drawArraysInstanced = original.drawArraysInstanced;
+          proto.drawElementsInstanced = original.drawElementsInstanced;
+        };
+        const closeFrame = (): void => {
+          if (!gl || !ext || !open) return;
+          gl.endQuery(ext.TIME_ELAPSED_EXT);
+          pending.push({ query: open, frame: count });
+          open = null;
+        };
+        const collect = (): void => {
+          if (!gl || !ext) return;
+          if (gl.getParameter(ext.GPU_DISJOINT_EXT)) disjoint = true;
+          for (let index = pending.length - 1; index >= 0; index -= 1) {
+            const { query, frame } = pending[index];
+            if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) continue;
+            const ns = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
+            gpuByFrame.set(frame, (gpuByFrame.get(frame) ?? 0) + ns / 1e6);
+            gl.deleteQuery(query);
+            pending.splice(index, 1);
+          }
+        };
+        const stats = (values: number[]) => {
+          const sorted = [...values].sort((a, b) => a - b);
+          return {
+            median: sorted[Math.floor(sorted.length / 2)] ?? NaN,
+            mean: values.length ? values.reduce((s, v) => s + v, 0) / values.length : NaN,
+            p90: sorted[Math.floor(sorted.length * 0.9)] ?? NaN,
+          };
+        };
         const intervals: number[] = [];
         let last = performance.now();
-        let count = 0;
-        const tick = () => {
+        const finish = (): void => {
+          let grace = 0;
+          const drain = (): void => {
+            collect();
+            grace += 1;
+            if (pending.length > 0 && grace < 60) {
+              requestAnimationFrame(drain);
+              return;
+            }
+            const gpu = [...gpuByFrame.entries()]
+              .filter(([frame]) => frame >= warmup)
+              .map(([, ms]) => ms);
+            const interval = stats(intervals);
+            const useGpu = gl !== null && ext !== null && gpu.length >= frames / 2;
+            const render = useGpu ? stats(gpu) : interval;
+            resolve({
+              medianMs: render.median,
+              meanMs: render.mean,
+              p90Ms: render.p90,
+              samples: useGpu ? gpu.length : intervals.length,
+              method: useGpu ? "gpu-timer" : "interval",
+              intervalMedianMs: interval.median,
+              intervalMeanMs: interval.mean,
+              intervalP90Ms: interval.p90,
+              disjoint,
+            });
+          };
+          drain();
+        };
+        const tick = (): void => {
           const now = performance.now();
+          // The sim's own frame callback ran before this one, so its draws
+          // for this frame are issued and the open query covers them.
+          closeFrame();
+          collect();
           count += 1;
           if (count > warmup) intervals.push(now - last);
           last = now;
           if (intervals.length >= frames) {
-            const sorted = [...intervals].sort((a, b) => a - b);
-            resolve({
-              medianMs: sorted[Math.floor(sorted.length / 2)],
-              meanMs: intervals.reduce((s, v) => s + v, 0) / intervals.length,
-              p90Ms: sorted[Math.floor(sorted.length * 0.9)],
-              samples: intervals.length,
-            });
+            restore();
+            finish();
             return;
           }
           requestAnimationFrame(tick);

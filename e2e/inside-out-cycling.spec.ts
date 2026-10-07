@@ -816,6 +816,8 @@ test.describe("controls and cache", () => {
         fieldBuildMs: measured.runs.map((r) => r.fieldBuildMs),
         renderMedianMs: last.renders.map((r) => r.medianMs),
         renderP90Ms: last.renders.map((r) => r.p90Ms),
+        renderMethod: last.renders.map((r) => r.method),
+        intervalMedianMs: last.renders.map((r) => r.intervalMedianMs),
         points: measured.runs.map((r) => r.points),
       };
     };
@@ -836,7 +838,10 @@ test.describe("controls and cache", () => {
     expect(cur.renderMedianMs.length).toBe(SAMPLE_COUNT);
     expect(base.renderMedianMs.length).toBe(SAMPLE_COUNT);
     expect(new Set(cur.points).size).toBe(1);
-    expect(cur.points[0]).toBe(base.points[0]);
+    // A packed cloud (card 103) stores each cell's distinct points once, so it
+    // submits fewer points than the stacked baseline by design; equality was
+    // retired for an upper bound.
+    expect(Number(cur.points[0])).toBeLessThanOrEqual(Number(base.points[0]));
     // A sustained regression above 20% in build or render time needs an
     // explanation and verifier approval; the medians of three matched samples
     // are the sustained figures.

@@ -11,6 +11,7 @@ import {
   cellCoordinate,
   periodDetectionWindow,
 } from "../sims/logistic-mandelbrot/model.ts";
+import { SlotPacker, admissionOrder, distinctPointCount } from "./orbitPacking.ts";
 
 const SAMPLE_BATCH_SIZE = 4;
 const MAX_WARMUP_ITERATIONS = 20000;
@@ -303,15 +304,52 @@ void main() {
 }
 `;
 
+/**
+ * A live cloud in the packed layout: `sampleCount` rows by `slotCount` slots,
+ * point index `row * slotCount + slot`. A cell occupies
+ * `distinctPointCount(period, sampleCount)` consecutive rows of one slot, in
+ * orbit-sample order; periodic cells share slots; a cell without a detected
+ * period fills a slot alone. Rows nothing occupies carry `sampleIndex ===
+ * sampleCount` and are hidden by the point shader, never drawn.
+ */
 export interface OrbitCloudBuffers {
   positions: Float32Array;
+  /**
+   * Detected period per point (0 = none). Float32, like the sample index: a
+   * 1-byte attribute has a 1-byte stride, which Metal cannot bind natively,
+   * so ANGLE converts the whole buffer every frame (measured at 2.5 times the
+   * render time at 5.5M points).
+   */
   periods: Float32Array;
   /** Centre height of each point's column (AttractorCellMeasure.centre). */
   centres: Float32Array;
   boundaries: Float32Array;
   weights: Float32Array;
-  survivingCells: number;
-  boundaryDetailBaseCells: number;
+  /** Orbit sample index of the point within its cell; `sampleCount` on a hidden row. */
+  sampleIndices: Float32Array;
+  sampleCount: number;
+  /** Slots in the layout; the draw submits `slotCount * sampleCount` points. */
+  slotCount: number;
+  /** Slots of the tiers below the raised boundary-detail tier (0 when detail is off). */
+  boundaryDetailBaseSlots: number;
+  /** Cells of the candidate grid (sampleWidth times sampleHeight). */
+  candidateCells: number;
+  /** Candidate cells that did not escape. */
+  boundedCandidates: number;
+  /** Bounded cells admitted into the base tier. */
+  baseCells: number;
+  /** Rows the base tier occupies. */
+  baseRows: number;
+  /** Sub-cells stored across the refinement tiers. */
+  refinedSubCells: number;
+  /** Rows the refinement tiers occupy. */
+  refinedRows: number;
+  /** Occupied rows per orbit sample index, for the visible-point count. */
+  rowsBySampleIndex: Uint32Array;
+  /** Bytes of the cloud's own CPU-side arrays (attributes and layout tables). */
+  buildBytes: number;
+  /** Bytes of the sampler readback arrays the build held. */
+  samplerBytes: number;
 }
 
 export interface GpuOrbitCloudOptions {
@@ -320,9 +358,12 @@ export interface GpuOrbitCloudOptions {
   sampleCount: number;
   warmupIterations: number;
   realSliceOnly: boolean;
-  maxSurvivingCells: number;
+  /** Slots the whole cloud may occupy (the raised budget when detail is active). */
+  maxSlots: number;
+  /** Slots the base tier may occupy: the planner's base row budget over sampleCount. */
   baseSlotCap: number;
-  baselineMaxSurvivingCells: number;
+  /** Slots the detail-0 cloud may occupy; the baseline refinement tier fills up to here. */
+  baselineMaxSlots: number;
   baselineRefineActive: boolean;
   baselineRefineCandidateCap: number;
   baselineRefineWarmup: number;
@@ -709,6 +750,130 @@ export class OrbitSampler {
   }
 }
 
+/**
+ * Largest job count handed to one `OrbitSampler.sample` call. The sampler
+ * allocates six RGBA32F pixels per job, so a refinement tier larger than
+ * this is sampled in batches rather than dropped.
+ */
+export const MAX_SAMPLE_JOBS_PER_CALL = 1 << 22;
+
+/** Seed of the admission order that decides which refined sub-cells are kept. */
+const REFINEMENT_ADMISSION_SEED = 0x103_01;
+
+/** Seed of the admission order that decides which base cells are kept when the base slot cap binds. */
+const BASE_ADMISSION_SEED = 0x103;
+
+interface SampleBatch {
+  first: number;
+  sample: OrbitSampleResult;
+}
+
+/**
+ * A tier's packed cells: for each stored item (a candidate cell or a
+ * refinement job) its index, slot and first row. Items pack in index order,
+ * which keeps neighbouring cells in neighbouring slots and needs no
+ * permutation; only when the slot cap binds is the tier repacked in
+ * `admissionOrder` and cut there, so the kept set is a spatially uniform
+ * prefix rather than a row-major truncation.
+ */
+interface PackedTier {
+  packer: SlotPacker;
+  items: Int32Array;
+  slots: Int32Array;
+  rows: Uint8Array;
+  stored: number;
+  /** Bytes of the tier's tables, including the admission order when it was needed. */
+  bytes: number;
+}
+
+function packItems(
+  rowsPerItem: Uint8Array,
+  storable: number,
+  slotCap: number,
+  sampleCount: number,
+  seed: number,
+): PackedTier {
+  const items = new Int32Array(storable);
+  const slots = new Int32Array(storable);
+  const rows = new Uint8Array(storable);
+  const tableBytes = items.byteLength + slots.byteLength + rows.byteLength;
+  const admit = (order: Uint32Array | null): PackedTier | null => {
+    const packer = new SlotPacker(sampleCount);
+    let stored = 0;
+    for (let index = 0; index < rowsPerItem.length; index += 1) {
+      const item = order === null ? index : order[index];
+      const itemRows = rowsPerItem[item];
+      if (itemRows === 0) continue;
+      if (packer.slotCount >= slotCap && !packer.fitsOpenSlot(itemRows)) {
+        if (order === null) return null;
+        break;
+      }
+      const placed = packer.placePacked(itemRows);
+      items[stored] = item;
+      slots[stored] = (placed / sampleCount) | 0;
+      rows[stored] = placed % sampleCount;
+      stored += 1;
+    }
+    return {
+      packer,
+      items,
+      slots,
+      rows,
+      stored,
+      bytes: tableBytes + (order === null ? 0 : order.byteLength),
+    };
+  };
+  return admit(null) ?? (admit(admissionOrder(rowsPerItem.length, seed)) as PackedTier);
+}
+
+function emptyPackedTier(sampleCount: number): PackedTier {
+  return {
+    packer: new SlotPacker(sampleCount),
+    items: new Int32Array(0),
+    slots: new Int32Array(0),
+    rows: new Uint8Array(0),
+    stored: 0,
+    bytes: 0,
+  };
+}
+
+interface RefinementTier {
+  packed: PackedTier;
+  /** Rows per job: 0 for an escaped sub-cell, else its distinct points. */
+  rowsPerJob: Uint8Array;
+  /** Sampled batches covering the jobs in order, with their first job index. */
+  batches: SampleBatch[];
+  /** Parent cell of each job, for the boundary distance. */
+  parents: Int32Array;
+  subCells: number;
+  rows: number;
+  samplerBytes: number;
+  layoutBytes: number;
+}
+
+function emptyTier(sampleCount: number): RefinementTier {
+  return {
+    packed: emptyPackedTier(sampleCount),
+    rowsPerJob: new Uint8Array(0),
+    batches: [],
+    parents: new Int32Array(0),
+    subCells: 0,
+    rows: 0,
+    samplerBytes: 0,
+    layoutBytes: 0,
+  };
+}
+
+function sampleResultBytes(result: OrbitSampleResult): number {
+  return result.coordinates.byteLength
+    + result.samples.byteLength
+    + result.periods.byteLength
+    + result.interiors.byteLength
+    + result.centres.byteLength
+    + result.spreads.byteLength
+    + result.escaped.byteLength;
+}
+
 export function buildGpuOrbitCloud(
   sampler: OrbitSampler,
   options: GpuOrbitCloudOptions,
@@ -719,9 +884,9 @@ export function buildGpuOrbitCloud(
     sampleCount,
     warmupIterations,
     realSliceOnly,
-    maxSurvivingCells,
+    maxSlots,
     baseSlotCap,
-    baselineMaxSurvivingCells,
+    baselineMaxSlots,
     baselineRefineActive,
     baselineRefineCandidateCap,
     baselineRefineWarmup,
@@ -746,32 +911,59 @@ export function buildGpuOrbitCloud(
         ? 0
         : cellCoordinate(IM_MIN, IM_MAX, y, sampleHeight);
   }
-  const base = sampler.sample(baseCoordinates, warmupIterations, sampleCount);
+  const base = sampleInBatches(sampler, baseCoordinates, warmupIterations, sampleCount);
   if (!base) return null;
+  let samplerBytes = base.reduce((sum, batch) => sum + sampleResultBytes(batch.sample), 0);
 
-  const escapeMask = base.escaped.slice();
-  const baseSlots = new Int32Array(baseSlotCap);
-  const baselineRefineCandidates = new Int32Array(
-    boundaryDetailActive ? baselineRefineCandidateCap : 0,
+  // Every candidate's rows: 0 for an escaped cell, else its distinct points.
+  // Read once per cell here, so the admission, candidate and write passes
+  // index byte arrays instead of resolving a sample batch per point.
+  const escapeMask = new Uint8Array(baseCellCount);
+  const tailMask = new Uint8Array(baseCellCount);
+  const baseRowsPerCell = new Uint8Array(baseCellCount);
+  let boundedCandidates = 0;
+  for (const { first, sample } of base) {
+    for (let local = 0; local < sample.cellCount; local += 1) {
+      const cell = first + local;
+      if (sample.escaped[local] === 1) {
+        escapeMask[cell] = 1;
+        continue;
+      }
+      boundedCandidates += 1;
+      const period = sample.periods[local];
+      baseRowsPerCell[cell] = distinctPointCount(period, sampleCount);
+      if (period === 0 || period >= refinePeriodThreshold) tailMask[cell] = 1;
+    }
+  }
+
+  // The base tier keeps every bounded cell when its slot cap allows, packed
+  // in grid order; when the cap binds, cells are admitted in `admissionOrder`
+  // until it does, and nothing is swapped out afterwards.
+  const baseTier = packItems(
+    baseRowsPerCell,
+    boundedCandidates,
+    baseSlotCap,
+    sampleCount,
+    BASE_ADMISSION_SEED,
   );
-  const refineCandidates = new Int32Array(refineCandidateCap);
-  let survivorsSeen = 0;
+  const baseSlots = baseTier.packer.slotCount;
+
+  // Refinement candidates: cascade tails (deep or undetected period) and,
+  // with boundary detail, both sides of the escape edge. Reservoir-capped as
+  // before; the caps derive from the rows the base tier was planned to leave.
+  const baselineRefineCandidates = new Int32Array(
+    boundaryDetailActive && baselineRefineActive ? baselineRefineCandidateCap : 0,
+  );
+  const refineCandidates = new Int32Array(refineActive ? refineCandidateCap : 0);
   let baselineInterestingSeen = 0;
   let interestingSeen = 0;
-  for (let cell = 0; cell < base.cellCount; cell += 1) {
-    const escaped = base.escaped[cell] === 1;
+  for (let cell = 0; cell < baseCellCount; cell += 1) {
+    const escaped = escapeMask[cell] === 1;
     const boundaryBand =
       boundaryDetailActive &&
-      isEscapeEdgeCell(base.escaped, sampleWidth, sampleHeight, cell);
+      isEscapeEdgeCell(escapeMask, sampleWidth, sampleHeight, cell);
     if (escaped && !boundaryBand) continue;
-    if (!escaped) {
-      const slot = reservoirSlot(survivorsSeen, baseSlotCap);
-      survivorsSeen += 1;
-      if (slot >= 0) baseSlots[slot] = cell;
-    }
-    const period = escaped ? 0 : base.periods[cell];
-    const tailCandidate = !escaped &&
-      (period === 0 || period >= refinePeriodThreshold);
+    const tailCandidate = !escaped && tailMask[cell] === 1;
     if (boundaryDetailActive && baselineRefineActive && tailCandidate) {
       const candidateSlot = reservoirSlot(
         baselineInterestingSeen,
@@ -787,31 +979,17 @@ export function buildGpuOrbitCloud(
     }
   }
 
-  const refineStart = Math.min(survivorsSeen, baseSlotCap);
-  type RefinementBatch = {
-    sample: OrbitSampleResult | null;
-    parents: Int32Array;
-    slots: Int32Array;
-    count: number;
-  };
-  const emptyBatch = (): RefinementBatch => ({
-    sample: null,
-    parents: new Int32Array(0),
-    slots: new Int32Array(0),
-    count: 0,
-  });
-  const buildRefinement = (
+  const refineTier = (
     candidates: Int32Array,
     candidatesSeen: number,
-    capacity: number,
+    capacitySlots: number,
     warmup: number,
     subdivision: number,
-    countReduction = 0,
-  ): RefinementBatch | null => {
+  ): RefinementTier | null => {
     const candidateCount = Math.min(candidatesSeen, candidates.length);
     const subCells = subdivision * subdivision;
     const jobs = candidateCount * subCells;
-    if (jobs === 0 || capacity <= 0) return emptyBatch();
+    if (jobs === 0 || capacitySlots <= 0) return emptyTier(sampleCount);
     const parents = new Int32Array(jobs);
     const coordinates = new Float64Array(jobs * 2);
     const cellWidth = (RE_MAX - RE_MIN) / sampleWidth;
@@ -833,153 +1011,214 @@ export function buildGpuOrbitCloud(
       coordinates[job * 2 + 1] =
         centreIm + ((sy + 0.5) / subdivision - 0.5) * cellHeight;
     }
-    const sampled = sampler.sample(coordinates, warmup, sampleCount);
-    if (!sampled) return null;
-    let seen = 0;
-    for (let job = 0; job < sampled.cellCount; job += 1) {
-      if (sampled.escaped[job] === 1) continue;
-      seen += 1;
+    const batches = sampleInBatches(sampler, coordinates, warmup, sampleCount);
+    if (!batches) return null;
+    const rowsPerJob = new Uint8Array(jobs);
+    let storable = 0;
+    for (const { first, sample } of batches) {
+      for (let local = 0; local < sample.cellCount; local += 1) {
+        if (sample.escaped[local] === 1) continue;
+        rowsPerJob[first + local] = distinctPointCount(sample.periods[local], sampleCount);
+        storable += 1;
+      }
     }
-    const count = Math.max(
-      0,
-      Math.min(seen, capacity) - countReduction,
+    // Surviving sub-cells pack in job order; a tier that cannot hold them
+    // all is repacked in a uniform order over the jobs and thins evenly.
+    const packed = packItems(
+      rowsPerJob,
+      storable,
+      capacitySlots,
+      sampleCount,
+      REFINEMENT_ADMISSION_SEED,
     );
-    const slots = new Int32Array(count);
-    let selectionSeen = 0;
-    for (let job = 0; job < sampled.cellCount; job += 1) {
-      if (sampled.escaped[job] === 1) continue;
-      const slot = reservoirSlot(selectionSeen, count);
-      selectionSeen += 1;
-      if (slot >= 0) slots[slot] = job;
-    }
     return {
-      sample: sampled,
+      packed,
+      rowsPerJob,
+      batches,
       parents,
-      slots,
-      count,
+      subCells: packed.stored,
+      rows: packed.packer.rowCount,
+      samplerBytes: batches.reduce((sum, batch) => sum + sampleResultBytes(batch.sample), 0),
+      layoutBytes: packed.bytes + rowsPerJob.byteLength + parents.byteLength,
     };
   };
 
-  let baselineRefine = emptyBatch();
+  let baselineRefine = emptyTier(sampleCount);
   if (boundaryDetailActive && baselineRefineActive) {
-    // Keep the ordinary detail-0 refinement byte-for-byte at the front of
-    // each sample so a fully gated draw submits the genuine baseline cloud.
-    const baselineCapacity = Math.max(
-      0,
-      baselineMaxSurvivingCells - refineStart,
-    );
-    const built = buildRefinement(
+    // The detail-0 refinement sits in front of the raised tier so a fully
+    // gated draw submits the genuine baseline cloud.
+    const built = refineTier(
       baselineRefineCandidates,
       baselineInterestingSeen,
-      baselineCapacity,
+      Math.max(0, baselineMaxSlots - baseSlots),
       baselineRefineWarmup,
       baselineRefineSubdivision,
     );
     if (!built) return null;
     baselineRefine = built;
   }
-  const boundaryDetailBaseCells = refineStart + baselineRefine.count;
-  const refineCapacity = Math.max(0, maxSurvivingCells - refineStart);
-  let refine = emptyBatch();
+  const boundaryDetailBaseSlots = baseSlots + baselineRefine.packed.packer.slotCount;
+  let refine = emptyTier(sampleCount);
   if (refineActive) {
-    const built = buildRefinement(
+    const built = refineTier(
       refineCandidates,
       interestingSeen,
-      refineCapacity,
+      Math.max(0, maxSlots - boundaryDetailBaseSlots),
       refineWarmup,
       refineSubdivision,
-      boundaryDetailActive ? baselineRefine.count : 0,
     );
     if (!built) return null;
     refine = built;
   }
-  const survivingCells = boundaryDetailBaseCells + refine.count;
-  const pointCount = survivingCells * sampleCount;
+  samplerBytes += baselineRefine.samplerBytes + refine.samplerBytes;
+
+  const slotCount = boundaryDetailBaseSlots + refine.packed.packer.slotCount;
+  const pointCount = slotCount * sampleCount;
   const positions = new Float32Array(pointCount * 3);
   const periods = new Float32Array(pointCount);
   const centres = new Float32Array(pointCount);
   const boundaries = new Float32Array(pointCount);
-  const weights = new Float32Array(pointCount).fill(1);
-  const slotCells = new Int32Array(survivingCells);
-
-  for (let slot = 0; slot < refineStart; slot += 1) {
-    slotCells[slot] = baseSlots[slot];
-  }
-  for (let slot = 0; slot < baselineRefine.count; slot += 1) {
-    slotCells[refineStart + slot] =
-      baselineRefine.parents[baselineRefine.slots[slot]];
-  }
-  for (let slot = 0; slot < refine.count; slot += 1) {
-    slotCells[boundaryDetailBaseCells + slot] =
-      refine.parents[refine.slots[slot]];
-  }
+  const weights = new Float32Array(pointCount);
+  const sampleIndices = new Float32Array(pointCount).fill(sampleCount);
+  const rowsBySampleIndex = new Uint32Array(sampleCount);
   const cellScale = realSliceOnly
     ? (RE_MAX - RE_MIN) / sampleWidth
     : ((RE_MAX - RE_MIN) / sampleWidth + (IM_MAX - IM_MIN) / sampleHeight) / 2;
   const distances = boundaryDistanceField(escapeMask, sampleWidth, sampleHeight);
 
-  for (let sample = 0; sample < sampleCount; sample += 1) {
-    const sampleOffset = sample * survivingCells;
-    for (let slot = 0; slot < refineStart; slot += 1) {
-      const cell = baseSlots[slot];
-      const point = sampleOffset + slot;
-      const position = point * 3;
-      positions[position] = base.coordinates[cell * 2];
-      positions[position + 1] = base.coordinates[cell * 2 + 1];
-      positions[position + 2] = base.samples[sample * base.cellCount + cell];
-      periods[point] = base.periods[cell];
-      centres[point] = base.centres[cell];
-      boundaries[point] = Math.min(1, distances[cell] * cellScale);
-    }
-    if (baselineRefine.sample) {
-      for (let slot = 0; slot < baselineRefine.count; slot += 1) {
-        const job = baselineRefine.slots[slot];
-        const point = sampleOffset + refineStart + slot;
+  // Each stored cell writes its distinct points down its slot: rows
+  // firstRow..firstRow+rows-1 carry orbit samples 0..rows-1 in order.
+  const writeTier = (
+    tier: PackedTier,
+    rowsPerItem: Uint8Array,
+    slotOffset: number,
+    batches: SampleBatch[],
+    parents: Int32Array | null,
+    weight: number,
+  ): void => {
+    const batchOf = batchIndexLookup(batches);
+    for (let stored = 0; stored < tier.stored; stored += 1) {
+      const item = tier.items[stored];
+      const batch = batches[batchOf(item)];
+      const sample = batch.sample;
+      const local = item - batch.first;
+      const slot = slotOffset + tier.slots[stored];
+      const firstRow = tier.rows[stored];
+      const rows = rowsPerItem[item];
+      const re = sample.coordinates[local * 2];
+      const im = sample.coordinates[local * 2 + 1];
+      const period = sample.periods[local];
+      const centre = sample.centres[local];
+      const boundary = Math.min(
+        1,
+        distances[parents === null ? item : parents[item]] * cellScale,
+      );
+      for (let k = 0; k < rows; k += 1) {
+        const point = (firstRow + k) * slotCount + slot;
         const position = point * 3;
-        positions[position] = baselineRefine.sample.coordinates[job * 2];
-        positions[position + 1] =
-          baselineRefine.sample.coordinates[job * 2 + 1];
-        positions[position + 2] =
-          baselineRefine.sample.samples[
-            sample * baselineRefine.sample.cellCount + job
-          ];
-        periods[point] = baselineRefine.sample.periods[job];
-        centres[point] = baselineRefine.sample.centres[job];
-        boundaries[point] = Math.min(
-          1,
-          distances[slotCells[refineStart + slot]] * cellScale,
-        );
-        weights[point] = baselineRefinePointWeight;
+        positions[position] = re;
+        positions[position + 1] = im;
+        positions[position + 2] = sample.samples[k * sample.cellCount + local];
+        periods[point] = period;
+        centres[point] = centre;
+        boundaries[point] = boundary;
+        weights[point] = weight;
+        sampleIndices[point] = k;
+        rowsBySampleIndex[k] += 1;
       }
     }
-    if (!refine.sample) continue;
-    for (let slot = 0; slot < refine.count; slot += 1) {
-      const job = refine.slots[slot];
-      const point = sampleOffset + boundaryDetailBaseCells + slot;
-      const position = point * 3;
-      positions[position] = refine.sample.coordinates[job * 2];
-      positions[position + 1] = refine.sample.coordinates[job * 2 + 1];
-      positions[position + 2] =
-        refine.sample.samples[sample * refine.sample.cellCount + job];
-      periods[point] = refine.sample.periods[job];
-      centres[point] = refine.sample.centres[job];
-      boundaries[point] = Math.min(
-        1,
-        distances[slotCells[boundaryDetailBaseCells + slot]] * cellScale,
-      );
-      weights[point] = refinePointWeight;
-    }
-  }
+  };
+  writeTier(baseTier, baseRowsPerCell, 0, base, null, 1);
+  writeTier(
+    baselineRefine.packed,
+    baselineRefine.rowsPerJob,
+    baseSlots,
+    baselineRefine.batches,
+    baselineRefine.parents,
+    baselineRefinePointWeight,
+  );
+  writeTier(
+    refine.packed,
+    refine.rowsPerJob,
+    boundaryDetailBaseSlots,
+    refine.batches,
+    refine.parents,
+    refinePointWeight,
+  );
+
+  const buildBytes = positions.byteLength
+    + periods.byteLength
+    + centres.byteLength
+    + boundaries.byteLength
+    + weights.byteLength
+    + sampleIndices.byteLength
+    + escapeMask.byteLength
+    + tailMask.byteLength
+    + baseRowsPerCell.byteLength
+    + baseTier.bytes
+    + distances.byteLength
+    + baselineRefineCandidates.byteLength
+    + refineCandidates.byteLength
+    + baselineRefine.layoutBytes
+    + refine.layoutBytes;
   return {
     positions,
     periods,
     centres,
     boundaries,
     weights,
-    survivingCells,
-    boundaryDetailBaseCells: boundaryDetailActive
-      ? boundaryDetailBaseCells
-      : 0,
+    sampleIndices,
+    sampleCount,
+    slotCount,
+    boundaryDetailBaseSlots: boundaryDetailActive ? boundaryDetailBaseSlots : 0,
+    candidateCells: baseCellCount,
+    boundedCandidates,
+    baseCells: baseTier.stored,
+    baseRows: baseTier.packer.rowCount,
+    refinedSubCells: baselineRefine.subCells + refine.subCells,
+    refinedRows: baselineRefine.rows + refine.rows,
+    rowsBySampleIndex,
+    buildBytes,
+    samplerBytes,
+  };
+}
+
+/**
+ * Sample `coordinates` in calls of at most MAX_SAMPLE_JOBS_PER_CALL jobs.
+ * Null when any call fails; a failed batch is never dropped silently.
+ */
+function sampleInBatches(
+  sampler: OrbitSampler,
+  coordinates: Float64Array,
+  warmupIterations: number,
+  sampleCount: number,
+): SampleBatch[] | null {
+  const jobs = coordinates.length / 2;
+  const batches: SampleBatch[] = [];
+  for (let first = 0; first < jobs; first += MAX_SAMPLE_JOBS_PER_CALL) {
+    const count = Math.min(MAX_SAMPLE_JOBS_PER_CALL, jobs - first);
+    const slice = first === 0 && count === jobs
+      ? coordinates
+      : coordinates.slice(first * 2, (first + count) * 2);
+    const sample = sampler.sample(slice, warmupIterations, sampleCount);
+    if (!sample) return null;
+    batches.push({ first, sample });
+  }
+  return batches;
+}
+
+/** Resolve a global job index to the index of its batch in `batches`. */
+function batchIndexLookup(batches: SampleBatch[]): (job: number) => number {
+  if (batches.length === 1) return () => 0;
+  return (job) => {
+    let low = 0;
+    let high = batches.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (batches[middle].first <= job) low = middle;
+      else high = middle - 1;
+    }
+    return low;
   };
 }
 
