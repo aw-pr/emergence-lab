@@ -126,3 +126,26 @@ Verifier writes the schema-valid `state/verifiers/104-logistic-mandelbrot-hierar
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes; do not change auth routing to work around quota or browser failures. The codex worker runs under the widened sandbox `Requires GUI: true` grants and launches headless Chromium through Playwright with the repo's GPU flags (`playwright.config.ts`); redirect stdin from `/dev/null` for any non-interactive subcommand. The Claude verifier needs no widening.
+
+## Re-brief 1 (2026-10-07, attempt 2)
+
+Attempt 1 (Astra) was stopped after about ten minutes by the operator's Codex
+quota guard, not by a fault in the work: the Codex five-hour window reached
+97%. Its tree is preserved at `75f4c241b8039db0d6146d0677ac58aa155b59c3` on
+`wip/104-logistic-mandelbrot-hierarchical-centre-attempt-1`, unverified.
+Card 103 has since landed on `dev` (`b6a4f9c6d`), so this attempt's worktree
+includes the packed layout.
+
+Attempt 2 instructions, in addition to everything above:
+
+1. Start from the preserved work: `git checkout 75f4c241b8039db0d6146d0677ac58aa155b59c3 -- .`
+   in the run worktree, then restore this card to HEAD
+   (`git checkout HEAD -- docs/stages/104-logistic-mandelbrot-hierarchical-centre.md`).
+   Attempt 1 was cut from the pre-103 tree; resolve any conflict with the
+   packed layout in favour of `dev`, and review the diff rather than
+   re-deriving it.
+2. Regenerate all evidence; do not cite attempt-1 paths.
+3. Spend economically. The Codex window is the binding limit on this card:
+   read files by range, avoid re-reading, and do not dump full logs. Write the
+   dispatch envelope as the final action; a partial result with an envelope
+   is better than none.
