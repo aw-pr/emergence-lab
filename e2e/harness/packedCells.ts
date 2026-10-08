@@ -49,7 +49,7 @@ export async function openPacked(
       if (resolution) localStorage.setItem(`el:resolution:${slug}`, resolution);
       else localStorage.removeItem(`el:resolution:${slug}`);
     },
-    [SLUG, params, preset ?? ""] as const,
+    [SLUG, { __format: 2, ...params }, preset ?? ""] as const,
   );
   const queries = [cpu ? "orbit3dSampler=cpu" : "", options.query ?? ""].filter(Boolean);
   const query = queries.length > 0 ? `?${queries.join("&")}` : "";

@@ -968,7 +968,7 @@ async function compareBuildCosts(page: Page, outputPath: string) {
         const target = await context.newPage();
         await target.addInitScript(
           ([values]) => localStorage.setItem("el:values:logistic-mandelbrot", JSON.stringify(values)),
-          [params] as const,
+          [{ __format: 2, ...params }] as const,
         );
         const started = Date.now();
         await target.goto(`${origin}/#/logistic-mandelbrot`, { timeout: 15_000 });

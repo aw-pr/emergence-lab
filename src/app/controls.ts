@@ -21,6 +21,12 @@ import {
 } from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
 import type { DisplayOptions, ResolutionPreset } from "./renderer.ts";
+import {
+  encodeStoredValues,
+  isLegacyStoredValues,
+  migrateLegacyStoredValues,
+  RETIRED_DEFAULTS,
+} from "./paramPersistence.ts";
 
 /**
  * A collapsible, headed control section. Open by default; a user's toggle is
@@ -299,7 +305,7 @@ export class ControlsPanel {
       if (value === undefined) continue;
       this.syncParamControl(descriptor, value);
     }
-    if (persist) saveValues(this.slug, this.params);
+    if (persist) saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
   }
 
   private render(options: ControlsOptions): void {
@@ -1054,7 +1060,7 @@ export class ControlsPanel {
 
   private updateParams(next: SimParams): void {
     this.params = next;
-    saveValues(this.slug, this.params);
+    saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
     this.callbacks.onParamChange(this.params);
   }
 
@@ -1303,9 +1309,12 @@ export function restorePersistedParams(
     return { ...initialParams };
   }
 
+  const stored = isLegacyStoredValues(loaded)
+    ? migrateLegacyStoredValues(loaded, RETIRED_DEFAULTS[slug] ?? {})
+    : loaded;
   const next = { ...initialParams };
   for (const descriptor of schema) {
-    const value = loaded[descriptor.key];
+    const value = stored[descriptor.key];
     if (value === undefined) {
       continue;
     }

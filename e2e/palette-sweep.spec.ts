@@ -63,7 +63,7 @@ async function openSim(page: Page, params: Record<string, number | boolean>): Pr
     ([slug, values]) => {
       localStorage.setItem(`el:values:${slug}`, JSON.stringify(values));
     },
-    [SLUG, params] as const,
+    [SLUG, { __format: 2, ...params }] as const,
   );
   await page.goto(`/#/${SLUG}`);
   const canvas = page.locator(".sim-view__canvas");

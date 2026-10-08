@@ -132,7 +132,7 @@ test.describe("budget", () => {
         expect(stats.layout).toBe("packed");
         expect(Math.abs(stats.candidateCells / PRESET_TARGETS[preset] - 1)).toBeLessThanOrEqual(0.02);
         // The slider's share of the point budget; the CPU path reads 0 as 0.3.
-        const share = path === "cpu" && tailRefinement === 0 ? 0.3 : tailRefinement;
+        const share = path === "cpu" ? Math.min(tailRefinement || 0.3, 0.3) : tailRefinement;
         expect(stats.refineRowBudget, `row budget at ${tailRefinement}`).toBe(Math.floor(stats.pointBudget * share));
         expect(stats.refinedL1Rows + stats.refinedL2Rows, `rows within the row budget at ${tailRefinement}`).toBeLessThanOrEqual(stats.refineRowBudget);
         expect(stats.refinedSubCells).toBe(stats.refinedL1SubCells + stats.refinedL2SubCells + stats.refinedDetailSubCells);

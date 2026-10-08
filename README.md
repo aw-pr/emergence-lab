@@ -118,6 +118,10 @@ the point budget from the unchanged 9.6M extreme ceiling to 16M and spends the
 additional capacity on a 5x5 boundary sub-grid warmed for 20,000 iterations.
 That depth is deliberate: stage 35 measured boundary-band period mismatch
 falling from 1.71% at 1,500 warmup iterations to 0.25% at 20,000.
+Tail refinement defaults to its maximum, 0.6, on the GPU path. There, 0 turns
+tail refinement off. The CPU fallback keeps its bounded automatic policy: 0
+selects its 0.3 share, positive settings up to 0.3 are honoured, and every higher
+setting is capped at 0.3.
 
 Instead the cloud can be baked offline, on the machine that will view it, with
 no time-slicing, a much higher warmup, and a second refinement level the

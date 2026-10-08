@@ -39,6 +39,7 @@ export function frozenParams(overrides: SimParams = {}): SimParams {
     colourMode: "inside-out",
     cycleSpeed: 0,
     cycleBands: PROBE_CYCLE_BANDS,
+    tailRefinement: 0,
     edgeGlow: 0,
     ...overrides,
   };
@@ -49,7 +50,7 @@ export async function openSim(page: Page, params: SimParams, query = ""): Promis
     ([slug, values]) => {
       localStorage.setItem(`el:values:${slug}`, JSON.stringify(values));
     },
-    [SLUG, params] as const,
+    [SLUG, { __format: 2, ...params }] as const,
   );
   await page.goto(`/${query}#/${SLUG}`);
   const canvas = page.locator(".sim-view__canvas");

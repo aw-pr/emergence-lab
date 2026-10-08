@@ -50,15 +50,19 @@ export function encodeStoredValues(
   params: Readonly<StoredValues>,
   schema: ReadonlyArray<StoredDefault>,
 ): StoredValues {
-  void params;
-  void schema;
-  throw new Error("card 106: encodeStoredValues is not implemented");
+  const stored: StoredValues = { [STORED_VALUES_FORMAT_KEY]: STORED_VALUES_FORMAT };
+  for (const descriptor of schema) {
+    const value = params[descriptor.key];
+    if (value === undefined) continue;
+    if ("default" in descriptor && value === descriptor.default) continue;
+    stored[descriptor.key] = value;
+  }
+  return stored;
 }
 
 /** Whether a stored blob predates the current format marker. */
 export function isLegacyStoredValues(stored: Readonly<StoredValues>): boolean {
-  void stored;
-  throw new Error("card 106: isLegacyStoredValues is not implemented");
+  return stored[STORED_VALUES_FORMAT_KEY] !== STORED_VALUES_FORMAT;
 }
 
 /**
@@ -70,7 +74,10 @@ export function migrateLegacyStoredValues(
   stored: Readonly<StoredValues>,
   retiredDefaults: Readonly<StoredValues>,
 ): StoredValues {
-  void stored;
-  void retiredDefaults;
-  throw new Error("card 106: migrateLegacyStoredValues is not implemented");
+  const migrated = { ...stored };
+  if (!isLegacyStoredValues(stored)) return migrated;
+  for (const [key, retiredDefault] of Object.entries(retiredDefaults)) {
+    if (migrated[key] === retiredDefault) delete migrated[key];
+  }
+  return migrated;
 }
