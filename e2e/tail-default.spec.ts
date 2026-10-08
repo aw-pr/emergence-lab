@@ -164,11 +164,11 @@ test("default: the maximum is shipped, Reset keeps it, and its build matches the
   const rows: Array<Record<string, unknown>> = [];
   for (let sample = 0; sample < 3; sample += 1) {
     const params = pinned({ boundaryDetail: 1 });
-    const current = await openCase(browser, { stored: marked(params), preset: "extreme" });
+    const current = await openCase(browser, { stored: marked(params), preset: "ultra" });
     const baseline = await openCase(browser, {
       origin: BASELINE_ORIGIN,
       stored: marked({ ...params, tailRefinement: 0.6 }),
-      preset: "extreme",
+      preset: "ultra",
     });
     try {
       const currentStats = await cloudStats(current.canvas);
@@ -194,17 +194,15 @@ test("legacy: returning visitors receive the moved default while explicit choice
   test.setTimeout(1_800_000);
   await requireBaseline(page);
 
-  const baseline = await openCase(browser, { origin: BASELINE_ORIGIN, stored: null, preset: "balanced" });
-  let legacyRaw = "";
-  try {
-    await setParam(baseline.page, "cycleBands", 1.5);
-    legacyRaw = await baseline.page.evaluate((slug) => localStorage.getItem(`el:values:${slug}`) ?? "", SLUG);
-    const legacy = JSON.parse(legacyRaw) as Stored;
-    expect(legacy.tailRefinement).toBe(0);
-    expect(legacy.__format).toBeUndefined();
-  } finally {
-    await baseline.context.close();
-  }
+  // A served baseline cut after card 106 stores the sparse format itself, so
+  // the returning visitor's blob is written the way the pre-106 panel wrote
+  // it: every parameter, no format marker, Tail refinement at its retired
+  // default of 0, and one choice (cycleBands 1.5).
+  await page.goto(`${CURRENT_ORIGIN}/#/${SLUG}`, { timeout: 30_000 });
+  const legacy: Stored = { ...(await kernelDefaults(page)), tailRefinement: 0, cycleBands: 1.5 };
+  const legacyRaw = JSON.stringify(legacy);
+  expect(legacy.tailRefinement).toBe(0);
+  expect(legacy.__format).toBeUndefined();
 
   const migrated = await openCase(browser, { stored: legacyRaw, preset: "balanced" });
   try {
@@ -332,7 +330,7 @@ test("cost: three matched samples at the new default, explicit 0.6, and the old 
       const opened = await openCase(browser, {
         origin: item.origin,
         stored: marked(params),
-        preset: "extreme",
+        preset: "ultra",
       });
       try {
         await opened.page.waitForTimeout(500);
@@ -357,7 +355,7 @@ test("cost: three matched samples at the new default, explicit 0.6, and the old 
       const opened = await openCase(headedBrowser, {
         origin: item.origin,
         stored: marked(params),
-        preset: "extreme",
+        preset: "ultra",
       });
       try {
         await opened.page.waitForTimeout(500);

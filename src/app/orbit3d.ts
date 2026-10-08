@@ -1005,6 +1005,16 @@ const COLOUR_MODE_INDEX: Record<Orbit3DColourMode, number> = {
 
 export type Orbit3DPointLayout = "packed" | "stacked";
 
+/** The six per-point attribute buffers one point VAO reads. */
+interface PointBufferSet {
+  positions: WebGLBuffer;
+  periods: WebGLBuffer;
+  centres: WebGLBuffer;
+  boundaries: WebGLBuffer;
+  weights: WebGLBuffer;
+  sampleIndices: WebGLBuffer;
+}
+
 export interface Orbit3DStats {
   /** Points submitted to the draw. */
   pointCount: number;
@@ -1018,7 +1028,7 @@ export interface Orbit3DStats {
   baseCells: number;
   /** Rows the base tier occupies. */
   baseRows: number;
-  /** Slots of the sample-major layout (`u_cellCount` in the point shader). */
+  /** Slots of the sample-major layout, the lower tiers' block and the raised tier's together. */
   slotCount: number;
   /** Sub-cells stored across every refinement tier. */
   refinedSubCells: number;
@@ -1033,8 +1043,9 @@ export interface Orbit3DStats {
   /** Sub-cells of the raised boundary-detail tier (0 when it is inactive). */
   refinedDetailSubCells: number;
   /**
-   * Slots below the raised tier, the value bound to
-   * `u_boundaryDetailBaseCellCount`; the slot count when the tier is inactive.
+   * Slots below the raised tier: the lower tiers' block, which a packed
+   * build draws on its own while the tier is hidden; the slot count when the
+   * tier is inactive.
    */
   detailBaseSlots: number;
   /** Points not hidden by Plotted iterations, from the per-sample-index counts at upload. */
@@ -1133,6 +1144,17 @@ export class Orbit3DPointCloud {
   private readonly boundaryBuffer: WebGLBuffer;
   private readonly weightBuffer: WebGLBuffer;
   private readonly sampleIndexBuffer: WebGLBuffer;
+  /**
+   * The raised boundary-detail tier's own attribute buffers and VAO. Binding
+   * more than about 415 MB of attribute buffers to one point draw roughly
+   * doubles the GPU time per rasterised point on Apple GPUs under ANGLE
+   * Metal (card 107: 34 ms against 65 ms for the same 8.36M points), so the
+   * raised tier, which the opening pose never draws, is kept out of the
+   * lower tiers' buffers and drawn from these only while the camera is
+   * close enough to show it.
+   */
+  private readonly detailBuffers: PointBufferSet;
+  private readonly detailVao: WebGLVertexArrayObject;
   private readonly markerBuffer: WebGLBuffer;
   private readonly quadBuffer: WebGLBuffer;
   private readonly viewProjectionUniform: WebGLUniformLocation;
@@ -1184,7 +1206,10 @@ export class Orbit3DPointCloud {
   private targetWidth = 0;
   private targetHeight = 0;
   private pointCount = 0;
+  /** Points in the main buffers: the lower tiers' slots times sampleCount. */
   private fullPointCount = 0;
+  /** Points in the raised tier's own buffers; 0 unless a packed build stored it apart. */
+  private detailPointCount = 0;
   private pointBudget = 0;
   private sampleCount = DEFAULT_SAMPLE_COUNT;
   private visibleIterations = DEFAULT_SAMPLE_COUNT;
@@ -1276,9 +1301,18 @@ export class Orbit3DPointCloud {
     this.boundaryBuffer = requireResource(gl.createBuffer(), "orbit3d boundary buffer");
     this.weightBuffer = requireResource(gl.createBuffer(), "orbit3d weight buffer");
     this.sampleIndexBuffer = requireResource(gl.createBuffer(), "orbit3d sample-index buffer");
+    this.detailBuffers = {
+      positions: requireResource(gl.createBuffer(), "orbit3d detail point buffer"),
+      periods: requireResource(gl.createBuffer(), "orbit3d detail period buffer"),
+      centres: requireResource(gl.createBuffer(), "orbit3d detail centre buffer"),
+      boundaries: requireResource(gl.createBuffer(), "orbit3d detail boundary buffer"),
+      weights: requireResource(gl.createBuffer(), "orbit3d detail weight buffer"),
+      sampleIndices: requireResource(gl.createBuffer(), "orbit3d detail sample-index buffer"),
+    };
     this.markerBuffer = requireResource(gl.createBuffer(), "orbit3d marker buffer");
     this.quadBuffer = requireResource(gl.createBuffer(), "orbit3d quad buffer");
     this.pointVao = requireResource(gl.createVertexArray(), "orbit3d point VAO");
+    this.detailVao = requireResource(gl.createVertexArray(), "orbit3d detail point VAO");
     this.markerVao = requireResource(gl.createVertexArray(), "orbit3d marker VAO");
     this.groundVao = requireResource(gl.createVertexArray(), "orbit3d ground VAO");
     this.toneMapVao = requireResource(gl.createVertexArray(), "orbit3d tone-map VAO");
@@ -1498,7 +1532,7 @@ export class Orbit3DPointCloud {
       !this.surfaceResourceFailed &&
       this.surfaceFallback === null;
     const slotCount = this.fullPointCount > 0 && this.sampleCount > 0
-      ? Math.floor(this.fullPointCount / this.sampleCount)
+      ? Math.floor((this.fullPointCount + this.detailPointCount) / this.sampleCount)
       : 0;
     return {
       pointCount: this.pointCount,
@@ -1750,9 +1784,30 @@ export class Orbit3DPointCloud {
   private configurePointAttributes(
     layout: "stacked-live" | "prebaked" | "packed",
   ): void {
+    this.bindPointAttributes(this.pointVao, this.mainPointBuffers(), layout);
+    this.quantizedAttributes = layout === "prebaked";
+    this.layout = layout === "packed" ? "packed" : "stacked";
+  }
+
+  private mainPointBuffers(): PointBufferSet {
+    return {
+      positions: this.pointBuffer,
+      periods: this.periodBuffer,
+      centres: this.centreBuffer,
+      boundaries: this.boundaryBuffer,
+      weights: this.weightBuffer,
+      sampleIndices: this.sampleIndexBuffer,
+    };
+  }
+
+  private bindPointAttributes(
+    vao: WebGLVertexArrayObject,
+    buffers: PointBufferSet,
+    layout: "stacked-live" | "prebaked" | "packed",
+  ): void {
     const gl = this.gl;
     const quantized = layout === "prebaked";
-    gl.bindVertexArray(this.pointVao);
+    gl.bindVertexArray(vao);
     const attribute = (
       buffer: WebGLBuffer,
       name: string,
@@ -1767,35 +1822,33 @@ export class Orbit3DPointCloud {
     };
     const scalarType = quantized ? gl.UNSIGNED_BYTE : gl.FLOAT;
     attribute(
-      this.pointBuffer,
+      buffers.positions,
       "a_position",
       3,
       quantized ? gl.UNSIGNED_SHORT : gl.FLOAT,
       quantized,
     );
-    attribute(this.periodBuffer, "a_period", 1, scalarType, quantized);
+    attribute(buffers.periods, "a_period", 1, scalarType, quantized);
     // The centre shares the z coordinate's quantization, so the shader
     // dequantizes it with u_posOffset.z / u_posScale.z alongside a_position.
     attribute(
-      this.centreBuffer,
+      buffers.centres,
       "a_centre",
       1,
       quantized ? gl.UNSIGNED_SHORT : gl.FLOAT,
       quantized,
     );
-    attribute(this.boundaryBuffer, "a_boundary", 1, scalarType, quantized);
-    attribute(this.weightBuffer, "a_weight", 1, scalarType, quantized);
+    attribute(buffers.boundaries, "a_boundary", 1, scalarType, quantized);
+    attribute(buffers.weights, "a_weight", 1, scalarType, quantized);
     const sampleIndexLocation = gl.getAttribLocation(this.pointProgram, "a_sampleIndex");
     if (layout === "packed") {
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.sampleIndexBuffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.sampleIndices);
       gl.enableVertexAttribArray(sampleIndexLocation);
       gl.vertexAttribPointer(sampleIndexLocation, 1, gl.FLOAT, false, 0, 0);
     } else {
       gl.disableVertexAttribArray(sampleIndexLocation);
       gl.vertexAttrib1f(sampleIndexLocation, 0);
     }
-    this.quantizedAttributes = quantized;
-    this.layout = layout === "packed" ? "packed" : "stacked";
   }
 
   /** Force the CPU sampling path for live builds (diagnostic override). */
@@ -1846,17 +1899,44 @@ export class Orbit3DPointCloud {
     positions: Float32Array; periods: Float32Array; centres: Float32Array;
     sampleIndices: Float32Array;
   } {
-    const start = Math.max(0, Math.min(this.fullPointCount, Math.floor(first)));
+    const total = this.fullPointCount + this.detailPointCount;
+    const start = Math.max(0, Math.min(total, Math.floor(first)));
     const length = this.quantizedAttributes || this.building ? 0
-      : Math.max(0, Math.min(Math.floor(count), this.fullPointCount - start));
+      : Math.max(0, Math.min(Math.floor(count), total - start));
     return {
-      positions: this.readFloatAttribute(this.pointBuffer, start, length, 3),
-      periods: this.readFloatAttribute(this.periodBuffer, start, length),
-      centres: this.readFloatAttribute(this.centreBuffer, start, length),
+      positions: this.readPointAttribute((buffers) => buffers.positions, start, length, 3),
+      periods: this.readPointAttribute((buffers) => buffers.periods, start, length),
+      centres: this.readPointAttribute((buffers) => buffers.centres, start, length),
       sampleIndices: this.layout === "packed"
-        ? this.readFloatAttribute(this.sampleIndexBuffer, start, length)
+        ? this.readPointAttribute((buffers) => buffers.sampleIndices, start, length)
         : new Float32Array(0),
     };
+  }
+
+  /**
+   * Read one attribute over point indices that run through the lower tiers'
+   * block and on into the raised tier's, when that is stored apart.
+   */
+  private readPointAttribute(
+    pick: (buffers: PointBufferSet) => WebGLBuffer,
+    start: number,
+    length: number,
+    components = 1,
+  ): Float32Array {
+    const out = new Float32Array(length * components);
+    const mainCount = Math.max(0, Math.min(length, this.fullPointCount - start));
+    if (mainCount > 0) {
+      out.set(this.readFloatAttribute(pick(this.mainPointBuffers()), start, mainCount, components));
+    }
+    const detailCount = length - mainCount;
+    if (detailCount > 0) {
+      const detailFirst = Math.max(0, start - this.fullPointCount);
+      out.set(
+        this.readFloatAttribute(pick(this.detailBuffers), detailFirst, detailCount, components),
+        mainCount * components,
+      );
+    }
+    return out;
   }
 
   /** Sheet positions retain grid coordinates; width and height map them to c. */
@@ -1929,6 +2009,7 @@ export class Orbit3DPointCloud {
     upload(this.weightBuffer, cloud.weights);
     requireNoGlError(gl, "prebaked orbit3d upload");
     this.configurePointAttributes("prebaked");
+    this.releaseDetailBlock();
     this.resetLayoutStats();
     this.samplingPath = "prebaked";
     this.boundaryDetail = "off";
@@ -2093,6 +2174,7 @@ export class Orbit3DPointCloud {
 
     this.pointCount = 0;
     this.fullPointCount = 0;
+    this.releaseDetailBlock();
     this.resetLayoutStats();
     this.pointBudget = gpuPointBudget;
     this.sampleCount = sampleCount;
@@ -2615,6 +2697,7 @@ export class Orbit3DPointCloud {
         );
         this.pointCount = 0;
         this.fullPointCount = 0;
+        this.releaseDetailBlock();
         this.buildTimer = null;
         this.building = false;
         this.buildFailed = true;
@@ -2746,6 +2829,7 @@ export class Orbit3DPointCloud {
 
     this.pointCount = 0;
     this.fullPointCount = 0;
+    this.releaseDetailBlock();
     this.pointBudget = pointBudget;
     this.sampleCount = sampleCount;
     this.visibleIterations = plottedIterations;
@@ -3796,6 +3880,7 @@ export class Orbit3DPointCloud {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.weightBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, submittedWeights, gl.STATIC_DRAW);
         this.configurePointAttributes("stacked-live");
+        this.releaseDetailBlock();
         this.resetLayoutStats();
         this.fullPointCount = submittedSiteCount * submittedSampleCount;
         this.buildBytes = submittedPositions.byteLength
@@ -3839,23 +3924,30 @@ export class Orbit3DPointCloud {
     buildSlice(BUILD_SLICE_MS);
   }
 
-  /** Upload a packed live cloud (either builder) and take its layout stats. */
+  /**
+   * Upload a packed live cloud (either builder) and take its layout stats.
+   * The builder lays every tier out in one sample-major block; the raised
+   * boundary-detail tier's slots are split off into their own buffers here,
+   * so the lower tiers' block is the cloud a detail-0 build would upload.
+   */
   private applyLiveCloud(cloud: OrbitCloudBuffers, label: string): void {
     const gl = this.gl;
     clearGlErrors(gl);
-    const upload = (buffer: WebGLBuffer, data: ArrayBufferView): void => {
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    };
-    upload(this.pointBuffer, cloud.positions);
-    upload(this.periodBuffer, cloud.periods);
-    upload(this.centreBuffer, cloud.centres);
-    upload(this.boundaryBuffer, cloud.boundaries);
-    upload(this.weightBuffer, cloud.weights);
-    upload(this.sampleIndexBuffer, cloud.sampleIndices);
+    const detailSlots = cloud.boundaryDetailBaseSlots > 0
+      ? cloud.slotCount - cloud.boundaryDetailBaseSlots
+      : 0;
+    const baseSlots = cloud.slotCount - detailSlots;
+    this.uploadPointBlock(this.mainPointBuffers(), cloud, 0, baseSlots);
+    if (detailSlots > 0) {
+      this.uploadPointBlock(this.detailBuffers, cloud, baseSlots, detailSlots);
+      this.bindPointAttributes(this.detailVao, this.detailBuffers, "packed");
+      this.detailPointCount = detailSlots * cloud.sampleCount;
+    } else {
+      this.releaseDetailBlock();
+    }
     requireNoGlError(gl, label);
     this.configurePointAttributes("packed");
-    this.fullPointCount = cloud.slotCount * this.sampleCount;
+    this.fullPointCount = baseSlots * this.sampleCount;
     this.boundaryDetailBaseCellCount = cloud.boundaryDetailBaseSlots;
     this.candidateCells = cloud.candidateCells;
     this.boundedCandidates = cloud.boundedCandidates;
@@ -3876,6 +3968,57 @@ export class Orbit3DPointCloud {
     this.refreshPointCount();
     this.buildTimer = null;
     this.pendingSlice = null;
+  }
+
+  /**
+   * Upload slots [firstSlot, firstSlot + slots) of every sample row of a
+   * packed cloud into `buffers`, as a sample-major block `slots` wide.
+   */
+  private uploadPointBlock(
+    buffers: PointBufferSet,
+    cloud: OrbitCloudBuffers,
+    firstSlot: number,
+    slots: number,
+  ): void {
+    const gl = this.gl;
+    const rows = cloud.sampleCount;
+    const whole = firstSlot === 0 && slots === cloud.slotCount;
+    const bytesPerElement = Float32Array.BYTES_PER_ELEMENT;
+    const upload = (buffer: WebGLBuffer, data: Float32Array, components: number): void => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      if (whole) {
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        return;
+      }
+      const rowLength = slots * components;
+      gl.bufferData(gl.ARRAY_BUFFER, rows * rowLength * bytesPerElement, gl.STATIC_DRAW);
+      for (let row = 0; row < rows; row += 1) {
+        const start = (row * cloud.slotCount + firstSlot) * components;
+        gl.bufferSubData(
+          gl.ARRAY_BUFFER,
+          row * rowLength * bytesPerElement,
+          data.subarray(start, start + rowLength),
+        );
+      }
+    };
+    upload(buffers.positions, cloud.positions, 3);
+    upload(buffers.periods, cloud.periods, 1);
+    upload(buffers.centres, cloud.centres, 1);
+    upload(buffers.boundaries, cloud.boundaries, 1);
+    upload(buffers.weights, cloud.weights, 1);
+    upload(buffers.sampleIndices, cloud.sampleIndices, 1);
+  }
+
+  /** Free the raised tier's buffer storage; nothing draws from it until the next detail build. */
+  private releaseDetailBlock(): void {
+    if (this.detailPointCount === 0) return;
+    const gl = this.gl;
+    const empty = new Float32Array(0);
+    for (const buffer of Object.values(this.detailBuffers)) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, empty, gl.STATIC_DRAW);
+    }
+    this.detailPointCount = 0;
   }
 
   /**
@@ -3912,7 +4055,7 @@ export class Orbit3DPointCloud {
       // Every row is submitted; the shader hides rows at or beyond the
       // visible iteration count, so the visible figure is a prefix sum of the
       // per-sample-index occupancy taken at upload.
-      this.pointCount = this.fullPointCount;
+      this.pointCount = this.fullPointCount + this.detailPointCount;
       let visible = 0;
       const upTo = Math.min(this.visibleIterations, this.rowsBySampleIndex.length);
       for (let sample = 0; sample < upTo; sample += 1) {
@@ -4095,7 +4238,9 @@ export class Orbit3DPointCloud {
     );
     gl.uniform1f(this.cellCountUniform, fullCellCount);
     const boundaryDetailActive = this.boundaryDetail === "active";
-    const boundaryDetailBaseCellCount = boundaryDetailActive
+    // With the raised tier stored apart, no slot of the main VAO is raised.
+    const detailStoredApart = this.detailPointCount > 0;
+    const boundaryDetailBaseCellCount = boundaryDetailActive && !detailStoredApart
       ? Math.min(fullCellCount, this.boundaryDetailBaseCellCount)
       : fullCellCount;
     gl.uniform1f(
@@ -4139,7 +4284,22 @@ export class Orbit3DPointCloud {
     gl.uniform1f(this.fanActiveUniform, fanActive ? 1 : 0);
     gl.uniform1f(this.cycleBeamUniform, cycleBeam);
     gl.bindVertexArray(this.pointVao);
-    if (boundaryDetailDrawCellCount < fullCellCount) {
+    if (detailStoredApart) {
+      // The lower tiers are one contiguous block, every row submitted; the
+      // raised tier follows from its own buffers only while it is shown, so
+      // the opening pose binds the lower tiers' bytes alone.
+      gl.drawArrays(gl.POINTS, 0, this.fullPointCount);
+      if (boundaryDetailTierSubmitted) {
+        const detailCellCount = Math.max(
+          1,
+          Math.floor(this.detailPointCount / Math.max(1, this.sampleCount)),
+        );
+        gl.uniform1f(this.cellCountUniform, detailCellCount);
+        gl.uniform1f(this.boundaryDetailBaseCellCountUniform, 0);
+        gl.bindVertexArray(this.detailVao);
+        gl.drawArrays(gl.POINTS, 0, this.detailPointCount);
+      }
+    } else if (boundaryDetailDrawCellCount < fullCellCount) {
       // Points are sample-major, so each submitted row owns one contiguous
       // prefix of lower-tier slots followed by the raised tier. When detail
       // is hidden, submit exactly that prefix per row and no raised vertices.
@@ -4323,6 +4483,8 @@ export class Orbit3DPointCloud {
     gl.deleteBuffer(this.centreBuffer);
     gl.deleteBuffer(this.boundaryBuffer);
     gl.deleteBuffer(this.weightBuffer);
+    for (const buffer of Object.values(this.detailBuffers)) gl.deleteBuffer(buffer);
+    gl.deleteVertexArray(this.detailVao);
     gl.deleteBuffer(this.markerBuffer);
     gl.deleteBuffer(this.quadBuffer);
     gl.deleteProgram(this.pointProgram);

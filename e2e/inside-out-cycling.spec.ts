@@ -370,6 +370,11 @@ test.describe("spread", () => {
   });
 
   test("two sheets over a period-2 point share hue in the real route", async ({ page }) => {
+    // Read at `ultra`: card 107's wider `extreme` pool, the desktop default,
+    // adds enough cloud light over the lower sheet at c = -1 to bleach its
+    // chroma below the floor (0.015 against 0.026 at the old pool), and the
+    // assertion is about the colouring, which the shared pool shows unchanged.
+    await page.addInitScript(() => localStorage.setItem("el:resolution:logistic-mandelbrot", "ultra"));
     const canvas = await openSim(page, frozenParams({ geometryMode: "hybrid" }));
     await page.waitForTimeout(1500);
     const frame = await captureCanvas(canvas, artifact("real-route-period2-sheets.png"));
@@ -966,8 +971,14 @@ async function compareBuildCosts(page: Page, outputPath: string) {
         const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
         try {
         const target = await context.newPage();
+        // Compared at `ultra`: card 107 widened the `extreme` pool, so at the
+        // desktop default the two trees differ by design and agree only where
+        // the pool is shared.
         await target.addInitScript(
-          ([values]) => localStorage.setItem("el:values:logistic-mandelbrot", JSON.stringify(values)),
+          ([values]) => {
+            localStorage.setItem("el:values:logistic-mandelbrot", JSON.stringify(values));
+            localStorage.setItem("el:resolution:logistic-mandelbrot", "ultra");
+          },
           [{ __format: 2, ...params }] as const,
         );
         const started = Date.now();

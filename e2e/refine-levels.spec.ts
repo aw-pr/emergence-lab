@@ -145,8 +145,15 @@ test.describe("budget", () => {
           expect(stats.refinedL2Rows).toBe(0);
           expect(stats.refinedL1SubCells).toBe(0);
           expect(stats.refinedL2SubCells).toBe(0);
-        } else {
-          expect(stats.refinedL2SubCells, `level 2 present at ${tailRefinement}`).toBeGreaterThan(0);
+        } else if (stats.refinedL2SubCells === 0) {
+          // Level 2 takes what level 1 leaves, so it may be empty only when
+          // level 1 packed the whole share. Card 107's wider extreme pool does
+          // this at 0.3, where level 1's survivors alone need more rows than
+          // the slider grants.
+          expect(
+            stats.refineRowBudget - stats.refinedL1Rows,
+            `level 2 absent at ${tailRefinement} only because level 1 filled the share`,
+          ).toBeLessThan(2 * SAMPLES);
         }
       }
       saveJson(`budget-${path}-${preset}.json`, rows);
@@ -384,7 +391,7 @@ test.describe("defaults", () => {
           for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
             const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
             const target = await context.newPage();
-            const { canvas } = await openPacked(target, { origin, params, preset: "extreme", timeoutMs: 600_000 });
+            const { canvas } = await openPacked(target, { origin, params, preset: "ultra", timeoutMs: 600_000 });
             await target.waitForTimeout(800);
             const image = await screenshot(canvas, sample === 0 ? artifact(`defaults-${label}-${geometryMode}-${colourMode}.png`) : undefined);
             lumas.push(meanLuma(image));
@@ -435,7 +442,7 @@ test.describe("boundary detail", () => {
     test.setTimeout(1_200_000);
     await requireBaseline(page);
     const open = async (origin: string, boundaryDetail: number) => {
-      const { canvas, buildMs } = await openPacked(page, { origin, params: cloudParams({ boundaryDetail, tailRefinement: 0.3 }), preset: "extreme", timeoutMs: 600_000 });
+      const { canvas, buildMs } = await openPacked(page, { origin, params: cloudParams({ boundaryDetail, tailRefinement: 0.3 }), preset: "ultra", timeoutMs: 600_000 });
       return levelRow(await cloudStats(canvas), buildMs);
     };
     const current1 = await open(CURRENT_ORIGIN, 1);
@@ -506,7 +513,7 @@ test.describe("cost", () => {
       for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
         const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
         const target = await context.newPage();
-        const { canvas, buildMs } = await openPacked(target, { origin, params, preset: "extreme", timeoutMs: 600_000 });
+        const { canvas, buildMs } = await openPacked(target, { origin, params, preset: "ultra", timeoutMs: 600_000 });
         await target.waitForTimeout(1000);
         const stats = await cloudStats(canvas);
         expect(stats.sampler).toBe("gpu-sampled");

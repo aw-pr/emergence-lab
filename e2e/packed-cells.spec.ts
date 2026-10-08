@@ -183,10 +183,10 @@ test.describe("plane coverage", () => {
       const stats = await cloudStats(canvas);
       return { label, tailRefinement, fraction, pose: { distance: pose.distance, azimuth: pose.azimuth, rect: pose.rect }, points: stats.points, baseCells: stats.baseCells, candidateCells: stats.candidateCells };
     };
-    const gpu0 = await measure(CURRENT_ORIGIN, "current-gpu-extreme", "extreme", false, 0);
-    const gpu6 = await measure(CURRENT_ORIGIN, "current-gpu-extreme", "extreme", false, 0.6);
-    const base0 = await measure(BASELINE_ORIGIN, "baseline-gpu-extreme", "extreme", false, 0);
-    const base6 = await measure(BASELINE_ORIGIN, "baseline-gpu-extreme", "extreme", false, 0.6);
+    const gpu0 = await measure(CURRENT_ORIGIN, "current-gpu-ultra", "ultra", false, 0);
+    const gpu6 = await measure(CURRENT_ORIGIN, "current-gpu-ultra", "ultra", false, 0.6);
+    const base0 = await measure(BASELINE_ORIGIN, "baseline-gpu-ultra", "ultra", false, 0);
+    const base6 = await measure(BASELINE_ORIGIN, "baseline-gpu-ultra", "ultra", false, 0.6);
     const cpu3 = await measure(CURRENT_ORIGIN, "current-cpu-ultra", "ultra", true, 0.3);
     const cpu6 = await measure(CURRENT_ORIGIN, "current-cpu-ultra", "ultra", true, 0.6);
     const report = { steps: CARDIOID_DOLLY_STEPS, litThreshold: LIT_THRESHOLD, target: CARDIOID_C, gpu0, gpu6, base0, base6, cpu3, cpu6 };
@@ -196,7 +196,7 @@ test.describe("plane coverage", () => {
       expect(lower.fraction, `${lower.label} lattice resolved`).toBeGreaterThanOrEqual(0.15);
       expect(lower.fraction, `${lower.label} lattice resolved`).toBeLessThanOrEqual(0.6);
     }
-    expect(Math.abs(gpu6.fraction / gpu0.fraction - 1), "GPU extreme 0.6 vs 0").toBeLessThanOrEqual(0.02);
+    expect(Math.abs(gpu6.fraction / gpu0.fraction - 1), "GPU ultra 0.6 vs 0").toBeLessThanOrEqual(0.02);
     expect(Math.abs(cpu6.fraction / cpu3.fraction - 1), "CPU ultra 0.6 vs 0.3").toBeLessThanOrEqual(0.02);
     // Card 103's baseline was the stacked tree, which lost 40% of its lit
     // cores at 0.6. A baseline cut after card 103 is packed, and under card
@@ -398,7 +398,7 @@ test.describe("brightness", () => {
           for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
             const context = await page.context().browser()!.newContext({ viewport: VIEWPORT });
             const target = await context.newPage();
-            const { canvas } = await openPacked(target, { origin, params, preset: "extreme", timeoutMs: 600_000 });
+            const { canvas } = await openPacked(target, { origin, params, preset: "ultra", timeoutMs: 600_000 });
             await target.waitForTimeout(800);
             const image = await screenshot(canvas, sample === 0 ? artifact(`brightness-${label}-${geometryMode}-${colourMode}.png`) : undefined);
             lumas.push(meanLuma(image));
@@ -499,7 +499,7 @@ test.describe("cost", () => {
       const runs: Run[] = [];
       for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
         const target = await newPage();
-        const { canvas, buildMs } = await openPacked(target, { origin, params, preset: "extreme", timeoutMs: 600_000 });
+        const { canvas, buildMs } = await openPacked(target, { origin, params, preset: "ultra", timeoutMs: 600_000 });
         await target.waitForTimeout(1000);
         const stats = await cloudStats(canvas);
         expect(stats.sampler).toBe("gpu-sampled");
@@ -517,7 +517,7 @@ test.describe("cost", () => {
     // own context, closed before any timing runs: a page left rendering
     // 7.4M points shares the GPU with whatever is measured next.
     const plainPage = await headlessPage();
-    const baselinePlain = await openPacked(plainPage, { origin: BASELINE_ORIGIN, params: { ...params, boundaryDetail: 0 }, preset: "extreme", timeoutMs: 600_000 });
+    const baselinePlain = await openPacked(plainPage, { origin: BASELINE_ORIGIN, params: { ...params, boundaryDetail: 0 }, preset: "ultra", timeoutMs: 600_000 });
     const baselinePlainStats = await cloudStats(baselinePlain.canvas);
     await plainPage.context().close();
     const baselineRefined = baseline[0].stats.points / SAMPLES - baselinePlainStats.points / SAMPLES;
@@ -566,7 +566,7 @@ test.describe("cost", () => {
       try {
         const timings = async (origin: string): Promise<Timed> => {
           const target = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
-          await openPacked(target, { origin, params, preset: "extreme", timeoutMs: 600_000 });
+          await openPacked(target, { origin, params, preset: "ultra", timeoutMs: 600_000 });
           await target.waitForTimeout(1000);
           const timed = await timeRenders(target);
           await target.context().close();

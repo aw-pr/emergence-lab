@@ -6,6 +6,7 @@
  * production `?orbit3dSampler=cpu` diagnostic.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
+import { RESOLUTION_TARGETS, type ResolutionPreset } from "../../src/app/resolutionPreset.ts";
 import { decodePng, type DecodedImage } from "./frame.ts";
 import { SLUG, projectToCanvas, type SimParams } from "./insideOut.ts";
 
@@ -13,14 +14,9 @@ export const PACKED_ARTIFACT_DIR = "e2e/artifacts/packed-cells";
 export const CURRENT_ORIGIN = "http://localhost:5173";
 export const BASELINE_ORIGIN = process.env.PACKED_CELLS_BASELINE_URL ?? "http://localhost:5174";
 
-export type ResolutionPreset = "performance" | "balanced" | "high" | "ultra" | "extreme";
-export const PRESET_TARGETS: Record<ResolutionPreset, number> = {
-  performance: 384 * 384,
-  balanced: 640 * 640,
-  high: 960 * 960,
-  ultra: 1280 * 1280,
-  extreme: 1920 * 1920,
-};
+export type { ResolutionPreset };
+/** The production cell targets, so a suite's "within 2% of the pool" follows the preset module. */
+export const PRESET_TARGETS: Readonly<Record<ResolutionPreset, number>> = RESOLUTION_TARGETS;
 
 export interface OpenOptions {
   params: SimParams;
