@@ -132,3 +132,42 @@ Criterion 4's cost bar (GPU frame-time ratio <=1.5 at the desktop default, detai
 Propose one of: (a) relax criterion 4's GPU-frame-time bar specifically for the wider-pool default, citing the measured threshold; (b) scope this card to ship the wider pool at a detail level or tail setting that stays under the roughly 446MB threshold by default, with detail 1 at 0.6 as an opt-in rather than the shipped default (the audit names three capping options at docs/audits/107-extreme-pool.md); or (c) accept the regression as a documented tradeoff and amend the bar's applicability.
 
 Separately, criterion 1 fails on three sub-assertions that are consequences of widening the pool interacting with earlier cards' fixed test expectations, not of this card's own named deliverables: refine-levels' card-105 budget test at tailRefinement 0.3 (level 1 now fills the whole share, leaving level 2 empty — e2e/refine-levels.spec.ts:143-150), the cycling frozen-contract's hybrid-default chroma floor (0.0146 measured vs required >0.02 — e2e/inside-out-cycling.spec.ts:382-393), and tail-default's own pre-106 legacy baseline assumption (e2e/tail-default.spec.ts:197-204, independent of this card). Making criterion 1 pass without editing those earlier cards' frozen blocks may not be possible from inside stage 107's scope. Worth deciding whether those three assertions need their own amendment too, or whether this card's cost/default-shipping tension is resolved first and the regressions are re-measured against the resolved version.
+
+## Re-brief (attempt 2, 2026-10-08, after verifier FAIL on cost and three near-miss regressions)
+
+Restore the preserved commit 50f3f0d8aa537a0fdb10bb171868dc1904353e6f (branch
+wip/107-logistic-mandelbrot-extreme-pool-attempt-1) rather than starting over.
+Six of eight criteria already pass cleanly on independent reruns and should
+not be touched: the pool/base-tier/budget accounting (2), the denser plane
+(3), boundary detail gating (5), the CPU fallback (6), the prebaked path (7),
+and the operator evidence (8). Keep that work.
+
+Two criteria failed and both are real, fixable implementation gaps, not
+card-wording problems:
+
+- **Criterion 4 (cost at the desktop default):** the GPU timer came in at
+  65.261 ms current vs 25.771 ms baseline, a 2.532x ratio against a <=1.5x
+  bar (build time 1.309x and both byte bars were within tolerance). The
+  extreme-pool change is too expensive on the GPU path at the desktop
+  default specifically; profile what the extra refinement work costs on the
+  GPU timer and bring it back under 1.5x, even if that means trimming where
+  the extra density is spent at that specific tier.
+- **Criterion 1 (regression and frozen contracts):** three suites each
+  missed by a small, specific margin — not broad regressions:
+  - `e2e/refine-levels.spec.ts:143-150` — gpu extreme at tailRefinement 0.3
+    produced `refinedL2SubCells=0` against the `>0` assertion.
+  - `e2e/tail-default.spec.ts:197-204` — legacy baseline value was
+    `undefined` against an expected `0`.
+  - `e2e/inside-out-cycling.spec.ts:382-393` — sheet z=-1 chroma was
+    0.014614 against a `>0.02` threshold.
+
+  Also: the verifier flagged that the dirty tree touches
+  `e2e/packed-cells.spec.ts` and `e2e/inside-out-cycling.spec.ts` beyond the
+  four comparisons deliverable 4 names to re-point. Re-check that those
+  touches are deliberate and scoped, not incidental fallout from the cost
+  fix.
+
+Re-run `npm run verify` and `scripts/check-contract-test-gate.sh --worktree`
+after addressing both, plus the full extreme-pool e2e suite (note: its cost
+case launches headed Chromium — that's fine for the worker; the verifier
+reruns it headless-only).
