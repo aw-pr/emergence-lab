@@ -122,3 +122,11 @@ Verifier writes the schema-valid `state/verifiers/106-logistic-mandelbrot-tail-r
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex worker seat so it can launch the browser. The Claude verifier takes the CLI transport (`.autometta.local.yaml`) and runs browser checks headless through Playwright with the same config.
+
+## Re-brief 1 (2026-10-08)
+
+Attempt 1's verifier failed criterion 1 on one assertion only, `e2e/refine-levels.spec.ts` "0.6 denser than the baseline at 0.6", and recorded the cause as a card defect: card 105 wrote that assertion to compare its two-level build against a one-level baseline, but this card's dispatch base is card 105's own commit (`4f982833e`), so both sides build the same cloud and measure the same density. Deliverable 4 forbids editing the assertion, and that stays true.
+
+Correction to criterion 1, for the `e2e/refine-levels.spec.ts` run only: serve as the baseline on port 5174 the tree card 105 was written against, `1c2abeb57` (card 105's dispatch base), by the same audit 100 recipe. Every other suite in criterion 1, and criteria 2 to 6, keep the dispatch base (`4f982833e`) as their served baseline. No assertion, frozen block or contract file changes.
+
+Attempt 1's implementation stands; criteria 2 to 6 passed. The verifier re-runs criterion 1 in full with this correction, then confirms criteria 2 to 6 still hold on the tree as left. The audit may note which baseline served each suite.
