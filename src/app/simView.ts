@@ -76,9 +76,11 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
     "tailRefinement",
     "boundaryDetail",
     "pointDensity",
+    "zoomGrowth",
     "autoRotate",
     "continuousSpin",
     "cycleSpeed",
+    "cycleBands",
     "cascadeReveal",
     "cascadeDuration",
     "realSliceOnly",
@@ -562,7 +564,11 @@ export async function renderSimView(
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
-    fractalPaletteCycleUi: fractal,
+    // The orbit renderer's Cycle and Inside-out modes share the fractal
+    // palette phase, so they get the same direction control; the arrow-key
+    // speed binding stays fractal-only, so its hint does too.
+    fractalPaletteCycleUi: fractal || slug === "logistic-mandelbrot",
+    paletteCycleKeyboardHint: fractal,
     viewParamKeys: VIEW_PARAM_KEYS[slug] ?? [],
     callbacks: {
       onPlayPause: () => {

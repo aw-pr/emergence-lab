@@ -14,6 +14,8 @@
  * Everything here is pure and deterministic: no DOM, no WebGL, no RNG.
  */
 
+import { cycleHierarchy } from "../../app/orbitHierarchy.js";
+
 export const RE_MIN = -2;
 export const RE_MAX = 1;
 export const IM_MIN = -1;
@@ -60,6 +62,16 @@ export function periodDetectionWindow(sampleCount: number): number {
 export const PERIOD_TOLERANCE = 1e-4;
 
 /**
+ * Iterates that estimate the orbit's centre height and spread when no period
+ * is detected. A detected period-q cycle needs exactly q iterates for an
+ * exact mean; a chaotic orbit's running mean converges as 1/sqrt(N), and the
+ * orbit-spread audit (docs/audits/2026-10-02-orbit-spread-colouring.md,
+ * decision 1) measured 1024 as RMS error 0.0135 height units on the real
+ * axis for +4.4% of the sampler's iterations.
+ */
+export const SPREAD_WINDOW_ITERATIONS = 1024;
+
+/**
  * Squared distance below which the warmup orbit is treated as having landed
  * on its attracting cycle (Brent-style revisit check). Far stricter than
  * PERIOD_TOLERANCE so an early exit never changes what the sample window
@@ -102,6 +114,16 @@ export interface AttractorField {
 export interface AttractorCellMeasure {
   /** Attracting-cycle multiplier magnitude; 1 when no period is detected. */
   interior: number;
+  /**
+   * Mean of Re(z) over exactly one cycle of the detected period, or over
+   * SPREAD_WINDOW_ITERATIONS iterates when no period is detected. 0 for an
+   * escaped cell: read the escape classification, never this value.
+   */
+  centre: number;
+  /** RMS deviation of Re(z) about `centre` over the same iterates. */
+  spread: number;
+  /** Parent centre of each plotted sample, when the caller supplies a full window. */
+  sampleCentres?: Float32Array;
 }
 
 /** Centre of grid cell `index` along an axis spanning [min, max]. */
@@ -191,6 +213,7 @@ export function sampleAttractorCell(
 
     if (zr * zr + zi * zi > escapeSquared) {
       samplesOut.fill(0, offset, offset + sampleCount);
+      clearMeasure(measureOut);
       return ESCAPED;
     }
 
@@ -217,6 +240,7 @@ export function sampleAttractorCell(
 
     if (zr * zr + zi * zi > escapeSquared) {
       samplesOut.fill(0, offset, offset + sampleCount);
+      clearMeasure(measureOut);
       return ESCAPED;
     }
 
@@ -265,20 +289,55 @@ export function sampleAttractorCell(
     // Measured from the end of the plot window, not the end of the detection
     // tail: the cycle multiplier is the same either way, and holding the
     // start point fixed keeps this figure identical to the pre-decoupling one.
+    // The centre and spread share the walk: one exact cycle when a period is
+    // known, otherwise a long running window (Welford, so the spread of a
+    // near-constant orbit does not cancel to noise).
     let multiplier = 1;
-    if (period > 0) {
-      let cycleR = zr;
-      let cycleI = zi;
-      for (let step = 0; step < period; step += 1) {
-        const nextR = cycleR * cycleR - cycleI * cycleI + cRe;
-        cycleI = 2 * cycleR * cycleI + cIm;
-        cycleR = nextR;
+    let mean = 0;
+    let squares = 0;
+    let count = 0;
+    let cycleR = zr;
+    let cycleI = zi;
+    const steps = period > 0 ? period : SPREAD_WINDOW_ITERATIONS;
+    for (let step = 0; step < steps; step += 1) {
+      const nextR = cycleR * cycleR - cycleI * cycleI + cRe;
+      cycleI = 2 * cycleR * cycleI + cIm;
+      cycleR = nextR;
+      if (period > 0) {
         multiplier *= 2 * Math.hypot(cycleR, cycleI);
+      } else if (cycleR * cycleR + cycleI * cycleI > escapeSquared) {
+        break;
       }
+      count += 1;
+      const delta = cycleR - mean;
+      mean += delta / count;
+      squares += delta * (cycleR - mean);
     }
     measureOut.interior = Math.max(0, Math.min(1, multiplier));
+    measureOut.centre = mean;
+    measureOut.spread = count > 0 ? Math.sqrt(Math.max(0, squares) / count) : 0;
+    const sampleCentres = measureOut.sampleCentres;
+    if (sampleCentres && sampleCentres.length >= sampleCount) {
+      if (period > 0) {
+        const heights = detectionCount <= sampleCount
+          ? samplesOut.subarray(offset, offset + period)
+          : detectionWindow;
+        const parents = cycleHierarchy(heights, period).centres;
+        for (let i = 0; i < sampleCount; i += 1) sampleCentres[i] = parents[i % period];
+      } else {
+        sampleCentres.fill(mean, 0, sampleCount);
+      }
+    }
   }
   return period;
+}
+
+function clearMeasure(measureOut?: AttractorCellMeasure): void {
+  if (!measureOut) return;
+  measureOut.interior = 1;
+  measureOut.centre = 0;
+  measureOut.spread = 0;
+  measureOut.sampleCentres?.fill(0);
 }
 
 /** Sample every cell of a c-grid in one pass. */

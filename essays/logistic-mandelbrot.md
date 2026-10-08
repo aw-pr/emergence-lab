@@ -64,10 +64,29 @@ in every direction, not just along the real line.
 - Orbit the camera around the full object to see off-axis bulbs hold their
   cycles as separate sheets exactly above their bulbs on the ground plane.
 - Switch the colour mode: period tints each bulb by the length of its cycle,
-  inside-out grades the sheets by attraction strength, and mono keeps the
-  plain additive glow. Cycle uses the escape-time palette outside the set,
-  extends its bands inward by distance from the boundary, and carries those
-  colours up through the attractor sheets by orbit height.
+  and mono keeps the plain additive glow. Cycle uses the escape-time palette
+  outside the set, extends its bands inward by distance from the boundary,
+  and carries those colours up through the attractor sheets by orbit height.
+- Inside-out colours by distance from each point's parent cycle point: the
+  mean of the cycle group it was born from, so bands leave each satellite
+  bulb at its own root. Primary bulbs use the column's cycle mean and chaotic
+  columns use a long running mean; call this centre height h0. Each point reads the palette at
+  fract(bands · |Re(z) − h0| − phase), so colour depends only on how far the
+  point sits above or below its parent centre, mirrored: the two branches
+  of a period-2 cycle are equally far from h0 = −1/2 and share a hue, and a
+  period-1 sheet sits at distance zero, so the whole cardioid takes one
+  colour that changes with the phase. The cycle speed carries each band out
+  of the centre upward and downward along the sheets; reverse brings them
+  back in; speed 0 holds them still; bands per unit is the number of palette
+  laps per unit of height distance. The chaotic band is coloured the same
+  way, running through several laps between its extremes, and the vertical
+  seams in it are the attractor's own crises, where the mean jumps. Under the
+  sheets the ground reads fract(bands · spread − phase), the column's RMS
+  deviation about its centre, so it is one flat phase-cycling colour under
+  the cardioid and matches the sheets above it over the period-2 bulb;
+  outside the set it keeps its escape-time colouring. With a noncyclic
+  palette the bands carry that palette's end-to-end seam, which is a
+  feature of the palette, not of the dynamics.
 
 ## Further reading
 

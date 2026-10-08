@@ -641,11 +641,13 @@ test("metadata matches the renderer contract", () => {
       "tailRefinement",
       "boundaryDetail",
       "pointDensity",
+      "zoomGrowth",
       "autoRotate",
       "continuousSpin",
       "realAxisSweep",
       "sweepSpeed",
       "cycleSpeed",
+      "cycleBands",
       "cascadeReveal",
       "cascadeDuration",
       "warmupIterations",
@@ -673,8 +675,14 @@ test("metadata matches the renderer contract", () => {
   }
 
   const colourMode = kernel.paramSchema.find((d) => d.key === "colourMode");
-  assert.equal(colourMode?.default, "cycle");
+  assert.equal(colourMode?.default, "inside-out");
   assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
+  const exposure = kernel.paramSchema.find((d) => d.key === "exposure");
+  assert.equal(exposure?.default, 0.5);
+  const cycleBands = kernel.paramSchema.find((d) => d.key === "cycleBands");
+  assert.equal(cycleBands?.default, 4);
+  const edgeGlow = kernel.paramSchema.find((d) => d.key === "edgeGlow");
+  assert.equal(edgeGlow?.default, 0.25);
 
   const geometryMode = kernel.paramSchema.find((d) => d.key === "geometryMode");
   assert.deepEqual(geometryMode?.options, ["cloud", "hybrid"]);
@@ -692,7 +700,7 @@ test("metadata matches the renderer contract", () => {
   );
 
   const cycleSpeed = kernel.paramSchema.find((d) => d.key === "cycleSpeed");
-  assert.equal(cycleSpeed?.default, 0.06);
+  assert.equal(cycleSpeed?.default, 0.1);
   assert.equal(cycleSpeed?.min, 0);
   assert.equal(cycleSpeed?.max, 5);
   assert.equal(cycleSpeed?.step, 0.001);

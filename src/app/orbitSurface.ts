@@ -3,6 +3,8 @@ export interface OrbitSurfaceCells {
   height: number;
   sampleCount: number;
   samples: Float32Array;
+  /** Parent centres in the same cell-major order as samples. */
+  sampleCentres?: Float32Array;
   periods: Int16Array;
   interiors: Float32Array;
   boundaries: Float32Array;
@@ -27,6 +29,8 @@ export interface OrbitSurfaceMesh {
 
 export interface OrbitSurfaceSample {
   samples: ArrayLike<number>;
+  /** Parent of each unsorted cycle rank, sharing sampleOffset with samples. */
+  sampleCentres?: ArrayLike<number>;
   sampleOffset?: number;
   period: number;
   interior: number;
@@ -702,10 +706,10 @@ export function buildOrbitSurface(
         usable = false;
         break;
       }
-      sorted[rank] = value;
+      sorted[rank] = rank;
     }
     if (!usable) continue;
-    sorted.sort((left, right) => left - right);
+    sorted.sort((left, right) => cells.samples[sampleOffset + left] - cells.samples[sampleOffset + right]);
 
     const x = cell % width;
     const y = (cell - x) / width;
@@ -714,9 +718,9 @@ export function buildOrbitSurface(
     const interior = finiteOr(cells.interiors[cell], 1);
     const boundary = finiteOr(cells.boundaries[cell], 0);
     for (let rank = 0; rank < period; rank += 1) {
-      positionValues.push(x, y, sorted[rank]);
+      positionValues.push(x, y, cells.samples[sampleOffset + sorted[rank]]);
       periodValues.push(period);
-      interiorValues.push(interior);
+      interiorValues.push(cells.sampleCentres?.[sampleOffset + sorted[rank]] ?? interior);
       boundaryValues.push(boundary);
       rankValues.push(rank);
       dissolveValues.push(clamp01(cells.dissolves?.[cell] ?? 1));
@@ -961,6 +965,7 @@ export function buildOrbitSurface(
     const sample: OrbitSurfaceSample = baseCell >= 0
       ? {
           samples: cells.samples,
+          sampleCentres: cells.sampleCentres,
           sampleOffset: baseCell * sampleCount,
           period: cells.periods[baseCell] ?? 0,
           interior: finiteOr(cells.interiors[baseCell], 1),
@@ -979,6 +984,7 @@ export function buildOrbitSurface(
             escaped: true,
           };
     const period = orbitSurfaceSamplePeriod(sample, sampleCount);
+    const sorted = sortedSurfaceSamples(sample, period);
     const point: PreparedSurfacePoint = {
       x,
       y,
@@ -986,11 +992,12 @@ export function buildOrbitSurface(
       baseCell,
       sample,
       period,
+      centres: sorted.centres,
       heights: conformingSurfaceHeights(
         x,
         y,
         period,
-        sortedSurfaceHeights(sample, period),
+        sorted.heights,
       ),
     };
     sampledPoints.set(key, point);
@@ -1012,7 +1019,7 @@ export function buildOrbitSurface(
     const vertex = periodValues.length;
     positionValues.push(point.x, point.y, point.heights[rank]);
     periodValues.push(period);
-    interiorValues.push(finiteOr(point.sample.interior, 1));
+    interiorValues.push(finiteOr(point.centres[rank], 1));
     boundaryValues.push(finiteOr(point.sample.boundary, 0));
     rankValues.push(rank);
     dissolveValues.push(clamp01(point.sample.dissolve ?? 1));
@@ -1053,12 +1060,12 @@ export function buildOrbitSurface(
       sample = transition.samplesByPeriod.get(period) ?? fallback.sample;
       transitionPoint = transition.pointsByPeriod.get(period) ?? transition;
     }
-    const heights = sortedSurfaceHeights(sample, period);
-    const height = finiteOr(heights[rank], fallback.heights[rank]);
+    const sorted = sortedSurfaceSamples(sample, period);
+    const height = finiteOr(sorted.heights[rank], fallback.heights[rank]);
     const vertex = periodValues.length;
     positionValues.push(transitionPoint.x, transitionPoint.y, height);
     periodValues.push(period);
-    interiorValues.push(finiteOr(sample.interior, fallback.sample.interior));
+    interiorValues.push(finiteOr(sorted.centres[rank], fallback.centres[rank]));
     boundaryValues.push(finiteOr(sample.boundary, fallback.sample.boundary));
     rankValues.push(rank);
     const chaosTransition = first.period === 0 || second.period === 0;
@@ -1073,18 +1080,17 @@ export function buildOrbitSurface(
     return vertex;
   }
 
-  function sortedSurfaceHeights(
+  function sortedSurfaceSamples(
     sample: OrbitSurfaceSample,
     period: number,
-  ): number[] {
-    if (period <= 0) return [];
+  ): { heights: number[]; centres: number[] } {
     const offset = Math.max(0, Math.floor(sample.sampleOffset ?? 0));
-    const heights = new Array<number>(period);
-    for (let rank = 0; rank < period; rank += 1) {
-      heights[rank] = sample.samples[offset + rank];
-    }
-    heights.sort((left, right) => left - right);
-    return heights;
+    const order = Array.from({ length: period }, (_, rank) => rank);
+    order.sort((left, right) => sample.samples[offset + left] - sample.samples[offset + right]);
+    return {
+      heights: order.map((rank) => sample.samples[offset + rank]),
+      centres: order.map((rank) => sample.sampleCentres?.[offset + rank] ?? sample.interior),
+    };
   }
 
   function conformingSurfaceHeights(
@@ -1157,6 +1163,7 @@ interface PreparedSurfacePoint extends OrbitSurfaceSamplePoint {
   baseCell: number;
   period: number;
   heights: number[];
+  centres: number[];
 }
 
 function pointKey(x: number, y: number): string {

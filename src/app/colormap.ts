@@ -1,4 +1,5 @@
 /**
+ *
  * Generic float-channel -> RGB mapping.
  *
  * Kernels only expose floats; colour is a renderer concern. The options here
@@ -14,12 +15,16 @@ export type ColourPreset =
   | "plasma"
   | "inferno"
   | "magma"
+  | "magma-cyclic"
   | "turbo"
   | "twilight"
   | "phase"
   | "sand"
   | "ice"
   | "amber"
+  | "rosewood"
+  | "dusk"
+  | "verdigris"
   | "brian"
   | "binary"
   | "chemical"
@@ -56,12 +61,16 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "plasma", label: "Plasma" },
   { value: "inferno", label: "Inferno" },
   { value: "magma", label: "Magma" },
+  { value: "magma-cyclic", label: "Magma (cyclic)" },
   { value: "turbo", label: "Turbo" },
   { value: "twilight", label: "Twilight (cyclic)" },
   { value: "phase", label: "Phase silk (cyclic)" },
   { value: "sand", label: "Avalanche glow" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
+  { value: "rosewood", label: "Rosewood" },
+  { value: "dusk", label: "Dusk" },
+  { value: "verdigris", label: "Verdigris" },
   { value: "brian", label: "Brian's Brain" },
   { value: "binary", label: "Binary" },
   { value: "chemical", label: "Chemical blend" },
@@ -74,11 +83,12 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
  * (fract) without a visible seam sweeping through the image. Consumed by the
  * renderer's palette-cycling path.
  */
-type CyclicPreset = "twilight" | "phase";
+type CyclicPreset = "twilight" | "phase" | "magma-cyclic";
 
 const CYCLIC_PRESETS: ReadonlySet<string> = new Set<CyclicPreset>([
   "twilight",
   "phase",
+  "magma-cyclic",
 ]);
 
 /** Narrows to the ramp presets, which is what lets callers hand a cyclic
@@ -131,6 +141,17 @@ const RAMPS: Record<
     [0.75, [251, 136, 97]],
     [1, [252, 253, 191]],
   ],
+  // A lifted purple floor preserves faint detail; rose closes the warm loop
+  // without retracing the outward ramp or snapping from cream to black.
+  "magma-cyclic": [
+    [0, [40, 16, 60]],
+    [0.18, [104, 28, 128]],
+    [0.36, [190, 58, 111]],
+    [0.52, [247, 139, 96]],
+    [0.64, [252, 235, 183]],
+    [0.8, [184, 78, 114]],
+    [1, [40, 16, 60]],
+  ],
   turbo: [
     [0, [48, 18, 59]],
     [0.14, [50, 100, 220]],
@@ -168,6 +189,33 @@ const RAMPS: Record<
     [0.28, [92, 35, 8]],
     [0.62, [238, 156, 24]],
     [1, [255, 246, 184]],
+  ],
+  // Seam ramps from the 2026-09-19 cycle-palette sweep
+  // (scripts/sweep-cycle-palette.mjs): five OKLCH stops, dark floor to a
+  // bright ceiling, with a deliberate luminance seam at the wrap so palette
+  // cycling shows one hard band edge per lap. Rosewood is the warm pick
+  // (rose to amber, cream ceiling), Dusk the cool one (red through violet to
+  // sky), Verdigris the cool-to-warm one with a held-chroma ceiling.
+  rosewood: [
+    [0, [6, 2, 6]],
+    [0.25, [87, 2, 49]],
+    [0.5, [168, 53, 62]],
+    [0.75, [223, 131, 88]],
+    [1, [255, 235, 210]],
+  ],
+  dusk: [
+    [0, [7, 2, 3]],
+    [0.25, [72, 15, 80]],
+    [0.5, [93, 82, 180]],
+    [0.75, [87, 164, 233]],
+    [1, [209, 246, 253]],
+  ],
+  verdigris: [
+    [0, [0, 4, 6]],
+    [0.25, [0, 63, 39]],
+    [0.5, [57, 117, 0]],
+    [0.75, [180, 158, 48]],
+    [1, [245, 194, 153]],
   ],
   // Brian's Brain: dead=black, dying=amber, alive=white.
   brian: [
@@ -234,9 +282,9 @@ export function defaultColourOptionsFor(
     case "julia-set":
       return { ...base, preset: "inferno", gamma: 0.68, contrast: 1.5 };
     case "logistic-mandelbrot":
-      // Chosen by eye against the cycle colour mode: viridis with a strong
-      // lift keeps the plane's bands cool while the cycling dots stay legible.
-      return { ...base, preset: "viridis", gamma: 1.65, contrast: 2.4 };
+      // A seamless cyclic ramp lets the orbit's cycle phase wrap without
+      // introducing a stationary seam through the colour field.
+      return { ...base, preset: "magma-cyclic", gamma: 1.65, contrast: 2.4 };
     case "markus-lyapunov":
       return { ...base, preset: "lyapunov", gamma: 0.8, contrast: 1.3 };
     case "burning-ship":
@@ -299,7 +347,11 @@ function rampColour(
     const [leftAt, leftColour] = stops[i - 1];
     if (x <= rightAt) {
       const localT = (x - leftAt) / (rightAt - leftAt || 1);
-      return mix(leftColour, rightColour, localT);
+      return mix(
+        leftColour,
+        rightColour,
+        preset === "magma-cyclic" ? smoothstep01(localT) : localT,
+      );
     }
   }
   return stops[stops.length - 1][1];

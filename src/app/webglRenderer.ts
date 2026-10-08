@@ -18,12 +18,23 @@ import {
   ORBIT_SURFACE_CLOUD_BAND_CELLS,
   ORBIT_SURFACE_DISSOLVE_BAND_CELLS,
   Orbit3DPointCloud,
+  orbit3dGroundDiagnosticMode,
   orbit3dSurfaceDiagnosticMode,
   type Orbit3DColourMode,
+  type Orbit3DGroundDiagnosticMode,
   type Orbit3DGroundPlane,
   type Orbit3DSurfaceDiagnosticMode,
 } from "./orbit3d.ts";
 import { boundaryDistanceField } from "./orbitSampler.ts";
+import { classifyAttraction } from "./orbitColour.ts";
+import {
+  DEFAULT_SAMPLE_COUNT,
+  DEFAULT_WARMUP_ITERATIONS,
+  ESCAPED,
+  cellCoordinate,
+  sampleAttractorCell,
+  type AttractorCellMeasure,
+} from "../sims/logistic-mandelbrot/model.ts";
 import {
   createKuramotoInitialFields,
   KURAMOTO_TAU,
@@ -147,6 +158,15 @@ vec3 rampColour(int preset, float t) {
     return mixRgb(vec3(251.0, 136.0, 97.0), vec3(252.0, 253.0, 191.0), (x - 0.75) / 0.25) / 255.0;
   }
 
+  if (preset == 18) {
+    if (x <= 0.18) return mixRgb(vec3(40.0, 16.0, 60.0), vec3(104.0, 28.0, 128.0), smoothstep(0.0, 0.18, x)) / 255.0;
+    if (x <= 0.36) return mixRgb(vec3(104.0, 28.0, 128.0), vec3(190.0, 58.0, 111.0), smoothstep(0.18, 0.36, x)) / 255.0;
+    if (x <= 0.52) return mixRgb(vec3(190.0, 58.0, 111.0), vec3(247.0, 139.0, 96.0), smoothstep(0.36, 0.52, x)) / 255.0;
+    if (x <= 0.64) return mixRgb(vec3(247.0, 139.0, 96.0), vec3(252.0, 235.0, 183.0), smoothstep(0.52, 0.64, x)) / 255.0;
+    if (x <= 0.8) return mixRgb(vec3(252.0, 235.0, 183.0), vec3(184.0, 78.0, 114.0), smoothstep(0.64, 0.8, x)) / 255.0;
+    return mixRgb(vec3(184.0, 78.0, 114.0), vec3(40.0, 16.0, 60.0), smoothstep(0.8, 1.0, x)) / 255.0;
+  }
+
   if (preset == 10) {
     if (x <= 0.14) return mixRgb(vec3(48.0, 18.0, 59.0), vec3(50.0, 100.0, 220.0), x / 0.14) / 255.0;
     if (x <= 0.29) return mixRgb(vec3(50.0, 100.0, 220.0), vec3(30.0, 175.0, 235.0), (x - 0.14) / 0.15) / 255.0;
@@ -168,6 +188,27 @@ vec3 rampColour(int preset, float t) {
     if (x <= 0.33) return mixRgb(vec3(226.0, 217.0, 226.0), vec3(65.0, 108.0, 172.0), x / 0.33) / 255.0;
     if (x <= 0.66) return mixRgb(vec3(65.0, 108.0, 172.0), vec3(176.0, 82.0, 112.0), (x - 0.33) / 0.33) / 255.0;
     return mixRgb(vec3(176.0, 82.0, 112.0), vec3(226.0, 217.0, 226.0), (x - 0.66) / 0.34) / 255.0;
+  }
+
+  if (preset == 15) {
+    if (x <= 0.25) return mixRgb(vec3(6.0, 2.0, 6.0), vec3(87.0, 2.0, 49.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(87.0, 2.0, 49.0), vec3(168.0, 53.0, 62.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(168.0, 53.0, 62.0), vec3(223.0, 131.0, 88.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(223.0, 131.0, 88.0), vec3(255.0, 235.0, 210.0), (x - 0.75) / 0.25) / 255.0;
+  }
+
+  if (preset == 16) {
+    if (x <= 0.25) return mixRgb(vec3(7.0, 2.0, 3.0), vec3(72.0, 15.0, 80.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(72.0, 15.0, 80.0), vec3(93.0, 82.0, 180.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(93.0, 82.0, 180.0), vec3(87.0, 164.0, 233.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(87.0, 164.0, 233.0), vec3(209.0, 246.0, 253.0), (x - 0.75) / 0.25) / 255.0;
+  }
+
+  if (preset == 17) {
+    if (x <= 0.25) return mixRgb(vec3(0.0, 4.0, 6.0), vec3(0.0, 63.0, 39.0), x / 0.25) / 255.0;
+    if (x <= 0.5) return mixRgb(vec3(0.0, 63.0, 39.0), vec3(57.0, 117.0, 0.0), (x - 0.25) / 0.25) / 255.0;
+    if (x <= 0.75) return mixRgb(vec3(57.0, 117.0, 0.0), vec3(180.0, 158.0, 48.0), (x - 0.5) / 0.25) / 255.0;
+    return mixRgb(vec3(180.0, 158.0, 48.0), vec3(245.0, 194.0, 153.0), (x - 0.75) / 0.25) / 255.0;
   }
 
   if (x <= 0.28) return mixRgb(vec3(68.0, 1.0, 84.0), vec3(59.0, 82.0, 139.0), x / 0.28) / 255.0;
@@ -266,11 +307,11 @@ vec3 singleChannelColour(float t) {
 }
 
 vec3 twoChannelColour(float c0, float c1) {
-  // Cyclic presets (twilight 11, phase 12) carry a hue channel: c1 picks the
+  // Cyclic presets carry a hue channel: c1 picks the
   // colour, c0 only says how brightly it burns. Fading towards black keeps an
   // empty cell black — mirrors the isCyclic branch in colormap.ts, which the
   // canvas renderer already honours.
-  if (u_preset == 11 || u_preset == 12) {
+  if (u_paletteCyclic) {
     vec3 hue = rampColour(u_preset, fract(c1));
     return hue * adjust(c0);
   }
@@ -1195,6 +1236,58 @@ class GpuKuramotoSimulation {
 const ORBIT3D_GROUND_TEXTURE_WIDTH = 1024;
 const ORBIT3D_GROUND_ITERATIONS = 160;
 
+/**
+ * Inside-out's ground field: each column's centre height, RMS spread and
+ * classification at every ground texel, sampled once through the same orbit
+ * sampler as the cloud. The CPU fallback (no GPU sampler) runs synchronously,
+ * so it takes a coarser grid to keep that one-off build short.
+ */
+const ORBIT3D_ATTRACTION_FIELD_WIDTH = ORBIT3D_GROUND_TEXTURE_WIDTH;
+const ORBIT3D_ATTRACTION_FIELD_CPU_WIDTH = 256;
+/** Texel layout of Orbit3DAttractionField.data and its RGBA32F texture. */
+export const ATTRACTION_FIELD_CHANNELS = 4;
+
+export interface Orbit3DAttractionField {
+  width: number;
+  height: number;
+  /** (re, im) at the field's centre. */
+  centre: readonly [number, number];
+  /** (re, im) extent the field covers edge to edge; texel (x, y) is centred at
+   * centre + ((x + 0.5) / width - 0.5) * span, row 0 at imMin. */
+  span: readonly [number, number];
+  /**
+   * Interleaved (centre, spread, classification, period) per texel, row-major
+   * from imMin: the column's mean height, its RMS deviation about that mean,
+   * the orbitColour.ts classification and the detected period (0 if none).
+   */
+  data: Float32Array;
+  source: "gpu" | "cpu";
+  /** Sampling inputs the field was built from. */
+  warmupIterations: number;
+  sampleCount: number;
+  buildMs: number;
+}
+
+/** Canvas expando the renderer keeps current for diagnostics and tests. */
+export interface Orbit3DDiagnosticCanvas extends HTMLCanvasElement {
+  orbit3dAttractionField?: Orbit3DAttractionField | null;
+  /**
+   * Read back the packed cloud's uploaded sample-index attribute for the
+   * first `count` slots of every row, straight from the GPU buffer
+   * (Orbit3DPointCloud.readSampleIndices). Empty for a stacked cloud.
+   */
+  orbit3dReadSampleIndices?: (count: number) => Float32Array;
+  /**
+   * Read back the jobs a tail-refinement level sampled in the last live
+   * build: how many, and for the first `count` each job's centre and its
+   * parent's centre and size, from the arrays the builder sampled
+   * (Orbit3DPointCloud.readRefineJobs). Empty for a prebaked cloud.
+   */
+  orbit3dReadRefineJobs?: (level: 1 | 2, count: number) => ReturnType<Orbit3DPointCloud["readRefineJobs"]>;
+  orbit3dReadPoints?: (first: number, count: number) => ReturnType<Orbit3DPointCloud["readPoints"]>;
+  orbit3dReadSurface?: () => ReturnType<Orbit3DPointCloud["readSurface"]>;
+}
+
 export class WebGLRendererBackend implements RendererBackend {
   readonly kind = "webgl2" as const;
   readonly maxTextureSize: number;
@@ -1210,6 +1303,10 @@ export class WebGLRendererBackend implements RendererBackend {
   private orbit3dInteriorDistanceTexture: WebGLTexture | null = null;
   private orbit3dInteriorDistanceAttempted = false;
   private orbit3dGroundKey = "";
+  private orbit3dAttractionTexture: WebGLTexture | null = null;
+  private orbit3dAttractionField: Orbit3DAttractionField | null = null;
+  private orbit3dAttractionKey = "";
+  private orbit3dAttractionBuilds = 0;
   private readonly texture: WebGLTexture;
   private readonly fractalPaletteTexture: WebGLTexture;
   private readonly fractalPaletteData = new Uint8Array(256 * 4);
@@ -1287,6 +1384,7 @@ export class WebGLRendererBackend implements RendererBackend {
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
+    this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLOOM_BLUR_SHADER);
     this.compositeProgram = createProgram(gl, VERTEX_SHADER, BLOOM_COMPOSITE_SHADER);
@@ -1521,6 +1619,28 @@ export class WebGLRendererBackend implements RendererBackend {
     delete (this.gl.canvas as HTMLCanvasElement).dataset.fractalSupersample;
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.orbit3dPoints;
+    delete canvas.dataset.orbit3dCandidateCells;
+    delete canvas.dataset.orbit3dBoundedCandidates;
+    delete canvas.dataset.orbit3dBaseCells;
+    delete canvas.dataset.orbit3dBaseRows;
+    delete canvas.dataset.orbit3dSlots;
+    delete canvas.dataset.orbit3dRefinedSubCells;
+    delete canvas.dataset.orbit3dRefinedRows;
+    delete canvas.dataset.orbit3dRefineRowBudget;
+    delete canvas.dataset.orbit3dRefinedL1SubCells;
+    delete canvas.dataset.orbit3dRefinedL1Rows;
+    delete canvas.dataset.orbit3dRefinedL2SubCells;
+    delete canvas.dataset.orbit3dRefinedL2Rows;
+    delete canvas.dataset.orbit3dRefinedDetailSubCells;
+    delete canvas.dataset.orbit3dDetailBaseSlots;
+    delete canvas.dataset.orbit3dVisiblePoints;
+    delete canvas.dataset.orbit3dLayout;
+    delete canvas.dataset.orbit3dBuildBytes;
+    delete canvas.dataset.orbit3dSamplerBytes;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadRefineJobs;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints;
+    delete (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface;
     delete canvas.dataset.orbit3dCameraDistance;
     delete canvas.dataset.orbit3dCameraAzimuth;
     delete canvas.dataset.orbit3dBoundaryDetailOpacity;
@@ -1588,10 +1708,10 @@ export class WebGLRendererBackend implements RendererBackend {
     const canvas = this.gl.canvas as HTMLCanvasElement;
     const exposure = numericParam(frame.params, "exposure", 1);
     const colourMode = orbit3dColourMode(frame.params);
-    const cycling =
-      colourMode === "cycle" && numericParam(frame.params, "cycleSpeed", 0) > 0;
+    // Cycle and Inside-out share the one signed time phase: speed sets its
+    // rate, reverse its sign, and speed zero pins it at zero.
     const phase =
-      colourMode === "cycle"
+      colourMode === "cycle" || colourMode === "inside-out"
         ? palettePhase(
             frame.params,
             frame.elapsedTime,
@@ -1601,7 +1721,8 @@ export class WebGLRendererBackend implements RendererBackend {
         : 0;
     const fanActive = frame.params.realAxisSweep === true;
     const surfaceDiagnosticMode = orbit3dSurfaceDiagnosticModeFromUrl();
-    const ground = this.ensureOrbit3dGround(frame, phase, cycling);
+    const groundDiagnosticMode = orbit3dGroundDiagnosticModeFromUrl();
+    const ground = this.ensureOrbit3dGround(frame, phase, colourMode);
     if (
       !this.orbit3d?.draw(
         this.displayWidth,
@@ -1617,6 +1738,9 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "surfaceOpacity", 0.4),
         numericParam(frame.params, "edgeGlow", 0),
         surfaceDiagnosticMode,
+        numericParam(frame.params, "cycleBands", 1.5),
+        numericParam(frame.params, "zoomGrowth", 0),
+        groundDiagnosticMode,
       )
     ) {
       return;
@@ -1626,7 +1750,41 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
     canvas.dataset.simulationRenderer = "gpu-orbit3d";
+    canvas.dataset.orbit3dPhase = phase.toFixed(6);
+    canvas.dataset.orbit3dAttractionBuilds = String(this.orbit3dAttractionBuilds);
+    const attraction = this.orbit3dAttractionField;
+    if (attraction) {
+      canvas.dataset.orbit3dAttractionSource = attraction.source;
+      canvas.dataset.orbit3dAttractionBuildMs = attraction.buildMs.toFixed(1);
+      canvas.dataset.orbit3dAttractionSize = `${attraction.width}x${attraction.height}`;
+    }
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dAttractionField = attraction;
+    const orbit3d = this.orbit3d;
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSampleIndices = (count) =>
+      orbit3d.readSampleIndices(count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadRefineJobs = (level, count) =>
+      orbit3d.readRefineJobs(level, count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadPoints = (first, count) => orbit3d.readPoints(first, count);
+    (canvas as Orbit3DDiagnosticCanvas).orbit3dReadSurface = () => orbit3d.readSurface();
     canvas.dataset.orbit3dPoints = String(stats.pointCount);
+    canvas.dataset.orbit3dCandidateCells = String(stats.candidateCells);
+    canvas.dataset.orbit3dBoundedCandidates = String(stats.boundedCandidates);
+    canvas.dataset.orbit3dBaseCells = String(stats.baseCells);
+    canvas.dataset.orbit3dBaseRows = String(stats.baseRows);
+    canvas.dataset.orbit3dSlots = String(stats.slotCount);
+    canvas.dataset.orbit3dRefinedSubCells = String(stats.refinedSubCells);
+    canvas.dataset.orbit3dRefinedRows = String(stats.refinedRows);
+    canvas.dataset.orbit3dRefineRowBudget = String(stats.refineRowBudget);
+    canvas.dataset.orbit3dRefinedL1SubCells = String(stats.refinedL1SubCells);
+    canvas.dataset.orbit3dRefinedL1Rows = String(stats.refinedL1Rows);
+    canvas.dataset.orbit3dRefinedL2SubCells = String(stats.refinedL2SubCells);
+    canvas.dataset.orbit3dRefinedL2Rows = String(stats.refinedL2Rows);
+    canvas.dataset.orbit3dRefinedDetailSubCells = String(stats.refinedDetailSubCells);
+    canvas.dataset.orbit3dDetailBaseSlots = String(stats.detailBaseSlots);
+    canvas.dataset.orbit3dVisiblePoints = String(stats.visiblePoints);
+    canvas.dataset.orbit3dLayout = stats.layout;
+    canvas.dataset.orbit3dBuildBytes = String(stats.buildBytes);
+    canvas.dataset.orbit3dSamplerBytes = String(stats.samplerBytes);
     canvas.dataset.orbit3dCameraDistance = String(this.orbit3d.cameraReadout.distance);
     canvas.dataset.orbit3dCameraAzimuth = String(this.orbit3d.cameraReadout.azimuth);
     canvas.dataset.orbit3dBoundaryDetailOpacity = String(this.orbit3d.boundaryDetailOpacity);
@@ -1690,30 +1848,33 @@ export class WebGLRendererBackend implements RendererBackend {
   /**
    * Render (or fetch the cached) Mandelbrot ground-plane texture covering the
    * orbit3d c-domain, reusing the fractal escape-time program and palette.
-   * Re-rendered only when the palette configuration changes.
+   * Re-rendered only when the palette configuration or the escape-colouring
+   * phase changes, so a cycling mode redraws it each frame and a static one
+   * keeps it; switching colour mode changes the phase and refreshes it.
    */
   private ensureOrbit3dGround(
     frame: RendererBackendFrame,
     phase: number,
-    cycling: boolean,
+    colourMode: Orbit3DColourMode,
   ): Orbit3DGroundPlane | null {
     const gl = this.gl;
     this.updateFractalPalette(frame.colourOptions);
     const width = ORBIT3D_GROUND_TEXTURE_WIDTH;
     const scale = GROUND_DOMAIN.span[0] / width;
     const height = Math.round(GROUND_DOMAIN.span[1] / scale);
+    const attraction = colourMode === "inside-out"
+      ? this.ensureOrbit3dAttractionField(frame.params)
+      : null;
     const key = [
       this.fractalPaletteKey,
       frame.colourOptions.paletteCycleReverse ? 1 : 0,
+      phase.toFixed(6),
     ].join(":");
-    if (
-      !cycling &&
-      this.orbit3dGroundTexture &&
-      this.orbit3dGroundKey === key
-    ) {
+    if (this.orbit3dGroundTexture && this.orbit3dGroundKey === key) {
       return {
         texture: this.orbit3dGroundTexture,
         interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
+        attractionTexture: attraction,
         centre: GROUND_DOMAIN.centre,
         span: [width * scale, height * scale],
       };
@@ -1788,6 +1949,12 @@ export class WebGLRendererBackend implements RendererBackend {
       isCyclic(frame.colourOptions.preset) ? 1 : 0,
     );
     gl.uniform1i(this.fractalUniforms.escapeMaskOutput, 1);
+    // The orbit sampler binds its scratch textures on whichever unit is
+    // active and deletes them afterwards, which can leave the palette unit
+    // empty on the frame the attraction field is built; bind it here rather
+    // than trusting the binding to have survived since the palette upload.
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.fractalPaletteTexture);
     gl.bindVertexArray(this.fractalVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -1795,13 +1962,174 @@ export class WebGLRendererBackend implements RendererBackend {
       this.buildOrbit3dInteriorDistance(width, height, scale);
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.orbit3dGroundKey = cycling ? "" : key;
+    this.orbit3dGroundKey = key;
     return {
       texture: this.orbit3dGroundTexture,
       interiorDistanceTexture: this.orbit3dInteriorDistanceTexture,
+      attractionTexture: attraction,
       centre: GROUND_DOMAIN.centre,
       span: [width * scale, height * scale],
     };
+  }
+
+  /**
+   * Build (or fetch the cached) attraction field texture for Inside-out's
+   * ground. Keyed on the sampling inputs only, so time, palette, reverse and
+   * exposure never rebuild it; a change of warmup or sample count does, and
+   * the previous texture is released first.
+   */
+  private ensureOrbit3dAttractionField(
+    params: Record<string, number | boolean | string>,
+  ): WebGLTexture | null {
+    const warmupIterations = boundedInteger(
+      params.warmupIterations,
+      16,
+      2000,
+      DEFAULT_WARMUP_ITERATIONS,
+    );
+    const sampleCount = boundedInteger(params.sampleCount, 8, 96, DEFAULT_SAMPLE_COUNT);
+    const key = `${warmupIterations}:${sampleCount}`;
+    if (this.orbit3dAttractionTexture && this.orbit3dAttractionKey === key) {
+      return this.orbit3dAttractionTexture;
+    }
+    this.releaseOrbit3dAttractionField();
+    this.orbit3dAttractionKey = key;
+    const field = this.buildOrbit3dAttractionField(warmupIterations, sampleCount);
+    if (!field) return null;
+
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    if (!texture) return null;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Nearest: interpolating a spread across a classification edge would
+    // invent readings between a bulb and its exterior.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA32F,
+      field.width,
+      field.height,
+      0,
+      gl.RGBA,
+      gl.FLOAT,
+      field.data,
+    );
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(texture);
+      return null;
+    }
+    this.orbit3dAttractionTexture = texture;
+    this.orbit3dAttractionField = field;
+    this.orbit3dAttractionBuilds += 1;
+    return texture;
+  }
+
+  private buildOrbit3dAttractionField(
+    warmupIterations: number,
+    sampleCount: number,
+  ): Orbit3DAttractionField | null {
+    const started = performance.now();
+    const groundScale = GROUND_DOMAIN.span[0] / ORBIT3D_GROUND_TEXTURE_WIDTH;
+    const groundHeight = Math.round(GROUND_DOMAIN.span[1] / groundScale);
+    const groundSpan = [
+      ORBIT3D_GROUND_TEXTURE_WIDTH * groundScale,
+      groundHeight * groundScale,
+    ] as const;
+    const build = (width: number, height: number) => {
+      const reMin = GROUND_DOMAIN.centre[0] - groundSpan[0] / 2;
+      const reMax = GROUND_DOMAIN.centre[0] + groundSpan[0] / 2;
+      const imMin = GROUND_DOMAIN.centre[1] - groundSpan[1] / 2;
+      const imMax = GROUND_DOMAIN.centre[1] + groundSpan[1] / 2;
+      const coordinates = new Float64Array(width * height * 2);
+      for (let y = 0; y < height; y += 1) {
+        const im = cellCoordinate(imMin, imMax, y, height);
+        for (let x = 0; x < width; x += 1) {
+          const cell = y * width + x;
+          coordinates[cell * 2] = cellCoordinate(reMin, reMax, x, width);
+          coordinates[cell * 2 + 1] = im;
+        }
+      }
+      return coordinates;
+    };
+
+    const gpuWidth = ORBIT3D_ATTRACTION_FIELD_WIDTH;
+    const gpuHeight = groundHeight;
+    const gpuCoordinates = build(gpuWidth, gpuHeight);
+    const sampled = this.orbit3d?.sampleCells(gpuCoordinates, warmupIterations, sampleCount);
+    if (sampled) {
+      const data = new Float32Array(sampled.cellCount * ATTRACTION_FIELD_CHANNELS);
+      for (let cell = 0; cell < sampled.cellCount; cell += 1) {
+        const escaped = sampled.escaped[cell] === 1;
+        const period = escaped ? 0 : sampled.periods[cell];
+        const offset = cell * ATTRACTION_FIELD_CHANNELS;
+        data[offset] = escaped ? 0 : sampled.centres[cell];
+        data[offset + 1] = escaped ? 0 : sampled.spreads[cell];
+        data[offset + 2] = classifyAttraction(escaped, period);
+        data[offset + 3] = period;
+      }
+      return {
+        width: gpuWidth,
+        height: gpuHeight,
+        centre: GROUND_DOMAIN.centre,
+        span: groundSpan,
+        data,
+        source: "gpu",
+        warmupIterations,
+        sampleCount,
+        buildMs: performance.now() - started,
+      };
+    }
+
+    const width = ORBIT3D_ATTRACTION_FIELD_CPU_WIDTH;
+    const height = Math.max(1, Math.round((groundSpan[1] / groundSpan[0]) * width));
+    const coordinates = build(width, height);
+    const cells = width * height;
+    const data = new Float32Array(cells * ATTRACTION_FIELD_CHANNELS);
+    const samples = new Float32Array(sampleCount);
+    const measure: AttractorCellMeasure = { interior: 1, centre: 0, spread: 0 };
+    for (let cell = 0; cell < cells; cell += 1) {
+      const result = sampleAttractorCell(
+        coordinates[cell * 2],
+        coordinates[cell * 2 + 1],
+        warmupIterations,
+        sampleCount,
+        samples,
+        0,
+        measure,
+      );
+      const escaped = result === ESCAPED;
+      const period = escaped ? 0 : result;
+      const offset = cell * ATTRACTION_FIELD_CHANNELS;
+      data[offset] = escaped ? 0 : measure.centre;
+      data[offset + 1] = escaped ? 0 : measure.spread;
+      data[offset + 2] = classifyAttraction(escaped, period);
+      data[offset + 3] = period;
+    }
+    return {
+      width,
+      height,
+      centre: GROUND_DOMAIN.centre,
+      span: groundSpan,
+      data,
+      source: "cpu",
+      warmupIterations,
+      sampleCount,
+      buildMs: performance.now() - started,
+    };
+  }
+
+  private releaseOrbit3dAttractionField(): void {
+    if (this.orbit3dAttractionTexture) {
+      this.gl.deleteTexture(this.orbit3dAttractionTexture);
+    }
+    this.orbit3dAttractionTexture = null;
+    this.orbit3dAttractionField = null;
+    this.orbit3dAttractionKey = "";
   }
 
   private buildOrbit3dInteriorDistance(width: number, height: number, cellScale: number): void {
@@ -2364,6 +2692,8 @@ export class WebGLRendererBackend implements RendererBackend {
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
     if (this.orbit3dGroundFbo) gl.deleteFramebuffer(this.orbit3dGroundFbo);
+    this.releaseOrbit3dAttractionField();
+    (gl.canvas as Orbit3DDiagnosticCanvas).orbit3dAttractionField = null;
     gl.deleteTexture(this.texture);
     gl.deleteTexture(this.fractalPaletteTexture);
     gl.deleteVertexArray(this.vao);
@@ -2726,6 +3056,14 @@ function presetIndex(preset: ColourPreset): number {
       return 13;
     case "lyapunov":
       return 14;
+    case "rosewood":
+      return 15;
+    case "dusk":
+      return 16;
+    case "verdigris":
+      return 17;
+    case "magma-cyclic":
+      return 18;
   }
 }
 
@@ -2858,6 +3196,36 @@ function orbit3dSurfaceDiagnosticModeFromUrl(): Orbit3DSurfaceDiagnosticMode {
   );
 }
 
+function orbit3dGroundDiagnosticModeFromUrl(): Orbit3DGroundDiagnosticMode {
+  return orbit3dGroundDiagnosticMode(
+    new URLSearchParams(window.location.search).get("groundDiagnostic"),
+  );
+}
+
+/**
+ * `?orbit3dSampler=cpu` forces the logistic-Mandelbrot live build onto the
+ * CPU sampling path (reported as `data-orbit3d-sampler="cpu-sampled"`), so
+ * that path can be exercised on a machine whose GPU sampler works. Inert
+ * when absent; any other value is ignored.
+ */
+function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("orbit3dSampler") === "cpu"
+    ? "cpu"
+    : null;
+}
+
+function boundedInteger(
+  value: number | boolean | string | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.round(value)))
+    : fallback;
+}
+
 function fractalKind(kernel: SimKernel): number {
   if (kernel.name === "Mandelbrot") return 0;
   if (kernel.name === "Julia Set") return 1;
@@ -2925,7 +3293,12 @@ function particleGlyphRadius(
   return Math.max(1.5, Math.min(8, size / 2));
 }
 
-function palettePhase(
+/**
+ * Signed palette phase shared by the fractal, Cycle and Inside-out paths:
+ * speed sets the rate, reverse flips the sign once, speed zero pins it at
+ * zero. Exported so the phase a probe drives can be traced to this rule.
+ */
+export function palettePhase(
   params: Record<string, number | boolean | string>,
   elapsedTime: number,
   colourOptions: ColourMapOptions,

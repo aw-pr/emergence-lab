@@ -250,7 +250,76 @@ test("cyclic phase sampling does not draw a false midpoint seam", async ({ page 
 
 test("Kuramoto defaults to the softened cyclic phase palette", async ({ page }) => {
   await page.goto("/#/kuramoto-oscillators");
-  await expect(page.locator(".controls__colour select")).toHaveValue("phase");
+  await expect(page.getByRole("combobox", { name: "Palette", exact: true })).toHaveValue("phase");
+});
+
+test("cyclic Magma joins seamlessly and agrees across CPU and GPU mappings", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { buildMapper, DEFAULT_COLOUR_OPTIONS } = await import("/src/app/colormap.ts");
+    const { createWebGLRendererBackend } = await import("/src/app/webglRenderer.ts");
+    const canvas = document.createElement("canvas");
+    const backend = createWebGLRendererBackend(canvas);
+    if (!backend) throw new Error("WebGL2 required for palette parity");
+    const gl = canvas.getContext("webgl2")!;
+    const options = { ...DEFAULT_COLOUR_OPTIONS, preset: "magma-cyclic" as const };
+    const mapper = buildMapper(1, [[0, 1]], options);
+    const endpoints = [0, 0.0001, 0.9999, 1].map((t) => mapper(new Float32Array([t]), 0));
+    let maxError = 0;
+    try {
+      backend.resizeDisplay(8, 8);
+      for (const channelCount of [1, 2]) {
+        const state = new Float32Array(channelCount);
+        const channelRanges = Array.from({ length: channelCount }, () => [0, 1] as const);
+        const kernel = {
+          name: "Palette parity fixture",
+          channelCount,
+          channelLabels: channelCount === 1 ? ["Value"] : ["Density", "Hue"],
+          channelRanges,
+          paramSchema: [],
+          init() {}, step() {}, destroy() {},
+          readState: () => state,
+        };
+        backend.setGrid(1, 1, kernel, "field", {});
+        for (const adjustments of [{ gamma: 1, contrast: 1 }, { gamma: 1.65, contrast: 2.4 }]) {
+          const colourOptions = { ...options, ...adjustments };
+          const cpu = buildMapper(channelCount, channelRanges, colourOptions);
+          for (const density of channelCount === 1 ? [1] : [0, 0.4, 1]) {
+            for (let index = 0; index <= 100; index += 1) {
+              state[0] = channelCount === 1 ? index / 100 : density;
+              if (channelCount === 2) state[1] = index / 100;
+              backend.draw({
+                state, kernel, colourOptions,
+                displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 },
+                mode: "field", params: {}, elapsedTime: 0, speedScale: 1,
+              });
+              const rgba = new Uint8Array(4);
+              gl.readPixels(4, 4, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+              const expected = cpu(state, 0);
+              for (let channel = 0; channel < 3; channel += 1) {
+                maxError = Math.max(maxError, Math.abs(rgba[channel] - expected[channel]));
+              }
+            }
+          }
+        }
+      }
+      return { endpoints, maxError };
+    } finally {
+      backend.destroy();
+    }
+  });
+  for (const colour of result.endpoints) expect(colour).toEqual(result.endpoints[0]);
+  expect(result.maxError).toBeLessThanOrEqual(1);
+});
+
+test("Logistic Mandelbrot loads and resets to cyclic Magma", async ({ page }) => {
+  await page.goto("/#/logistic-mandelbrot");
+  await page.getByRole("button", { name: "Show settings", exact: true }).click();
+  const palette = page.getByRole("combobox", { name: "Palette", exact: true });
+  await expect(palette).toHaveValue("magma-cyclic");
+  await palette.selectOption("magma");
+  await expect(palette).toHaveValue("magma");
+  await page.getByRole("button", { name: "Reset to defaults", exact: true }).click();
+  await expect(palette).toHaveValue("magma-cyclic");
 });
 
 for (const slug of ["mandelbrot", "julia-set"]) {

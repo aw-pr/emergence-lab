@@ -136,15 +136,15 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "colourMode",
       label: "Colour mode",
       type: "enum",
-      default: "cycle",
+      default: "inside-out",
       options: ["period", "inside-out", "mono", "cycle"],
-      info: "Chooses how attractor cells are coloured: by period, inside-out by escape depth, a single tone, or animated cycling. Changes the palette mapping instantly.",
+      info: "Chooses how attractor cells are coloured: by period; inside-out by each point's height distance from its parent cycle point (the column mean for primary bulbs and chaotic columns), so colour bands leave the centre and travel up and down the sheets at the cycle speed (reverse brings them back in, speed 0 holds them, bands per unit sets their density); a period-1 sheet sits at distance zero and takes one colour that changes with the phase, and the chaotic band is coloured like the sheets; a single tone; or Cycle's animated bands by boundary distance and height. Changes the palette mapping instantly.",
     },
     {
       key: "exposure",
       label: "Exposure",
       type: "number",
-      default: 1,
+      default: 0.5,
       min: 0.4,
       max: 3,
       step: 0.05,
@@ -155,23 +155,26 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "edgeGlow",
       label: "Edge glow",
       type: "number",
-      default: 0,
+      default: 0.25,
       min: 0,
       max: 2,
       step: 0.05,
       info: "Strength of the glow drawn at cell boundaries. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
-    // Share of the point budget spent re-sampling cascade tails on a finer
-    // sub-grid. Zero leaves CPU sharpening automatic because it has no boundary tier.
+    // Share of the point budget spent re-sampling cascade tails at two
+    // levels of detail (3 by 3, then 3 by 3 again where a sub-cell is still a
+    // tail). The base grid stores each cell's distinct points once and does
+    // not change with the setting. The CPU fallback caps the setting at its
+    // automatic share because it has no boundary tier.
     {
       key: "tailRefinement",
       label: "Tail refinement",
       type: "number",
-      default: 0,
+      default: 0.6,
       min: 0,
       max: 0.6,
       step: 0.05,
-      info: "Share of the point budget spent re-sampling cascade tails on a finer sub-grid, sharpening the boundary. Changing it rebuilds the point cloud; 0 means off on the GPU path, automatic (0.3) on the CPU fallback.",
+      info: "Share of the point budget spent re-sampling cascade tails at two levels of detail: each tail cell on a 3 by 3 sub-grid, then each sub-cell that is still a tail on a 3 by 3 sub-grid of its own. The default is the maximum, 0.6, and the base grid does not change with it. Changing it rebuilds the point cloud; 0 turns refinement off on the GPU path, while the CPU fallback spends the automatic share (0.3) at any setting above 0.",
     },
     // GPU-only live-build detail. The CPU fallback ignores this control and
     // retains the tail-refinement plan above rather than attempting 16M points.
@@ -197,6 +200,21 @@ export class LogisticMandelbrotKernel implements SimKernel {
       step: 0.05,
       info: "Fraction of built points actually drawn. Culled per frame in the vertex shader, so dragging it is instant with no rebuild.",
     },
+    // How much a splat grows with zoom magnification. 0 is the constant pixel
+    // size the cloud had before card 88: crisp dots that separate into a
+    // lattice past the sample pitch. 1 is card 92's square-root growth with
+    // its light spread over the larger footprint, which fills the lattice at
+    // the cost of resolving less. Resolved per frame, no rebuild.
+    {
+      key: "zoomGrowth",
+      label: "Splat growth on zoom",
+      type: "number",
+      default: 0,
+      min: 0,
+      max: 1,
+      step: 0.05,
+      info: "How much each point grows as you zoom in. 0 keeps points a constant pixel size, so they stay crisp and separate into a lattice up close; 1 grows them with the square root of the magnification to fill that lattice. Resolved per frame in the shader, no rebuild.",
+    },
     {
       key: "autoRotate",
       label: "Auto rotate",
@@ -216,7 +234,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "realAxisSweep",
       label: "Light beam sweep",
       type: "boolean",
-      default: true,
+      default: false,
       group: "Light beam",
       info: "Shows a tracer light sweeping along the real axis with a fading wake.",
     },
@@ -236,11 +254,24 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "cycleSpeed",
       label: "Palette cycle speed",
       type: "number",
-      default: 0.06,
+      default: 0.1,
       min: 0,
       max: 5,
       step: 0.001,
-      info: "Speed of the palette's colour cycling animation.",
+      info: "Speed of the palette's colour cycling animation in Cycle and Inside-out modes; 0 holds the colours still.",
+    },
+    // Spatial band frequency for Cycle mode. A lap spans 1/cycleBands c-units
+    // of depth into the set; the cardioid is about 0.4 deep, so anything
+    // under 2.5 leaves every bulb holding less than one complete band.
+    {
+      key: "cycleBands",
+      label: "Colour bands per unit",
+      type: "number",
+      default: 4,
+      min: 0.5,
+      max: 8,
+      step: 0.25,
+      info: "Palette laps per unit of distance into the set in Cycle mode, or per unit of height distance from the parent cycle point in Inside-out mode (the ground reads laps per unit of the column's RMS spread); higher packs more bands into each column. Resolved per frame in the shader, so dragging it updates live with no rebuild.",
     },
     {
       key: "cascadeReveal",
@@ -280,7 +311,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       max: MAX_SAMPLE_COUNT,
       step: 1,
       group: "Sampling",
-      info: "Orbit points sampled per cell once warmup settles. Changing it rebuilds the point cloud; the GPU point budget is fixed, so more samples per cell means fewer cells covered.",
+      info: "Orbit points sampled per cell once warmup settles. Changing it rebuilds the point cloud; each cell stores only its distinct points, so more samples cost rows only for chaotic and high-period cells and the base grid keeps its coverage.",
     },
     {
       key: "plottedIterations",

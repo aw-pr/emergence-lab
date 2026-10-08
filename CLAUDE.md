@@ -17,8 +17,35 @@ The logistic-Mandelbrot bifurcation reveal is landed and validated, including
 free camera navigation and the machine-local prebaked point cloud (see
 "Baking a local point cloud" in `README.md`). The analytic surface arc
 (stages 52-56) is landed, deployed and mirrored publicly as of 2026-08-23.
-Stage 57, an interestingness sweep harness scoring frames on entropy, spatial
-autocorrelation, temporal flux and coverage, is queued and unstarted.
+The interestingness sweep harness landed via stage 83, which corrected its
+structure-term bias; stage 57's original framing is closed, not queued.
+
+The 87-92 logistic-Mandelbrot slate is closed: zoom diagnostic (87), camera
+repair (88), period-detection window (89), detail adjudication (91) and the
+point-size cap (92) all passed and merged; stage 90 was superseded on card
+87's audit. Stage 93 moved parameter grouping into the kernel schema. Stage
+94, the CPU-fallback refinement default, landed at `e09473fb` after three
+attempts (10/10 criteria). Stage 95, which decided how a pure `src/app`
+module becomes testable, landed at `cdc1d2fe` — see `docs/INTERFACE.md` for
+the resulting convention (explicit `tsconfig.test.json` include list plus a
+preflight guard in `scripts/run-kernel-tests.cjs`); a future card adding a
+pure `src/app` module should consult it before improvising.
+
+Stages 96-98 settled the cycling palette (cyclic Magma default) and the
+hue-preserving tone map. On 2026-10-02 the operator redefined Inside-out:
+each point is coloured by its distance from its column's mean height,
+`fract(bands * |Re(z) - h0(c)| - phase)`, mirrored above and below, so bands
+leave each bulb's sheet upward and downward and the chaotic band is coloured.
+Stage 99 (`docs/audits/2026-10-02-orbit-spread-colouring.md`) fixed the
+numbers and stage 100 landed the mode at `f81eee106`; prebaked clouds derive
+their centres at load (`src/app/prebakedCentre.ts`). The shipped Magma at
+gamma 1.65 / contrast 2.4 is flat across about 58% of a lap, so the period-1
+sheet reads pale; that is a tuning question for the interestingness run
+(stages 101-102, `docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`),
+which hands the operator a shortlist and changes no default. Stages 103
+(packed cells for the orbit cloud) and 104 (a hierarchical Inside-out centre,
+gated on 103) were queued on 2026-10-06.
+
 Gray-Scott stays the priority kernel for future refinement.
 
 ## Worktrees and branches

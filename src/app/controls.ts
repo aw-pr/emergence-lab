@@ -21,6 +21,12 @@ import {
 } from "./persistence.ts";
 import type { ParamPreset } from "./presets.ts";
 import type { DisplayOptions, ResolutionPreset } from "./renderer.ts";
+import {
+  encodeStoredValues,
+  isLegacyStoredValues,
+  migrateLegacyStoredValues,
+  RETIRED_DEFAULTS,
+} from "./paramPersistence.ts";
 
 /**
  * A collapsible, headed control section. Open by default; a user's toggle is
@@ -130,6 +136,8 @@ export interface ControlsOptions {
    * Parameters section.
    */
   viewParamKeys?: readonly string[];
+  /** Show the arrow-key cycle-speed hint beside the cycle-direction select. */
+  paletteCycleKeyboardHint?: boolean;
 }
 
 /**
@@ -297,7 +305,7 @@ export class ControlsPanel {
       if (value === undefined) continue;
       this.syncParamControl(descriptor, value);
     }
-    if (persist) saveValues(this.slug, this.params);
+    if (persist) saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
   }
 
   private render(options: ControlsOptions): void {
@@ -381,7 +389,10 @@ export class ControlsPanel {
     this.container.appendChild(viewSection);
 
     this.container.appendChild(
-      this.buildColourDashboard(options.fractalPaletteCycleUi ?? false),
+      this.buildColourDashboard(
+        options.fractalPaletteCycleUi ?? false,
+        options.paletteCycleKeyboardHint ?? true,
+      ),
     );
 
     const grouped = new Set(viewParamKeys);
@@ -784,11 +795,14 @@ export class ControlsPanel {
     return wrap;
   }
 
-  private buildColourDashboard(fractalPaletteCycleUi: boolean): HTMLElement {
+  private buildColourDashboard(
+    fractalPaletteCycleUi: boolean,
+    keyboardHint: boolean,
+  ): HTMLElement {
     const section = collapsibleSection(this.slug, "Colour", "controls__colour");
 
     if (fractalPaletteCycleUi) {
-      section.appendChild(this.buildFractalPaletteCycleExtras());
+      section.appendChild(this.buildFractalPaletteCycleExtras(keyboardHint));
     }
 
     section.appendChild(
@@ -873,7 +887,7 @@ export class ControlsPanel {
    * Kernels keep cycleSpeed ≥ 0; “reverse” is implemented in the colour mapper
    * (see ColourMapOptions.paletteCycleReverse), not by passing negative params.
    */
-  private buildFractalPaletteCycleExtras(): HTMLElement {
+  private buildFractalPaletteCycleExtras(keyboardHint: boolean): HTMLElement {
     const block = document.createElement("div");
     block.className = "controls__fractal-palette-cycle";
 
@@ -905,11 +919,13 @@ export class ControlsPanel {
     row.appendChild(select);
     block.appendChild(row);
 
-    const hint = document.createElement("p");
-    hint.className = "controls__hint";
-    hint.textContent =
-      "Arrow Up / Down adjusts Cycle speed (same as the parameter slider).";
-    block.appendChild(hint);
+    if (keyboardHint) {
+      const hint = document.createElement("p");
+      hint.className = "controls__hint";
+      hint.textContent =
+        "Arrow Up / Down adjusts Cycle speed (same as the parameter slider).";
+      block.appendChild(hint);
+    }
 
     return block;
   }
@@ -1044,7 +1060,7 @@ export class ControlsPanel {
 
   private updateParams(next: SimParams): void {
     this.params = next;
-    saveValues(this.slug, this.params);
+    saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
     this.callbacks.onParamChange(this.params);
   }
 
@@ -1293,9 +1309,12 @@ export function restorePersistedParams(
     return { ...initialParams };
   }
 
+  const stored = isLegacyStoredValues(loaded)
+    ? migrateLegacyStoredValues(loaded, RETIRED_DEFAULTS[slug] ?? {})
+    : loaded;
   const next = { ...initialParams };
   for (const descriptor of schema) {
-    const value = loaded[descriptor.key];
+    const value = stored[descriptor.key];
     if (value === undefined) {
       continue;
     }

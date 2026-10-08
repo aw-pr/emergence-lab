@@ -118,6 +118,10 @@ the point budget from the unchanged 9.6M extreme ceiling to 16M and spends the
 additional capacity on a 5x5 boundary sub-grid warmed for 20,000 iterations.
 That depth is deliberate: stage 35 measured boundary-band period mismatch
 falling from 1.71% at 1,500 warmup iterations to 0.25% at 20,000.
+Tail refinement defaults to its maximum, 0.6, on the GPU path. There, 0 turns
+tail refinement off. The CPU fallback keeps its bounded automatic policy: 0
+selects its 0.3 share, positive settings up to 0.3 are honoured, and every higher
+setting is capped at 0.3.
 
 Instead the cloud can be baked offline, on the machine that will view it, with
 no time-slicing, a much higher warmup, and a second refinement level the
@@ -136,6 +140,17 @@ Total points ≈ cells × samples, so at a fixed `--points` budget raising
 `--samples` buys vertical density in the attractor at the cost of resolution in
 the *c* plane. Periodic cells only have *p* distinct heights however many
 samples are taken; the chaotic bands are where extra samples show.
+
+The live build and a bake lay their points out differently. Since card 103
+the live build packs each cell's distinct points once: a period-*p* cell
+occupies min(*p*, samples) rows of a slot, periodic cells share slots, and
+Plotted iterations hides rows in the shader, so the base grid covers the whole
+candidate pool at every Tail refinement setting and
+`data-orbit3d-layout="packed"` is reported. A bake stays stacked (every cell
+stores all of its samples, `data-orbit3d-layout="stacked"`), and the renderer
+draws it exactly as before: the same point count, the same Plotted iterations
+prefix and the same brightness, with the stacked energy factor applied in the
+shader.
 
 Each run writes the quantized `.elpc` binary and merges an entry into
 `public/baked/index.json`. The app fetches that manifest at mount and turns it
