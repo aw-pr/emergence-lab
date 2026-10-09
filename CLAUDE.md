@@ -44,7 +44,8 @@ sheet reads pale; that is a tuning question for the interestingness run
 (stages 101-102, `docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`),
 which hands the operator a shortlist and changes no default. Stages 103
 (packed cells for the orbit cloud) and 104 (a hierarchical Inside-out centre,
-gated on 103) were queued on 2026-10-06.
+gated on 103) were queued on 2026-10-06 and have since landed.
+Stages 105-107 (second refinement level, tail refinement default, wider extreme pool) landed and shipped 2026-10-08/09 with exposure 0.5 and edge glow 0.25 as the new defaults.
 
 Gray-Scott stays the priority kernel for future refinement.
 
