@@ -9,7 +9,7 @@
 - **Base branch:** dev
 - **Run branch:** autometta/109-logistic-mandelbrot-boundary-detail-ring
 - **Worker effort:** xhigh
-- **Verifier effort:** high
+- **Verifier effort:** max
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
@@ -134,3 +134,15 @@ Verifier writes the schema-valid `state/verifiers/109-logistic-mandelbrot-bounda
 ## Family-specific notes
 
 Both roles use the repo's subscription CLI routes; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex worker seat so it can launch the browser. The Claude verifier runs browser checks headless through Playwright with the same config and needs no widening. Codex worker: run every command in the foreground and write the envelope as your final action.
+
+## Re-brief 1 (2026-10-09, operator decision after attempt 1)
+
+Attempt 1 stopped correctly on the ring-sweep stop condition and is preserved at `e754c8297d041658c183162efd5f673c21a5c02b` (`wip/109-logistic-mandelbrot-boundary-detail-ring-attempt-1`). Its sweep (`docs/audits/109-boundary-detail-ring.md`, "Ring sweep at the desktop default") measured raised-point ratios of 1.0984, 1.1942, 1.2991, 1.3017 and 1.3017 at R = 2 to 6: from R = 5 the 176,694-candidate cap is full and outer rings add about 22 points per candidate. The 1.45 bar was an authoring estimate, not a product requirement. The operator has accepted about 1.3 and wants the card finished so the result can be seen. These amendments override the card text where they conflict:
+
+1. **Restore from attempt 1, not card 108.** Deliverable 0 becomes: `git checkout e754c8297 -- src/app/orbitPointBudgets.ts src/app/orbit3d.ts src/app/orbitSampler.ts src/app/webglRenderer.ts e2e/boundary-budget.spec.ts e2e/harness/packedCells.ts docs/audits/109-boundary-detail-ring.md`, then `git reset -q`. Revise the restored audit in place rather than starting a new one; keep its ring-sweep table as measured.
+2. **R is fixed at 4.** Objective item 2's "smallest integer from 2 to 6" rule and its stop condition are withdrawn. R is the constant 4 at `extreme` with boundary detail above 0, and 1 everywhere else. Do not re-run the R = 2 to 6 sweep; cite attempt 1's table as the evidence for the choice.
+3. **Criterion 2's density bar is 1.25, not 1.45.** At `extreme`, boundary detail 1 and Tail refinement 0.6, `data-orbit3d-detail-points` on the tree under test is at least 1.25 times the baseline's, and `data-orbit3d-detail-ring` reads 4. Every other clause of criterion 2 is unchanged.
+4. **Criteria 1 and 3 to 7 are now mandatory** and were not run on attempt 1; run all of them, and the whole new spec once, as the card states. Evidence goes under `e2e/artifacts/boundary-ring/`.
+5. The audit's recommendation section must state, from criterion 4's frame times and criterion 7's screenshots, whether the 20M ceiling with R = 4 is worth keeping as the desktop default, given a raised-point gain of about 30% rather than the 45% first planned.
+
+Verifier effort is raised to `max` for the judgement in criteria 4 and 7. Nothing else in the card changes.
