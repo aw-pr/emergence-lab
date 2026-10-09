@@ -146,3 +146,18 @@ Attempt 1 stopped correctly on the ring-sweep stop condition and is preserved at
 5. The audit's recommendation section must state, from criterion 4's frame times and criterion 7's screenshots, whether the 20M ceiling with R = 4 is worth keeping as the desktop default, given a raised-point gain of about 30% rather than the 45% first planned.
 
 Verifier effort is raised to `max` for the judgement in criteria 4 and 7. Nothing else in the card changes.
+
+## Re-brief 2 (2026-10-09, criterion 1 inherited assertions)
+
+Attempt 2's worker returned `partial` on criterion 1 alone (criteria 2 to 7 pass; full new spec 6/6). Its audit row 1 records four assertions in the served-baseline suites that fail identically on the dispatch base, i.e. on `dev` without this card. The attempt-1 preserved commit `e754c8297d041658c183162efd5f673c21a5c02b` is the restore point this attempt built on; this re-brief changes no deliverable and is resumed straight to the verifier.
+
+Criterion 1 is amended for exactly these four, and no others:
+
+1. `e2e/packed-cells.spec.ts` "the cardioid lattice keeps its density at tail refinement 0.6 on both live paths, and on the served baseline" (about line 196: absolute `fraction >= 0.15`).
+2. `e2e/packed-cells.spec.ts` "Plotted iterations hides rows in the shader and density leaves the visible count alone" (about lines 289-291: absolute `> 0.05`).
+3. `e2e/packed-cells.spec.ts` "a bake stays stacked and draws as before" (about line 470: absolute `> 0.1`).
+4. `e2e/refine-levels.spec.ts` "more tail detail where the tails are at 0.3 and 0.6, above the baseline, with the plane unchanged" (about line 322: strictly-greater tail density against a baseline that is identical at boundary detail 0, and an absolute plane bar).
+
+Each of the four counts as satisfied for criterion 1 when, and only when, the verifier itself shows that it fails on the served baseline with the same measured values: run the same spec and test against the dispatch base tree (baseline on 5174) as the tree under test, and record both trees' values side by side with literal evidence paths. The tree under test must not be worse than the baseline on any of those measured values beyond the run-to-run noise the verifier observes in its own repeat. Any other failing test in those suites, or any of the four failing differently on the two trees, fails criterion 1 as before. These assertions predate this card and are not repaired by it; the audit lists them as inherited.
+
+Nothing else in the card changes.
