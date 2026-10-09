@@ -4,8 +4,8 @@
 
 - **Authored:** 2026-10-09
 - **Orchestrator:** Claude Opus 5.5 <claude-opus-5-5@local>
-- **Worker:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Verifier:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Worker:** GPT-5.6 Sol <gpt-5-6-sol@local>
+- **Verifier:** Claude Opus 5.5 <claude-opus-5-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/108-logistic-mandelbrot-boundary-detail-budget
 - **Worker effort:** xhigh
@@ -13,7 +13,7 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
-- **Pairing rationale:** a budget and GPU-cost brief through the planner, the GPU builder's raised tier, the split upload card 107 introduced and the hybrid path that shares the plan, with suites from cards 103 to 107 that compare against a served baseline; that is the strongest Anthropic tier's work, as cards 103 to 107 were. Sol verifies across the family boundary with the browser evidence in hand (`Requires GUI` widens the codex seat for Playwright). Astra is not seated for an unattended run.
+- **Pairing rationale:** a budget and GPU-cost brief through the planner, the GPU builder's raised tier, the split upload card 107 introduced and the hybrid path that shares the plan, with suites from cards 103 to 107 that compare against a served baseline. The Fable seat is out for this run on quota, so Sol takes the worker seat, as it did for card 106, and runs on the OpenAI API route (`auth.codex.worker.mode: api` in the local config). Opus 5.5 verifies across the family boundary on the Claude subscription, with the browser evidence in hand. `Requires GUI` widens the codex worker seat so it can launch Playwright. Astra is not seated for an unattended run.
 
 ## Objective
 
@@ -77,7 +77,7 @@ Supporting changes are allowed only where these deliverables need them: `e2e/har
 
 ## Acceptance criteria
 
-The Sol verifier runs every command independently in the run worktree and judges all rows. A changing attribute or a green build alone cannot satisfy a rendered criterion. No required suite may pass with zero collected tests. Where a criterion names the served baseline, the unchanged tree is the dispatch base (`dev` as cut), served on port 5174 by the audit 107 recipe; a missing baseline fails that criterion.
+The verifier runs every command independently in the run worktree and judges all rows. A changing attribute or a green build alone cannot satisfy a rendered criterion. No required suite may pass with zero collected tests. Where a criterion names the served baseline, the unchanged tree is the dispatch base (`dev` as cut), served on port 5174 by the audit 107 recipe; a missing baseline fails that criterion.
 
 1. **Regression and frozen contracts.** `npm run verify`; `scripts/check-contract-test-gate.sh --worktree` exits 0; `npm run build:test && POINT_BUDGETS=1 node --test src/app/orbitPointBudgets.contract.test.cjs` (5 pass, 0 fail, 0 skipped); `EXTREME_POOL=1 node --test src/app/resolutionPreset.contract.test.cjs` (3 pass); `PARAM_PERSISTENCE=1 node --test src/app/paramPersistence.contract.test.cjs` (6 pass); `ORBIT_LEVELS=1 node --test src/app/orbitRefineLevels.contract.test.cjs` (6 pass); `ORBIT_PACKING=1 node --test src/app/orbitPacking.contract.test.cjs` (7 pass); `ORBIT_HIERARCHY=1 node --test src/app/orbitHierarchy.contract.test.cjs` (4 pass); `INSIDE_OUT_CYCLING=1 npx playwright test e2e/inside-out-cycling.contract.spec.ts --workers=1` (4 pass); `npx playwright test e2e/smoke.spec.ts --grep 'logistic-Mandelbrot|Logistic Mandelbrot|cyclic Magma|orbit camera' --workers=1`; and with the baseline served: `npx playwright test e2e/packed-cells.spec.ts --workers=1`, `npx playwright test e2e/refine-levels.spec.ts --workers=1`, `npx playwright test e2e/tail-default.spec.ts --workers=1`, and `npx playwright test e2e/inside-out-cycling.spec.ts --grep 'spread|chaotic|controls and cache|hierarchy' --workers=1`. Before implementing, run the `POINT_BUDGETS=1` command on the unchanged tree and keep its result (5 tests, 1 pass, 4 fail) as the red baseline. The verifier checks that every Deliverable 6 repair is listed in the audit and is of the kind Deliverable 6 permits.
 
@@ -117,7 +117,7 @@ On dev at `a3e1c198b`, 2026-10-09, with the stub, the frozen test and the `tscon
 
 - **Worker wall-clock:** 420 minutes
 - **Verifier wall-clock:** 240 minutes
-- Planning evidence: card 107's Fable worker and Sol verifier on a similar-sized brief over two attempts; card 104's Fable worker spent 11.0M tokens, and the Sol verifiers on 103 to 105 spent 2.5M to 6.9M. Plan 12M for the worker and 6M for the verifier. Serial.
+- Planning evidence: card 106's Sol worker spent about 18.6M tokens (about 98% cached); the Claude verifiers on 106 spent under 2.5M each and the verifiers on 103 to 107 up to 6.9M. Plan 20M for the worker and 6M for the verifier. Serial.
 - Stop with an explicit partial result if the remaining checks cannot be covered. A retry needs a re-brief.
 
 ## Verification
@@ -126,4 +126,4 @@ Verifier writes the schema-valid `state/verifiers/108-logistic-mandelbrot-bounda
 
 ## Family-specific notes
 
-Both roles use the repo's subscription CLI routes; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex seat so it can launch the browser. The Claude worker runs browser checks headless through Playwright with the same config and needs no widening.
+The Codex worker runs on the API route the operator set for this run and the Claude verifier on the subscription CLI route; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex worker seat so it can launch the browser. The Claude verifier runs browser checks headless through Playwright with the same config and needs no widening. Codex worker: run every command in the foreground and write the envelope as your final action.
