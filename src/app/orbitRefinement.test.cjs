@@ -29,12 +29,16 @@ test("orbit refinement: CPU 0.1 stays 0.1", () => {
   assert.equal(resolveOrbitRefinement(0.1, false, false), 0.1);
 });
 
-test("orbit refinement: CPU 0.45 caps at the automatic 0.3 share", () => {
-  assert.equal(resolveOrbitRefinement(0.45, false, false), 0.3);
+test("orbit refinement: CPU 0.45 stays 0.45", () => {
+  assert.equal(resolveOrbitRefinement(0.45, false, false), 0.45);
 });
 
-test("orbit refinement: CPU 0.6 caps at the automatic 0.3 share", () => {
-  assert.equal(resolveOrbitRefinement(0.6, false, false), 0.3);
+test("orbit refinement: CPU 0.6 stays 0.6", () => {
+  assert.equal(resolveOrbitRefinement(0.6, false, false), 0.6);
+});
+
+test("orbit refinement: CPU 2 clamps to 0.6", () => {
+  assert.equal(resolveOrbitRefinement(2, false, false), 0.6);
 });
 
 test("orbit refinement: CPU undefined defaults to 0.3", () => {

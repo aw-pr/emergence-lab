@@ -452,18 +452,17 @@ test.describe("boundary detail", () => {
 });
 
 test.describe("cpu", () => {
-  test("the fallback reaches the whole pool and keeps its automatic share", async ({ page }) => {
+  test("the fallback reaches the whole pool at the default share", async ({ page }) => {
     test.setTimeout(900_000);
     await requireBaseline(page);
-    // No `tailRefinement` key: the default, which the fallback reads as its
-    // automatic share.
+    // No `tailRefinement` key: the default, which the fallback now honours.
     const params = pinned({ boundaryDetail: 0 });
     delete params.tailRefinement;
     const current = await buildInContext(page, { origin: CURRENT_ORIGIN, params, preset: "extreme", cpu: true, timeoutMs: 850_000 });
     console.log(`cpu current: ${JSON.stringify({ ms: current.buildMs, candidates: current.candidateCells, base: current.baseCells, budget: current.refineRowBudget, pointBudget: current.pointBudget, points: current.points, l1: current.refinedL1SubCells, l2: current.refinedL2SubCells })}`);
     expect(current.sampler).toBe("cpu-sampled");
     expect(relative(current.candidateCells, WIDENED_POOL), "candidate cells within 2% of 2560 by 2560").toBeLessThanOrEqual(0.02);
-    expect(current.refineRowBudget, "automatic share").toBe(Math.floor(current.pointBudget * 0.3));
+    expect(current.refineRowBudget, "default share").toBe(Math.floor(current.pointBudget * 0.6));
     expect(current.points).toBeLessThanOrEqual(current.pointBudget);
     const baseline = await buildInContext(page, { origin: BASELINE_ORIGIN, params, preset: "extreme", cpu: true, timeoutMs: 600_000 });
     console.log(`cpu baseline: ${JSON.stringify({ ms: baseline.buildMs, candidates: baseline.candidateCells, base: baseline.baseCells, points: baseline.points })}`);

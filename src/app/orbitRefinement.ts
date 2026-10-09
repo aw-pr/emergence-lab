@@ -1,4 +1,5 @@
 export const REFINE_BUDGET_FRACTION = 0.3;
+export const MAX_REFINE_FRACTION = 0.6;
 
 export function resolveOrbitRefinement(
   tailRefinement: number | boolean | string | undefined,
@@ -9,9 +10,6 @@ export function resolveOrbitRefinement(
   if (typeof tailRefinement !== "number" || !Number.isFinite(tailRefinement)) {
     return REFINE_BUDGET_FRACTION;
   }
-  if (!gpuSamplerAvailable) {
-    if (tailRefinement === 0) return REFINE_BUDGET_FRACTION;
-    return Math.max(0, Math.min(REFINE_BUDGET_FRACTION, tailRefinement));
-  }
-  return Math.max(0, Math.min(0.6, tailRefinement));
+  if (!gpuSamplerAvailable && tailRefinement === 0) return REFINE_BUDGET_FRACTION;
+  return Math.max(0, Math.min(MAX_REFINE_FRACTION, tailRefinement));
 }
