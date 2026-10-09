@@ -155,7 +155,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "edgeGlow",
       label: "Edge glow",
       type: "number",
-      default: 0.25,
+      default: 1.5,
       min: 0,
       max: 2,
       step: 0.05,
