@@ -12,6 +12,10 @@ import {
   type AttractorCellMeasure,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { bakedFileFor } from "./bakedManifest.ts";
+import {
+  POINT_BUDGETS,
+  gpuPointBudgetFor,
+} from "./orbitPointBudgets.ts";
 import { resolveOrbitRefinement } from "./orbitRefinement.ts";
 export { REFINE_BUDGET_FRACTION } from "./orbitRefinement.ts";
 import {
@@ -708,14 +712,6 @@ const PERFORMANCE_CELL_CEILING = Math.ceil(384 * 384 * 1.01);
 const BALANCED_CELL_CEILING = Math.ceil(640 * 640 * 1.01);
 const HIGH_CELL_CEILING = Math.ceil(960 * 960 * 1.01);
 const ULTRA_CELL_CEILING = Math.ceil(1280 * 1280 * 1.01);
-const POINT_BUDGETS = {
-  performance: 1_000_000,
-  balanced: 2_400_000,
-  high: 3_400_000,
-  ultra: 4_800_000,
-  extreme: 9_600_000,
-  boundaryDetail: 16_000_000,
-} as const;
 const SURFACE_GRID_SIZES = {
   performance: 192,
   balanced: 256,
@@ -756,6 +752,7 @@ const CPU_LEVEL2_ADMISSION_SEED = 0x105_02;
 const MAX_WARMUP = 2000;
 const BOUNDARY_DETAIL_SUBDIVISION = 5;
 const BOUNDARY_DETAIL_WARMUP = 20_000;
+export const EXTREME_BOUNDARY_DETAIL_RING = 4;
 // A 5x5 sub-grid contributes 25 samples per parent cell. Slightly above
 // 1/25 energy parity keeps the finer structure legible without brightening
 // smooth bulb interiors.
@@ -1055,6 +1052,19 @@ export interface Orbit3DStats {
   buildBytes: number;
   /** Bytes of the GPU sampler's readback arrays the build held (0 on the CPU path). */
   samplerBytes: number;
+  /** Bytes allocated to attribute buffers read by the main point draw. */
+  mainBoundBytes: number;
+  /** Bytes allocated to attribute buffers read by the raised-tier point draw. */
+  detailBoundBytes: number;
+  /** Points stored in the raised tier's separate attribute buffers. */
+  detailPoints: number;
+  /** Escape-edge ring used by the raised tier (0 when it is inactive). */
+  detailRing: number;
+  detailCoreCandidates: number;
+  detailRingCandidates: number;
+  detailCandidatesAdmitted: number;
+  detailRingCells: readonly number[];
+  detailRingBoundedCells: readonly number[];
   samplingPath: "gpu-sampled" | "cpu-sampled" | "cpu-sampled-gpu-failed" | "prebaked";
   boundaryDetail: "off" | "active" | "degraded";
   geometryMode: Orbit3DGeometryMode;
@@ -1231,9 +1241,17 @@ export class Orbit3DPointCloud {
   private refinedL2SubCells = 0;
   private refinedL2Rows = 0;
   private refinedDetailSubCells = 0;
+  private detailRing = 0;
+  private detailCoreCandidates = 0;
+  private detailRingCandidates = 0;
+  private detailCandidatesAdmitted = 0;
+  private detailRingCells: Uint32Array = new Uint32Array(6);
+  private detailRingBoundedCells: Uint32Array = new Uint32Array(6);
   private refineJobRecords: OrbitCloudBuffers["refineJobs"] = { level1: null, level2: null };
   private buildBytes = 0;
   private samplerBytes = 0;
+  private mainBoundBytes = 0;
+  private detailBoundBytes = 0;
   // Diagnostic override (`?orbit3dSampler=cpu`): build on the CPU path even
   // though the GPU sampler is available. Inert unless set.
   private forceCpuSampling = false;
@@ -1558,6 +1576,15 @@ export class Orbit3DPointCloud {
       layout: this.layout,
       buildBytes: this.buildBytes,
       samplerBytes: this.samplerBytes,
+      mainBoundBytes: this.mainBoundBytes,
+      detailBoundBytes: this.detailBoundBytes,
+      detailPoints: this.detailPointCount,
+      detailRing: this.detailRing,
+      detailCoreCandidates: this.detailCoreCandidates,
+      detailRingCandidates: this.detailRingCandidates,
+      detailCandidatesAdmitted: this.detailCandidatesAdmitted,
+      detailRingCells: Array.from(this.detailRingCells),
+      detailRingBoundedCells: Array.from(this.detailRingBoundedCells),
       samplingPath: this.samplingPath,
       boundaryDetail: this.boundaryDetail,
       geometryMode: this.geometryMode,
@@ -1986,9 +2013,17 @@ export class Orbit3DPointCloud {
     this.refinedL2SubCells = 0;
     this.refinedL2Rows = 0;
     this.refinedDetailSubCells = 0;
+    this.detailRing = 0;
+    this.detailCoreCandidates = 0;
+    this.detailRingCandidates = 0;
+    this.detailCandidatesAdmitted = 0;
+    this.detailRingCells = new Uint32Array(6);
+    this.detailRingBoundedCells = new Uint32Array(6);
     this.refineJobRecords = { level1: null, level2: null };
     this.buildBytes = 0;
     this.samplerBytes = 0;
+    this.mainBoundBytes = 0;
+    this.detailBoundBytes = 0;
     this.rowsBySampleIndex = new Uint32Array(0);
     this.visiblePoints = 0;
   }
@@ -2011,6 +2046,11 @@ export class Orbit3DPointCloud {
     this.configurePointAttributes("prebaked");
     this.releaseDetailBlock();
     this.resetLayoutStats();
+    this.mainBoundBytes = cloud.positions.byteLength
+      + cloud.periods.byteLength
+      + cloud.centres.byteLength
+      + cloud.boundaries.byteLength
+      + cloud.weights.byteLength;
     this.samplingPath = "prebaked";
     this.boundaryDetail = "off";
     this.boundaryDetailBaseCellCount = 0;
@@ -2169,6 +2209,7 @@ export class Orbit3DPointCloud {
       boundaryDetailActive,
       gpuPointBudget,
       gpuMaxSlots,
+      boundaryDetailRing,
       boundaryDetailCandidateCap,
     } = cloudPlan;
 
@@ -2196,6 +2237,7 @@ export class Orbit3DPointCloud {
           warmupIterations,
           realSliceOnly,
           maxSlots: gpuMaxSlots,
+          gpuPointBudget,
           baseSlotCap,
           refineActive,
           refineRowBudget,
@@ -2204,6 +2246,7 @@ export class Orbit3DPointCloud {
           refineWarmup,
           refineSubdivision: REFINE_SUBDIVISION,
           boundaryDetailActive,
+          boundaryDetailRing,
           boundaryDetailCandidateCap,
           boundaryDetailWarmup: BOUNDARY_DETAIL_WARMUP,
           boundaryDetailSubdivision: BOUNDARY_DETAIL_SUBDIVISION,
@@ -2631,6 +2674,12 @@ export class Orbit3DPointCloud {
           refinedL2SubCells: level2SubCellsStored,
           refinedL2Rows: level2Packer?.rowCount ?? 0,
           refinedDetailSubCells: 0,
+          detailRing: 0,
+          detailCoreCandidates: 0,
+          detailRingCandidates: 0,
+          detailCandidatesAdmitted: 0,
+          detailRingCells: new Uint32Array(6),
+          detailRingBoundedCells: new Uint32Array(6),
           refineJobs: {
             level1: level1SampledCount === 0
               ? null
@@ -3718,6 +3767,7 @@ export class Orbit3DPointCloud {
             warmupIterations,
             realSliceOnly: false,
             maxSlots: cloudPlan.gpuMaxSlots,
+            gpuPointBudget: cloudPlan.gpuPointBudget,
             baseSlotCap: cloudPlan.baseSlotCap,
             refineActive: cloudPlan.refineActive,
             refineRowBudget: cloudPlan.refineRowBudget,
@@ -3726,6 +3776,7 @@ export class Orbit3DPointCloud {
             refineWarmup: cloudPlan.refineWarmup,
             refineSubdivision: REFINE_SUBDIVISION,
             boundaryDetailActive: cloudPlan.boundaryDetailActive,
+            boundaryDetailRing: cloudPlan.boundaryDetailRing,
             boundaryDetailCandidateCap: cloudPlan.boundaryDetailCandidateCap,
             boundaryDetailWarmup: BOUNDARY_DETAIL_WARMUP,
             boundaryDetailSubdivision: BOUNDARY_DETAIL_SUBDIVISION,
@@ -3888,6 +3939,7 @@ export class Orbit3DPointCloud {
           + submittedCentres.byteLength
           + submittedBoundaries.byteLength
           + submittedWeights.byteLength;
+        this.mainBoundBytes = this.buildBytes;
       }
       this.bandPointCount = submittedBandPointCount;
       this.hybridCloudPointCountBefore =
@@ -3937,9 +3989,19 @@ export class Orbit3DPointCloud {
       ? cloud.slotCount - cloud.boundaryDetailBaseSlots
       : 0;
     const baseSlots = cloud.slotCount - detailSlots;
-    this.uploadPointBlock(this.mainPointBuffers(), cloud, 0, baseSlots);
+    this.mainBoundBytes = this.uploadPointBlock(
+      this.mainPointBuffers(),
+      cloud,
+      0,
+      baseSlots,
+    );
     if (detailSlots > 0) {
-      this.uploadPointBlock(this.detailBuffers, cloud, baseSlots, detailSlots);
+      this.detailBoundBytes = this.uploadPointBlock(
+        this.detailBuffers,
+        cloud,
+        baseSlots,
+        detailSlots,
+      );
       this.bindPointAttributes(this.detailVao, this.detailBuffers, "packed");
       this.detailPointCount = detailSlots * cloud.sampleCount;
     } else {
@@ -3961,6 +4023,12 @@ export class Orbit3DPointCloud {
     this.refinedL2SubCells = cloud.refinedL2SubCells;
     this.refinedL2Rows = cloud.refinedL2Rows;
     this.refinedDetailSubCells = cloud.refinedDetailSubCells;
+    this.detailRing = cloud.detailRing;
+    this.detailCoreCandidates = cloud.detailCoreCandidates;
+    this.detailRingCandidates = cloud.detailRingCandidates;
+    this.detailCandidatesAdmitted = cloud.detailCandidatesAdmitted;
+    this.detailRingCells = cloud.detailRingCells;
+    this.detailRingBoundedCells = cloud.detailRingBoundedCells;
     this.refineJobRecords = cloud.refineJobs;
     this.rowsBySampleIndex = cloud.rowsBySampleIndex;
     this.buildBytes = cloud.buildBytes;
@@ -3979,19 +4047,23 @@ export class Orbit3DPointCloud {
     cloud: OrbitCloudBuffers,
     firstSlot: number,
     slots: number,
-  ): void {
+  ): number {
     const gl = this.gl;
     const rows = cloud.sampleCount;
     const whole = firstSlot === 0 && slots === cloud.slotCount;
     const bytesPerElement = Float32Array.BYTES_PER_ELEMENT;
+    let allocatedBytes = 0;
     const upload = (buffer: WebGLBuffer, data: Float32Array, components: number): void => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       if (whole) {
         gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        allocatedBytes += data.byteLength;
         return;
       }
       const rowLength = slots * components;
-      gl.bufferData(gl.ARRAY_BUFFER, rows * rowLength * bytesPerElement, gl.STATIC_DRAW);
+      const byteLength = rows * rowLength * bytesPerElement;
+      gl.bufferData(gl.ARRAY_BUFFER, byteLength, gl.STATIC_DRAW);
+      allocatedBytes += byteLength;
       for (let row = 0; row < rows; row += 1) {
         const start = (row * cloud.slotCount + firstSlot) * components;
         gl.bufferSubData(
@@ -4007,11 +4079,12 @@ export class Orbit3DPointCloud {
     upload(buffers.boundaries, cloud.boundaries, 1);
     upload(buffers.weights, cloud.weights, 1);
     upload(buffers.sampleIndices, cloud.sampleIndices, 1);
+    return allocatedBytes;
   }
 
   /** Free the raised tier's buffer storage; nothing draws from it until the next detail build. */
   private releaseDetailBlock(): void {
-    if (this.detailPointCount === 0) return;
+    if (this.detailPointCount === 0 && this.detailBoundBytes === 0) return;
     const gl = this.gl;
     const empty = new Float32Array(0);
     for (const buffer of Object.values(this.detailBuffers)) {
@@ -4019,6 +4092,7 @@ export class Orbit3DPointCloud {
       gl.bufferData(gl.ARRAY_BUFFER, empty, gl.STATIC_DRAW);
     }
     this.detailPointCount = 0;
+    this.detailBoundBytes = 0;
   }
 
   /**
@@ -4709,11 +4783,13 @@ function orbitCloudBuildPlan(
   const boundaryDetailRequested =
     !bakedRequested && !realSliceOnly && boundaryDetailLevel > 0;
   const boundaryDetailActive = boundaryDetailRequested && gpuSamplerAvailable;
+  const boundaryDetailRing = boundaryDetailActive
+    ? pointBudget === POINT_BUDGETS.extreme
+      ? EXTREME_BOUNDARY_DETAIL_RING
+      : 1
+    : 0;
   const gpuPointBudget = boundaryDetailActive
-    ? Math.floor(
-        pointBudget
-          + (POINT_BUDGETS.boundaryDetail - pointBudget) * boundaryDetailLevel,
-      )
+    ? gpuPointBudgetFor(pointBudget, boundaryDetailLevel)
     : pointBudget;
   const gpuMaxSlots = Math.max(1, Math.floor(gpuPointBudget / sampleCount));
   // The raised tier keeps its candidate pool: the rows the base tier was
@@ -4742,6 +4818,7 @@ function orbitCloudBuildPlan(
     boundaryDetailActive,
     gpuPointBudget,
     gpuMaxSlots,
+    boundaryDetailRing,
     boundaryDetailCandidateCap,
   };
 }

@@ -32,8 +32,7 @@ export const MAX_DRAW_BOUND_BYTES = 400_000_000;
  * own point budget: 20,000,000 at `extreme`, 16,000,000 at every other tier.
  */
 export function boundaryDetailCeilingFor(pointBudget: number): number {
-  void pointBudget;
-  throw new Error("card 108: boundaryDetailCeilingFor is not implemented");
+  return pointBudget === POINT_BUDGETS.extreme ? 20_000_000 : 16_000_000;
 }
 
 /**
@@ -42,14 +41,15 @@ export function boundaryDetailCeilingFor(pointBudget: number): number {
  * the result rounded down.
  */
 export function gpuPointBudgetFor(pointBudget: number, boundaryDetailLevel: number): number {
-  void pointBudget;
-  void boundaryDetailLevel;
-  throw new Error("card 108: gpuPointBudgetFor is not implemented");
+  const level = Math.max(0, Math.min(1, boundaryDetailLevel));
+  return Math.floor(
+    pointBudget + (boundaryDetailCeilingFor(pointBudget) - pointBudget) * level,
+  );
 }
 
 /** Points one draw may bind: the byte ceiling over the bytes per point. */
 export function maxPointsPerDraw(): number {
-  throw new Error("card 108: maxPointsPerDraw is not implemented");
+  return Math.floor(MAX_DRAW_BOUND_BYTES / BOUND_BYTES_PER_POINT);
 }
 
 /**
@@ -58,7 +58,8 @@ export function maxPointsPerDraw(): number {
  * than zero.
  */
 export function raisedTierPointCap(gpuPointBudget: number, lowerTierPoints: number): number {
-  void gpuPointBudget;
-  void lowerTierPoints;
-  throw new Error("card 108: raisedTierPointCap is not implemented");
+  return Math.max(
+    0,
+    Math.min(gpuPointBudget - lowerTierPoints, maxPointsPerDraw()),
+  );
 }

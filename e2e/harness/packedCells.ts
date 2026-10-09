@@ -84,6 +84,15 @@ export interface CloudStats {
   visiblePoints: number;
   buildBytes: number;
   samplerBytes: number;
+  mainBoundBytes: number;
+  detailBoundBytes: number;
+  detailPoints: number;
+  detailRing: number;
+  detailCoreCandidates: number;
+  detailRingCandidates: number;
+  detailCandidatesAdmitted: number;
+  detailRingCells: number[];
+  detailRingBoundedCells: number[];
   boundaryDetail: string;
   geometry: string;
   bandPoints: number;
@@ -117,6 +126,15 @@ export async function cloudStats(canvas: Locator): Promise<CloudStats> {
     visiblePoints: n("orbit3dVisiblePoints"),
     buildBytes: n("orbit3dBuildBytes"),
     samplerBytes: n("orbit3dSamplerBytes"),
+    mainBoundBytes: n("orbit3dMainBoundBytes"),
+    detailBoundBytes: n("orbit3dDetailBoundBytes"),
+    detailPoints: n("orbit3dDetailPoints"),
+    detailRing: n("orbit3dDetailRing"),
+    detailCoreCandidates: n("orbit3dDetailCoreCandidates"),
+    detailRingCandidates: n("orbit3dDetailRingCandidates"),
+    detailCandidatesAdmitted: n("orbit3dDetailCandidatesAdmitted"),
+    detailRingCells: (d.orbit3dDetailRingCells ?? "").split(",").filter(Boolean).map(Number),
+    detailRingBoundedCells: (d.orbit3dDetailRingBoundedCells ?? "").split(",").filter(Boolean).map(Number),
     boundaryDetail: d.orbit3dBoundaryDetail ?? "",
     geometry: d.orbit3dGeometry ?? "",
     bandPoints: n("orbit3dBandPoints"),
