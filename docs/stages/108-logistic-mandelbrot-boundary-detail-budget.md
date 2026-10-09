@@ -13,7 +13,7 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
-- **Pairing rationale:** a budget and GPU-cost brief through the planner, the GPU builder's raised tier, the split upload card 107 introduced and the hybrid path that shares the plan, with suites from cards 103 to 107 that compare against a served baseline. The Fable seat is out for this run on quota, so Sol takes the worker seat, as it did for card 106, and runs on the OpenAI API route (`auth.codex.worker.mode: api` in the local config). Opus 5.5 verifies across the family boundary on the Claude subscription, with the browser evidence in hand. `Requires GUI` widens the codex worker seat so it can launch Playwright. Astra is not seated for an unattended run.
+- **Pairing rationale:** a budget and GPU-cost brief through the planner, the GPU builder's raised tier, the split upload card 107 introduced and the hybrid path that shares the plan, with suites from cards 103 to 107 that compare against a served baseline. The Fable seat is out for this run on quota, so Sol takes the worker seat, as it did for card 106, on the subscription CLI route. Opus 5.5 verifies across the family boundary on the Claude subscription, with the browser evidence in hand. `Requires GUI` widens the codex worker seat so it can launch Playwright. Astra is not seated for an unattended run.
 
 ## Objective
 
@@ -126,4 +126,4 @@ Verifier writes the schema-valid `state/verifiers/108-logistic-mandelbrot-bounda
 
 ## Family-specific notes
 
-The Codex worker runs on the API route the operator set for this run and the Claude verifier on the subscription CLI route; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex worker seat so it can launch the browser. The Claude verifier runs browser checks headless through Playwright with the same config and needs no widening. Codex worker: run every command in the foreground and write the envelope as your final action.
+Both roles use the repo's subscription CLI routes; do not change auth routing to work around a refusal or a browser failure. Headless Chromium needs the repo's existing GPU flags for WebGL2 (`playwright.config.ts`); `Requires GUI: true` widens the codex worker seat so it can launch the browser. The Claude verifier runs browser checks headless through Playwright with the same config and needs no widening. Codex worker: run every command in the foreground and write the envelope as your final action.
