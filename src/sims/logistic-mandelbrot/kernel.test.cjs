@@ -678,11 +678,11 @@ test("metadata matches the renderer contract", () => {
   assert.equal(colourMode?.default, "inside-out");
   assert.deepEqual(colourMode?.options, ["period", "inside-out", "mono", "cycle"]);
   const exposure = kernel.paramSchema.find((d) => d.key === "exposure");
-  assert.equal(exposure?.default, 0.5);
+  assert.equal(exposure?.default, 1.3);
   const cycleBands = kernel.paramSchema.find((d) => d.key === "cycleBands");
   assert.equal(cycleBands?.default, 4);
   const edgeGlow = kernel.paramSchema.find((d) => d.key === "edgeGlow");
-  assert.equal(edgeGlow?.default, 0.5);
+  assert.equal(edgeGlow?.default, 0);
 
   const geometryMode = kernel.paramSchema.find((d) => d.key === "geometryMode");
   assert.deepEqual(geometryMode?.options, ["cloud", "hybrid"]);
