@@ -1,6 +1,6 @@
 # Autometta vendor stamp. Refresh with: autometta refresh-repo .
 source_repo: autometta
-vendored_from: 992b7c8
+vendored_from: 91059ff
 vendored_at: 2026-10-27
 file: templates/worker-prompt.md
 file: templates/verifier-prompt.md
