@@ -13,6 +13,8 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
+As of 2026-10-27, the entire later deep-zoom arc is parked at the operator's request. Normal `dev` was recreated from pre-zoom `main` (`fc063bc51`); main is unchanged. The full arc including failed 130a is preserved on `parked/logistic-mandelbrot-zoom`, checked out in `../emergence-lab-zoom-parked` and backed up to origin. Autometta dispatch is paused. Do not resume or promote the zoom work without explicit operator instruction. Read `HANDOFF.md` for runtime state, evidence and the two unrelated uncommitted guard-script edits.
+
 The logistic-Mandelbrot bifurcation reveal is landed and validated, including
 free camera navigation and the machine-local prebaked point cloud (see
 "Baking a local point cloud" in `README.md`). The analytic surface arc
