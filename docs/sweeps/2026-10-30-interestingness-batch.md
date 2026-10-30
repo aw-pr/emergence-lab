@@ -1,6 +1,6 @@
 # Interestingness sweep batch — 2026-10-30
 
-**Admission checkpoint: 13 reviewed cards; operator approval received and frozen-core preflight complete. No sweep results or preset promotions are claimed.** Dispatch remains operator-paused. Work is on dev at `14029cefb`; the parked zoom arc is excluded entirely. This report is the approval packet; the eventual result summary is a separate deliverable of card 149.
+**Queued: all 13 approved cards, 137–149, with frozen-core preflight complete. Dispatch is authorised with caps unchanged. No sweep results or preset promotions are claimed.** The operator approved clearing the pause after readiness. Initial source baseline was dev at `14029cefb`; the parked zoom arc is excluded entirely. This report is the approval packet; the eventual result summary is a separate deliverable of card 149.
 
 ## Live baseline and scope reconciliation
 
@@ -109,7 +109,7 @@ Live admission readings: no pending/in-progress stage; port5173 vacant; fleet ti
 
 ## Final admission review
 
-All twelve executable cards now name frozen tests and digests; card149 remains prose-only. Explicit node-only baselines total **25 positive controls and 21 intended failures**, with no skipped tests in each selected run. Failures identify missing new configs, retained results or metric exports; they are the worker's tasks, not broken test imports. Positive controls exercise valid/nonempty evidence and corruptions, unchanged production source/guard scripts/historical configurations and legacy scoring. ECA also verifies the existing kernel's generated-row count. Default discovery compiles all46 new tests and skips them unless their stage is selected, preserving unrelated e2e behaviour. All13 cards pass strict lint and all12 digests match.
+All twelve executable cards now name frozen tests and digests; card 149 remains prose-only. Explicit node-only baselines total **25 positive controls and 21 intended failures**, with no skipped tests in each selected run. Failures identify missing new configs, retained results or metric exports; they are the worker's tasks, not broken test imports. Positive controls exercise valid/nonempty evidence and corruptions, unchanged production source/guard scripts/historical configurations and legacy scoring. ECA also verifies the existing kernel's generated-row count. Default discovery compiles all46 new tests and skips them unless their stage is selected, preserving unrelated e2e behaviour. All13 cards pass strict lint and all12 digests match.
 
 The final fresh Claude Sonnet5.5 review cleared twelve cards and conditionally questioned Lorenz's spread truthiness. Live source and a five-identical-snapshot probe close that concern: spread.score is an object with min0/max0/standardDeviation0, so equilibria pass. No assertion was changed. Final-review usage:145,500 cache-creation input +7,649 cache-read input +2 uncached input +36,795 output =189,946 tokens. Both cold reads total265,087; lead/agent actual usage is not available in the stage ledger and is not represented as zero.
 
@@ -118,3 +118,10 @@ Live checks also confirmed all referenced config/kernel field names and enums. P
 The completion-only gate was found to admit an awaiting-integration predecessor. Cards138/139 now use Autometta's existing `Depends on` mechanism, which rejects awaiting integration and requires dependency-commit ancestry in dev. This closes the review item without changing orchestration code. All other cards remain serial, with summary149 permitted to report a partial/failed batch.
 
 Before queueing, commit these cards/tests and the HANDOFF checkpoint onto dev so ephemeral run worktrees inherit them. The approved unpause will clear only paused_until/paused_reason; caps, counters, provider routes and parked-stage records remain unchanged. Real scientific/visual results must still be independently verified; the preparation controls are not successful sweeps.
+
+
+## Queue handover
+
+Cards 137–149 were added using the canonical add-stage command in the reviewed order. Native dependency graph: valid, no errors; 138/139 await 137's landed commit. No other pending or running stages were present. Preparation committed as `2e658912f`, HANDOFF checkpoint as `08526f7cc`, backed up to private origin/dev. Main and publish were not pushed. The existing fleet tick is the dispatcher; only the approved operator pause is being cleared, without a drain, cap reset or counter reset. Stage 137 is first. The final result report remains card 149's deliverable.
+
+Pre-commit diff inspection noted trailing spaces on one blank line in each of three frozen files (138–140). Their digests remain unchanged; this cosmetic issue has no assertion effect and is not a reason to reopen frozen contracts.
