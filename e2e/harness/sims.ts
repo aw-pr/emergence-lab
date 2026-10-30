@@ -745,8 +745,42 @@ const MANDELBROT_BOUNDARY: SimSweepConfig = {
   ],
 };
 
+const JULIA_REFINED_CONSTANTS = [
+  { cRe: -0.44, cIm: 0.56 },
+  { cRe: -0.36, cIm: 0.56 },
+  { cRe: -0.36, cIm: 0.64 },
+  { cRe: -0.83, cIm: 0.141 },
+  { cRe: -0.153, cIm: 0.715 },
+  { cRe: -0.82, cIm: 0.185 },
+];
+
+const JULIA_CONNECTIVITY: SimSweepConfig = {
+  slug: "julia-set", artifactId: "sweep-139-julia-set",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { centerX: 0, centerY: 0, zoom: 0.85, maxIterations: 512,
+    autoIterations: false, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["cRe", "cIm", "zoom"].map(key => ({ key, values: [] })),
+  sets: [
+    ...[
+      { re: [-0.44, -0.42, -0.38, -0.36], im: [0.56, 0.58, 0.62, 0.64] },
+      { re: [-0.83, -0.81, -0.79, -0.77], im: [0.141, 0.151, 0.161, 0.171] },
+      { re: [-0.153, -0.133, -0.113, -0.093], im: [0.715, 0.735, 0.755, 0.775] },
+      { re: [-0.82, -0.8, -0.78, -0.76], im: [0.185, 0.195, 0.205, 0.215] },
+    ].flatMap(region => region.re.flatMap(cRe => region.im.map(cIm => ({ cRe, cIm })))),
+    ...JULIA_REFINED_CONSTANTS.flatMap(c => [1, 1.3, 1.7, 2.2].map(zoom => ({ ...c, zoom }))),
+  ],
+  references: [
+    { id: "139-current-default", label: "Kernel default (phase/cycle disabled)", params: { cRe: -0.4, cIm: 0.6, centerX: 0, centerY: 0, zoom: 1.45, maxIterations: 180, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    { id: "139-current-dendrite", label: "Dendrite seed (phase/cycle disabled)", params: { cRe: -0.8, cIm: 0.156, centerX: 0, centerY: 0, zoom: 1, maxIterations: 128, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    { id: "139-current-rabbit", label: "Douady rabbit (phase/cycle disabled)", params: { cRe: -0.123, cIm: 0.745, centerX: 0, centerY: 0, zoom: 1.15, maxIterations: 220, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
+  "sweep-139-julia-set": JULIA_CONNECTIVITY,
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
   "lorenz-attractor": LORENZ,

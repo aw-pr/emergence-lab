@@ -886,3 +886,179 @@ sweepTest("sweep kuramoto coupling", async ({ page }) => {
 sweepTest("sweep particle life", async ({ page }) => {
   await runSweep(page, SWEEP_CONFIGS["particle-life"]);
 });
+
+
+sweepTest("sweep 139 Julia connectivity transitions", async ({ page }) => {
+  test.setTimeout(900_000);
+  const config = SWEEP_CONFIGS["sweep-139-julia-set"];
+  const root = "docs/sweeps/data/2026-10-30/139";
+  const imageRoot = "docs/images/sweeps-2026-10-30";
+  const planned = expandSweep(config).map((params, i) => ({ id: `139-c${String(i + 1).padStart(2, "0")}`, params }));
+  const manifest = {
+    slug: config.slug, methodVersion: config.staticBoundary!.methodVersion,
+    grid: { width: 128, height: 128 }, warmupSteps: 0, fluxGap: 0, dt: 1,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 139 "',
+    candidates: planned, references: config.references, fixedParams: config.baseParams,
+    determinism: "Fresh deterministic Julia kernel per row, no RNG/seed, no step calls; phase0/cycle0; no rotation parameter exists.",
+    candidateCounts: { constants: 64, refinedViews: planned.length - 64 },
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md#live-baseline-and-scope-reconciliation", description: "Julia was one of five uncovered kernels: no old grid, appendix range, config, or retained Julia ranking. Historical candidate ranges: none; no old grid repeated." },
+      { source: "src/app/presets.ts", description: "Current Dendrite seed c=(-0.8,0.156), centre(0,0),zoom1,base128,phase0,cycle0.30; Douady rabbit c=(-0.123,0.745),centre(0,0),zoom1.15,base220,phase0.12,cycle0.40. Both inherit adaptive detail true. References override phase/cycle to0 only." },
+      { source: "src/sims/julia-set/kernel.ts", description: "Default c=(-0.4,0.6),centre(0,0),zoom1.45,base180,adaptive true,phase0.38,cycle0.1. Schema c real/imag [-1.5,1.5],centre[-2,2],zoom[0.25,1e8],base[16,2048]. Reference overrides phase/cycle to0." },
+    ],
+    search: {
+      constants: "Four 4x4 neighborhoods: default re[-.44,-.42,-.38,-.36] im[.56,.58,.62,.64]; dendrite re[-.83,-.81,-.79,-.77] im[.141,.151,.161,.171]; rabbit re[-.153,-.133,-.113,-.093] im[.715,.735,.755,.775]; dendrite outward flank re[-.82,-.8,-.78,-.76] im[.185,.195,.205,.215]. Enumeration re outer, im inner, neighborhoods in this order. All at zoom.85/base512/adaptive false.",
+      refined: "Six coarse constants chosen by manual 8x8 membership-montage inspection: c01 (coarse score leader), c13 (filled default-neighborhood comparison), c16 (branching star), c17 (dendrite lobes), c33 (rabbit lobes), c49 (sparse dust). Each paired with zoom[1,1.3,1.7,2.2]; centre remains0. Exact full list in candidates:24 refinements.",
+      inclusion: "Local changes around every shipped seed and default; outward dendrite flank retained to expose fragmentation and zero-score negatives. Every candidate retained regardless of score.",
+      exclusion: "No global constant slider sweep, pan search, palette/brightness/cycling search, random seed or temporal ranking; no production edits. No topology proof from raster morphology.",
+    },
+    validationPlan: { sizes: [128,256], viewport: { width:1200,height:900 }, iterations: "Exact effective doubling at256; adaptive references compensate zoom boost in base. Candidate512 to1024. Different-resolution checks are separate from numeric replay.",
+      presentation: { palette:"inferno", gamma:.7, contrast:1.5, paletteSteps:0, pointSize:1, bloom:.3, invert:false, paused:true, palettePhase:0, cycleSpeed:0 } },
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/julia-set/kernel.ts", "e2e/harness/metrics.ts"].map(p => [p,createHash("sha256").update(readFileSync(p)).digest("hex")])),
+  };
+  expect(new Set([...planned,...config.references].map(c=>c.id)).size).toBe(planned.length+config.references.length);
+  writeText(`${root}/manifest-${planned.length === 64 ? "coarse" : "refined"}.json`, JSON.stringify(manifest,null,2));
+  const drive = (params: Params, size: number) => page.evaluate(driveKernel, { registryUrl: REGISTRY_URL, slug: config.slug, params,
+    gridWidth:size,gridHeight:size,warmupSteps:0,fluxGap:0,dt:1,primaryChannel:0,preserveRange:true });
+  const candidates: ScoredCandidate[] = [];
+  const sheet = new Float32Array(8*128 * Math.ceil(planned.length/8)*128);
+  for (const c of planned) {
+    const scored = await scoreOne(page,config,c.id,c.id,c.params);
+    expect(Object.values(scored.metrics).every(Number.isFinite),c.id).toBe(true);
+    const raw = await drive(c.params,128);
+    const i = candidates.length;
+    for(let y=0;y<128;y++) for(let x=0;x<128;x++) sheet[(Math.floor(i/8)*128+y)*1024+(i%8)*128+x] = raw.frameA[y*128+x]===0 ? 0 : 1;
+    candidates.push(scored);
+    if (candidates.length % 16 === 0) console.log(`Julia measured ${candidates.length}/${planned.length}`);
+  }
+  writePng(`${ARTIFACT_ROOT}/sweep-139-julia-set/all-membership.png`,sheet,1024,Math.ceil(planned.length/8)*128,1);
+  const references: ScoredCandidate[] = [];
+  for (const c of config.references) references.push(await scoreOne(page,config,c.id,c.label,c.params));
+  const ranked = [...candidates].sort((a,b)=>b.metrics.score-a.metrics.score);
+  // Explicit evidence choices are frozen after inspection of the coarse montage.
+  const finalistIds = [ranked[0].id, "139-c65", "139-c87"];
+  const finalists = [...new Set(finalistIds)].map(id=>ranked.find(c=>c.id===id)!);
+  const replay: object[] = [], validation: any[] = [], images = new Map<string,string[]>();
+  const limit = (p: Params) => effectiveIterationLimit(Number(p.maxIterations),Number(p.zoom),Boolean(p.autoIterations));
+  await page.setViewportSize({width:1200,height:900});
+  for (const c of [...finalists,...references]) {
+    const raw = await drive(c.params,128), replayed = staticBoundaryMetrics(raw.frameA,128,128);
+    const maxDelta = Math.max(...Object.entries(replayed).map(([k,v])=>Math.abs(v-(c.metrics as any)[k])));
+    expect(maxDelta,c.id).toBeLessThanOrEqual(1e-9);
+    replay.push({id:c.id,metrics:replayed,maxAbsoluteDelta:maxDelta});
+    writeText(`${root}/${c.id}.field-128.json`,JSON.stringify({id:c.id,params:c.params,width:128,height:128,field:raw.frameA}));
+    const high = await drive(c.params,256), effective = limit(c.params), boost = effective - Number(c.params.maxIterations);
+    const comparisonParams = {...c.params,maxIterations:2*effective-boost};
+    expect(Number(comparisonParams.maxIterations)).toBeLessThanOrEqual(2048);
+    const comparison = await drive(comparisonParams,256);
+    validation.push({id:c.id,params:c.params,grid:256,effectiveLimit:effective,comparisonParams,comparisonEffectiveLimit:limit(comparisonParams),
+      metrics:staticBoundaryMetrics(high.frameA,256,256),comparisonMetrics:staticBoundaryMetrics(comparison.frameA,256,256),
+      membershipChangedFraction:high.frameA.filter((v,i)=>(v===0)!==(comparison.frameA[i]===0)).length/high.frameA.length});
+    const fieldPath = `${imageRoot}/139-${c.id}-field-256.png`;
+    const maskPath = `${imageRoot}/139-${c.id}-membership-256.png`;
+    const comparisonMaskPath = `${imageRoot}/139-${c.id}-comparison-membership-256.png`;
+    writePng(fieldPath,high.frameA,256,256,1);
+    writePng(maskPath,high.frameA.map(v=>v===0?0:1),256,256,1);
+    writePng(comparisonMaskPath,comparison.frameA.map(v=>v===0?0:1),256,256,1);
+    // Exercise the actual application and its GPU renderer through its controls.
+    await page.goto("/#/julia-set");
+    await page.reload();
+    await page.locator("[data-param-key=centerX]").waitFor();
+    const pause = page.getByRole("button", { name: "Pause", exact: true });
+    if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
+    const palette = page.locator("select").filter({ has: page.locator('option[value="inferno"]') });
+    await palette.evaluate(el => {
+      (el as HTMLSelectElement).value = "inferno";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(await palette.inputValue()).toBe("inferno");
+    await page.locator("[data-param-key=autoIterations]").evaluate((el, checked) => {
+      const input = el as HTMLInputElement;
+      if (input.checked !== checked) input.click();
+    }, Boolean(c.params.autoIterations));
+    const presentation = { Gamma: 0.7, Contrast: 1.5, "Palette steps": 0, "Point size (px)": 1, Bloom: 0.3 };
+    for (const [label, value] of Object.entries(presentation)) {
+      await page.getByText(label, { exact: true }).locator("..").locator("input").evaluate((el, value) => {
+        const input = el as HTMLInputElement;
+        input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, value);
+    }
+    await page.getByText("Invert colours", { exact: true }).locator("..").locator("input").evaluate(el => {
+      const input = el as HTMLInputElement;
+      if (input.checked) input.click();
+    });
+    for (const key of ["cycleSpeed", "palettePhase", "cRe", "cIm", "centerX", "centerY", "zoom", "maxIterations"]) {
+      await page.locator(`[data-param-key=${key}]`).evaluate((el, value) => {
+        const input = el as HTMLInputElement;
+        input.step = "any";
+        input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }, c.params[key]);
+    }
+    // The GPU draws on animation frames; release pause after all frozen inputs
+    // are installed, then pause again once the renderer has consumed them.
+    await page.getByRole("button", { name: "Play", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+    await page.waitForTimeout(500);
+    await page.getByRole("button", { name: "Pause", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+    const inputs = await page.locator("input[data-param-key]").evaluateAll(es => Object.fromEntries(es.map(el => {
+      const e = el as HTMLInputElement;
+      return [e.dataset.paramKey!, e.type === "checkbox" ? e.checked : Number(e.value)];
+    })));
+    for (const [key, value] of Object.entries(c.params)) expect(inputs[key], `app input ${key}`).toBe(value);
+    await page.waitForTimeout(1000);
+    const appPath = `${imageRoot}/139-${c.id}-app.png`;
+    await page.screenshot({ path: appPath, animations: "disabled", timeout: 20_000 });
+    const canvas = await page.locator("canvas").evaluate(el => ({ width: el.width, height: el.height, attributes: Object.fromEntries(Array.from(el.attributes, a => [a.name, a.value])) }));
+    validation[validation.length - 1] = { ...validation[validation.length - 1], app: { viewport: { width: 1200, height: 900 }, inputs, canvas, palette: "inferno", presentation, invert: false, motion: "paused; phase0 and speed0", note: "GPU app renderer; landscape aspect differs from square CPU field. UI inputs retain full precision via step=any before input/change events." } };
+    images.set(c.id, [appPath, fieldPath, maskPath, comparisonMaskPath]);
+    console.log(`Julia validated ${c.id}; replay delta ${maxDelta}`);
+
+  }
+  const result = {manifest,ranked,references,finalists:finalists.map(c=>({id:c.id,referenceId:"139-current-dendrite",images:[...images.get(c.id)!,...images.get("139-current-dendrite")!]})),
+    replay,validation,referenceImages:Object.fromEntries(images),replayTolerance:1e-9,runtime:{browser:page.context().browser()?.version(),node:process.version,platform:process.platform}};
+  writeText(`${root}/julia-set.json`,JSON.stringify(result,null,2));
+  writeText(`${ARTIFACT_ROOT}/sweep-139-julia-set/report.md`,metricsTable(ranked,["cRe","cIm","zoom"]));
+  console.log(JSON.stringify({counts:{candidates:ranked.length,references:references.length},top:ranked.slice(0,8),finalists:finalists.map(c=>c.id)},null,2));
+});
+
+const juliaReplayTest = process.env.SWEEP_REPLAY === "139" ? test : test.skip;
+juliaReplayTest("139 independently replay retained geometry through direct browser imports", async ({ page }) => {
+  test.setTimeout(180_000);
+  const data = JSON.parse(readFileSync("docs/sweeps/data/2026-10-30/139/julia-set.json", "utf8"));
+  const actual: { id: string; score: number; maxAbsoluteDelta: number; metrics: object }[] = [];
+  for (const row of [...data.manifest.candidates, ...data.references]) {
+    const measured = await page.evaluate(async params => {
+      const kernelUrl = "/src/sims/julia-set/kernel.ts";
+      const metricsUrl = "/e2e/harness/metrics.ts";
+      const { JuliaSetKernel } = await import(/* @vite-ignore */ kernelUrl);
+      const { staticBoundaryMetrics } = await import(/* @vite-ignore */ metricsUrl);
+      const kernel = new JuliaSetKernel();
+      kernel.init(128, 128, params);
+      const result = staticBoundaryMetrics(kernel.readState(), 128, 128);
+      kernel.destroy();
+      return result;
+    }, row.params);
+    const expected = [...data.ranked, ...data.references].find(c => c.id === row.id);
+    let maxAbsoluteDelta = 0;
+    for (const [key, value] of Object.entries(measured)) {
+      maxAbsoluteDelta = Math.max(maxAbsoluteDelta, Math.abs(Number(value) - expected.metrics[key]));
+    }
+    expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
+    actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta, metrics: measured });
+  }
+  const candidateIds = new Set(data.manifest.candidates.map(c => c.id));
+  expect(actual.filter(c => candidateIds.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map(c => c.id));
+  const shipped = await page.evaluate(async () => {
+    const url = "/src/app/presets.ts";
+    return (await import(/* @vite-ignore */ url)).presetsFor("julia-set");
+  });
+  expect(data.references).toHaveLength(shipped.length + 1);
+  for (const preset of shipped) {
+    const row = data.references.find(r => r.id === `139-current-${preset.id === "kernel-dendrite" ? "dendrite" : "rabbit"}`);
+    expect(row.params).toEqual({ ...preset.params, autoIterations: true, palettePhase: 0, cycleSpeed: 0 });
+  }
+  writeText("docs/sweeps/data/2026-10-30/139/direct-replay.json", JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
+  console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
+});
