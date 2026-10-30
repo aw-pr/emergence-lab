@@ -66,6 +66,17 @@ export interface InterestingnessMetrics extends FrameMetrics {
    * composite score.
    */
   channelMixing?: number;
+  /** Sign geometry of an opted-in two-channel Lyapunov field (lyapunov-sign-v1). */
+  stableFraction?: number;
+  chaoticFraction?: number;
+  zeroFraction?: number;
+  signMix?: number;
+  boundaryDensity?: number;
+  /** Lyapunov rows only: diagnostics of the raw channels, never scored. */
+  nonFiniteFraction?: number;
+  ceilingFraction?: number;
+  bothSignFraction?: number;
+  offPlaneFraction?: number;
 }
 
 export interface MetricSpread {
@@ -430,6 +441,51 @@ export function staticBoundaryMetrics(field: Field, width: number, height: numbe
   return { interiorFraction: p, edgeDensity, coarseEdgeDensity, entropy: binaryEntropy, score,
     nonFiniteFraction: invalid / n, lowerEndpointFraction: p, upperEndpointFraction: ones / n,
     outOfRangeFraction: outside / n, borderInteriorFraction: borderZeros / borderCells, borderCrossings };
+}
+
+export interface LyapunovSignMetrics {
+  stableFraction: number;
+  chaoticFraction: number;
+  zeroFraction: number;
+  signMix: number;
+  boundaryDensity: number;
+  score: number;
+}
+
+/** Sign geometry of a Lyapunov field from its two aligned magnitude channels.
+ * A cell is stable when only the stability channel is positive, chaotic when
+ * only the chaos channel is, and zero (neither sign) otherwise. signMix is
+ * 4·s·c, so empty and one-sign fields read 0 and a fully assigned balanced split
+ * reads 1. Boundary density counts opposing-sign non-wrapping horizontal and
+ * vertical pairs over all such pairs. The score ramps in over the first 5% of
+ * boundary density and falls to zero as it approaches 50%, so a balanced
+ * salt-and-pepper field cannot win on sign balance alone. */
+export function lyapunovSignMetrics(stable: Field, chaotic: Field, width: number, height: number): LyapunovSignMetrics {
+  const n = width * height;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || stable.length !== n || chaotic.length !== n) {
+    throw new Error("lyapunovSignMetrics requires two aligned, exact, nonempty rectangular fields");
+  }
+  const sign = new Int8Array(n);
+  let stableCells = 0, chaoticCells = 0;
+  for (let i = 0; i < n; i += 1) {
+    const s = stable[i] > 0, c = chaotic[i] > 0;
+    if (s && !c) { sign[i] = 1; stableCells += 1; }
+    else if (c && !s) { sign[i] = -1; chaoticCells += 1; }
+  }
+  let pairs = 0, opposing = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const here = sign[y * width + x];
+    for (const [xx, yy] of [[x + 1, y], [x, y + 1]]) {
+      if (xx >= width || yy >= height) continue;
+      pairs += 1;
+      if (here * sign[yy * width + xx] === -1) opposing += 1;
+    }
+  }
+  const stableFraction = stableCells / n, chaoticFraction = chaoticCells / n;
+  const signMix = 4 * stableFraction * chaoticFraction;
+  const boundaryDensity = pairs ? opposing / pairs : 0;
+  const score = clamp01(signMix * clamp01(boundaryDensity / 0.05) * Math.max(0, 1 - 2 * boundaryDensity) ** 2);
+  return { stableFraction, chaoticFraction, zeroFraction: (n - stableCells - chaoticCells) / n, signMix, boundaryDensity, score };
 }
 
 /** Mean metrics and population spread for deterministic frame-pair samples. */

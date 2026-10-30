@@ -58,6 +58,9 @@ export interface MultiSnapshotConfig {
 
 export interface SimSweepConfig {
   staticBoundary?: { methodVersion: "static-boundary-v1" };
+  /** Opt-in two-channel sign geometry for signed fields stored as separate
+   * magnitude channels (channel 0 stable, channel 1 chaotic). */
+  signMix?: { methodVersion: "lyapunov-sign-v1"; stableChannel: number; chaoticChannel: number };
   slug: string;
   /** Artifact directory / report id; defaults to the slug. Lets several sweeps
    * (e.g. one per map of a multi-map kernel) share a slug without colliding. */
@@ -778,7 +781,66 @@ const JULIA_CONNECTIVITY: SimSweepConfig = {
   ],
 };
 
+/** Every finite sequence enum the kernel schema exposes, in schema order. */
+export const MARKUS_SEQUENCES = ["AB", "AABB", "AAB", "ABB", "AABAB", "AAAABBBBBB"] as const;
+
+/** Eight views per sequence around the two shipped views (Zircon Zity at
+ * 3,3 zoom 1; Woven boundary at 3.48,3.64 zoom 4.5). */
+export const MARKUS_COARSE_VIEWS = [
+  { centerX: 3, centerY: 3, zoom: 1 },
+  { centerX: 3, centerY: 3, zoom: 1.6 },
+  { centerX: 3.3, centerY: 3.3, zoom: 2.4 },
+  { centerX: 2.7, centerY: 3.3, zoom: 2.4 },
+  { centerX: 3.48, centerY: 3.64, zoom: 4.5 },
+  { centerX: 3.48, centerY: 3.64, zoom: 2.8 },
+  { centerX: 3.36, centerY: 3.52, zoom: 4.5 },
+  { centerX: 3.6, centerY: 3.76, zoom: 4.5 },
+] as const;
+
+/** Second-pass views, chosen from the coarse ranking and appended after it. */
+export const MARKUS_REFINEMENT_LEADERS = [
+  { sequence: "AB", centerX: 3.48, centerY: 3.64, zoom: 2.8 },
+  { sequence: "ABB", centerX: 3.36, centerY: 3.52, zoom: 4.5 },
+  { sequence: "AABB", centerX: 3.48, centerY: 3.64, zoom: 4.5 },
+] as const;
+
+/** Each leader (the three best distinct sequence/window pairs of the coarse
+ * ranking) gets zoom factors [1.4, 2] x diagonal offsets of 0.15 of its coarse
+ * window span (2/zoom), centre rounded to 12 decimals and zoom to 6. */
+export const MARKUS_REFINED_VIEWS: Params[] = MARKUS_REFINEMENT_LEADERS.flatMap(leader =>
+  [1.4, 2].flatMap(factor => [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([dx, dy]) => {
+    const offset = 0.15 * (2 / leader.zoom);
+    return {
+      sequence: leader.sequence,
+      centerX: Number((leader.centerX + dx * offset).toFixed(12)),
+      centerY: Number((leader.centerY + dy * offset).toFixed(12)),
+      zoom: Number((leader.zoom * factor).toFixed(6)),
+    };
+  })));
+
+/** Evidence finalists (candidate ids), fixed by hand after the ranking and
+ * its montage are inspected; empty means the score leader alone. */
+export const MARKUS_FINALISTS: string[] = ["140-c06", "140-c62", "140-c69"];
+
+const MARKUS_LYAPUNOV: SimSweepConfig = {
+  slug: "markus-lyapunov", artifactId: "sweep-140-markus-lyapunov",
+  signMix: { methodVersion: "lyapunov-sign-v1", stableChannel: 0, chaoticChannel: 1 },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { warmupIterations: 300, sampleIterations: 700, rotationSpeed: 0 },
+  axes: ["sequence", "centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [
+    ...MARKUS_SEQUENCES.flatMap(sequence => MARKUS_COARSE_VIEWS.map(view => ({ sequence, ...view }))),
+    ...MARKUS_REFINED_VIEWS,
+  ],
+  references: [
+    { id: "140-current-zircon-zity", label: "Zircon Zity (rotation disabled)", params: { centerX: 3, centerY: 3, zoom: 1, warmupIterations: 200, sampleIterations: 500, sequence: "AB", rotationSpeed: 0 } },
+    { id: "140-current-woven-boundary", label: "Woven boundary (rotation disabled)", params: { centerX: 3.48, centerY: 3.64, zoom: 4.5, warmupIterations: 300, sampleIterations: 700, sequence: "AABAB", rotationSpeed: 0 } },
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-140-markus-lyapunov": MARKUS_LYAPUNOV,
   "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
   "sweep-139-julia-set": JULIA_CONNECTIVITY,
   "gray-scott": GRAY_SCOTT,

@@ -4,7 +4,7 @@ const test = require("node:test");
 // The harness metrics module is plain TypeScript with no imports, so Node can
 // require it directly under type stripping — no build step, and the unit tests
 // score exactly the source the Playwright sweep scores.
-const { channelMixing } = require("./metrics.ts");
+const { channelMixing, lyapunovSignMetrics } = require("./metrics.ts");
 
 const CHANNELS = 3;
 const WIDTH = 8;
@@ -116,4 +116,35 @@ test("channelMixing: empty cells are excluded, not scored as segregated", () => 
   assertClose(channelMixing(blended), 2 / 3);
   assertClose(channelMixing(blended, everyCell), 2 / 3);
   assert.equal(channelMixing([new Array(CELLS).fill(0), new Array(CELLS).fill(0)]), 0);
+});
+
+test("lyapunovSignMetrics: zero cells carry neither sign and scale as magnitude, not as 0/1", () => {
+  const w = 8, h = 8;
+  // Left half stable with graded magnitudes, right half chaotic; one column of
+  // each is a zero exponent so the boundary has a gap in it.
+  const stable = new Array(64).fill(0), chaotic = new Array(64).fill(0);
+  for (let i = 0; i < 64; i += 1) {
+    const x = i % w;
+    if (x < 3) stable[i] = 0.1 + 0.2 * x;
+    else if (x > 4) chaotic[i] = 0.05 * x;
+  }
+  const m = lyapunovSignMetrics(stable, chaotic, w, h);
+  assert.equal(m.stableFraction, 3 / 8);
+  assert.equal(m.chaoticFraction, 3 / 8);
+  assert.equal(m.zeroFraction, 2 / 8);
+  assertClose(m.signMix, 4 * (3 / 8) * (3 / 8));
+  // The zero columns separate the signs: no opposing neighbour pair exists.
+  assert.equal(m.boundaryDensity, 0);
+  assert.equal(m.score, 0);
+});
+
+test("lyapunovSignMetrics: rejects misaligned fields and keeps salt-and-pepper below a coherent boundary", () => {
+  assert.throws(() => lyapunovSignMetrics([0, 1], [0], 2, 1));
+  const w = 16, h = 16;
+  const stripes = new Array(w * h).fill(0).map((_, i) => ((i % w) >> 1) % 2);
+  const stripesInverse = stripes.map((v) => 1 - v);
+  const noise = new Array(w * h).fill(0).map((_, i) => (i % w + Math.floor(i / w)) % 2);
+  const striped = lyapunovSignMetrics(stripes, stripesInverse, w, h);
+  const salt = lyapunovSignMetrics(noise, noise.map((v) => 1 - v), w, h);
+  assert.ok(striped.score > 0 && salt.score === 0);
 });

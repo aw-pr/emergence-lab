@@ -7,6 +7,7 @@ import {
   channelMixing,
   circularSpatialAutocorrelation,
   gaussianBlur,
+  lyapunovSignMetrics,
   meanResultantLength,
   scoreFrames,
   staticBoundaryMetrics,
@@ -20,6 +21,10 @@ import {
 import {
   SWEEP_CONFIGS,
   MANDELBROT_REFINEMENT_CENTRES,
+  MARKUS_COARSE_VIEWS,
+  MARKUS_FINALISTS,
+  MARKUS_REFINED_VIEWS,
+  MARKUS_SEQUENCES,
   expandSweep,
   type ReferenceSet,
   type SimSweepConfig,
@@ -46,6 +51,46 @@ const DENSITY_CHANNELS = [0, 1, 2] as const;
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
+
+/** Fraction of grid cells whose (A, B) lies outside the logistic map's [0,4]²
+ * plane, where the kernel writes empty cells; mirrors sampleLyapunovGrid's
+ * cell-to-plane mapping. */
+function offPlaneFraction(params: Params, width: number, height: number): number {
+  const scale = 2 / (Math.min(width, height) * Number(params.zoom));
+  let outside = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const a = Number(params.centerX) + (x - (width - 1) / 2) * scale;
+    const b = Number(params.centerY) + (y - (height - 1) / 2) * scale;
+    if (a < 0 || a > 4 || b < 0 || b > 4) outside += 1;
+  }
+  return outside / (width * height);
+}
+
+/** Sign metrics plus raw-channel diagnostics for one pair of normalised
+ * magnitude fields (channel value / channel span, so 1 is the ceiling). */
+function markusSignRow(
+  stable: ArrayLike<number>,
+  chaotic: ArrayLike<number>,
+  width: number,
+  height: number,
+  params: Params,
+): InterestingnessMetrics {
+  const n = width * height;
+  let invalid = 0, ceiling = 0, both = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (!Number.isFinite(stable[i]) || !Number.isFinite(chaotic[i])) invalid += 1;
+    if (stable[i] >= 1) ceiling += 1;
+    if (chaotic[i] >= 1) ceiling += 1;
+    if (stable[i] > 0 && chaotic[i] > 0) both += 1;
+  }
+  return {
+    ...lyapunovSignMetrics(stable, chaotic, width, height),
+    nonFiniteFraction: invalid / n,
+    ceilingFraction: ceiling / n,
+    bothSignFraction: both / n,
+    offPlaneFraction: offPlaneFraction(params, width, height),
+  } as InterestingnessMetrics;
+}
 
 async function scoreOne(
   page: Page,
@@ -88,6 +133,14 @@ async function scoreOne(
       frameA = smoothed.frameA;
       frameB = smoothed.frameB;
       coverageThreshold = pc.coverageThreshold;
+    }
+    if (config.signMix) {
+      // Both magnitude channels are replayed at identical params and time and
+      // read unclipped; the sign is never inferred from a scalar frame.
+      const stable = config.signMix.stableChannel === config.primaryChannel ? result
+        : await page.evaluate(driveKernel, { ...snapshotConfig, primaryChannel: config.signMix.stableChannel, fluxGap: 0 });
+      const chaotic = await page.evaluate(driveKernel, { ...snapshotConfig, primaryChannel: config.signMix.chaoticChannel, fluxGap: 0 });
+      return markusSignRow(stable.frameA, chaotic.frameA, result.width, result.height, params);
     }
     const metrics = scoreFrames(
       frameA,
@@ -205,7 +258,8 @@ async function scoreOne(
 
   if (!config.multiSnapshot) {
     return { id, label, params, metrics: await scoreAtWarmup(config.warmupSteps),
-      ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}) };
+      ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}),
+      ...(config.signMix ? { methodVersion: config.signMix.methodVersion } : {}) };
   }
 
   if (config.multiSnapshot.warmupSteps.length === 0) {
@@ -1060,5 +1114,204 @@ juliaReplayTest("139 independently replay retained geometry through direct brows
     expect(row.params).toEqual({ ...preset.params, autoIterations: true, palettePhase: 0, cycleSpeed: 0 });
   }
   writeText("docs/sweeps/data/2026-10-30/139/direct-replay.json", JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
+  console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
+});
+
+
+const MARKUS_ROOT = "docs/sweeps/data/2026-10-30/140";
+const MARKUS_IMAGES = "docs/images/sweeps-2026-10-30";
+
+/** Row-wise sign map: S stable, C chaotic, 0 neither. Compact and lossless for
+ * every sign metric, which only ever tests each channel against zero. */
+function signRows(stable: ArrayLike<number>, chaotic: ArrayLike<number>, width: number, height: number): string[] {
+  const rows: string[] = [];
+  for (let y = 0; y < height; y += 1) {
+    let row = "";
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      row += stable[i] > 0 && !(chaotic[i] > 0) ? "S" : chaotic[i] > 0 && !(stable[i] > 0) ? "C" : "0";
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Grayscale sign image: chaotic black, neither-sign mid grey, stable white. */
+function signImage(rows: string[]): number[] {
+  return rows.flatMap(row => [...row].map(c => (c === "S" ? 1 : c === "C" ? 0 : 0.4)));
+}
+
+sweepTest("sweep 140 Markus-Lyapunov sign mix", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const config = SWEEP_CONFIGS["sweep-140-markus-lyapunov"];
+  const coarseOnly = MARKUS_REFINED_VIEWS.length === 0;
+  const planned = expandSweep(config).map((params, i) => ({ id: `140-c${String(i + 1).padStart(2, "0")}`, params }));
+  const { gridWidth, gridHeight } = config;
+  const manifest = {
+    slug: config.slug, methodVersion: config.signMix!.methodVersion,
+    grid: { width: gridWidth, height: gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 140 "',
+    candidates: planned, references: config.references, fixedParams: config.baseParams,
+    determinism: "Fresh deterministic Markus-Lyapunov kernel per measurement: no RNG or seed, no step calls (rotationSpeed pinned to 0). Both magnitude channels are read unclipped from the same init, at identical params.",
+    candidateCounts: { coarse: MARKUS_SEQUENCES.length * MARKUS_COARSE_VIEWS.length, refined: MARKUS_REFINED_VIEWS.length },
+    sequenceEnum: MARKUS_SEQUENCES,
+    allocation: `${MARKUS_COARSE_VIEWS.length} views for each of the ${MARKUS_SEQUENCES.length} schema sequences (${MARKUS_SEQUENCES.length * MARKUS_COARSE_VIEWS.length} coarse), then ${MARKUS_REFINED_VIEWS.length} refined views around the leading coarse windows; IDs follow expansion order, sequence outer and view inner.`,
+    coarseViews: MARKUS_COARSE_VIEWS,
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md", description: "Planning audit: markus-lyapunov was one of five kernels with no historical sweep config, grid, appendix range or retained ranking. Old coverage ranges: none. No old grid is repeated." },
+      { source: "src/app/presets.ts", description: "Shipped views: Zircon Zity (3,3, zoom 1, warmup 200, sample 500, AB) and Woven boundary (3.48,3.64, zoom 4.5, warmup 300, sample 700, AABAB). Both are references with rotationSpeed overridden to 0; the kernel default view equals Zircon Zity apart from rotation 6." },
+      { source: "src/sims/markus-lyapunov/kernel.ts", description: "Schema: centre A/B [0,4], zoom [0.25,1e8], warmup [0,2048], sample [16,2048], sequence enum AB, AABB, AAB, ABB, AABAB, AAAABBBBBB, rotationSpeed [-30,30]. Channel 0 is -min(2,max(0,-exponent)) stability magnitude, channel 1 chaos magnitude, both in [0,2]; cells outside the [0,4] plane are empty." },
+      { source: "src/sims/markus-lyapunov/model.ts", description: "Grid scale is 2/(min(width,height)*zoom) plane units per cell, centred on (centerX, centerY); sample iterations are raised with zoom by the shared automatic-detail rule in src/sims/fractal/detail.ts." },
+    ],
+    search: {
+      coarse: "Every schema sequence on one shared 8-view set: Zircon Zity neighbourhood (3,3,z1), (3,3,z1.6), (3.3,3.3,z2.4), (2.7,3.3,z2.4); Woven boundary neighbourhood (3.48,3.64,z4.5), (3.48,3.64,z2.8), (3.36,3.52,z4.5), (3.6,3.76,z4.5). Warmup 300, sample 700, rotation 0 for all.",
+      refined: MARKUS_REFINED_VIEWS.length ? "See the candidates list: views chosen from the coarse ranking, entries after the first coarse block." : "Not yet declared.",
+      exclusion: "No global slider Cartesian product, no palette or rotation search, no iteration-count search beyond the doubling recheck, no custom sequences outside the schema enum.",
+    },
+    validationPlan: { sizes: [128, 256], iteration: "Finalists and references are re-measured with warmup and sample iterations doubled (capped 2048), at 128 and 256 grids; changed-sign fraction reported against the base reading.",
+      app: "Real Renderer module (WebGL2) on the real kernel at app default Lyapunov palette (gamma 0.8, contrast 1.3), rotation 0; the app route is shelved so the full app page cannot be loaded.",
+      replay: "Fresh kernel import, absolute metric tolerance 1e-9, identical full candidate ordering." },
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/markus-lyapunov/kernel.ts", "src/sims/markus-lyapunov/model.ts", "src/sims/fractal/detail.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+  };
+  expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
+  writeText(`${MARKUS_ROOT}/manifest-${coarseOnly ? "coarse" : "refined"}.json`, JSON.stringify(manifest, null, 2));
+
+  const candidates: ScoredCandidate[] = [];
+  const sheet = new Float32Array(8 * gridWidth * Math.ceil(planned.length / 8) * gridHeight);
+  const drive = (params: Params, size: number, channel: number) => page.evaluate(driveKernel, {
+    registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: size, gridHeight: size,
+    warmupSteps: 0, fluxGap: 0, dt: 1, primaryChannel: channel, preserveRange: true });
+  const signAt = async (params: Params, size: number) => {
+    const stable = await drive(params, size, 0), chaotic = await drive(params, size, 1);
+    return { stable: stable.frameA, chaotic: chaotic.frameA, rows: signRows(stable.frameA, chaotic.frameA, size, size),
+      metrics: lyapunovSignMetrics(stable.frameA, chaotic.frameA, size, size) };
+  };
+  for (const c of planned) {
+    const scored = await scoreOne(page, config, c.id, c.id, c.params);
+    expect(Object.values(scored.metrics).every(Number.isFinite), c.id).toBe(true);
+    const raw = await signAt(c.params, gridWidth);
+    const i = candidates.length, image = signImage(raw.rows);
+    for (let y = 0; y < gridHeight; y += 1) for (let x = 0; x < gridWidth; x += 1) {
+      sheet[(Math.floor(i / 8) * gridHeight + y) * 8 * gridWidth + (i % 8) * gridWidth + x] = image[y * gridWidth + x];
+    }
+    candidates.push(scored);
+    if (candidates.length % 12 === 0) console.log(`Markus measured ${candidates.length}/${planned.length}`);
+  }
+  writePng(`${ARTIFACT_ROOT}/sweep-140-markus-lyapunov/all-sign.png`, sheet, 8 * gridWidth, Math.ceil(planned.length / 8) * gridHeight, 1);
+  const ranked = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+  writeText(`${ARTIFACT_ROOT}/sweep-140-markus-lyapunov/report.md`, metricsTable(ranked, ["sequence", "centerX", "centerY", "zoom"]));
+  if (coarseOnly) {
+    writeText(`${MARKUS_ROOT}/coarse-results.json`, JSON.stringify({ manifest, ranked }, null, 2));
+    console.log(JSON.stringify(ranked.slice(0, 12).map(c => ({ id: c.id, ...c.params, ...c.metrics })), null, 1));
+    return;
+  }
+
+  const references: ScoredCandidate[] = [];
+  for (const c of config.references) references.push(await scoreOne(page, config, c.id, c.label, c.params));
+  const finalistIds = MARKUS_FINALISTS.length ? MARKUS_FINALISTS : [ranked[0].id];
+  const finalists = finalistIds.map(id => ranked.find(c => c.id === id)!);
+  expect(finalists.every(Boolean)).toBe(true);
+  const replay: object[] = [], validation: any[] = [], images = new Map<string, string[]>();
+  const doubled = (p: Params): Params => ({ ...p, warmupIterations: Math.min(2048, Number(p.warmupIterations) * 2), sampleIterations: Math.min(2048, Number(p.sampleIterations) * 2) });
+  await page.setViewportSize({ width: 1200, height: 900 });
+  for (const c of [...finalists, ...references]) {
+    const base = await signAt(c.params, gridWidth);
+    const maxDelta = Math.max(...Object.entries(base.metrics).map(([k, v]) => Math.abs(v - (c.metrics as any)[k])));
+    expect(maxDelta, c.id).toBeLessThanOrEqual(1e-9);
+    replay.push({ id: c.id, metrics: base.metrics, maxAbsoluteDelta: maxDelta });
+    writeText(`${MARKUS_ROOT}/${c.id}.sign-${gridWidth}.json`, JSON.stringify({ id: c.id, params: c.params, width: gridWidth, height: gridHeight, legend: "S stable, C chaotic, 0 neither sign", rows: base.rows }));
+    const convergence: any[] = [];
+    let high256: string[] = [];
+    for (const size of [gridWidth, 256]) {
+      const here = size === gridWidth ? base : await signAt(c.params, size);
+      const more = await signAt(doubled(c.params), size);
+      if (size === 256) high256 = more.rows;
+      const changed = here.rows.reduce((n, row, y) => n + [...row].filter((ch, x) => ch !== more.rows[y][x]).length, 0) / (size * size);
+      convergence.push({ grid: size, metrics: here.metrics, doubledParams: doubled(c.params), doubledMetrics: more.metrics, changedSignFraction: changed,
+        diagnostics: { nonFinite: [...here.stable, ...here.chaotic].filter(v => !Number.isFinite(v)).length, ceilingCells: [...here.stable, ...here.chaotic].filter(v => v >= 1).length, offPlaneFraction: offPlaneFraction(c.params, size, size) } });
+    }
+    const base256 = await signAt(c.params, 256);
+    const signPath = `${MARKUS_IMAGES}/140-${c.id}-sign-256.png`;
+    const doubledPath = `${MARKUS_IMAGES}/140-${c.id}-sign-256-doubled.png`;
+    const magnitudePath = `${MARKUS_IMAGES}/140-${c.id}-stability-field-256.png`;
+    writePng(signPath, signImage(base256.rows), 256, 256, 1);
+    writePng(doubledPath, signImage(high256), 256, 256, 1);
+    writePng(magnitudePath, base256.stable, 256, 256, 1);
+
+    // The app route is shelved, so drive the app's own Renderer on the real kernel.
+    const appPath = `${MARKUS_IMAGES}/140-${c.id}-app.png`;
+    const rendered = await page.evaluate(async (params) => {
+      const load = (url: string) => import(/* @vite-ignore */ url);
+      const [{ Renderer }, { MarkusLyapunovKernel }, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+        load("/src/app/renderer.ts"), load("/src/sims/markus-lyapunov/kernel.ts"), load("/src/app/colormap.ts"),
+        load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts"),
+      ]);
+      document.body.innerHTML = "";
+      const canvas = document.createElement("canvas");
+      canvas.id = "markus-evidence";
+      canvas.style.cssText = "position:fixed;left:0;top:0;width:1200px;height:900px;background:#000";
+      document.body.appendChild(canvas);
+      const kernel = new MarkusLyapunovKernel();
+      const mode = getRenderMode("markus-lyapunov");
+      const profile = qualityProfileFor("markus-lyapunov", mode, "desktop");
+      const colourOptions = defaultColourOptionsFor("markus-lyapunov", kernel.channelCount);
+      const renderer = new Renderer({ canvas, kernel, params, stepsPerFrame: 1, colourOptions,
+        displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const info = { renderer: canvas.dataset.renderer, renderSize: canvas.dataset.renderSize, canvas: [canvas.width, canvas.height], colourOptions, resolution: profile.defaultPreset, running: renderer.isRunning() };
+      (window as any).__markusRenderer = renderer;
+      return info;
+    }, c.params);
+    expect(rendered.running).toBe(false);
+    await page.waitForTimeout(500);
+    await page.locator("#markus-evidence").screenshot({ path: appPath, timeout: 20_000 });
+    await page.evaluate(() => (window as any).__markusRenderer?.destroy());
+    validation.push({ id: c.id, params: c.params, convergence, app: { viewport: { width: 1200, height: 900 }, ...rendered,
+      note: "Real Renderer on the real kernel; app route is shelved. Landscape aspect shows more plane than the square CPU field along the long axis." } });
+    images.set(c.id, [appPath, signPath, doubledPath, magnitudePath]);
+    console.log(`Markus validated ${c.id}; replay delta ${maxDelta}`);
+  }
+  const referenceApps = config.references.flatMap(r => images.get(r.id)!.slice(0, 1));
+  const result = { manifest, ranked, references,
+    finalists: finalists.map(c => ({ id: c.id, referenceIds: config.references.map(r => r.id), images: [...images.get(c.id)!, ...referenceApps] })),
+    replay, validation, referenceImages: Object.fromEntries(images), replayTolerance: 1e-9,
+    runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } };
+  writeText(`${MARKUS_ROOT}/markus-lyapunov.json`, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify({ counts: { candidates: ranked.length, references: references.length }, top: ranked.slice(0, 8), finalists: finalists.map(c => c.id) }, null, 2));
+});
+
+const markusReplayTest = process.env.SWEEP_REPLAY === "140" ? test : test.skip;
+markusReplayTest("140 independently replay retained sign geometry through direct browser imports", async ({ page }) => {
+  test.setTimeout(600_000);
+  const data = JSON.parse(readFileSync(`${MARKUS_ROOT}/markus-lyapunov.json`, "utf8"));
+  const actual: { id: string; score: number; maxAbsoluteDelta: number; metrics: object }[] = [];
+  const { gridWidth: width, gridHeight: height } = SWEEP_CONFIGS["sweep-140-markus-lyapunov"];
+  for (const row of [...data.manifest.candidates, ...data.references]) {
+    const measured = await page.evaluate(async ({ params, width, height }) => {
+      const load = (url: string) => import(/* @vite-ignore */ url);
+      const [{ MarkusLyapunovKernel }, { lyapunovSignMetrics }] = await Promise.all([load("/src/sims/markus-lyapunov/kernel.ts"), load("/e2e/harness/metrics.ts")]);
+      const kernel = new MarkusLyapunovKernel();
+      kernel.init(width, height, params);
+      const state = kernel.readState();
+      const stable = new Float32Array(width * height), chaotic = new Float32Array(width * height);
+      for (let i = 0; i < width * height; i += 1) { stable[i] = state[i * 2]; chaotic[i] = state[i * 2 + 1]; }
+      kernel.destroy();
+      return lyapunovSignMetrics(stable, chaotic, width, height);
+    }, { params: row.params, width, height });
+    const expected = [...data.ranked, ...data.references].find((c: any) => c.id === row.id);
+    let maxAbsoluteDelta = 0;
+    for (const [key, value] of Object.entries(measured)) maxAbsoluteDelta = Math.max(maxAbsoluteDelta, Math.abs(Number(value) - expected.metrics[key]));
+    expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
+    actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta, metrics: measured });
+  }
+  const candidateIds = new Set(data.manifest.candidates.map((c: any) => c.id));
+  expect(actual.filter(c => candidateIds.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map((c: any) => c.id));
+  const shipped = await page.evaluate(async () => (await import(/* @vite-ignore */ "/src/app/presets.ts")).presetsFor("markus-lyapunov"));
+  expect(data.references).toHaveLength(shipped.length);
+  for (const preset of shipped) {
+    const row = data.references.find((r: any) => r.id === `140-current-${preset.id === "zircon-zity" ? "zircon-zity" : "woven-boundary"}`);
+    expect(row.params).toEqual({ ...preset.params, rotationSpeed: 0 });
+  }
+  writeText(`${MARKUS_ROOT}/direct-replay.json`, JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
   console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
 });

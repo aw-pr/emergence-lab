@@ -124,6 +124,13 @@ export function metricsTable(rows: ScoredCandidate[], paramKeys: string[]): stri
       ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.interiorFraction!, 6)} | ${fmt(r.metrics.edgeDensity!, 6)} | ${fmt(r.metrics.coarseEdgeDensity!, 6)} | ${fmt(r.metrics.entropy, 6)} |`),
     ].join("\n");
   }
+  if (rows.length && rows.every(r => r.metrics.signMix !== undefined)) {
+    return [
+      "| # | label | params | score | stable | chaotic | zero | sign mix | boundary |",
+      "|---|---|---|---:|---:|---:|---:|---:|---:|",
+      ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.stableFraction!, 6)} | ${fmt(r.metrics.chaoticFraction!, 6)} | ${fmt(r.metrics.zeroFraction!, 6)} | ${fmt(r.metrics.signMix!, 6)} | ${fmt(r.metrics.boundaryDensity!, 6)} |`),
+    ].join("\n");
+  }
   const header =
     "| # | label | params | score | entropy | autocorr | flux | coverage |\n" +
     "|---|---|---|---|---|---|---|---|";
