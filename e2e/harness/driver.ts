@@ -27,6 +27,8 @@ export interface SweepDriverConfig {
   primaryChannel: number;
   /** dt passed to step(); fixed for reproducibility. */
   dt: number;
+  /** Keep invalid/out-of-range samples observable for static diagnostics. */
+  preserveRange?: boolean;
 }
 
 export interface SweepDriverResult {
@@ -77,8 +79,10 @@ export async function driveKernel(
     const out = new Array<number>(w * h);
     for (let cell = 0; cell < w * h; cell += 1) {
       let v = (state[cell * cc + cfg.primaryChannel] - lo) / span;
-      if (v < 0) v = 0;
-      else if (v > 1) v = 1;
+      if (!cfg.preserveRange) {
+        if (v < 0) v = 0;
+        else if (v > 1) v = 1;
+      }
       out[cell] = v;
     }
     return out;

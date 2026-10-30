@@ -57,6 +57,7 @@ export interface MultiSnapshotConfig {
 }
 
 export interface SimSweepConfig {
+  staticBoundary?: { methodVersion: "static-boundary-v1" };
   slug: string;
   /** Artifact directory / report id; defaults to the slug. Lets several sweeps
    * (e.g. one per map of a multi-map kernel) share a slug without colliding. */
@@ -703,7 +704,49 @@ const PARTICLE_LIFE: SimSweepConfig = {
   ],
 };
 
+export const MANDELBROT_ANCHORS = [
+  { id: "whole-set", centerX: -0.5, centerY: 0, zoom: 1 },
+  { id: "seahorse-valley", centerX: -0.75, centerY: 0.047, zoom: 18 },
+  { id: "spiral-hub", centerX: -0.761574, centerY: -0.0847596, zoom: 96 },
+];
+
+export const MANDELBROT_REFINEMENT_CENTRES = [
+  { centerX: -0.765324, centerY: -0.0885096, zoom: 288 },
+  { centerX: -0.14, centerY: -0.36, zoom: 2.2 },
+  { centerX: -0.77, centerY: 0.067, zoom: 54 },
+];
+
+const MANDELBROT_BOUNDARY: SimSweepConfig = {
+  slug: "mandelbrot", artifactId: "sweep-137-mandelbrot",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { maxIterations: 512, autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [...MANDELBROT_ANCHORS.flatMap(anchor => [1.2, 1.6, 2.2, 3].flatMap(factor =>
+    [-0.12, 0.12].flatMap(dx => [-0.12, 0.12].map(dy => ({
+      centerX: Number((anchor.centerX + dx * 3 / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * 3 / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  )), ...MANDELBROT_REFINEMENT_CENTRES.flatMap(anchor => [1.15, 1.45].flatMap(factor =>
+    [-0.06, 0.06].flatMap(dx => [-0.06, 0.06].map(dy => ({
+      centerX: Number((anchor.centerX + dx * 3 / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * 3 / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  ))],
+  references: [
+    { id: "137-current-default", label: "Kernel default (motion disabled)", params: { centerX: -0.5, centerY: 0, zoom: 1, maxIterations: 128, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    ...MANDELBROT_ANCHORS.map((anchor, i) => ({
+      id: `137-current-${anchor.id}`, label: `${anchor.id} (motion disabled)`,
+      params: { centerX: anchor.centerX, centerY: anchor.centerY, zoom: anchor.zoom, maxIterations: [128, 256, 384][i], autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+    })),
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
   "lorenz-attractor": LORENZ,

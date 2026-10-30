@@ -1,4 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
 import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
@@ -6,6 +9,7 @@ import {
   gaussianBlur,
   meanResultantLength,
   scoreFrames,
+  staticBoundaryMetrics,
   smoothPointCloudFrames,
   spatialAutocorrelation,
   summarizeMetrics,
@@ -15,6 +19,7 @@ import {
 } from "./harness/metrics.ts";
 import {
   SWEEP_CONFIGS,
+  MANDELBROT_REFINEMENT_CENTRES,
   expandSweep,
   type ReferenceSet,
   type SimSweepConfig,
@@ -59,6 +64,7 @@ async function scoreOne(
     fluxGap: config.fluxGap,
     primaryChannel: config.primaryChannel,
     dt: config.dt,
+    preserveRange: Boolean(config.staticBoundary),
   };
   const scoreAtWarmup = async (warmupSteps: number): Promise<InterestingnessMetrics> => {
     const snapshotConfig = { ...driverConfig, warmupSteps };
@@ -90,6 +96,9 @@ async function scoreOne(
       result.height,
       coverageThreshold,
     );
+    if (config.staticBoundary) {
+      return { ...metrics, ...staticBoundaryMetrics(frameA, result.width, result.height) };
+    }
 
     if (pc?.velocityChannels) {
       // The kernels are deterministic (same params + same step count => same
@@ -195,7 +204,8 @@ async function scoreOne(
   };
 
   if (!config.multiSnapshot) {
-    return { id, label, params, metrics: await scoreAtWarmup(config.warmupSteps) };
+    return { id, label, params, metrics: await scoreAtWarmup(config.warmupSteps),
+      ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}) };
   }
 
   if (config.multiSnapshot.warmupSteps.length === 0) {
@@ -279,6 +289,47 @@ async function runSweep(
   const artifactId = config.artifactId ?? config.slug;
 
   const sweepParams = expandSweep(config);
+  const planned = sweepParams.map(params => ({
+    id: paramKeys.map(k => `${k}${params[k]}`).join("_"), params,
+  }));
+  const manifest = config.staticBoundary ? {
+    slug, methodVersion: config.staticBoundary.methodVersion,
+    grid: { width: config.gridWidth, height: config.gridHeight },
+    warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 137 "',
+    determinism: "Fixed deterministic geometry; no RNG or seed; fresh kernel per measurement.",
+    fixedParams: config.baseParams,
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/mandelbrot/kernel.ts", "src/sims/fractal/detail.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    validationPlan: {
+      shortlist: "Best scored view in each of the three anchor-scale regions; one representative per region, even if rejected. No numerical morphology labels.",
+      resolutions: [128, 256], viewport: { width: 1200, height: 900 },
+      presentation: { palette: "inferno", gamma: 0.7, contrast: 1.5, paletteSteps: 0, pointSize: 1, bloom: 0.3, invert: false, paused: true, palettePhase: 0, cycleSpeed: 0 },
+      iterationMethod: "Compute actual zoom boost; request base=2*effective-boost only if base<=2048 and effective<=4096. Otherwise measure actual effective limit against a lower reference and mark cap-limited. Additional top-view base2048 cap probe is validation, not a searched view.",
+      replay: "Same Chromium/runtime, fresh direct kernel import; absolute metric tolerance1e-9 and identical full candidate ordering. Different resolutions are separate checks.",
+    },
+    candidateCounts: { coarse: 48, refined: sweepParams.length - 48 },
+    candidates: planned,
+    effectiveLimits: planned.map(c => ({ id: c.id, effective: effectiveIterationLimit(Number(c.params.maxIterations), Number(c.params.zoom), Boolean(c.params.autoIterations)) })),
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md#live-audit", description: "Planning audit: Mandelbrot has no historical harness config, grid, appendix or retained rankings. Old coverage ranges: none. No old Mandelbrot candidate grid is repeated." },
+      { source: "src/app/presets.ts", description: "Shipped anchors: whole-set (-0.5,0,1;128), seahorse-valley (-0.75,0.047,18;256), spiral-hub (-0.761574,-0.0847596,96;384). These are references, not novel candidates; palettePhase/cycleSpeed are overridden to 0." },
+      { source: "src/sims/mandelbrot/kernel.ts", description: "Kernel default (-0.5,0,1;128), automatic detail true. Schema centre ranges [-2,1] and [-1.5,1.5], zoom [0.25,100000000], base iterations [16,2048]. Candidate base512 is a fixed measurement setting, not a parameter search." },
+      { source: "src/sims/fractal/detail.ts", description: "Effective = min(4096, bounded base + floor(48*log2(max(1,zoom)))) with automatic detail. All convergence rows record actual limits; impossible doubling uses lower reference and cap-limited uncertainty." },
+    ],
+    search: {
+      coarse: "3 shipped anchors × zoom factors [1.2,1.6,2.2,3] × x/y offsets [-0.12,+0.12] times anchor span 3/zoom = 48 views; centre rounded to 12 decimals, zoom to 6.",
+      inclusion: "Nearby nonidentical windows around all shipped anchor scales; all 48 retained, including empty/solid negatives.",
+      exclusion: "No global slider Cartesian product, far/deep zoom, palette search, motion or logistic-mandelbrot; refinement only around leading distinct coarse anchor regions, at most32 views.",
+      refined: "Best coarse window in each original anchor-scale region; choose negative-y whole-set conjugate on tied score. 3 centres × factors [1.15,1.45] × x/y offsets [-0.06,+0.06] times centre span 3/zoom =24 views. First48 entries are coarse; last24 are refined.",
+      refinementCentres: MANDELBROT_REFINEMENT_CENTRES,
+    },
+    references: config.references,
+  } : undefined;
+  if (manifest) {
+    expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
+    // Persist the declaration before the first kernel measurement.
+    writeText(`docs/sweeps/data/2026-10-30/137/manifest-${sweepParams.length === 48 ? "coarse" : "refined"}.json`, JSON.stringify(manifest, null, 2));
+  }
   const candidates: ScoredCandidate[] = [];
 
   let n = 0;
@@ -339,7 +390,7 @@ async function runSweep(
     `# Interestingness sweep — ${artifactId}`,
     "",
     `Grid ${config.gridWidth}×${config.gridHeight}, warmup ${config.warmupSteps} steps, flux gap ${config.fluxGap}.`,
-    `Scored on channel ${config.primaryChannel}, coverage threshold ${config.coverageThreshold}.`,
+    config.staticBoundary ? `Scored on channel ${config.primaryChannel}; ${config.staticBoundary.methodVersion}; zero/nonzero geometry, lag-1 and lag-2 edges; no temporal bonus.` : `Scored on channel ${config.primaryChannel}, coverage threshold ${config.coverageThreshold}.`,
     `${sweepParams.length} swept sets + ${references.length} references.`,
     "",
     "## Top candidates",
@@ -376,8 +427,10 @@ async function runSweep(
   writeText(`${ARTIFACT_ROOT}/${artifactId}/report.md`, md);
   writeText(
     `${ARTIFACT_ROOT}/${artifactId}/results.json`,
-    JSON.stringify({ ranked, references }, null, 2),
+    JSON.stringify({ ranked, references, ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}) }, null, 2),
   );
+
+  if (manifest) await retainStaticEvidence(page, config, ranked, references, manifest);
 
   const coherenceNote = (c: ScoredCandidate): string =>
     (c.metrics.velocityCoherence === undefined
@@ -398,6 +451,138 @@ async function runSweep(
   }
 
   return ranked;
+}
+
+async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: ScoredCandidate[], references: ScoredCandidate[], manifest: object): Promise<void> {
+  const root = "docs/sweeps/data/2026-10-30/137";
+  const imageRoot = "docs/images/sweeps-2026-10-30";
+  const limit = (p: Params) => effectiveIterationLimit(Number(p.maxIterations), Number(p.zoom), Boolean(p.autoIterations));
+  const drive = (p: Params, size: number) => page.evaluate(driveKernel, {
+    registryUrl: REGISTRY_URL, slug: config.slug, params: p,
+    gridWidth: size, gridHeight: size, warmupSteps: 0, fluxGap: 0, dt: 1, primaryChannel: 0, preserveRange: true,
+  });
+  // Keep spatially distinct evidence rather than three adjacent scalar winners.
+  const finalists: ScoredCandidate[] = [];
+  const region = (c: ScoredCandidate) => Number(c.params.zoom) >= 100 ? "spiral" : Number(c.params.zoom) >= 10 ? "seahorse" : "whole";
+  for (const c of ranked) {
+    if (c.metrics.score <= 0) continue;
+    if (finalists.every(f => region(f) !== region(c))) finalists.push(c);
+    if (finalists.length === 3) break;
+  }
+  expect(finalists.length).toBeGreaterThan(0);
+  const replay: object[] = [], validation: object[] = [], images = new Map<string, string[]>();
+  const selected = [...finalists, ...references];
+  await page.setViewportSize({ width: 1200, height: 900 });
+  for (const c of selected) {
+    const raw = await drive(c.params, 128);
+    const replayed = staticBoundaryMetrics(raw.frameA, 128, 128);
+    let maxDelta = 0;
+    for (const [key, value] of Object.entries(replayed)) {
+      maxDelta = Math.max(maxDelta, Math.abs(value - (c.metrics as any)[key]));
+    }
+    expect(maxDelta, `replay ${c.id}`).toBeLessThanOrEqual(1e-9);
+    const hash = createHash("sha256").update(Buffer.from(new Float32Array(raw.frameA).buffer)).digest("hex");
+    writeText(`${root}/${c.id}.field-128.json`, JSON.stringify({ id: c.id, width: 128, height: 128, params: c.params, sha256Float32: hash, field: raw.frameA }));
+    replay.push({ id: c.id, metrics: replayed, maxAbsoluteDelta: maxDelta, sha256Float32: hash });
+    const high = await drive(c.params, 256);
+    const highMetrics = staticBoundaryMetrics(high.frameA, 256, 256);
+    // Exact doubling must compensate for the automatic zoom boost.
+    const effective = limit(c.params);
+    const boost = effective - Number(c.params.maxIterations);
+    const requestedBase = 2 * effective - boost;
+    const doubled = requestedBase <= 2048 && 2 * effective <= 4096;
+    const comparisonParams = { ...c.params, maxIterations: doubled ? requestedBase : Math.max(16, Math.floor(effective / 2) - boost) };
+    const comparison = await drive(comparisonParams, 256);
+    let membershipChanged = 0, absoluteDifference = 0;
+    for (let i = 0; i < high.frameA.length; i += 1) {
+      if ((high.frameA[i] === 0) !== (comparison.frameA[i] === 0)) membershipChanged += 1;
+      absoluteDifference += Math.abs(high.frameA[i] - comparison.frameA[i]);
+    }
+    validation.push({ id: c.id, params: c.params, grid: 256, effectiveLimit: effective,
+      comparisonParams, comparisonEffectiveLimit: limit(comparisonParams), exactDoubling: doubled,
+      capLimitedUncertainty: !doubled, metrics: highMetrics,
+      comparisonMetrics: staticBoundaryMetrics(comparison.frameA, 256, 256),
+      membershipChangedFraction: membershipChanged / high.frameA.length,
+      meanAbsoluteFieldDifference: absoluteDifference / high.frameA.length });
+    const fieldPath = `${imageRoot}/137-${c.id}-field-256.png`;
+    writePng(fieldPath, high.frameA, 256, 256, 1);
+    const maskPath = `${imageRoot}/137-${c.id}-membership-256.png`;
+    writePng(maskPath, high.frameA.map(v => v === 0 ? 0 : 1), 256, 256, 1);
+    const comparisonMaskPath = `${imageRoot}/137-${c.id}-comparison-membership-256.png`;
+    writePng(comparisonMaskPath, comparison.frameA.map(v => v === 0 ? 0 : 1), 256, 256, 1);
+    // Exercise the actual application and its GPU renderer through its controls.
+    await page.goto("/#/mandelbrot");
+    await page.locator("[data-param-key=centerX]").waitFor();
+    const pause = page.getByRole("button", { name: "Pause", exact: true });
+    if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
+    const palette = page.locator("select").filter({ has: page.locator('option[value="inferno"]') });
+    await palette.evaluate(el => {
+      (el as HTMLSelectElement).value = "inferno";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(await palette.inputValue()).toBe("inferno");
+    await page.locator("[data-param-key=autoIterations]").setChecked(Boolean(c.params.autoIterations));
+    const presentation = { Gamma: 0.7, Contrast: 1.5, "Palette steps": 0, "Point size (px)": 1, Bloom: 0.3 };
+    for (const [label, value] of Object.entries(presentation)) {
+      await page.getByText(label, { exact: true }).locator("..").locator("input").evaluate((el, value) => {
+        const input = el as HTMLInputElement;
+        input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, value);
+    }
+    await page.getByText("Invert colours", { exact: true }).locator("..").locator("input").evaluate(el => {
+      const input = el as HTMLInputElement;
+      if (input.checked) input.click();
+    });
+    for (const key of ["cycleSpeed", "palettePhase", "centerX", "centerY", "zoom", "maxIterations"]) {
+      await page.locator(`[data-param-key=${key}]`).evaluate((el, value) => {
+        const input = el as HTMLInputElement;
+        input.step = "any";
+        input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }, c.params[key]);
+    }
+    const inputs = await page.locator("input[data-param-key]").evaluateAll(es => Object.fromEntries(es.map(el => {
+      const e = el as HTMLInputElement;
+      return [e.dataset.paramKey!, e.type === "checkbox" ? e.checked : Number(e.value)];
+    })));
+    for (const [key, value] of Object.entries(c.params)) expect(inputs[key], `app input ${key}`).toBe(value);
+    await page.waitForTimeout(150);
+    const appPath = `${imageRoot}/137-${c.id}-app.png`;
+    await page.screenshot({ path: appPath, animations: "disabled", timeout: 20_000 });
+    const canvas = await page.locator("canvas").evaluate(el => ({ width: el.width, height: el.height, attributes: Object.fromEntries(Array.from(el.attributes, a => [a.name, a.value])) }));
+    validation[validation.length - 1] = { ...validation[validation.length - 1], app: { viewport: { width: 1200, height: 900 }, inputs, canvas, palette: "inferno", presentation, invert: false, motion: "paused; phase0 and speed0", note: "GPU app renderer; landscape aspect differs from square CPU field. UI inputs retain full precision via step=any before input/change events." } };
+    images.set(c.id, [appPath, fieldPath, maskPath, comparisonMaskPath]);
+    console.log(`  static validation: ${c.id}; replay delta ${maxDelta}; iterations ${effective} → ${limit(comparisonParams)}`);
+  }
+  const w = 32, blank = Array(w * w).fill(0);
+  let seed = 1234567;
+  const calibration = Object.fromEntries(Object.entries({
+    empty: blank, full: blank.map(() => 1), split: blank.map((_, i) => i % w < 16 ? 0 : 1),
+    bands: blank.map((_, i) => Math.floor((i % w) / 4) % 2),
+    noise: blank.map(() => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed >>> 31; }),
+  }).map(([id, field]) => [id, staticBoundaryMetrics(field, w, w)]));
+  const capParams = { ...finalists[0].params, maxIterations: 2048 };
+  const capEffective = limit(capParams);
+  const capBoost = capEffective - 2048;
+  const lowerParams = { ...capParams, maxIterations: Math.max(16, Math.floor(capEffective / 2) - capBoost) };
+  const capField = await drive(capParams, 256), lowerField = await drive(lowerParams, 256);
+  const iterationCapProbe = { params: capParams, effectiveLimit: capEffective,
+    requestedDoubleEffectiveLimit: 2 * capEffective, requestedDoubleBase: 2 * capEffective - capBoost,
+    exactDoubling: false, capLimitedUncertainty: true, reason: "Doubling exceeds base2048 and/or effective4096; this is a capped measurement against a lower reference, not a doubling.",
+    lowerParams, lowerEffectiveLimit: limit(lowerParams),
+    metrics: staticBoundaryMetrics(capField.frameA, 256, 256), lowerMetrics: staticBoundaryMetrics(lowerField.frameA, 256, 256),
+    membershipChangedFraction: capField.frameA.filter((v, i) => (v === 0) !== (lowerField.frameA[i] === 0)).length / (256 * 256) };
+  const result = { manifest, ranked, references,
+    finalists: finalists.map(c => {
+      const referenceId = region(c) === "whole" ? "137-current-whole-set" : region(c) === "seahorse" ? "137-current-seahorse-valley" : "137-current-spiral-hub";
+      return { id: c.id, referenceId, images: [...images.get(c.id)!, ...images.get(referenceId)!] };
+    }),
+    calibration, replay, validation, iterationCapProbe, referenceImages: Object.fromEntries(images),
+    replayTolerance: 1e-9, runtime: { browser: page.context().browser()?.version(), platform: process.platform, node: process.version } };
+  writeText(`${root}/mandelbrot.json`, JSON.stringify(result, null, 2));
+  if (ranked.length === 48) writeText(`${root}/coarse-results.json`, JSON.stringify({ manifest, ranked, references }, null, 2));
 }
 
 // Always-on: a fast sanity check that the metric stack rewards a coherent Turing
@@ -514,10 +699,66 @@ test("circular autocorrelation is blind to a phase wrap", () => {
   expect(circular).toBeGreaterThan(0.7);
 });
 
+test("static boundary diagnostics expose invalid fields and ignore escape brightness", () => {
+  expect(() => staticBoundaryMetrics([], 0, 0)).toThrow();
+  expect(() => staticBoundaryMetrics([0], 2, 2)).toThrow();
+  const field = Array.from({ length: 64 }, (_, i) => i % 8 < 4 ? 0 : 0.1);
+  expect(staticBoundaryMetrics(field, 8, 8)).toEqual(staticBoundaryMetrics(field.map(v => v ? 0.9 : 0), 8, 8));
+  const invalid = staticBoundaryMetrics([0, NaN, Infinity, 2], 2, 2);
+  expect(invalid.nonFiniteFraction).toBe(0.5);
+  expect(invalid.outOfRangeFraction).toBe(0.25);
+  expect(invalid.score).toBe(0);
+});
+
+const staticReplayTest = process.env.SWEEP_REPLAY === "137" ? test : test.skip;
+staticReplayTest("137 independently replay retained geometry through direct browser imports", async ({ page }) => {
+  test.setTimeout(180_000);
+  const data = JSON.parse(readFileSync("docs/sweeps/data/2026-10-30/137/mandelbrot.json", "utf8"));
+  const actual: { id: string; score: number; maxAbsoluteDelta: number }[] = [];
+  for (const row of [...data.manifest.candidates, ...data.references]) {
+    const measured = await page.evaluate(async params => {
+      const kernelUrl = "/src/sims/mandelbrot/kernel.ts";
+      const metricsUrl = "/e2e/harness/metrics.ts";
+      const { MandelbrotKernel } = await import(/* @vite-ignore */ kernelUrl);
+      const { staticBoundaryMetrics } = await import(/* @vite-ignore */ metricsUrl);
+      const kernel = new MandelbrotKernel();
+      kernel.init(128, 128, params);
+      const result = staticBoundaryMetrics(kernel.readState(), 128, 128);
+      kernel.destroy();
+      return result;
+    }, row.params);
+    const expected = [...data.ranked, ...data.references].find(c => c.id === row.id);
+    let maxAbsoluteDelta = 0;
+    for (const [key, value] of Object.entries(measured)) {
+      maxAbsoluteDelta = Math.max(maxAbsoluteDelta, Math.abs(Number(value) - expected.metrics[key]));
+    }
+    expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
+    actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta });
+  }
+  const candidateIds = new Set(data.manifest.candidates.map(c => c.id));
+  expect(actual.filter(c => candidateIds.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map(c => c.id));
+  const shipped = await page.evaluate(async () => {
+    const url = "/src/app/presets.ts";
+    return (await import(/* @vite-ignore */ url)).presetsFor("mandelbrot");
+  });
+  expect(data.references).toHaveLength(shipped.length + 1);
+  for (const preset of shipped) {
+    const row = data.references.find(r => r.id === `137-current-${preset.id}`);
+    expect(row.params).toEqual({ ...preset.params, autoIterations: true, palettePhase: 0, cycleSpeed: 0 });
+  }
+  writeText("e2e/artifacts/sweep-137-mandelbrot/independent-replay.json", JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
+  console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
+});
+
 // Full sweeps are opt-in (SWEEP=1) — they step many kernels and take minutes.
 const sweepTest = process.env.SWEEP ? test : test.skip;
 const lorenzSnapshotsTest = process.env.LORENZ_SNAPSHOTS ? test : test.skip;
 const mixingTest = process.env.PARTICLE_LIFE_MIXING ? test : test.skip;
+
+sweepTest("sweep 137 Mandelbrot static boundaries", async ({ page }) => {
+  test.setTimeout(900_000);
+  await runSweep(page, SWEEP_CONFIGS["sweep-137-mandelbrot"]);
+});
 
 mixingTest("re-score Particle Life references under channel mixing", async ({ page }) => {
   // Stage 78 is a calibration read on the three shipped references only, not a

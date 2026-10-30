@@ -35,6 +35,9 @@ export interface FrameMetrics {
 }
 
 export interface InterestingnessMetrics extends FrameMetrics {
+  interiorFraction?: number;
+  edgeDensity?: number;
+  coarseEdgeDensity?: number;
   /** Mean absolute per-cell change between two frames, in [0, 1]. */
   temporalFlux: number;
   /** Composite interestingness score, in [0, 1]. Higher is more interesting. */
@@ -364,6 +367,69 @@ export function scoreFrames(
   const fm = frameMetrics(frameA, width, height, coverageThreshold);
   const flux = temporalFlux(frameA, frameB);
   return { ...fm, temporalFlux: flux, score: interestingness(fm, flux) };
+}
+
+export interface StaticBoundaryMetrics {
+  interiorFraction: number;
+  edgeDensity: number;
+  coarseEdgeDensity: number;
+  entropy: number;
+  score: number;
+  nonFiniteFraction: number;
+  lowerEndpointFraction: number;
+  upperEndpointFraction: number;
+  outOfRangeFraction: number;
+  borderInteriorFraction: number;
+  borderCrossings: number;
+}
+
+/** Zero/nonzero geometry only. Coarse edges use non-wrapping pairs two cells
+ * apart, without filtering or decimation. Binary entropy avoids rewarding
+ * palette brightness; the lag-1 penalty suppresses uncorrelated pixel noise.
+ * Interior is an iteration-limited zero field, not proven set membership. */
+export function staticBoundaryMetrics(field: Field, width: number, height: number): StaticBoundaryMetrics {
+  const n = width * height;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || field.length !== n) {
+    throw new Error("staticBoundaryMetrics requires an exact, nonempty rectangular field");
+  }
+  let zeros = 0, ones = 0, invalid = 0, outside = 0, borderZeros = 0, borderCells = 0;
+  for (let i = 0; i < n; i += 1) {
+    const v = field[i];
+    if (!Number.isFinite(v)) invalid += 1;
+    else if (v < 0 || v > 1) outside += 1;
+    if (v === 0) zeros += 1;
+    if (v === 1) ones += 1;
+    const x = i % width, y = Math.floor(i / width);
+    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+      borderCells += 1;
+      if (v === 0) borderZeros += 1;
+    }
+  }
+  let borderCrossings = 0;
+  const density = (lag: number): number => {
+    let pairs = 0, crossings = 0;
+    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      for (const [xx, yy] of [[x + lag, y], [x, y + lag]]) {
+        if (xx >= width || yy >= height) continue;
+        pairs += 1;
+        if ((field[i] === 0) !== (field[yy * width + xx] === 0)) {
+          crossings += 1;
+          if (lag === 1 && (x === 0 || y === 0 || xx === width - 1 || yy === height - 1)) borderCrossings += 1;
+        }
+      }
+    }
+    return pairs ? crossings / pairs : 0;
+  };
+  const p = zeros / n;
+  const edgeDensity = density(1), coarseEdgeDensity = density(2);
+  const binaryEntropy = p === 0 || p === 1 ? 0 : -p * Math.log2(p) - (1 - p) * Math.log2(1 - p);
+  const score = invalid || outside ? 0 : clamp01(
+    4 * p * (1 - p) * binaryEntropy * Math.sqrt(edgeDensity * coarseEdgeDensity) * Math.max(0, 1 - 2 * edgeDensity) ** 2,
+  );
+  return { interiorFraction: p, edgeDensity, coarseEdgeDensity, entropy: binaryEntropy, score,
+    nonFiniteFraction: invalid / n, lowerEndpointFraction: p, upperEndpointFraction: ones / n,
+    outOfRangeFraction: outside / n, borderInteriorFraction: borderZeros / borderCells, borderCrossings };
 }
 
 /** Mean metrics and population spread for deterministic frame-pair samples. */
