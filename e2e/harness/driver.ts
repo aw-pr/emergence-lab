@@ -29,6 +29,9 @@ export interface SweepDriverConfig {
   dt: number;
   /** Keep invalid/out-of-range samples observable for static diagnostics. */
   preserveRange?: boolean;
+  /** Opt-in ECA clock: exact generated rows, including init's row. fluxGap
+   * counts rows here. Extra batch rows are cropped, never counted as history. */
+  generatedRows?: number;
 }
 
 export interface SweepDriverResult {
@@ -67,18 +70,19 @@ export async function driveKernel(
   }
   const w = cfg.gridWidth;
   const h = cfg.gridHeight;
-  kernel.init(w, h, cfg.params);
+  const rowRate = cfg.generatedRows === undefined ? 1 : Number(cfg.params.stepsPerFrame ?? 1);
+  kernel.init(w, cfg.generatedRows === undefined ? h : h + rowRate - 1, cfg.params);
 
   const cc = kernel.channelCount as number;
   const range = kernel.channelRanges[cfg.primaryChannel] ?? [0, 1];
   const lo = range[0];
   const span = range[1] - range[0] || 1;
 
-  const extract = (): number[] => {
+  const extract = (rowOffset = 0): number[] => {
     const state: ArrayLike<number> = kernel.readState();
     const out = new Array<number>(w * h);
     for (let cell = 0; cell < w * h; cell += 1) {
-      let v = (state[cell * cc + cfg.primaryChannel] - lo) / span;
+      let v = (state[(cell + rowOffset * w) * cc + cfg.primaryChannel] - lo) / span;
       if (!cfg.preserveRange) {
         if (v < 0) v = 0;
         else if (v > 1) v = 1;
@@ -88,10 +92,21 @@ export async function driveKernel(
     return out;
   };
 
-  for (let i = 0; i < cfg.warmupSteps; i += 1) kernel.step(cfg.dt);
-  const frameA = extract();
-  for (let i = 0; i < cfg.fluxGap; i += 1) kernel.step(cfg.dt);
-  const frameB = extract();
+  let frameA: number[], frameB: number[];
+  if (cfg.generatedRows !== undefined) {
+    if (cfg.generatedRows < h || !Number.isInteger(rowRate) || rowRate < 1) throw new Error("Invalid generated-row clock");
+    let calls = Math.ceil((cfg.generatedRows - 1) / rowRate);
+    for (let i = 0; i < calls; i += 1) kernel.step(cfg.dt);
+    frameA = extract(1 + calls * rowRate - cfg.generatedRows);
+    const nextCalls = Math.ceil((cfg.generatedRows + cfg.fluxGap - 1) / rowRate);
+    for (; calls < nextCalls; calls += 1) kernel.step(cfg.dt);
+    frameB = extract(1 + calls * rowRate - cfg.generatedRows - cfg.fluxGap);
+  } else {
+    for (let i = 0; i < cfg.warmupSteps; i += 1) kernel.step(cfg.dt);
+    frameA = extract();
+    for (let i = 0; i < cfg.fluxGap; i += 1) kernel.step(cfg.dt);
+    frameB = extract();
+  }
 
   kernel.destroy();
   return { width: w, height: h, frameA, frameB };

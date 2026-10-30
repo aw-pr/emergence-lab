@@ -57,6 +57,7 @@ export interface MultiSnapshotConfig {
 }
 
 export interface SimSweepConfig {
+  eca?: { methodVersion: "eca-spacetime-v1" };
   staticBoundary?: { methodVersion: "static-boundary-v1" };
   /** Opt-in two-channel sign geometry for signed fields stored as separate
    * magnitude channels (channel 0 stable, channel 1 chaotic). */
@@ -840,6 +841,19 @@ const MARKUS_LYAPUNOV: SimSweepConfig = {
 };
 
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-141-elementary-cellular-automata": {
+    slug: "elementary-cellular-automata", artifactId: "sweep-141-elementary-cellular-automata",
+    eca: { methodVersion: "eca-spacetime-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 127, fluxGap: 1, dt: 1,
+    coverageThreshold: 0.5, baseParams: { stepsPerFrame: 1 },
+    axes: [{ key: "rule", values: Array.from({ length: 256 }, (_, i) => i) }, { key: "seedMode", values: [0, 1, 2] }],
+    references: [
+      { id: "141-current-rule-30", label: "Rule 30 chaos / kernel default", params: { rule: 30, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-90", label: "Rule 90 triangles", params: { rule: 90, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-110", label: "Rule 110 complexity", params: { rule: 110, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-184", label: "Rule 184 traffic", params: { rule: 184, seedMode: 1, stepsPerFrame: 2 } },
+    ],
+  },
   "sweep-140-markus-lyapunov": MARKUS_LYAPUNOV,
   "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
   "sweep-139-julia-set": JULIA_CONNECTIVITY,

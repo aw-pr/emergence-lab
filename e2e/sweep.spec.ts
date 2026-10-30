@@ -1,10 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
 import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
+  ecaClassSignals,
   circularSpatialAutocorrelation,
   gaussianBlur,
   lyapunovSignMetrics,
@@ -109,10 +111,11 @@ async function scoreOne(
     fluxGap: config.fluxGap,
     primaryChannel: config.primaryChannel,
     dt: config.dt,
-    preserveRange: Boolean(config.staticBoundary),
+    preserveRange: Boolean(config.staticBoundary || config.eca),
   };
   const scoreAtWarmup = async (warmupSteps: number): Promise<InterestingnessMetrics> => {
-    const snapshotConfig = { ...driverConfig, warmupSteps };
+    const snapshotConfig = { ...driverConfig, warmupSteps,
+      ...(config.eca ? { generatedRows: warmupSteps + 1 } : {}) };
     const result = await page.evaluate(driveKernel, snapshotConfig);
 
     // Point-cloud sims (config.pointCloud) score a Gaussian-smoothed density
@@ -149,6 +152,7 @@ async function scoreOne(
       result.height,
       coverageThreshold,
     );
+    if (config.eca) return { ...metrics, ...ecaClassSignals(frameA, result.width, result.height) };
     if (config.staticBoundary) {
       return { ...metrics, ...staticBoundaryMetrics(frameA, result.width, result.height) };
     }
@@ -259,7 +263,8 @@ async function scoreOne(
   if (!config.multiSnapshot) {
     return { id, label, params, metrics: await scoreAtWarmup(config.warmupSteps),
       ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}),
-      ...(config.signMix ? { methodVersion: config.signMix.methodVersion } : {}) };
+      ...(config.signMix ? { methodVersion: config.signMix.methodVersion } : {}),
+      ...(config.eca ? { methodVersion: config.eca.methodVersion } : {}) };
   }
 
   if (config.multiSnapshot.warmupSteps.length === 0) {
@@ -1314,4 +1319,251 @@ markusReplayTest("140 independently replay retained sign geometry through direct
   }
   writeText(`${MARKUS_ROOT}/direct-replay.json`, JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
   console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
+});
+
+const ECA_ROOT = "docs/sweeps/data/2026-10-30/141";
+const ECA_IMAGES = "docs/images/sweeps-2026-10-30";
+// Evidence selections are fixed after inspecting the complete census montage.
+const ECA_FINALISTS = ["141-r054-s1", "141-r106-s1", "141-r057-s0"];
+
+function ecaId(params: Params): string {
+  return `141-r${String(params.rule).padStart(3, "0")}-s${params.seedMode}`;
+}
+
+function ecaEquivalents(rule: number): { mirror: number; complement: number; mirrorComplement: number; representative: number } {
+  let mirror = 0, complement = 0;
+  for (let n = 0; n < 8; n += 1) {
+    const reversed = ((n & 1) << 2) | (n & 2) | ((n & 4) >> 2);
+    mirror |= ((rule >> reversed) & 1) << n;
+    complement |= (1 - ((rule >> (7 - n)) & 1)) << n;
+  }
+  let mirrorComplement = 0;
+  for (let n = 0; n < 8; n += 1) {
+    const reversed = ((n & 1) << 2) | (n & 2) | ((n & 4) >> 2);
+    mirrorComplement |= ((complement >> reversed) & 1) << n;
+  }
+  return { mirror, complement, mirrorComplement, representative: Math.min(rule, mirror, complement, mirrorComplement) };
+}
+
+function ecaReadings(frameA: number[], frameB: number[], width: number, height: number): InterestingnessMetrics {
+  return { ...scoreFrames(frameA, frameB, width, height, 0.5), ...ecaClassSignals(frameA, width, height) };
+}
+
+function ecaDiagnostics(field: number[]) {
+  return { nonFiniteFraction: field.filter(v => !Number.isFinite(v)).length / field.length,
+    lowerEndpointFraction: field.filter(v => v === 0).length / field.length,
+    upperEndpointFraction: field.filter(v => v === 1).length / field.length,
+    outOfRangeFraction: field.filter(v => v < 0 || v > 1).length / field.length,
+    offFrameClippingFraction: 0 };
+}
+
+const encodeEcaField = (field: number[]) => deflateSync(Uint8Array.from(field)).toString("base64");
+const decodeEcaField = (field: string) => Array.from(inflateSync(Buffer.from(field, "base64")));
+
+async function ecaDrive(page: Page, params: Params, size: number, generatedRows: number) {
+  return page.evaluate(driveKernel, { registryUrl: REGISTRY_URL, slug: "elementary-cellular-automata", params,
+    gridWidth: size, gridHeight: size, warmupSteps: generatedRows - 1, generatedRows,
+    fluxGap: 1, dt: 1, primaryChannel: 0, preserveRange: true });
+}
+
+sweepTest("sweep 141 ECA labelled rule and seed census", async ({ page }) => {
+  test.setTimeout(1_800_000);
+  const config = SWEEP_CONFIGS["sweep-141-elementary-cellular-automata"];
+  const planned = expandSweep(config).map(params => ({ id: ecaId(params), params }));
+  const manifest = {
+    slug: config.slug, methodVersion: config.eca!.methodVersion,
+    grid: { width: 128, height: 128 }, warmupSteps: 127, fluxGap: 1, dt: 1,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 141 "',
+    candidates: planned, references: config.references, fixedParams: config.baseParams,
+    axes: { rule: Array.from({ length: 256 }, (_, i) => i), seedMode: [0, 1, 2] },
+    generatedRows: 128, initialRowOffset: 1, historyOrder: "newest first",
+    determinism: "No RNG seed parameter. seedMode0: single centre cell; seedMode1: coordinateHash(x)<0.22; seedMode2: repeating 011010. Fresh kernel per reading; coordinate hash is deterministic but width changes the input row.",
+    clock: "Init writes generation0. Census:127 step calls at stepsPerFrame1. Exact target history is generations0..127; flux partner1..128. Shipped traffic uses stepsPerFrame2:64 calls generate through128; retain an extra row and crop the overshoot to recover0..127, then shift the crop for1..128 without a further call. No padding is scored.",
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md", description: "Live audit lists ECA among five kernels lacking a historical config. Prior grid/appendix ranges: none; no historical ECA candidate sweep is repeated." },
+      { source: "src/app/presets.ts", description: "All four current presets: (rule,seedMode,stepsPerFrame)=(30,0,1),(90,0,1),(110,0,1),(184,1,2). These are references, not claimed discoveries. Kernel default equals Rule30." },
+      { source: "src/sims/elementary-cellular-automata/kernel.ts", description: "Schema spans every integer rule0..255, seedMode0..2, stepsPerFrame1..32. Periodic spatial boundary, one generated row at init. Full labelled-rule census, no equivalence deduplication. Mirror/complement transforms annotate rule tables only; seed-specific outputs need not be equivalent." },
+    ],
+    inclusion: "Every labelled rule at all three built-in seed modes, including blank/solid/periodic negatives and shipped rules. Rule0,204,30,90,110 are calibrations, not automatic class proofs.",
+    exclusion: "No speed search, arbitrary seed values, seed replication, custom initial rows, automatic Wolfram classes, palette search or production changes.",
+    validationPlan: { shortlist: "At most3 diverse evidence selections after census inspection; no promotion quota.",
+      sizes: [128, 256], generatedRows: [256, 384, 512, 1024],
+      longerHistoryAllowance: 24, plannedFinalistLongerChecks: 12, plannedNegativeLongerChecks: 1,
+      note: "Three256-square frames after256,384,512 generated rows plus a1024-row horizon. References/calibrations/replays are additional. All current references get the same settings.",
+      app: "Real app route screenshot plus deterministic real WebGL Renderer snapshots on the real kernel. Grayscale fields labelled separately.",
+      replay: "All768 candidates and4 references; exact ordering, absolute metric tolerance1e-9." },
+    rawEncoding: "zlib-deflate of width*height uint8 cells in row-major newest-first order, base64; frameA and frameB per id in raw-fields.json. Values are actual binary kernel outputs, no quantization loss.",
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/elementary-cellular-automata/kernel.ts", "e2e/harness/driver.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+  };
+  expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(772);
+  writeText(`${ECA_ROOT}/manifest.json`, JSON.stringify(manifest, null, 2));
+  const candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [];
+  const raw: Record<string, object> = {};
+  const sheetWidth = 16 * 128, sheetHeight = 48 * 128;
+  const sheet = new Uint8Array(sheetWidth * sheetHeight);
+  for (const c of [...planned, ...config.references]) {
+    const fields = await ecaDrive(page, c.params, 128, 128);
+    const scored = await scoreOne(page, config, c.id, "label" in c ? c.label as string : c.id, c.params);
+    expect(scored.metrics).toEqual(ecaReadings(fields.frameA, fields.frameB, 128, 128));
+    expect(Object.values(scored.metrics).every(Number.isFinite), c.id).toBe(true);
+    const diagnostics = ecaDiagnostics(fields.frameA);
+    expect(diagnostics.nonFiniteFraction + diagnostics.outOfRangeFraction).toBe(0);
+    raw[c.id] = { frameA: encodeEcaField(fields.frameA), frameB: encodeEcaField(fields.frameB), diagnostics,
+      equivalents: ecaEquivalents(Number(c.params.rule)) };
+    if (candidates.length < planned.length) {
+      const i = candidates.length;
+      for (let y = 0; y < 128; y += 1) for (let x = 0; x < 128; x += 1) {
+        sheet[(Math.floor(i / 16) * 128 + y) * sheetWidth + (i % 16) * 128 + x] = fields.frameA[y * 128 + x];
+      }
+      candidates.push(scored);
+    } else references.push(scored);
+    if (candidates.length % 96 === 0 && references.length === 0) console.log(`ECA measured ${candidates.length}/768`);
+  }
+  const ranked = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+  writePng(`${ARTIFACT_ROOT}/sweep-141-elementary-cellular-automata/census.png`, sheet, sheetWidth, sheetHeight, 1);
+  writeText(`${ECA_ROOT}/raw-fields.json`, JSON.stringify({ encoding: manifest.rawEncoding, width: 128, height: 128, readings: raw }));
+  writeText(`${ARTIFACT_ROOT}/sweep-141-elementary-cellular-automata/report.md`, metricsTable(ranked, ["rule", "seedMode"]));
+  writeText(`${ARTIFACT_ROOT}/sweep-141-elementary-cellular-automata/census.json`, JSON.stringify({ manifest, ranked, references }));
+  if (process.env.SWEEP_141_CENSUS_ONLY) return;
+
+  const negative = ranked[0];
+  const negativeBase = await ecaDrive(page, negative.params, 128, 128);
+  const negativeLong = await ecaDrive(page, negative.params, 256, 1024);
+  const negativeImages = [`${ECA_IMAGES}/${negative.id}-rejected-field-128.png`, `${ECA_IMAGES}/${negative.id}-rejected-field-256-rows1024.png`];
+  writePng(negativeImages[0], negativeBase.frameA, 128, 128, 2);
+  writePng(negativeImages[1], negativeLong.frameA, 256, 256, 1);
+  const negativeControl = { id: negative.id, params: negative.params, images: negativeImages,
+    generatedRows: 1024, width: 256, height: 256,
+    metrics: ecaReadings(negativeLong.frameA, negativeLong.frameB, 256, 256),
+    diagnostics: ecaDiagnostics(negativeLong.frameA), frameA: encodeEcaField(negativeLong.frameA), frameB: encodeEcaField(negativeLong.frameB) };
+  const finalists = ECA_FINALISTS.map(id => ranked.find(c => c.id === id)!);
+  expect(finalists).toHaveLength(3);
+  expect(finalists.every(Boolean)).toBe(true);
+  const validation: object[] = [], images = new Map<string, string[]>(), replay: object[] = [];
+  for (const c of [...finalists, ...references]) {
+    const base = await ecaDrive(page, c.params, 128, 128);
+    const measured = ecaReadings(base.frameA, base.frameB, 128, 128);
+    const maxAbsoluteDelta = Math.max(...Object.entries(measured).map(([k, v]) => Math.abs(v! - (c.metrics as any)[k])));
+    expect(maxAbsoluteDelta).toBeLessThanOrEqual(1e-9);
+    replay.push({ id: c.id, metrics: measured, maxAbsoluteDelta });
+    const paths: string[] = [], histories: object[] = [];
+    for (const generatedRows of [256, 384, 512, 1024]) {
+      const fields = await ecaDrive(page, c.params, 256, generatedRows);
+      const fieldPath = `${ECA_IMAGES}/${c.id}-field-256-rows${generatedRows}.png`;
+      writePng(fieldPath, fields.frameA, 256, 256, 1);
+      const appPath = `${ECA_IMAGES}/${c.id}-renderer-256-rows${generatedRows}.png`;
+      await page.setViewportSize({ width: 256, height: 256 });
+      const rendering = await page.evaluate(async ({ params, generatedRows }) => {
+        const load = (u: string) => import(/* @vite-ignore */ u);
+        const [{ Renderer }, { ElementaryCellularAutomataKernel }, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+          load("/src/app/renderer.ts"), load("/src/sims/elementary-cellular-automata/kernel.ts"), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts")]);
+        document.body.innerHTML = "";
+        const canvas = document.createElement("canvas"); canvas.id = "eca-evidence";
+        canvas.style.cssText = "position:fixed;left:0;top:0;width:256px;height:256px"; document.body.appendChild(canvas);
+        let grid: number[] = [], state: Float32Array;
+        class SnapshotKernel extends ElementaryCellularAutomataKernel {
+          init(w: number, h: number, p: Params) {
+            const rate = Number(p.stepsPerFrame), calls = Math.ceil((generatedRows - 1) / rate);
+            super.init(w, h + rate - 1, p);
+            for (let i = 0; i < calls; i += 1) super.step(1);
+            const offset = (1 + calls * rate - generatedRows) * w;
+            state = super.readState().slice(offset, offset + w * h); grid = [w, h];
+          }
+          readState() { return state; }
+        }
+        const kernel = new SnapshotKernel(), mode = getRenderMode("elementary-cellular-automata");
+        const profile = qualityProfileFor("elementary-cellular-automata", mode, "desktop");
+        const colourOptions = defaultColourOptionsFor("elementary-cellular-automata", 1);
+        const renderer = new Renderer({ canvas, kernel, params, stepsPerFrame: 1, colourOptions,
+          displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        (window as any).__ecaRenderer = renderer;
+        return { grid, canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer, running: renderer.isRunning(), colourOptions,
+          field: Array.from(state!) };
+      }, { params: c.params, generatedRows });
+      expect(rendering.grid).toEqual([256, 256]);
+      expect(rendering.field).toEqual(fields.frameA);
+      expect(rendering.running).toBe(false);
+      expect(rendering.renderer).toBe("webgl2");
+      await page.locator("#eca-evidence").screenshot({ path: appPath });
+      await page.evaluate(() => (window as any).__ecaRenderer.destroy());
+      const { field: _, ...renderInfo } = rendering;
+      histories.push({ generatedRows, width: 256, height: 256, params: c.params,
+        stepCalls: Math.ceil((generatedRows - 1) / Number(c.params.stepsPerFrame)),
+        metrics: ecaReadings(fields.frameA, fields.frameB, 256, 256), diagnostics: ecaDiagnostics(fields.frameA),
+        frameA: encodeEcaField(fields.frameA), frameB: encodeEcaField(fields.frameB), fieldImage: fieldPath, appRendererImage: appPath, renderInfo });
+      paths.push(appPath, fieldPath);
+    }
+    await page.setViewportSize({ width: 1200, height: 900 });
+    // Force a document load after the isolated Renderer replaced the app DOM.
+    await page.goto(`/?sweep141=${c.id}#/elementary-cellular-automata`);
+    await page.locator("[data-param-key=rule]").waitFor({ timeout: 20_000 });
+    const pause = page.getByRole("button", { name: "Pause", exact: true });
+    if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
+    for (const [key, value] of Object.entries(c.params)) {
+      await page.locator(`[data-param-key=${key}]`).evaluate((el, value) => {
+        const input = el as HTMLInputElement; input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+      }, value);
+    }
+    await page.getByRole("button", { name: "Reset", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+    await page.getByRole("button", { name: "Play", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+    await page.waitForTimeout(3000);
+    await page.getByRole("button", { name: "Pause", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+    const appPath = `${ECA_IMAGES}/${c.id}-app-live.png`;
+    await page.screenshot({ path: appPath, animations: "disabled" });
+    const canvas = await page.locator("canvas").evaluate(e => ({ width: e.width, height: e.height, data: { ...e.dataset } }));
+    const inputs = await page.locator("[data-param-key]").evaluateAll(es => Object.fromEntries(es.map(e => [(e as HTMLElement).dataset.paramKey, Number((e as HTMLInputElement).value)])));
+    for (const [key, value] of Object.entries(c.params)) expect(inputs[key]).toBe(value);
+    paths.push(appPath);
+    c.thumb = paths[0];
+    validation.push({ id: c.id, histories, liveApp: { path: appPath, canvas, inputs, viewport: [1200, 900], timing: "3 seconds of live play, paused for capture; timing and generated-row count uncontrolled. Qualitative UI evidence only; numeric and equal-history comparisons use renderer-256 images." } });
+    images.set(c.id, paths);
+    console.log(`ECA validated ${c.id}; exact replay delta ${maxAbsoluteDelta}`);
+  }
+  const calibration = [0, 204, 30, 90, 110].flatMap(rule => [0, 1, 2].map(seedMode => candidates.find(c => c.id === ecaId({ rule, seedMode }))!));
+  writeText(`${ECA_ROOT}/elementary-cellular-automata.json`, JSON.stringify({ manifest, ranked, references,
+    finalists: finalists.map(c => ({ id: c.id, images: images.get(c.id), referenceIds: references.map(r => r.id) })),
+    calibration, replay, validation, negativeControl, referenceImages: Object.fromEntries(references.map(r => [r.id, images.get(r.id)])),
+    rawFields: `${ECA_ROOT}/raw-fields.json`, replayTolerance: 1e-9,
+    runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } }));
+  console.log(JSON.stringify({ counts: { candidates: ranked.length, references: references.length, finalistLongerChecks: 12, negativeLongerChecks: 1 }, top: ranked.slice(0, 10), finalists: finalists.map(c => c.id) }, null, 2));
+});
+
+const ecaReplayTest = process.env.SWEEP_REPLAY === "141" ? test : test.skip;
+ecaReplayTest("141 replay all retained ECA metrics and ordering", async ({ page }) => {
+  test.setTimeout(600_000);
+  const data = JSON.parse(readFileSync(`${ECA_ROOT}/elementary-cellular-automata.json`, "utf8"));
+  const raw = JSON.parse(readFileSync(`${ECA_ROOT}/raw-fields.json`, "utf8"));
+  const actual: { id: string; score: number; maxAbsoluteDelta: number }[] = [];
+  for (const row of [...data.manifest.candidates, ...data.references]) {
+    const fields = await ecaDrive(page, row.params, 128, 128);
+    expect(fields.frameA).toEqual(decodeEcaField(raw.readings[row.id].frameA));
+    expect(fields.frameB).toEqual(decodeEcaField(raw.readings[row.id].frameB));
+    const measured = ecaReadings(fields.frameA, fields.frameB, 128, 128);
+    const expected = [...data.ranked, ...data.references].find(c => c.id === row.id);
+    const maxAbsoluteDelta = Math.max(...Object.entries(measured).map(([k, v]) => Math.abs(v! - expected.metrics[k])));
+    expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
+    actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta });
+  }
+  const ids = new Set(data.manifest.candidates.map(c => c.id));
+  expect(actual.filter(c => ids.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map(c => c.id));
+  const shipped = await page.evaluate(async () => (await import(/* @vite-ignore */ "/src/app/presets.ts")).presetsFor("elementary-cellular-automata"));
+  expect(data.references.length).toBe(shipped.length);
+  for (const preset of shipped) expect(data.references.find(r => r.id === `141-current-${preset.id}`).params).toEqual(preset.params);
+  writeText(`${ECA_ROOT}/worker-replay.json`, JSON.stringify({ tolerance: 1e-9, actual,
+    independentVerifierRequired: true, note: "Worker repeat, not independent acceptance." }));
+  console.log(`ECA replayed ${actual.length}; identical ordering; max absolute delta ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
+});
+
+test("ECA generated-row clock matches batch speeds without padding", async ({ page }) => {
+  const params = { rule: 184, seedMode: 1, stepsPerFrame: 1 };
+  for (const generatedRows of [128, 129, 256, 1024]) {
+    const single = await ecaDrive(page, params, 128, generatedRows);
+    const batched = await ecaDrive(page, { ...params, stepsPerFrame: 2 }, 128, generatedRows);
+    expect(batched).toEqual(single);
+  }
+  expect(ecaClassSignals([0, 1, 1, 0], 2, 2)).toEqual({ rowEntropy: 1, rowChange: 1, repeatedRowFraction: 0 });
+  expect(() => ecaClassSignals([0], 2, 1)).toThrow();
+  expect(ecaEquivalents(30)).toEqual({ mirror: 86, complement: 135, mirrorComplement: 149, representative: 30 });
 });

@@ -117,6 +117,13 @@ function paramSummary(params: Record<string, number | boolean | string>, keys: s
 
 /** Markdown table of scored candidates, highest score first. */
 export function metricsTable(rows: ScoredCandidate[], paramKeys: string[]): string {
+  if (rows.length && rows.every(r => r.metrics.rowEntropy !== undefined)) {
+    return [
+      "| # | label | params | legacy score | row entropy | row change | repeated rows |",
+      "|---|---|---|---:|---:|---:|---:|",
+      ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.rowEntropy!, 6)} | ${fmt(r.metrics.rowChange!, 6)} | ${fmt(r.metrics.repeatedRowFraction!, 6)} |`),
+    ].join("\n");
+  }
   if (rows.length && rows.every(r => r.metrics.interiorFraction !== undefined)) {
     return [
       "| # | label | params | score | interior | edge | coarse edge (lag 2) | binary entropy |",

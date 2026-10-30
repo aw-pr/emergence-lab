@@ -35,6 +35,9 @@ export interface FrameMetrics {
 }
 
 export interface InterestingnessMetrics extends FrameMetrics {
+  rowEntropy?: number;
+  rowChange?: number;
+  repeatedRowFraction?: number;
   interiorFraction?: number;
   edgeDensity?: number;
   coarseEdgeDensity?: number;
@@ -378,6 +381,33 @@ export function scoreFrames(
   const fm = frameMetrics(frameA, width, height, coverageThreshold);
   const flux = temporalFlux(frameA, frameB);
   return { ...fm, temporalFlux: flux, score: interestingness(fm, flux) };
+}
+
+/** Binary spacetime heuristics. Callers must exclude ungenerated padding. */
+export function ecaClassSignals(field: Field, width: number, height: number): {
+  rowEntropy: number; rowChange: number; repeatedRowFraction: number;
+} {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || field.length !== width * height) {
+    throw new Error("ecaClassSignals requires an exact, nonempty rectangular field");
+  }
+  const seen = new Set<string>();
+  let entropySum = 0, changed = 0, repeated = 0;
+  for (let y = 0; y < height; y += 1) {
+    let row = "", ones = 0;
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x, bit = field[i] > 0.5 ? 1 : 0;
+      ones += bit;
+      row += bit;
+      if (y > 0 && bit !== (field[i - width] > 0.5 ? 1 : 0)) changed += 1;
+    }
+    const p = ones / width;
+    if (p > 0 && p < 1) entropySum -= p * Math.log2(p) + (1 - p) * Math.log2(1 - p);
+    if (seen.has(row)) repeated += 1;
+    seen.add(row);
+  }
+  return { rowEntropy: entropySum / height,
+    rowChange: height > 1 ? changed / (width * (height - 1)) : 0,
+    repeatedRowFraction: height > 1 ? repeated / (height - 1) : 0 };
 }
 
 export interface StaticBoundaryMetrics {
