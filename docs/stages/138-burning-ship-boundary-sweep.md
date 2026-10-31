@@ -9,7 +9,7 @@
 - **Base branch:** dev
 - **Run branch:** autometta/138-burning-ship-boundary-sweep
 - **Worker effort:** medium
-- **Verifier effort:** high
+- **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
@@ -114,3 +114,13 @@ Operator scope and conditional-unpause approval is recorded in the batch report.
 The project TypeScript gate passes; its existing scope excludes e2e. Playwright parsed all twelve new specs (46 tests, all dormant without selection), and explicit node-only oracle runs exercise the frozen checkers. An additional standalone TypeScript check was unavailable because the existing checkout has no @types/node; no dependency/tooling change is commissioned for this extra check. Names and shapes were checked against existing harness/kernel source. The Lorenz `spread.score` is `{min,max,standardDeviation}`, so an equilibrium spread of zero remains a truthy object; a live five-identical-snapshot probe confirms this. Brian's Brain's firing threshold is 0.99 and attractor map enums are clifford/dejong/svensson in current source.
 
 Only 138/139 consume a new dependency: native Depends on checks completed status plus landed commit ancestry and refuses awaiting integration. All other cards remain serial without false success dependencies. Keep production source and protected scripts unchanged throughout this batch; their frozen hashes intentionally detect concurrent edits too. Stop for a real conflict rather than changing a digest or widening scope.
+
+## Re-brief 1 — 2026-10-31 operator-authorised retry
+
+The operator authorised requeueing the four failed cards after repair preparation. Existing acceptance criteria, frozen blocks/digests, scope and promotion authority remain unchanged. Dispatch stays serial: these cards share harness/spec paths and browser port 5173. The existing queue order places these retries after the current active card and before the remaining pending batch; card 149 remains the final collation.
+
+Preserved attempt: `678d5e62ee3d5e00078ece6b792cc7da2a9b12f2`. Original verifier, envelope and stage record are archived under `state/archive/2026-10-31-interestingness-retry/138-burning-ship-boundary-sweep/` in the primary checkout. Read that verifier before editing. Restore only this attempt’s deliverable diff onto the fresh dev base, resolving shared harness additions additively; never replace entire shared files with the old snapshot or import old cards/scripts/state. Keep previously landed stages intact.
+
+Narrow report repair. Correct the searched/not-searched bounds to include the actual refinement extent (including harbour centerX=0.293333333333, zoom=4.35 and centerY=-1.293333333333). Link all four retained current-default images so all 28 retained images are accounted for. Preserve the accepted numeric and visual evidence; do not rerun the search merely to regenerate unchanged artifacts.
+
+The orchestrator repairs the shared contract-gate SIGPIPE false negative before retry admission. Use the repaired gate from the new base; do not change card 111, markers, assertions or digests, and do not exempt the gate. Reproduce the reported defect before/after the targeted repair, run cheap verification and frozen contract once, and retain the earlier accepted artifacts. Every original acceptance criterion still needs evidence: the verifier may cite the archived passing evidence where the restored implementation and evidence are unchanged; changed scientific paths require fresh replay. Report missing evidence honestly. No automatic retry or cap increase is authorised.
