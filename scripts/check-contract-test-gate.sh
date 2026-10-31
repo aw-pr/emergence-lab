@@ -47,20 +47,21 @@ extract_block() {
   '
 }
 
+# Consumers drain stdin so early matches cannot SIGPIPE a reader under pipefail.
 # Card path declared on the BEGIN marker line (card=<path>), read from stdin.
 card_path_from_marker() {
   awk -v b="$MARKER_BEGIN" '
-    index($0, b) {
+    !found && index($0, b) {
       for (i = 1; i <= NF; i++)
-        if ($i ~ /^card=/) { sub(/^card=/, "", $i); print $i; exit }
+        if ($i ~ /^card=/) { sub(/^card=/, "", $i); print $i; found=1; break }
     }'
 }
 
 # First sha256:... token on an "Assertions digest" line, backticks stripped.
 declared_digest() {
   awk '
-    /Assertions digest/ {
-      for (i = 1; i <= NF; i++) { t = $i; gsub(/`/, "", t); if (t ~ /^sha256:/) { print t; exit } }
+    !found && /Assertions digest/ {
+      for (i = 1; i <= NF; i++) { t = $i; gsub(/`/, "", t); if (t ~ /^sha256:/) { print t; found=1; break } }
     }'
 }
 
@@ -150,7 +151,7 @@ cmd_gate() {
     untracked="$(git ls-files --others --exclude-standard)"
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      naming_card="$(printf '%s\n' "$declarations" | awk -F'\t' -v f="$f" '$1 == f { print $2; exit }')"
+      naming_card="$(printf '%s\n' "$declarations" | awk -F'\t' -v f="$f" '$1 == f && !found { print $2; found=1 }')"
       case "$f" in
         scripts/*-smoke.sh) changed="$(printf '%s\n%s\n' "$changed" "$f" | awk 'NF && !seen[$0]++')" ;;
         *) [ -n "$naming_card" ] && changed="$(printf '%s\n%s\n' "$changed" "$f" | awk 'NF && !seen[$0]++')" ;;
@@ -173,19 +174,19 @@ EOF
     [ -n "$f" ] || continue
 
     naming_cards="$(printf '%s\n' "$declarations" | awk -F'\t' -v f="$f" '$1 == f { print $2 }')"
-    naming_card="$(printf '%s\n' "$naming_cards" | awk 'NF { print; exit }')"
+    naming_card="$(printf '%s\n' "$naming_cards" | awk 'NF && !found { print; found=1 }')"
     case "$f" in
       scripts/*-smoke.sh) ;;
       *) [ -n "$naming_card" ] || continue ;;
     esac
 
-    if "$content" "$f" | grep -q "$MARKER_NONE"; then
-      if "$content" "$f" | grep -q "$MARKER_BEGIN"; then
+    if "$content" "$f" | grep "$MARKER_NONE" >/dev/null; then
+      if "$content" "$f" | grep "$MARKER_BEGIN" >/dev/null; then
         warn "$f: cannot carry both $MARKER_NONE and $MARKER_BEGIN markers"
         violations=$((violations + 1)); continue
       fi
 
-      if ! "$content" "$f" | grep -Eq "^[[:space:]]*#[[:space:]]*$MARKER_NONE[[:space:]]+reason=[^[:space:]]"; then
+      if ! "$content" "$f" | grep -E "^[[:space:]]*#[[:space:]]*$MARKER_NONE[[:space:]]+reason=[^[:space:]]" >/dev/null; then
         warn "$f: $MARKER_NONE marker needs a reason=<text>"
         violations=$((violations + 1)); continue
       fi
@@ -203,7 +204,7 @@ EOF
       continue
     fi
 
-    if "$content" "$f" | grep -q "$MARKER_BEGIN"; then
+    if "$content" "$f" | grep "$MARKER_BEGIN" >/dev/null; then
       card="$("$content" "$f" | card_path_from_marker)"
       if [ -z "$card" ]; then
         warn "$f: $MARKER_BEGIN marker has no card=<path>"
@@ -223,7 +224,7 @@ EOF
       fi
 
       if [ "$recomputed" != "$declared" ]; then
-        if printf '%s\n' "$changed" | grep -qx -- "$card"; then
+        if printf '%s\n' "$changed" | grep -x -- "$card" >/dev/null; then
           warn "$f: assertions changed but card $card still declares $declared (recomputed $recomputed); update the card's 'Assertions digest' line in this commit"
         else
           warn "$f: frozen assertions changed but their card $card is not in this commit (declared $declared, recomputed $recomputed)"
