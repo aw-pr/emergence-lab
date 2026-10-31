@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
@@ -724,6 +724,7 @@ test("non-phase Gray-Scott scores are unchanged", async ({ page }) => {
     ...config.baseParams,
     F: 0.0545,
     k: 0.062,
+    stencil: "five-point",
   });
 
   expect(coral.metrics).toEqual({
@@ -733,6 +734,19 @@ test("non-phase Gray-Scott scores are unchanged", async ({ page }) => {
     coverage: 0.6756591796875,
     temporalFlux: 0.0011477361467768787,
     score: 0.7102674508287455,
+  });
+});
+
+test("non-phase Gray-Scott nine-point comparison matches the current default", async ({ page }) => {
+  const config = SWEEP_CONFIGS["gray-scott"];
+  const params = { ...config.baseParams, F: 0.0545, k: 0.062 };
+  const explicit = await scoreOne(page, config, "nine", "Nine-point Coral", { ...params, stencil: "nine-point" });
+  const implicit = await scoreOne(page, config, "default", "Default Coral", params);
+  expect(explicit.metrics).toEqual(implicit.metrics);
+  expect(explicit.metrics).toEqual({
+    entropy: 0.6988568702841468, variance: 0.015872195007509353,
+    spatialAutocorrelation: 0.9341877961656685, coverage: 0.692138671875,
+    temporalFlux: 0.0004988930676859127, score: 0.7065245840037978,
   });
 });
 
@@ -1813,4 +1827,390 @@ sweepTest("sweep 142 Lorenz unexplored beta/rho and sigma/rho regimes", async ({
   writeText(`${LORENZ_ROOT}/lorenz-attractor.json`, JSON.stringify({ manifest, ranked, references, finalists: finalistRows, diagnostics, evidence,
     replay: { tolerance: 1e-9, workerRepeat: replay, independentVerifierRequired: true }, negativeControl, refinedControl }, null, 2));
   console.log(`Lorenz 142: ${candidates.length} candidates, ${references.length} references, ${finalists.length} evidence selections`);
+});
+
+const RD_ROOT = "docs/sweeps/data/2026-10-30/143";
+const RD_IMAGES = "docs/images/sweeps-2026-10-30";
+const RD_SLUGS = ["gray-scott", "belousov-zhabotinsky", "lenia"];
+
+function rdDiagnostics(field: number[]) {
+  return {
+    nonFiniteFraction: field.filter(v => !Number.isFinite(v)).length / field.length,
+    lowerEndpointFraction: field.filter(v => v === 0).length / field.length,
+    upperEndpointFraction: field.filter(v => v === 1).length / field.length,
+    outOfRangeFraction: field.filter(v => v < 0 || v > 1).length / field.length,
+    offFrameClippingFraction: 0,
+  };
+}
+
+function rdEncode(field: number[]) {
+  const bytes = Buffer.alloc(field.length * 4);
+  field.forEach((v, i) => bytes.writeFloatLE(v, i * 4));
+  return deflateSync(bytes).toString("base64");
+}
+function rdDecode(encoded: string) {
+  const bytes = inflateSync(Buffer.from(encoded, "base64"));
+  return Array.from({ length: bytes.length / 4 }, (_, i) => bytes.readFloatLE(i * 4));
+}
+async function rdCapture(page: Page, config: SimSweepConfig, params: Params, size: number, steps: number) {
+  return (await rdCaptureSeries(page, config, params, size, [steps]))[0];
+}
+async function rdCaptureSeries(page: Page, config: SimSweepConfig, params: Params, size: number, times: number[]) {
+  const fields = await page.evaluate(driveKernel, {
+    registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: size, gridHeight: size,
+    warmupSteps: times[0], sampleSteps: times, fluxGap: config.fluxGap, primaryChannel: config.primaryChannel, dt: config.dt, preserveRange: true,
+  });
+  return fields.snapshots!.map(fields => {
+  const diagnostics = { frameA: rdDiagnostics(fields.frameA), frameB: rdDiagnostics(fields.frameB) };
+  expect(diagnostics.frameA.nonFiniteFraction).toBe(0);
+  expect(diagnostics.frameB.nonFiniteFraction).toBe(0);
+  const metrics = scoreFrames(fields.frameA, fields.frameB, size, size, config.coverageThreshold);
+  expect(Object.values(metrics).every(Number.isFinite)).toBe(true);
+  return { steps: fields.steps, size, metrics, diagnostics, frameA: rdEncode(fields.frameA), frameB: rdEncode(fields.frameB) };
+  });
+}
+
+const RD_PRIOR: Record<string, { source: string; description: string }[]> = {
+  "gray-scott": [
+    { source: "docs/sweeps/gray-scott-interestingness.md", description: "Subtract 56 pairs: F=linspace(0.01,0.066,8), k=linspace(0.045,0.067,7); whole plane 651 pairs F=0.010..0.070 step0.002, k=0.040..0.070 step0.0015 at96sq. Both fixed Du0.2097,Dv0.105. Subtract 210-pair glider box F0.056..0.066 step0.0005,k0.0590..0.0635 step0.0005 under five/nine-point and dt1/0.5/0.25/0.125, all canonical and labyrinth controls, later Waves/Coral five/nine-point and app-scale follow-ups. New F values are odd half-thousandths below0.056, and k quarter-thousandths; no old pair repeated. No discretisation search." },
+    { source: "e2e/harness/sims.ts", description: "Historical GRAY_SCOTT entry and retired u-skate row preserved unchanged. New sets cross four transition neighbourhoods with Dv0.085/0.105/0.125 at fixed Du0.2097, nine-point, dt1,20 inner iterations. Dv-to-Du ratios0.40534/0.50072/0.59609. F/k transition locations are exploratory, not proven phase boundaries." },
+  ],
+  "belousov-zhabotinsky": [
+    { source: "docs/sweeps/belousov-zhabotinsky-interestingness.md", description: "Subtract40 feed/kill pairs: feed linspace0.008..0.05(8), kill[0.008,0.016,0.024,0.032,0.044], fixed diffusion(0.18,0.08,0.035). Subtract12 diffusion probes at feed=kill0.02: A[0.06,0.09,0.12,0.14,0.18,0.21,0.24,0.27,0.30,0.34],B=A/2-0.01,C0.035 plus(0.18,0.08,C0.055/0.08). Subtract high-A appendix A0.18/0.24/0.27/0.35 at B0.08,C0.035,feed=kill0.02 and128/256/longer horizons. Every new triple is off the old A/B spine, every new set differs from all old full tuples; none uses feed=kill0.02." },
+    { source: "e2e/harness/sims.ts", description: "Both historical BZ configurations preserved. New feed[0.014,0.026,0.038,0.05] x kill[0.016,0.028,0.04] x four explicit diffusion triples;12 reaction pairs per triple,48 total. stepsPerFrame1, internal Euler dt0.2 unchanged." },
+  ],
+  lenia: [
+    { source: "docs/sweeps/lenia-interestingness.md", description: "Subtract24 mu[0.10,0.128,0.156,0.184,0.212,0.24] x sigma[0.010,0.016,0.022,0.028],radius8,muDrift0.015; subtract15 radius[6,8,10,12,14] x(mu,sigma)[(0.24,0.028),(0.212,0.028),(0.15,0.017)],muDrift0.015,dt0.1. Living labyrinth radius14/mu0.24/sigma0.028/drift0.015 is now a reference only. All new radii7/11/15 and growth pairs differ; drift[0,0.008,0.024,0.03] crosses previously unsearched drift with radius/growth." },
+    { source: "src/sims/lenia/kernel.ts", description: "750 internal-step drift period, seed0 deterministic radius/grid-dependent blobs; optional seeds1/2 used only for validation. Outer dt argument ignored: actual dt0.1 in params. No dt or stepsPerFrame search. Include drift0 as static-growth control, high drift0.03 as fragility probe, not a promotion assumption." },
+  ],
+};
+
+async function rdRender(page: Page, config: SimSweepConfig, params: Params, steps: number, path: string) {
+  await page.setViewportSize({ width: 384, height: 384 });
+  const info = await page.evaluate(async ({ slug, params, steps, channel }) => {
+    const load = (url: string) => import(/* @vite-ignore */ url);
+    const [{ Renderer }, mod, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+      load("/src/app/renderer.ts"), load(`/src/sims/${slug}/kernel.ts`), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts"),
+    ]);
+    const Base: any = mod.default ?? Object.values(mod).find(v => typeof v === "function");
+    let grid: number[] = [];
+    const receivedParams: Params[] = [];
+    class SnapshotKernel extends Base {
+      init(w: number, h: number, p: Params) {
+        receivedParams.push({ ...p });
+        // App runs inject variety; exact snapshots preserve their declared seed.
+        super.init(w, h, { ...p, ...(typeof params.seed === "number" ? { seed: params.seed } : {}) }); grid = [w, h];
+        for (let i = 0; i < steps; i += 1) super.step(1);
+      }
+    }
+    document.body.innerHTML = "";
+    const canvas = document.createElement("canvas"); canvas.id = "rd-evidence";
+    canvas.style.cssText = "position:fixed;left:0;top:0;width:384px;height:384px";
+    document.body.appendChild(canvas);
+    const kernel = new SnapshotKernel(), mode = getRenderMode(slug);
+    const profile = qualityProfileFor(slug, mode, "desktop");
+    const colourOptions = { ...defaultColourOptionsFor(slug, kernel.channelCount), channel };
+    const renderer = new Renderer({ canvas, kernel, params, stepsPerFrame: 1, colourOptions,
+      displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: "performance", qualityProfile: profile });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const state = kernel.readState(), cc = kernel.channelCount;
+    const field = Array.from({ length: grid[0] * grid[1] }, (_, i) => Number(state[i * cc + channel]));
+    (window as any).__rdRenderer = renderer;
+    return { grid, field, receivedParams, canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer, running: renderer.isRunning(), colourOptions };
+  }, { slug: config.slug, params, steps, channel: config.primaryChannel });
+  expect(info.running).toBe(false);
+  expect(info.renderer).toBe("webgl2");
+  await page.locator("#rd-evidence").screenshot({ path });
+  await page.evaluate(() => (window as any).__rdRenderer.destroy());
+  const { field, ...renderInfo } = info;
+  return { ...renderInfo, field: rdEncode(field) };
+}
+
+for (const slug of RD_SLUGS) {
+  sweepTest(`sweep 143 ${slug} missed regimes`, async ({ page }) => {
+    test.setTimeout(3_600_000);
+    const config = SWEEP_CONFIGS[`sweep-143-${slug}`];
+    const previous = existsSync(`${RD_ROOT}/${slug}.json`) ? JSON.parse(readFileSync(`${RD_ROOT}/${slug}.json`, "utf8")) : null;
+    const times = config.multiSnapshot!.warmupSteps;
+    const planned = expandSweep(config).map((params, i) => ({ id: `143-${slug}-c${String(i + 1).padStart(2, "0")}`, params }));
+    const manifest = {
+      slug, methodVersion: config.reactionDiffusion!.methodVersion,
+      grid: { width: config.gridWidth, height: config.gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+      command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1',
+      candidates: planned, references: config.references, fixedParams: config.baseParams, sampleSteps: times,
+      priorCoverage: [...RD_PRIOR[slug], { source: "src/app/presets.ts", description: "Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged." }],
+      candidateCounts: { novel: 48, refinements: 0 },
+      inclusion: "48 exact full parameter tuples, declaration order; historical tuples subtracted as detailed in priorCoverage. Fixed resolution/iteration/threshold settings listed here. No adaptive truncation.",
+      exclusion: "No glider box/discretisation repeat, global slider Cartesian product, production change or automatic promotion. No refinement allowance used.",
+      determinism: slug === "lenia" ? "Explicit seed0 for ranking; seeds0,1,2 for finalists and all current references. Fresh deterministic kernel per parameter/size/seed trajectory, ordered captures." : "Closed-form deterministic seed geometry; no random source or seed parameter. Fresh kernel per parameter/size trajectory, ordered captures.",
+      method: "Arithmetic mean of unchanged scoreFrames metrics at three separated times via summarizeMetrics; retain each reading and population spread. No new morphology class labels, weights, calibration orderings or aesthetic claims from scores.",
+      rawEncoding: "zlib-deflated little-endian Float32, base64, channel range[0,1]; frameA and frameB separated by fluxGap; exact metric recomputation, not PNG quantisation.",
+      validationPlan: { finalists: 1, selection: "Highest mean-score candidate, retained even if rejected; evidence selection only.", sizes: [128, 384], steps: [...times, slug === "gray-scott" ? 2000 : slug === "lenia" ? 1510 : 2000], seeds: slug === "lenia" ? [0, 1, 2] : [null],
+        presentation: "Actual app WebGL2 Renderer at performance resolution, paused snapshot kernel at exact step counts; app default colour options, primary channel, bloom0. All finalists/references equal384px screenshots. Full live route also retained as qualitative context only.",
+        clipping: "All kernels use a periodic field domain; no projection or off-frame particles, offFrameClippingFraction0 is geometric, not a count of boundary-crossing features.", replayTolerance: 1e-9 },
+      sourceHashes: Object.fromEntries(["src/app/presets.ts", `src/sims/${slug}/kernel.ts`, "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    };
+    expect(planned).toHaveLength(48);
+    expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(48 + config.references.length);
+    writeText(`${RD_ROOT}/manifest-${slug}.json`, JSON.stringify(manifest, null, 2));
+    const started = Date.now();
+    const pilot = await rdCapture(page, config, planned[0].params, 128, times[times.length - 1]);
+    const pilotMs = Date.now() - started;
+    const estimatedSweepMs = pilotMs * (48 + config.references.length) * times.length;
+    writeText(`${RD_ROOT}/pilot-${slug}.json`, JSON.stringify({ pilotMs, estimatedSweepMs, allowanceMs: 3_600_000, params: planned[0].params, metrics: pilot.metrics }, null, 2));
+    expect(estimatedSweepMs, "Pilot cannot fit declared grid: split/re-brief required").toBeLessThan(3_000_000);
+    if (process.env.SWEEP_143_PILOT === "1") {
+      const render = await rdRender(page, config, planned[0].params, times[0], `${ARTIFACT_ROOT}/${config.artifactId}/pilot-renderer.png`);
+      expect(render.grid).toEqual([384, 384]);
+      console.log(`${slug}: pilot ${pilotMs}ms, projected ranking ${estimatedSweepMs}ms; Renderer grid ${render.grid}`);
+      return;
+    }
+    const raw: any[] = [], candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [];
+    for (const [i, row] of [...planned, ...config.references].entries()) {
+      const samples = await rdCaptureSeries(page, config, row.params, 128, times);
+      const scored = { id: row.id, label: "label" in row ? row.label as string : row.id, params: row.params, metrics: summarizeMetrics(samples.map(s => s.metrics)), methodVersion: manifest.methodVersion };
+      (i < planned.length ? candidates : references).push(scored);
+      raw.push({ id: row.id, params: row.params, samples });
+      writeText(`${RD_ROOT}/${slug}-raw.json`, JSON.stringify({ encoding: manifest.rawEncoding, rows: raw }));
+      if ((i + 1) % 12 === 0) console.log(`${slug}: measured ${i + 1}/${planned.length + config.references.length}`);
+    }
+    const ranked = candidates.sort((a, b) => b.metrics.score - a.metrics.score);
+    const finalist = ranked[0];
+    if (previous) {
+      expect(ranked.map(r => r.id)).toEqual(previous.ranked.map((r: ScoredCandidate) => r.id));
+      for (const row of [...ranked, ...references]) {
+        const old = [...previous.ranked, ...previous.references].find(r => r.id === row.id);
+        expect(row.params).toEqual(old.params);
+        for (const key of ["entropy", "variance", "spatialAutocorrelation", "coverage", "temporalFlux", "score"]) {
+          expect(Math.abs((row.metrics as any)[key] - old.metrics[key]), `${row.id}:${key}`).toBeLessThanOrEqual(1e-9);
+        }
+      }
+    }
+    writeText(`${ARTIFACT_ROOT}/${config.artifactId}/report.md`, metricsTable(ranked, config.axes.map(a => a.key)));
+    const sheet = new Float32Array(8 * 128 * 6 * 128);
+    for (let i = 0; i < planned.length; i += 1) {
+      const field = rdDecode(raw[i].samples[0].frameA);
+      for (let y = 0; y < 128; y += 1) for (let x = 0; x < 128; x += 1) sheet[(Math.floor(i / 8) * 128 + y) * 1024 + i % 8 * 128 + x] = field[y * 128 + x];
+    }
+    writePng(`${RD_IMAGES}/143-${slug}-census.png`, sheet, 1024, 768, 1);
+    writeText(`${RD_ROOT}/${slug}-ranking.json`, JSON.stringify({ manifest, ranked, references }, null, 2));
+    if (process.env.SWEEP_143_RANKING_ONLY === "1") return;
+    const previousValidation = previous && (previous.rendererMethodVersion === "explicit-seed-v2" || slug !== "lenia")
+      ? JSON.parse(readFileSync(previous.validation, "utf8")) : [];
+    if (previous) expect(previous.manifest.sourceHashes).toEqual(manifest.sourceHashes);
+    const validation: any[] = [], replay: any[] = [], paths = new Map<string, string[]>();
+    for (const row of [finalist, ...references]) {
+      const exact = await scoreOne(page, config, row.id, row.label, row.params);
+      const delta = Math.max(...["entropy", "variance", "coverage", "spatialAutocorrelation", "temporalFlux", "score"].map(k => Math.abs((exact.metrics as any)[k] - (row.metrics as any)[k])));
+      expect(delta, row.id).toBeLessThanOrEqual(1e-9);
+      replay.push({ id: row.id, maxAbsoluteDelta: delta, metrics: exact.metrics });
+      const images: string[] = [], readings: any[] = [], rendered: any[] = [];
+      for (const size of [128, 384]) for (const seed of slug === "lenia" ? [0, 1, 2] : [null]) {
+        const params = seed === null ? row.params : { ...row.params, seed };
+        const samples = await rdCaptureSeries(page, config, params, size, manifest.validationPlan.steps);
+        for (const sample of samples) {
+          const steps = sample.steps;
+          const priorRow = previousValidation.find(v => v.id === row.id);
+          const priorReading = priorRow?.readings.find(r => r.size === size && r.steps === steps && (seed === null || r.params.seed === seed));
+          if (previous) {
+            expect(priorReading, `${row.id}:${size}:${seed}:${steps}`).toBeTruthy();
+            for (const [key, value] of Object.entries(sample.metrics)) {
+              expect(Math.abs(value - priorReading.metrics[key]), `${row.id}:${key}`).toBeLessThanOrEqual(1e-9);
+            }
+            expect(sample.diagnostics).toEqual(priorReading.diagnostics);
+          }
+          const path = `${RD_IMAGES}/${row.id}-field-${size}-seed${seed ?? "none"}-t${steps}.png`;
+          writePng(path, rdDecode(sample.frameA), size, size, 1);
+          images.push(path); readings.push({ ...sample, params, image: path });
+          if (size === 384 && (seed === null || seed === 0)) {
+            const appPath = `${RD_IMAGES}/${row.id}-renderer-t${steps}.png`;
+            const prior = previousValidation.find(v => v.id === row.id);
+            const priorField = prior?.readings.find(r => r.size === size && r.steps === steps && (seed === null || r.params.seed === seed));
+            const priorRender = prior?.rendered.find(r => r.steps === steps);
+            if (process.env.SWEEP_143_RENDER_FRESH !== "1" && priorRender && priorField?.frameA === sample.frameA && JSON.stringify(priorField.params) === JSON.stringify(params) && existsSync(appPath)) {
+              rendered.push({ ...priorRender, reusedAfterExactFreshFieldReplay: true,
+                imageSha256: createHash("sha256").update(readFileSync(appPath)).digest("hex") });
+            } else {
+              const rendering = await rdRender(page, config, params, steps, appPath);
+              expect(rendering.grid).toEqual([384, 384]);
+              expect(rdDecode(rendering.field)).toEqual(rdDecode(sample.frameA));
+              rendered.push({ steps, image: appPath, ...rendering, field: undefined });
+            }
+            images.push(appPath);
+          }
+        }
+      }
+      await page.setViewportSize({ width: 1200, height: 900 });
+      await page.goto(`/?sweep143=${row.id}#/${slug}`);
+      await page.locator("[data-param-key]").first().waitFor({ timeout: 20_000 });
+      const pause = page.getByRole("button", { name: "Pause", exact: true });
+      if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
+      for (const [key, value] of Object.entries(row.params)) {
+        const input = page.locator(`[data-param-key=${key}]`);
+        if (key === "seed") continue;
+        await input.evaluate((el, value) => {
+          (el as HTMLInputElement).value = String(value);
+          el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true }));
+        }, value);
+      }
+      await page.getByRole("button", { name: "Reset", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+      await page.getByRole("button", { name: "Play", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+      await page.waitForTimeout(3000);
+      await page.getByRole("button", { name: "Pause", exact: true }).evaluate(el => (el as HTMLButtonElement).click());
+      const livePath = `${RD_IMAGES}/${row.id}-app-live.png`;
+      await page.screenshot({ path: livePath, animations: "disabled" }); images.push(livePath);
+      const inputs = await page.locator("[data-param-key]").evaluateAll(es => Object.fromEntries(es.map(e => [(e as HTMLElement).dataset.paramKey, (e as HTMLInputElement).value])));
+      const canvas = await page.locator("canvas").first().evaluate((e: HTMLCanvasElement) => ({ width: e.width, height: e.height, data: { ...e.dataset } }));
+      paths.set(row.id, images); row.thumb = images.find(p => p.includes("renderer"))!;
+      validation.push({ id: row.id, readings, rendered, liveApp: { image: livePath, inputs, canvas, note: "Three seconds live play; step count and optional random seed uncontrolled. Qualitative route context only; exact equal-time comparisons use Renderer snapshots and raw fields." } });
+      writeText(`${RD_ROOT}/${slug}-validation.json`, JSON.stringify(validation));
+      console.log(`${slug}: validated ${row.id}, replay delta ${delta}`);
+    }
+    writeText(`${RD_ROOT}/${slug}.json`, JSON.stringify({ manifest, ranked, references,
+      finalists: [{ id: finalist.id, images: paths.get(finalist.id), referenceIds: references.map(r => r.id) }],
+      rendererMethodVersion: "explicit-seed-v2", replay, replayTolerance: 1e-9, rawFields: `${RD_ROOT}/${slug}-raw.json`, validation: `${RD_ROOT}/${slug}-validation.json`,
+      referenceImages: Object.fromEntries(references.map(r => [r.id, paths.get(r.id)])), elapsedMs: Date.now() - started,
+      runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } }, null, 2));
+    console.log(`${slug}: complete ${ranked.length} candidates, ${references.length} references, finalist ${finalist.id}`);
+  });
+}
+
+const rdReplayTest = process.env.SWEEP_REPLAY === "143" ? test : test.skip;
+rdReplayTest("143 retained raw fields reproduce every reading and current-reference provenance", async ({ page }) => {
+  test.setTimeout(120_000);
+  const summary = [];
+  for (const slug of RD_SLUGS) {
+    const result = JSON.parse(readFileSync(`${RD_ROOT}/${slug}.json`, "utf8"));
+    const raw = JSON.parse(readFileSync(result.rawFields, "utf8"));
+    const config = SWEEP_CONFIGS[`sweep-143-${slug}`];
+    let maxAbsoluteDelta = 0;
+    const recomputed: { id: string; score: number }[] = [];
+    const check = (samples: any[], expected: InterestingnessMetrics) => {
+      const metrics = samples.map(s => {
+        const frameA = rdDecode(s.frameA), frameB = rdDecode(s.frameB);
+        expect(rdDiagnostics(frameA)).toEqual(s.diagnostics.frameA);
+        expect(rdDiagnostics(frameB)).toEqual(s.diagnostics.frameB);
+        const actual = scoreFrames(frameA, frameB, s.size, s.size, config.coverageThreshold);
+        for (const [k, value] of Object.entries(actual)) {
+          const delta = Math.abs(value - s.metrics[k]);
+          expect(delta).toBeLessThanOrEqual(1e-9); maxAbsoluteDelta = Math.max(maxAbsoluteDelta, delta);
+        }
+        return actual;
+      });
+      const actual = summarizeMetrics(metrics);
+      for (const k of ["entropy", "variance", "spatialAutocorrelation", "coverage", "temporalFlux", "score"]) {
+        const delta = Math.abs((actual as any)[k] - (expected as any)[k]);
+        expect(delta).toBeLessThanOrEqual(1e-9); maxAbsoluteDelta = Math.max(maxAbsoluteDelta, delta);
+      }
+      return actual;
+    };
+    expect(raw.rows.map((r: any) => r.id)).toEqual([...result.manifest.candidates, ...result.references].map((r: any) => r.id));
+    for (const row of raw.rows) {
+      const expected = [...result.ranked, ...result.references].find((r: any) => r.id === row.id);
+      expect(row.params).toEqual(expected.params);
+      const actual = check(row.samples, expected.metrics);
+      if (result.ranked.some((r: any) => r.id === row.id)) recomputed.push({ id: row.id, score: actual.score });
+    }
+    expect(recomputed.sort((a, b) => b.score - a.score).map(r => r.id)).toEqual(result.ranked.map((r: any) => r.id));
+    const validations = JSON.parse(readFileSync(result.validation, "utf8"));
+    let validationReadings = 0;
+    for (const row of validations) for (const sample of row.readings) { check([sample], sample.metrics); validationReadings += 1; }
+    const shipped = await page.evaluate(async slug => (await import(/* @vite-ignore */ "/src/app/presets.ts")).presetsFor(slug), slug);
+    expect(result.references).toHaveLength(shipped.length);
+    for (const preset of shipped) {
+      const ref = result.references.find((r: any) => r.id === `143-current-${preset.id}`);
+      expect(ref, preset.id).toBeTruthy();
+      expect(ref.params).toEqual({ ...preset.params, ...(slug === "gray-scott" ? { stencil: "nine-point", dt: 1 } : slug === "lenia" ? { seed: 0 } : {}) });
+    }
+    summary.push({ slug, ranked: result.ranked.length, references: result.references.length, validationReadings, maxAbsoluteDelta, identicalOrdering: true, shippedReferenceMatch: true });
+  }
+  writeText(`${RD_ROOT}/raw-recomputation.json`, JSON.stringify({ tolerance: 1e-9, summary }, null, 2));
+  console.log(JSON.stringify(summary));
+});
+
+rdReplayTest("143 multi-time driver matches fresh independent trajectories", async ({ page }) => {
+  for (const slug of RD_SLUGS) {
+    const config = SWEEP_CONFIGS[`sweep-143-${slug}`], params = expandSweep(config)[0];
+    const cfg = { registryUrl: REGISTRY_URL, slug, params, gridWidth: 64, gridHeight: 64, warmupSteps: 10, fluxGap: 2, dt: 1, primaryChannel: config.primaryChannel, preserveRange: true };
+    const series = await page.evaluate(driveKernel, { ...cfg, sampleSteps: [10, 20, 30] });
+    for (const sample of series.snapshots!) {
+      const fresh = await page.evaluate(driveKernel, { ...cfg, warmupSteps: sample.steps });
+      expect(sample.frameA).toEqual(fresh.frameA); expect(sample.frameB).toEqual(fresh.frameB);
+    }
+  }
+});
+
+rdReplayTest("143 fresh replay preserves all metrics, ordering and validation readings", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const summary = [];
+  for (const slug of RD_SLUGS) {
+    const result = JSON.parse(readFileSync(`${RD_ROOT}/${slug}.json`, "utf8"));
+    const config = SWEEP_CONFIGS[`sweep-143-${slug}`];
+    let maxAbsoluteDelta = 0;
+    const compare = (actual: InterestingnessMetrics, expected: InterestingnessMetrics, id: string) => {
+      for (const key of ["entropy", "variance", "spatialAutocorrelation", "coverage", "temporalFlux", "score"]) {
+        const delta = Math.abs((actual as any)[key] - (expected as any)[key]);
+        expect(delta, `${id}:${key}`).toBeLessThanOrEqual(1e-9);
+        maxAbsoluteDelta = Math.max(maxAbsoluteDelta, delta);
+      }
+      const spread = (expected as MultiSnapshotMetrics).spread;
+      if (spread) for (const [key, readings] of Object.entries(spread)) {
+        for (const [stat, expectedValue] of Object.entries(readings!)) {
+          const delta = Math.abs((actual as any).spread[key][stat] - expectedValue);
+          expect(delta, `${id}:spread:${key}:${stat}`).toBeLessThanOrEqual(1e-9);
+          maxAbsoluteDelta = Math.max(maxAbsoluteDelta, delta);
+        }
+      }
+    };
+    const retainedRaw = JSON.parse(readFileSync(result.rawFields, "utf8"));
+    const fresh = [];
+    for (const row of [...result.manifest.candidates, ...result.references]) {
+      const samples = await rdCaptureSeries(page, config, row.params, 128, result.manifest.sampleSteps);
+      const expected = [...result.ranked, ...result.references].find(r => r.id === row.id);
+      const retained = retainedRaw.rows.find(r => r.id === row.id);
+      for (const [i, sample] of samples.entries()) {
+        expect(sample.steps).toBe(retained.samples[i].steps);
+        compare(sample.metrics, retained.samples[i].metrics, `${row.id}:${sample.steps}`);
+        expect(sample.diagnostics).toEqual(retained.samples[i].diagnostics);
+      }
+      const metrics = summarizeMetrics(samples.map(s => s.metrics));
+      compare(metrics, expected.metrics, row.id);
+      if (result.ranked.some(r => r.id === row.id)) fresh.push({ id: row.id, score: metrics.score });
+    }
+    expect(fresh.sort((a, b) => b.score - a.score).map(r => r.id)).toEqual(result.ranked.map(r => r.id));
+    const validations = JSON.parse(readFileSync(result.validation, "utf8"));
+    let validationReadings = 0;
+    for (const row of validations) {
+      for (const size of [128, 384]) for (const seed of slug === "lenia" ? [0, 1, 2] : [null]) {
+        const expected = row.readings.filter(r => r.size === size && (seed === null || r.params.seed === seed));
+        const samples = await rdCaptureSeries(page, config, expected[0].params, size, expected.map(r => r.steps));
+        for (const [i, sample] of samples.entries()) {
+          compare(sample.metrics, expected[i].metrics, `${row.id}:${size}:${seed}:${sample.steps}`);
+          expect(sample.diagnostics).toEqual(expected[i].diagnostics);
+          validationReadings += 1;
+        }
+      }
+    }
+    summary.push({ slug, candidates: fresh.length, references: result.references.length, validationReadings,
+      maxAbsoluteDelta, identicalOrdering: true, browser: page.context().browser()?.version() });
+    console.log(`${slug}: fresh replay complete, max delta ${maxAbsoluteDelta}`);
+  }
+  writeText(`${RD_ROOT}/fresh-replay.json`, JSON.stringify({ tolerance: 1e-9, summary,
+    note: "Identity of the executor determines independence; worker execution is a repeat, verifier execution is independent replay." }, null, 2));
+});
+
+
+test("143 Renderer snapshots keep declared seeds", async ({ page }) => {
+  const config = SWEEP_CONFIGS["sweep-143-lenia"];
+  const checks = [];
+  for (const seed of [0, 1, 2]) {
+    const params = { ...expandSweep(config)[0], seed };
+    const actual = await rdRender(page, config, params, 0, `${ARTIFACT_ROOT}/143-seed-${seed}.png`);
+    const expected = await rdCapture(page, config, params, 384, 0);
+    const field = rdDecode(actual.field), reference = rdDecode(expected.frameA);
+    const mismatchedCells = field.filter((v, i) => v !== reference[i]).length;
+    checks.push({ seed, receivedParams: actual.receivedParams, mismatchedCells });
+    writeText(`${RD_ROOT}/renderer-seed-regression.json`, JSON.stringify(checks, null, 2));
+    expect(mismatchedCells).toBe(0);
+  }
 });

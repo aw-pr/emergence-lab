@@ -57,6 +57,7 @@ export interface MultiSnapshotConfig {
 }
 
 export interface SimSweepConfig {
+  reactionDiffusion?: { methodVersion: "rd-persistence-v1" };
   eca?: { methodVersion: "eca-spacetime-v1" };
   staticBoundary?: { methodVersion: "static-boundary-v1" };
   /** Opt-in two-channel sign geometry for signed fields stored as separate
@@ -919,6 +920,47 @@ const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
 };
 
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-143-gray-scott": {
+    slug: "gray-scott", artifactId: "sweep-143-gray-scott",
+    reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 1, gridWidth: 128, gridHeight: 128, warmupSteps: 700, fluxGap: 12, dt: 1, coverageThreshold: 0.1,
+    multiSnapshot: { warmupSteps: [700, 850, 1000] },
+    baseParams: { Du: 0.2097, Dv: 0.105, stencil: "nine-point", dt: 1, stepsPerFrame: 20 },
+    axes: ["F", "k", "Dv"].map(key => ({ key, values: [] })),
+    sets: [[0.017, 0.049], [0.025, 0.060], [0.035, 0.065], [0.053, 0.0625]].flatMap(([f, k]) =>
+      [-0.0005, 0.0005].flatMap(df => [-0.00025, 0.00025].flatMap(dk => [0.085, 0.105, 0.125].map(Dv =>
+        ({ F: Number((f + df).toFixed(5)), k: Number((k + dk).toFixed(5)), Dv }))))),
+    references: GRAY_SCOTT.references.filter(r => r.id !== "u-skate").map(r => ({
+      ...r, id: `143-current-${r.id === "default-coral" ? "coral" : r.id}`, label: r.label.replace("Default (Coral)", "Coral"),
+      params: { ...r.params, stencil: "nine-point", dt: 1 },
+    })),
+  },
+  "sweep-143-belousov-zhabotinsky": {
+    slug: "belousov-zhabotinsky", artifactId: "sweep-143-belousov-zhabotinsky",
+    reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 8, dt: 1, coverageThreshold: 0.5,
+    multiSnapshot: { warmupSteps: [400, 700, 1000] },
+    baseParams: { stepsPerFrame: 1 }, axes: ["feed", "kill", "diffusionA", "diffusionB", "diffusionC"].map(key => ({ key, values: [] })),
+    sets: [0.014, 0.026, 0.038, 0.05].flatMap(feed => [0.016, 0.028, 0.04].flatMap(kill =>
+      [[0.12, 0.12, 0.02], [0.18, 0.04, 0.08], [0.24, 0.16, 0.055], [0.3, 0.06, 0.12]].map(([diffusionA, diffusionB, diffusionC]) =>
+        ({ feed, kill, diffusionA, diffusionB, diffusionC })))),
+    references: [
+      ...BELOUSOV_ZHABOTINSKY.references.map(r => ({ ...r, id: `143-current-${r.id}` })),
+    ],
+  },
+  "sweep-143-lenia": {
+    slug: "lenia", artifactId: "sweep-143-lenia", reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 260, fluxGap: 8, dt: 1, coverageThreshold: 0.1,
+    multiSnapshot: { warmupSteps: [260, 510, 760] },
+    baseParams: { dt: 0.1, stepsPerFrame: 1, seed: 0 }, axes: ["radius", "muDrift", "mu", "sigma"].map(key => ({ key, values: [] })),
+    sets: [7, 11, 15].flatMap(radius => [0, 0.008, 0.024, 0.03].flatMap(muDrift =>
+      [[0.135, 0.018], [0.165, 0.022], [0.205, 0.026], [0.245, 0.03]].map(([mu, sigma]) => ({ radius, muDrift, mu, sigma })))),
+    references: [
+      ...LENIA.references.map(r => ({ ...r, id: `143-current-${r.id}` })),
+      { id: "143-current-living-labyrinth", label: "Living labyrinth", params: { mu: 0.24, sigma: 0.028, muDrift: 0.015, dt: 0.1, radius: 14, stepsPerFrame: 1, seed: 0 } },
+    ],
+  },
+
   "sweep-142-lorenz-attractor": LORENZ_UNEXPLORED,
   "sweep-141-elementary-cellular-automata": {
     slug: "elementary-cellular-automata", artifactId: "sweep-141-elementary-cellular-automata",

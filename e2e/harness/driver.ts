@@ -32,6 +32,8 @@ export interface SweepDriverConfig {
   /** Opt-in ECA clock: exact generated rows, including init's row. fluxGap
    * counts rows here. Extra batch rows are cropped, never counted as history. */
   generatedRows?: number;
+  /** Opt-in separated field pairs on one trajectory, avoiding repeated warmup. */
+  sampleSteps?: number[];
 }
 
 export interface SweepDriverResult {
@@ -39,6 +41,7 @@ export interface SweepDriverResult {
   height: number;
   frameA: number[];
   frameB: number[];
+  snapshots?: { steps: number; frameA: number[]; frameB: number[] }[];
 }
 
 export async function driveKernel(
@@ -91,6 +94,22 @@ export async function driveKernel(
     }
     return out;
   };
+
+  if (cfg.sampleSteps) {
+    if (!cfg.sampleSteps.length || cfg.sampleSteps.some((t, i, ts) => !Number.isInteger(t) || t < 0 || (i > 0 && t <= ts[i - 1] + cfg.fluxGap))) {
+      throw new Error("Snapshot steps must be increasing, nonnegative and separated by more than fluxGap");
+    }
+    const snapshots = [];
+    let calls = 0;
+    for (const steps of cfg.sampleSteps) {
+      for (; calls < steps; calls += 1) kernel.step(cfg.dt);
+      const frameA = extract();
+      for (; calls < steps + cfg.fluxGap; calls += 1) kernel.step(cfg.dt);
+      snapshots.push({ steps, frameA, frameB: extract() });
+    }
+    kernel.destroy();
+    return { width: w, height: h, frameA: snapshots[0].frameA, frameB: snapshots[0].frameB, snapshots };
+  }
 
   let frameA: number[], frameB: number[];
   if (cfg.generatedRows !== undefined) {

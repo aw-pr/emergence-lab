@@ -418,3 +418,238 @@ already implemented in `e2e/harness/metrics.ts` but deliberately kept out of the
 composite is the obvious instrument to compare it against. Whether the term
 should be changed is out of scope for this card, which changes no metric, weight,
 threshold or composite.
+
+## 2026-10-30 — stage 143 partial attempt (stopped 2026-10-31 UTC)
+
+**Status: partial, no promotion.** The mandatory `scripts/check-contract-test-gate.sh --worktree` exits 1: `e2e/sweep.spec.ts: no AUTOMETTA-CONTRACT-BEGIN marker found, but docs/stages/111-gray-scott-nine-point-rebaseline.md names it as this stage's contract test`. HEAD and the working tree both have only the stage-70 marker at this path. No frozen assertion or digest was changed. The card says to stop on an unresolved evidence failure; the worker interrupted the full sweep (exit 130) and did not restart it. Repair or re-brief of that gate association belongs to the orchestrator, outside this worker's deliverables.
+
+Pre-measurement declaration: [manifest](data/2026-10-30/143/attempt1/manifest-belousov-zhabotinsky.json). [Pilot timings and first-candidate numeric readings](data/2026-10-30/143/attempt1/pilot-belousov-zhabotinsky.json). [Shared commands and scope evidence](data/2026-10-30/143/attempt1/checks.json). No canonical `143/belousov-zhabotinsky.json` is supplied because complete ranking/reference/finalist evidence does not exist.
+
+### Method and coverage
+
+Planned: 48 novel sets, no refinements; 3 current shipped references. Grid128×128, channel0, outer dt1, warmup samples[400, 700, 1000], flux gap8. The method `rd-persistence-v1` averages the unchanged `scoreFrames` readings via `summarizeMetrics`, preserving all historical scoring paths and configurations. The driver captures ordered times on one fresh trajectory per parameter/size/seed; the separate three-kernel browser regression proves exact frame equality against freshly initialised trajectories. The retained pre-measurement determinism wording “fresh kernel each sample” describes the intended deterministic comparison, not literal instance allocation after this optimisation.
+
+Search inclusion/exclusion and full fixed parameters are recorded in the manifest. Historical subtraction:
+
+- `docs/sweeps/belousov-zhabotinsky-interestingness.md`: Subtract40 feed/kill pairs: feed linspace0.008..0.05(8), kill[0.008,0.016,0.024,0.032,0.044], fixed diffusion(0.18,0.08,0.035). Subtract12 diffusion probes at feed=kill0.02: A[0.06,0.09,0.12,0.14,0.18,0.21,0.24,0.27,0.30,0.34],B=A/2-0.01,C0.035 plus(0.18,0.08,C0.055/0.08). Subtract high-A appendix A0.18/0.24/0.27/0.35 at B0.08,C0.035,feed=kill0.02 and128/256/longer horizons. Every new triple is off the old A/B spine, every new set differs from all old full tuples; none uses feed=kill0.02.
+- `e2e/harness/sims.ts`: Both historical BZ configurations preserved. New feed[0.014,0.026,0.038,0.05] x kill[0.016,0.028,0.04] x four explicit diffusion triples;12 reaction pairs per triple,48 total. stepsPerFrame1, internal Euler dt0.2 unchanged.
+- `src/app/presets.ts`: Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: global slider grids, production changes, palettes, timestep/iteration changes or an adaptive refinement pass. No glider discretisation search was revived. Pilot admission passed; its ranking-throughput estimate did not trigger a budget split. The stop was the frozen-gate failure, not slow throughput.
+
+### Measured evidence and ranking
+
+**Full-grid attempt: 0/48 candidates, 0/3 references**. Only the separate first-candidate throughput pilot ran. No ranking or claimed negative scientific result is available. Pilot score0.929912902905 is a single late-time reading, not the declared three-time mean. Exact pilot parameters: `{"stepsPerFrame":1,"feed":0.014,"kill":0.016,"diffusionA":0.12,"diffusionB":0.12,"diffusionC":0.02}`.
+
+### Current references and visual interpretation
+
+All current shipped references are declared separately from historical IDs; none was measured in the interrupted full run. These parameter rows come from current `src/app/presets.ts`, completed with explicit kernel defaults where needed:
+
+| current reference | full parameters |
+|---|---|
+| 143-current-spiral-waves | `{"diffusionA":0.18,"diffusionB":0.08,"diffusionC":0.035,"feed":0.02,"kill":0.02,"stepsPerFrame":1}` |
+| 143-current-soft-rings | `{"diffusionA":0.14,"diffusionB":0.06,"diffusionC":0.055,"feed":0.012,"kill":0.03,"stepsPerFrame":1}` |
+| 143-current-fast-catalyst | `{"diffusionA":0.24,"diffusionB":0.11,"diffusionC":0.08,"feed":0.03,"kill":0.03,"stepsPerFrame":3}` |
+
+![First-candidate pilot through actual app WebGL2 Renderer, not a finalist](../images/sweeps-2026-10-30/143-belousov-zhabotinsky-pilot-renderer.png)
+
+This is the real app Renderer at384×384 performance resolution, paused after the first declared sampling time, on the first candidate only. It is labelled **pilot**, not a finalist or a current-reference comparison. Grayscale field PNGs, equal-time reference comparisons, three separated finalist frames, longer horizons, two-resolution checks and supported three-seed robustness checks are missing. No aesthetic superiority, persistent morphology or promotion is inferred from this pilot. Off-frame clipping is0 by periodic-field geometry, not a count of features crossing a torus boundary.
+
+### Proposed promotions and reproduction
+
+**None proposed.** The research outcome is incomplete; absence of a promotion here is not evidence that the new region contains no useful regimes. Independent numerical replay and operator visual sign-off have not occurred. Production presets, kernels and defaults are unchanged.
+
+After the orchestrator resolves the freeze-gate blocker and authorises continuation, the complete declared command is:
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+```
+
+Do not present a pilot run as the full sweep. A complete later run must retain all48 candidate rows and all declared references, plus the missing validation and raw recomputation evidence.
+
+## 2026-10-30 — stage 143 completed retry
+
+Measured on 2026-10-31. This section supersedes the incomplete attempt above. **No production promotion proposed.** Independent verifier acceptance and operator visual sign-off remain separate.
+
+Complete [results](data/2026-10-30/143/belousov-zhabotinsky.json), [pre-measurement manifest](data/2026-10-30/143/manifest-belousov-zhabotinsky.json), [ranked census](data/2026-10-30/143/belousov-zhabotinsky-ranking.json), [raw float fields](data/2026-10-30/143/belousov-zhabotinsky-raw.json), [validation readings](data/2026-10-30/143/belousov-zhabotinsky-validation.json) and [pilot timing](data/2026-10-30/143/pilot-belousov-zhabotinsky.json). Earlier failed evidence remains under `143/attempt1/`.
+
+### Method and searched axes
+
+Full sweep plus validation elapsed 1.54 minutes. All 48/48 declared novel candidates and 3/3 current shipped references were measured, without refinements or truncation. Method `rd-persistence-v1`: arithmetic mean and population spread of unchanged scoreFrames readings at [400, 700, 1000], grid 128×128, primary channel 0, flux gap 8, outer dt 1. Full candidate parameters are retained in declaration order in the manifest; ranking order is stored separately.
+
+Closed-form deterministic seed geometry; no random source or seed parameter. Fresh kernel per parameter/size trajectory, ordered captures.
+
+Arithmetic mean of unchanged scoreFrames metrics at three separated times via summarizeMetrics; retain each reading and population spread. No new morphology class labels, weights, calibration orderings or aesthetic claims from scores.
+
+Historical subtraction and inclusion/exclusion:
+
+- [docs/sweeps/belousov-zhabotinsky-interestingness.md](../../docs/sweeps/belousov-zhabotinsky-interestingness.md): Subtract40 feed/kill pairs: feed linspace0.008..0.05(8), kill[0.008,0.016,0.024,0.032,0.044], fixed diffusion(0.18,0.08,0.035). Subtract12 diffusion probes at feed=kill0.02: A[0.06,0.09,0.12,0.14,0.18,0.21,0.24,0.27,0.30,0.34],B=A/2-0.01,C0.035 plus(0.18,0.08,C0.055/0.08). Subtract high-A appendix A0.18/0.24/0.27/0.35 at B0.08,C0.035,feed=kill0.02 and128/256/longer horizons. Every new triple is off the old A/B spine, every new set differs from all old full tuples; none uses feed=kill0.02.
+- [e2e/harness/sims.ts](../../e2e/harness/sims.ts): Both historical BZ configurations preserved. New feed[0.014,0.026,0.038,0.05] x kill[0.016,0.028,0.04] x four explicit diffusion triples;12 reaction pairs per triple,48 total. stepsPerFrame1, internal Euler dt0.2 unchanged.
+- [src/app/presets.ts](../../src/app/presets.ts): Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: timestep/iteration tuning, colour or display tuning, global slider Cartesian products, further refinements, production defaults or glider discretisation searches. No historical configuration or scoreFrames output was changed.
+
+### Ranked candidates
+
+| rank | candidate | full parameters | mean score | score min–max | flux | coverage |
+|---|---|---|---|---|---|---|
+| 1 | 143-belousov-zhabotinsky-c48 | `{"stepsPerFrame":1,"feed":0.05,"kill":0.04,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.955772045006 | 0.950857209–0.960137977 | 0.246925400 | 0.580607096 |
+| 2 | 143-belousov-zhabotinsky-c20 | `{"stepsPerFrame":1,"feed":0.026,"kill":0.028,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.955000658449 | 0.943929427–0.963633903 | 0.195710006 | 0.439025879 |
+| 3 | 143-belousov-zhabotinsky-c32 | `{"stepsPerFrame":1,"feed":0.038,"kill":0.028,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.954407589554 | 0.950199590–0.959929928 | 0.247294327 | 0.470133464 |
+| 4 | 143-belousov-zhabotinsky-c19 | `{"stepsPerFrame":1,"feed":0.026,"kill":0.028,"diffusionA":0.24,"diffusionB":0.16,"diffusionC":0.055}` | 0.953030187800 | 0.939689857–0.964462107 | 0.193793004 | 0.420979818 |
+| 5 | 143-belousov-zhabotinsky-c47 | `{"stepsPerFrame":1,"feed":0.05,"kill":0.04,"diffusionA":0.24,"diffusionB":0.16,"diffusionC":0.055}` | 0.952704269816 | 0.942434375–0.959413791 | 0.239277781 | 0.559407552 |
+| 6 | 143-belousov-zhabotinsky-c04 | `{"stepsPerFrame":1,"feed":0.014,"kill":0.016,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.951877297148 | 0.947772693–0.954686305 | 0.180160302 | 0.351603190 |
+| 7 | 143-belousov-zhabotinsky-c31 | `{"stepsPerFrame":1,"feed":0.038,"kill":0.028,"diffusionA":0.24,"diffusionB":0.16,"diffusionC":0.055}` | 0.951253127299 | 0.946973648–0.957064521 | 0.248252017 | 0.464233398 |
+| 8 | 143-belousov-zhabotinsky-c03 | `{"stepsPerFrame":1,"feed":0.014,"kill":0.016,"diffusionA":0.24,"diffusionB":0.16,"diffusionC":0.055}` | 0.950696937679 | 0.946804288–0.954291555 | 0.181055372 | 0.356099447 |
+| 9 | 143-belousov-zhabotinsky-c16 | `{"stepsPerFrame":1,"feed":0.026,"kill":0.016,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.949819642831 | 0.946134875–0.953034380 | 0.241442201 | 0.459940592 |
+| 10 | 143-belousov-zhabotinsky-c36 | `{"stepsPerFrame":1,"feed":0.038,"kill":0.04,"diffusionA":0.3,"diffusionB":0.06,"diffusionC":0.12}` | 0.947280601146 | 0.934271409–0.959559569 | 0.189275272 | 0.545491536 |
+
+Primary-output diagnostic ranges over the complete candidate/reference census: `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0.05712890625],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Every row's exact endpoint fractions and both raw fields are retained. Zero scores and empty outcomes are retained, not dropped from ranking.
+
+### Current references
+
+Source: current `src/app/presets.ts`, measured under new `143-current-*` IDs. Gray-Scott explicitly completes stencil=nine-point and dt=1; Lenia explicitly completes seed=0. Historical reference IDs/values remain reproducible.
+
+| reference | full parameters | mean score | flux | coverage |
+|---|---|---|---|---|
+| 143-current-spiral-waves | `{"diffusionA":0.18,"diffusionB":0.08,"diffusionC":0.035,"feed":0.02,"kill":0.02,"stepsPerFrame":1}` | 0.935532923116 | 0.202385799 | 0.373535156 |
+| 143-current-soft-rings | `{"diffusionA":0.14,"diffusionB":0.06,"diffusionC":0.055,"feed":0.012,"kill":0.03,"stepsPerFrame":1}` | 0.510047404158 | 0.073681647 | 0.070210775 |
+| 143-current-fast-catalyst | `{"diffusionA":0.24,"diffusionB":0.11,"diffusionC":0.08,"feed":0.03,"kill":0.03,"stepsPerFrame":3}` | 0.946828767133 | 0.339473550 | 0.406962077 |
+
+### Temporal and app-scale evidence
+
+One highest mean-score candidate is an evidence selection, without implying aesthetic superiority. Every selection and current reference has four separated samples, including a longer horizon, at 128² and 384². Lenia repeats all readings at seeds 0, 1 and 2. Equal-size 384px images labelled renderer use the actual app WebGL2 Renderer, exact parameters and steps, and verify its primary field against the independent driver. Images labelled field are grayscale primary-channel PNGs. App-live screenshots show the full route after three seconds of playback. UI sliders quantise some inputs (for example Gray-Scott Du 0.2097 becomes 0.21 and k 0.04875 becomes 0.049); the actual control values are retained in validation JSON. Their timing and optional seed are uncontrolled, so they are qualitative route context only, not exact candidate comparisons. Exact candidate comparisons use the Renderer snapshots.
+
+Renderer capture method: explicit-seed-v2. 16 previously successful Renderer images were retained after fresh field replay matched the complete float field and full parameters exactly; reused image SHA256 values are in validation JSON. All numeric trajectories and grayscale images were freshly measured. Set SWEEP_143_RENDER_FRESH=1 to regenerate every Renderer image instead of reusing matching captures.
+
+The first combined run passed Gray-Scott and BZ but exposed Renderer-generated seed variation in Lenia. [Failure record](data/2026-10-30/143/renderer-failure.json), [failing seed diagnostic](data/2026-10-30/143/renderer-seed-regression-before.json) and [passing three-seed regression](data/2026-10-30/143/renderer-seed-regression.json) retain the diagnosis. The snapshot wrapper now honours an explicitly declared seed; production Renderer behaviour is unchanged. receivedParams records the Renderer-supplied seed before that explicit override. The exact primary field is compared to the deterministic driver before a new snapshot is accepted.
+
+#### 143-belousov-zhabotinsky-c48
+
+| 400 | 700 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 400](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t400.png) | ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t700.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0.0031263563368055555,0.023193359375],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-belousov-zhabotinsky-c48-field-128-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-128-seednone-t400.png)
+- [143-belousov-zhabotinsky-c48-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-128-seednone-t700.png)
+- [143-belousov-zhabotinsky-c48-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-128-seednone-t1000.png)
+- [143-belousov-zhabotinsky-c48-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-128-seednone-t2000.png)
+- [143-belousov-zhabotinsky-c48-field-384-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-384-seednone-t400.png)
+- [143-belousov-zhabotinsky-c48-renderer-t400.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t400.png)
+- [143-belousov-zhabotinsky-c48-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-384-seednone-t700.png)
+- [143-belousov-zhabotinsky-c48-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t700.png)
+- [143-belousov-zhabotinsky-c48-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-384-seednone-t1000.png)
+- [143-belousov-zhabotinsky-c48-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t1000.png)
+- [143-belousov-zhabotinsky-c48-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-field-384-seednone-t2000.png)
+- [143-belousov-zhabotinsky-c48-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-renderer-t2000.png)
+- [143-belousov-zhabotinsky-c48-app-live.png](../../docs/images/sweeps-2026-10-30/143-belousov-zhabotinsky-c48-app-live.png)
+
+#### 143-current-spiral-waves
+
+| 400 | 700 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 400](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t400.png) | ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t700.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0.0008544921875,0.006591796875],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-spiral-waves-field-128-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-128-seednone-t400.png)
+- [143-current-spiral-waves-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-128-seednone-t700.png)
+- [143-current-spiral-waves-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-128-seednone-t1000.png)
+- [143-current-spiral-waves-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-128-seednone-t2000.png)
+- [143-current-spiral-waves-field-384-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-384-seednone-t400.png)
+- [143-current-spiral-waves-renderer-t400.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t400.png)
+- [143-current-spiral-waves-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-384-seednone-t700.png)
+- [143-current-spiral-waves-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t700.png)
+- [143-current-spiral-waves-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-384-seednone-t1000.png)
+- [143-current-spiral-waves-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t1000.png)
+- [143-current-spiral-waves-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-field-384-seednone-t2000.png)
+- [143-current-spiral-waves-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-renderer-t2000.png)
+- [143-current-spiral-waves-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-spiral-waves-app-live.png)
+
+#### 143-current-soft-rings
+
+| 400 | 700 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 400](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t400.png) | ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t700.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-soft-rings-field-128-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-128-seednone-t400.png)
+- [143-current-soft-rings-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-128-seednone-t700.png)
+- [143-current-soft-rings-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-128-seednone-t1000.png)
+- [143-current-soft-rings-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-128-seednone-t2000.png)
+- [143-current-soft-rings-field-384-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-384-seednone-t400.png)
+- [143-current-soft-rings-renderer-t400.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t400.png)
+- [143-current-soft-rings-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-384-seednone-t700.png)
+- [143-current-soft-rings-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t700.png)
+- [143-current-soft-rings-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-384-seednone-t1000.png)
+- [143-current-soft-rings-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t1000.png)
+- [143-current-soft-rings-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-field-384-seednone-t2000.png)
+- [143-current-soft-rings-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-renderer-t2000.png)
+- [143-current-soft-rings-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-soft-rings-app-live.png)
+
+#### 143-current-fast-catalyst
+
+| 400 | 700 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 400](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t400.png) | ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t700.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0.00274658203125],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-fast-catalyst-field-128-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-128-seednone-t400.png)
+- [143-current-fast-catalyst-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-128-seednone-t700.png)
+- [143-current-fast-catalyst-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-128-seednone-t1000.png)
+- [143-current-fast-catalyst-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-128-seednone-t2000.png)
+- [143-current-fast-catalyst-field-384-seednone-t400.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-384-seednone-t400.png)
+- [143-current-fast-catalyst-renderer-t400.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t400.png)
+- [143-current-fast-catalyst-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-384-seednone-t700.png)
+- [143-current-fast-catalyst-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t700.png)
+- [143-current-fast-catalyst-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-384-seednone-t1000.png)
+- [143-current-fast-catalyst-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t1000.png)
+- [143-current-fast-catalyst-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-field-384-seednone-t2000.png)
+- [143-current-fast-catalyst-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-renderer-t2000.png)
+- [143-current-fast-catalyst-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-fast-catalyst-app-live.png)
+
+[Full 48-candidate grayscale census](../images/sweeps-2026-10-30/143-belousov-zhabotinsky-census.png), in manifest order, eight columns; first declared sample only.
+
+### Reproduction and interpretation
+
+Worker fresh numerical repeat of the selection and every current reference: absolute tolerance 1e-9; maximum absolute delta 0 across 4 rows (full per-row readings in the results JSON). These worker checks do not substitute for independent verification. Full raw-data recomputation, ordering and current-preset provenance are checked by the separate replay command. Different resolutions are visual robustness checks, not exact numeric replays.
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_REPLAY=143 npx playwright test e2e/sweep.spec.ts -g "143 retained|143 multi-time"
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+Standalone numerical replay is also available with SWEEP_REPLAY=143 and selector "143 fresh". It covers the full grid plus validation readings without regenerating images; the verifier can use the main sweep for its single required full-grid replay, with the retained-raw check for recomputation.
+
+No promotions proposed. Manual findings are recorded below after visual inspection; scores only shortlist evidence.
+
+### Manual visual finding and promotion decision
+
+Selected c48 shows closely packed spiral/ring fronts at400 and700, with finer broken fronts by1000 and a more irregular labyrinth-like field by2000. Persistent activity survives the longer horizon at both sizes, but the original large spiral geometry is not preserved. This is a manual reading of the linked exact-time images, not an automated connectivity label. The mean score 0.955772045006 exceeds current Fast catalyst0.946828767133 by 0.008943277873, which does not establish aesthetic superiority. The selected primary field reaches the upper endpoint in roughly0.3–1.1 percent of frame-A cells across validation; exact frame-A/frame-B ranges are retained below. No nonfinite or out-of-range primary output was observed. No promotion proposed; retained for review rather than a claim that the new diffusion ratios improve the gallery. Current Spiral waves and Fast catalyst also evolve into finer irregular fields at the longer horizon; c48 is not a distinct sustained visual class. Current Soft rings loses contrast from 400 through 1000/2000, so its lower three-time mean0.510047404158 is not a scoring error or proof of a worse preset: it is the restrained reference sampled later. Fast catalyst retains its shipped stepsPerFrame3, while candidates use1; timing/speed remains part of the explicit reference parameters, not an unrecorded normalisation.
+
+**Proposed promotions: none.** Research acceptance belongs to the independent verifier; any production promotion requires separate operator visual sign-off.
+
+### Final worker validation
+
+[Commands, exits and limitations](data/2026-10-30/143/checks.json), [retained-field recomputation](data/2026-10-30/143/raw-recomputation.json), [fresh trajectory replay](data/2026-10-30/143/fresh-replay.json), [image/link audit](data/2026-10-30/143/artifact-audit.json) and [contract-gate before/after reproduction](data/2026-10-30/143/gate-reproduction.json) are retained.
+
+`npm run verify` exited 0: 397 passed, 38 skipped, typecheck/build green. The precise historical browser regression command exited 0: 6 passed, 1 opt-in recorder skipped. The named three-kernel sweep exited 0 with 3 passed and no skips; all 144 candidates and 13 current references completed. The frozen contract exited 0 with 4 passed and no skips; the worktree contract gate exited 0. The standalone retained/raw/fresh replay command exited 0 with 3 passed and no skips (46.5 minutes). Fresh replay covered every candidate, reference and all 208 validation readings, including metric spreads and explicit Lenia seeds, with maximum absolute delta 0 and identical ordering in Chromium 148.0.7778.96. Skips are not passes. These are worker checks, not independent-verifier acceptance.
+
+All 294 retained stage PNGs are linked and have valid headers/dimensions; each selected candidate has four distinct Renderer-frame hashes. Production files, protected scripts, frozen assertions/digests, historical configurations and orchestration state are unchanged. No git mutation was performed. The owned Vite server was stopped. Full live-route context reported unavailable KaTeX fonts; exact simulation Renderer captures and field-equality checks passed. Promotion remains a separate operator decision.
