@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
+import { SPECS as LORENZ_SPECS } from "../src/sims/lorenz-attractor/kernel.ts";
 import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
@@ -1625,4 +1626,191 @@ test("ECA generated-row clock matches batch speeds without padding", async ({ pa
   expect(ecaClassSignals([0, 1, 1, 0], 2, 2)).toEqual({ rowEntropy: 1, rowChange: 1, repeatedRowFraction: 0 });
   expect(() => ecaClassSignals([0], 2, 1)).toThrow();
   expect(ecaEquivalents(30)).toEqual({ mirror: 86, complement: 135, mirrorComplement: 149, representative: 30 });
+});
+
+const LORENZ_ROOT = "docs/sweeps/data/2026-10-30/142";
+const LORENZ_IMAGES = "docs/images/sweeps-2026-10-30";
+// Evidence selections are fixed after inspecting the census montage.
+const LORENZ_FINALISTS: string[] = ["142-c53", "142-c12", "142-c61"];
+const LORENZ_SNAPSHOTS = [280, 420, 560, 700, 840];
+const LORENZ_LONG_SNAPSHOTS = LORENZ_SNAPSHOTS.map(n => n + 2000);
+const LORENZ_FRAME_STEPS = [280, 560, 840];
+
+function lorenzId(index: number): string {
+  return `142-c${String(index + 1).padStart(2, "0")}`;
+}
+
+/** Node-side RK4 replica of the kernel's integrate/deposit geometry, used only
+ * to report divergence and off-frame clipping, which the density field hides. */
+function lorenzTrajectoryDiagnostics(params: Params, gridWidth: number, gridHeight: number, frames: number) {
+  const spec = LORENZ_SPECS.lorenz;
+  const sigma = Number(params.sigma), rho = Number(params.rho), beta = Number(params.beta);
+  const spf = Number(params.stepsPerFrame);
+  let x = spec.start[0], y = spec.start[1], z = spec.start[2];
+  const dt = spec.dt, h = dt / 2;
+  const d = (a: number, b: number, c: number) => spec.derivative(a, b, c, sigma, rho, beta);
+  const advance = () => {
+    const k1 = d(x, y, z), k2 = d(x + k1.dx * h, y + k1.dy * h, z + k1.dz * h);
+    const k3 = d(x + k2.dx * h, y + k2.dy * h, z + k2.dz * h), k4 = d(x + k3.dx * dt, y + k3.dy * dt, z + k3.dz * dt);
+    x += (dt / 6) * (k1.dx + 2 * k2.dx + 2 * k3.dx + k4.dx);
+    y += (dt / 6) * (k1.dy + 2 * k2.dy + 2 * k3.dy + k4.dy);
+    z += (dt / 6) * (k1.dz + 2 * k2.dz + 2 * k3.dz + k4.dz);
+  };
+  for (let i = 0; i < spec.warmup + spec.initialTrace; i += 1) advance();
+  const total = frames * spf;
+  let nonFinite = 0, offFrame = 0, leftLobe = 0, switches = 0, lastSign = 0, maxAbs = 0;
+  const tail = { x0: x, y0: y, z0: z };
+  for (let i = 0; i < total; i += 1) {
+    advance();
+    if (![x, y, z].every(Number.isFinite)) { nonFinite += 1; continue; }
+    maxAbs = Math.max(maxAbs, Math.abs(x), Math.abs(y), Math.abs(z));
+    const gx = ((spec.projX(x, y, z) - spec.xRange[0]) / (spec.xRange[1] - spec.xRange[0])) * (gridWidth - 1);
+    const gy = gridHeight - 1 - ((spec.projY(x, y, z) - spec.yRange[0]) / (spec.yRange[1] - spec.yRange[0])) * (gridHeight - 1);
+    if (gx < 0 || gx >= gridWidth || gy < 0 || gy >= gridHeight) offFrame += 1;
+    if (x < 0) leftLobe += 1;
+    const sign = x > 0.5 ? 1 : x < -0.5 ? -1 : 0;
+    if (sign !== 0) { if (lastSign !== 0 && sign !== lastSign) switches += 1; lastSign = sign; }
+  }
+  const end = d(x, y, z);
+  return { integrationSteps: total, nonFiniteFraction: nonFinite / total, offFrameClippingFraction: offFrame / total,
+    leftLobeTimeFraction: leftLobe / total, lobeSwitches: switches, maxAbsState: maxAbs,
+    endSpeed: Math.hypot(end.dx, end.dy, end.dz), drift: Math.hypot(x - tail.x0, y - tail.y0, z - tail.z0) };
+}
+
+/** Density-frame readings: channel endpoints and left/right mass split. */
+function lorenzFrameDiagnostics(field: number[], width: number, height: number) {
+  let lower = 0, upper = 0, left = 0, right = 0, bad = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const v = field[y * width + x];
+    if (!Number.isFinite(v)) { bad += 1; continue; }
+    if (v <= 0) lower += 1;
+    if (v >= 1) upper += 1;
+    if (x < width / 2) left += v; else right += v;
+  }
+  const mass = left + right;
+  return { nonFiniteFraction: bad / field.length, lowerEndpointFraction: lower / field.length,
+    upperEndpointFraction: upper / field.length, leftMassFraction: mass > 0 ? left / mass : 0 };
+}
+
+async function lorenzDrive(page: Page, config: SimSweepConfig, params: Params, warmupSteps: number, size = config.gridWidth) {
+  return page.evaluate(driveKernel, { registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: size, gridHeight: size,
+    warmupSteps, fluxGap: config.fluxGap, primaryChannel: config.primaryChannel, dt: config.dt });
+}
+
+sweepTest("sweep 142 Lorenz unexplored beta/rho and sigma/rho regimes", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const config = SWEEP_CONFIGS["sweep-142-lorenz-attractor"];
+  const sets = expandSweep(config);
+  const planned = sets.map((params, i) => ({ id: lorenzId(i), params }));
+  expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
+  const manifest = {
+    slug: config.slug, methodVersion: "lorenz-unexplored-v1",
+    grid: { width: config.gridWidth, height: config.gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 142 "',
+    snapshots: LORENZ_SNAPSHOTS, longHorizonSnapshots: LORENZ_LONG_SNAPSHOTS,
+    fixedParams: { dynamicSets: { stepsPerFrame: 6, fade: 0.992, ribbonWidth: "kernel default 2.1", colourByHeight: "kernel default true" } },
+    determinism: "No RNG: kernel starts at (0.1,0,0) and integrates fixed-step RK4 (dt 0.005); fresh kernel per snapshot; metric tolerance 1e-9 on replay.",
+    candidates: planned, references: config.references,
+    counts: { dynamic: 64, refinement: planned.length - 64, allowance: "64 novel pairs + at most 24 refined sets" },
+    schemaBounds: { sigma: [0, 30], rho: [0, 60], beta: [0, 10], stepsPerFrame: [1, 64], fade: [0.9, 1] },
+    axes: { betaRho: { sigma: 10, beta: [0.6, 1.4, 4.5, 7], rho: [8, 16, 22, 26, 50, 54, 57, 60] },
+      sigmaRho: { beta: 2.6667, sigma: [1.5, 4, 20, 28], rho: [14, 20, 24, 30, 34, 48, 54, 60] } },
+    priorCoverage: [
+      { source: "e2e/harness/sims.ts", description: "Historical LORENZ config (preserved unchanged, id lorenz-attractor): rho {24,28.4,32.8,37.2,41.6,46} x sigma {8,10,12,14} x fade {0.985,0.992,0.997}, beta fixed 2.6667, stepsPerFrame 6, five snapshots 280..840. 72 candidates. Not repeated; beta was never swept and sigma never left 8..14." },
+      { source: "docs/sweeps/gray-scott-interestingness.md", description: "Appendix: Lorenz multi-snapshot scoring (2026-08-30) and the Lorenz & Boids section: five-snapshot N=5 sets at rho 28 (sigma 10, fade 0.992, spf 6), rho 35 (fade 0.990, spf 12), rho 37 and rho 42 (fade 0.997, spf 6), all sigma 10, beta 2.6667. Not repeated; this stage adds beta/sigma variation and rho outside or between these values." },
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md", description: "Batch report: Lorenz is already covered by a historical config; this stage explores beta/rho and sigma/rho outside or between that grid and does not claim first-ever coverage." },
+      { source: "src/app/presets.ts", description: "Current shipped lorenz-attractor presets used as references (classic spf8/fade0.985, wide-wings spf12/fade0.99, dense-wings, fast-trace). Only the historical classic reference is stale (stepsPerFrame 6/fade 0.992 vs shipped 8/0.985); historical wide-wings (12/0.99) already matches the shipped preset and is re-measured under 142-current-wide-wings only for a uniform current-reference set." },
+      { source: "src/sims/lorenz-attractor/kernel.ts", description: "Schema bounds sigma [0,30], rho [0,60], beta [0,10]; only Lorenz-family attractor is searched, trail fade and stepsPerFrame fixed at 6 / 0.992 in dynamic comparisons." },
+    ],
+    inclusion: "All 64 sets retained including equilibrium, transient and clipped outcomes; rho below and above the old grid, sigma 1.5..28, beta 0.6..7.",
+    exclusion: "No rossler/thomas/aizawa/halvorsen; no old-grid repeat; no ribbonWidth/colour search; no production changes.",
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/lorenz-attractor/kernel.ts", "e2e/harness/driver.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+  };
+  writeText(`${LORENZ_ROOT}/manifest.json`, JSON.stringify(manifest, null, 2));
+  const diagnostics: Record<string, object> = {};
+  const measure = async (c: { id: string; params: Params }, label: string) => {
+    const scored = await scoreOne(page, config, c.id, label, c.params);
+    expect(Object.values(scored.metrics).filter(v => typeof v === "number").every(Number.isFinite), c.id).toBe(true);
+    const frame = await lorenzDrive(page, config, c.params, 560);
+    diagnostics[c.id] = { trajectory: lorenzTrajectoryDiagnostics(c.params, config.gridWidth, config.gridHeight, 840 + config.fluxGap),
+      density560: lorenzFrameDiagnostics(frame.frameA, frame.width, frame.height) };
+    return scored;
+  };
+  const candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [];
+  const sheetCols = 8, cell = 128;
+  const sheetW = sheetCols * cell, sheetH = Math.ceil(planned.length / sheetCols) * cell;
+  const sheet = new Float32Array(sheetW * sheetH);
+  for (const c of planned) {
+    const scored = await measure(c, c.id);
+    const frame = await lorenzDrive(page, config, c.params, 560);
+    const i = candidates.length;
+    for (let y = 0; y < cell; y += 1) for (let x = 0; x < cell; x += 1) sheet[(Math.floor(i / sheetCols) * cell + y) * sheetW + (i % sheetCols) * cell + x] = frame.frameA[y * cell + x];
+    candidates.push(scored);
+  }
+  for (const r of config.references) references.push(await measure(r, r.label));
+  const ranked = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+  writePng(`${ARTIFACT_ROOT}/sweep-142-lorenz-attractor/census.png`, sheet, sheetW, sheetH, 1);
+  writeText(`${ARTIFACT_ROOT}/sweep-142-lorenz-attractor/report.md`, metricsTable(ranked, ["sigma", "beta", "rho", "stepsPerFrame", "fade"]));
+  writeText(`${ARTIFACT_ROOT}/sweep-142-lorenz-attractor/census.json`, JSON.stringify({ manifest, ranked, references, diagnostics }));
+  if (!LORENZ_FINALISTS.length) return;
+
+  const imagePath = (id: string, tag: string) => `${LORENZ_IMAGES}/${id}-${tag}.png`;
+  const renderer = async (params: Params, warmup: number, path: string) => {
+    await page.setViewportSize({ width: 256, height: 256 });
+    const info = await page.evaluate(async ({ params, warmup }) => {
+      const load = (u: string) => import(/* @vite-ignore */ u);
+      const [{ Renderer }, { LorenzAttractorKernel }, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+        load("/src/app/renderer.ts"), load("/src/sims/lorenz-attractor/kernel.ts"), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts")]);
+      document.body.innerHTML = "";
+      const canvas = document.createElement("canvas"); canvas.id = "lorenz-evidence";
+      canvas.style.cssText = "position:fixed;left:0;top:0;width:256px;height:256px"; document.body.appendChild(canvas);
+      class Snapshot extends LorenzAttractorKernel {
+        init(w: number, h: number, p: Params) { super.init(w, h, p); for (let i = 0; i < warmup; i += 1) super.step(1); }
+      }
+      const kernel = new Snapshot(), mode = getRenderMode("lorenz-attractor");
+      const profile = qualityProfileFor("lorenz-attractor", mode, "desktop");
+      const colourOptions = defaultColourOptionsFor("lorenz-attractor", 1);
+      const r = new Renderer({ canvas, kernel, params, stepsPerFrame: 0, colourOptions,
+        displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      (window as any).__lorenzRenderer = r;
+      return { canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer };
+    }, { params, warmup });
+    expect(info.renderer).toBe("webgl2");
+    await page.locator("#lorenz-evidence").screenshot({ path });
+    await page.evaluate(() => (window as any).__lorenzRenderer.destroy());
+    return info;
+  };
+  const longConfig = { ...config, multiSnapshot: { warmupSteps: LORENZ_LONG_SNAPSHOTS } };
+  const finalists = LORENZ_FINALISTS.map(id => ranked.find(c => c.id === id)!);
+  expect(finalists.every(Boolean)).toBe(true);
+  const evidence: Record<string, object> = {}, replay: object[] = [];
+  const finalistRows: { id: string; images: string[] }[] = [];
+  let negativeControl: object | undefined, refinedControl: object | undefined;
+  const negative = ranked.find(c => (diagnostics[c.id] as any).trajectory.offFrameClippingFraction > 0.1)!;
+  const bestRefined = ranked.find(c => planned.findIndex(p => p.id === c.id) >= 64)!;
+  for (const c of [...finalists, negative, bestRefined, ...references]) {
+    const again = await scoreOne(page, config, c.id, c.label, c.params);
+    const delta = Math.max(...Object.entries(again.metrics).filter(([, v]) => typeof v === "number").map(([k, v]) => Math.abs((v as number) - (c.metrics as any)[k])));
+    expect(delta).toBeLessThanOrEqual(1e-9);
+    replay.push({ id: c.id, maxAbsoluteDelta: delta });
+    const frames: string[] = [], rendererFrames: string[] = [], renderInfo: object[] = [];
+    for (const warmup of LORENZ_FRAME_STEPS) {
+      const f = await lorenzDrive(page, config, c.params, warmup, 256);
+      const fp = imagePath(c.id, `field-256-warmup${warmup}`);
+      writePng(fp, f.frameA, f.width, f.height, 1); frames.push(fp);
+      const rp = imagePath(c.id, `renderer-256-warmup${warmup}`);
+      renderInfo.push(await renderer(c.params, warmup, rp)); rendererFrames.push(rp);
+    }
+    const long = await scoreOne(page, longConfig, c.id, c.label, c.params);
+    evidence[c.id] = { fieldImages: frames, rendererImages: rendererFrames, renderInfo, longHorizon: { snapshots: LORENZ_LONG_SNAPSHOTS, metrics: long.metrics },
+      longTrajectory: lorenzTrajectoryDiagnostics(c.params, config.gridWidth, config.gridHeight, 2840 + config.fluxGap) };
+    if (finalists.includes(c)) finalistRows.push({ id: c.id, images: [...rendererFrames, ...frames] });
+    else if (c === negative) negativeControl = { id: c.id, reason: "highest-scoring candidate with more than 10% of trajectory off-frame; rejected", images: [...rendererFrames, ...frames] };
+    else if (c === bestRefined) refinedControl = { id: c.id, reason: "highest-scoring presentation refinement", images: [...rendererFrames, ...frames] };
+    else c.thumb = rendererFrames[1];
+  }
+  writeText(`${LORENZ_ROOT}/lorenz-attractor.json`, JSON.stringify({ manifest, ranked, references, finalists: finalistRows, diagnostics, evidence,
+    replay: { tolerance: 1e-9, workerRepeat: replay, independentVerifierRequired: true }, negativeControl, refinedControl }, null, 2));
+  console.log(`Lorenz 142: ${candidates.length} candidates, ${references.length} references, ${finalists.length} evidence selections`);
 });

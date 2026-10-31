@@ -219,6 +219,40 @@ const LORENZ: SimSweepConfig = {
   ],
 };
 
+
+const LORENZ_142_BETA = [0.6, 1.4, 4.5, 7];
+const LORENZ_142_RHO_BETA = [8, 16, 22, 26, 50, 54, 57, 60];
+const LORENZ_142_SIGMA = [1.5, 4, 20, 28];
+const LORENZ_142_RHO_SIGMA = [14, 20, 24, 30, 34, 48, 54, 60];
+/** Refinement sets (presentation only) appended after the 64 dynamic sets. */
+export const LORENZ_142_REFINEMENTS: Params[] = [
+  { sigma: 20, beta: 2.6667, rho: 34 }, { sigma: 10, beta: 1.4, rho: 26 }, { sigma: 28, beta: 2.6667, rho: 34 },
+].flatMap(base => [0.985, 0.997].flatMap(fade => [3, 12].map(stepsPerFrame => ({ ...base, stepsPerFrame, fade }))));
+const LORENZ_142_SETS: Params[] = [
+  ...LORENZ_142_BETA.flatMap(beta => LORENZ_142_RHO_BETA.map(rho => ({ sigma: 10, beta, rho }))),
+  ...LORENZ_142_SIGMA.flatMap(sigma => LORENZ_142_RHO_SIGMA.map(rho => ({ sigma, beta: 2.6667, rho }))),
+  ...LORENZ_142_REFINEMENTS,
+];
+
+const LORENZ_UNEXPLORED: SimSweepConfig = {
+  ...LORENZ,
+  artifactId: "sweep-142-lorenz-attractor",
+  baseParams: { sigma: 10, rho: 28, beta: 2.6667, stepsPerFrame: 6, fade: 0.992 },
+  axes: [
+    { key: "beta", values: [...LORENZ_142_BETA, 2.6667] },
+    { key: "sigma", values: [10, ...LORENZ_142_SIGMA] },
+    { key: "rho", values: [...new Set([...LORENZ_142_RHO_BETA, ...LORENZ_142_RHO_SIGMA])].sort((a, b) => a - b) },
+  ],
+  sets: LORENZ_142_SETS,
+  // Current shipped lorenz-attractor presets, copied from src/app/presets.ts.
+  references: [
+    { id: "142-current-classic", label: "Classic butterfly (shipped preset)", params: { sigma: 10, rho: 28, beta: 2.6667, stepsPerFrame: 8, fade: 0.985 } },
+    { id: "142-current-wide-wings", label: "Wide wings (shipped preset)", params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 } },
+    { id: "142-current-dense-wings", label: "Dense wings (shipped preset)", params: { beta: 2.6667, stepsPerFrame: 6, fade: 0.997, rho: 41.6, sigma: 14 } },
+    { id: "142-current-fast-trace", label: "Fast trace (shipped preset)", params: { sigma: 14, rho: 32, beta: 3.1, stepsPerFrame: 20, fade: 0.975 } },
+  ],
+};
+
 /**
  * Point-map attractor sweeps: one config per map, sharing the slug. The a/b
  * axes are the interesting knobs (they set the trig frequencies that fold the
@@ -885,6 +919,7 @@ const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
 };
 
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-142-lorenz-attractor": LORENZ_UNEXPLORED,
   "sweep-141-elementary-cellular-automata": {
     slug: "elementary-cellular-automata", artifactId: "sweep-141-elementary-cellular-automata",
     eca: { methodVersion: "eca-spacetime-v1" },
