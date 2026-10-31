@@ -27,6 +27,7 @@ import {
   MARKUS_FINALISTS,
   MARKUS_REFINED_VIEWS,
   MARKUS_SEQUENCES,
+  BURNING_SHIP_REFINEMENT_CENTRES,
   expandSweep,
   type ReferenceSet,
   type SimSweepConfig,
@@ -333,6 +334,62 @@ function phaseMetricsTable(candidates: ScoredCandidate[]): string {
   return lines.join("\n");
 }
 
+interface StaticStage {
+  stage: string;
+  dataFile: string;
+  route: string;
+  settleMs: number;
+  sources: string[];
+  shortlist: string;
+  priorCoverage: { source: string; description: string }[];
+  search: Record<string, unknown>;
+  region: (c: ScoredCandidate) => string;
+  referenceId: (region: string) => string;
+}
+
+const STATIC_STAGES: Record<string, StaticStage> = {
+  "sweep-137-mandelbrot": {
+    stage: "137", dataFile: "mandelbrot.json", route: "mandelbrot", settleMs: 150,
+    sources: ["src/app/presets.ts", "src/sims/mandelbrot/kernel.ts", "src/sims/fractal/detail.ts", "e2e/harness/metrics.ts"],
+    shortlist: "Best scored view in each of the three anchor-scale regions; one representative per region, even if rejected. No numerical morphology labels.",
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md#live-audit", description: "Planning audit: Mandelbrot has no historical harness config, grid, appendix or retained rankings. Old coverage ranges: none. No old Mandelbrot candidate grid is repeated." },
+      { source: "src/app/presets.ts", description: "Shipped anchors: whole-set (-0.5,0,1;128), seahorse-valley (-0.75,0.047,18;256), spiral-hub (-0.761574,-0.0847596,96;384). These are references, not novel candidates; palettePhase/cycleSpeed are overridden to 0." },
+      { source: "src/sims/mandelbrot/kernel.ts", description: "Kernel default (-0.5,0,1;128), automatic detail true. Schema centre ranges [-2,1] and [-1.5,1.5], zoom [0.25,100000000], base iterations [16,2048]. Candidate base512 is a fixed measurement setting, not a parameter search." },
+      { source: "src/sims/fractal/detail.ts", description: "Effective = min(4096, bounded base + floor(48*log2(max(1,zoom)))) with automatic detail. All convergence rows record actual limits; impossible doubling uses lower reference and cap-limited uncertainty." },
+    ],
+    search: {
+      coarse: "3 shipped anchors × zoom factors [1.2,1.6,2.2,3] × x/y offsets [-0.12,+0.12] times anchor span 3/zoom = 48 views; centre rounded to 12 decimals, zoom to 6.",
+      inclusion: "Nearby nonidentical windows around all shipped anchor scales; all 48 retained, including empty/solid negatives.",
+      exclusion: "No global slider Cartesian product, far/deep zoom, palette search, motion or logistic-mandelbrot; refinement only around leading distinct coarse anchor regions, at most32 views.",
+      refined: "Best coarse window in each original anchor-scale region; choose negative-y whole-set conjugate on tied score. 3 centres × factors [1.15,1.45] × x/y offsets [-0.06,+0.06] times centre span 3/zoom =24 views. First48 entries are coarse; last24 are refined.",
+      refinementCentres: MANDELBROT_REFINEMENT_CENTRES,
+    },
+    region: c => Number(c.params.zoom) >= 100 ? "spiral" : Number(c.params.zoom) >= 10 ? "seahorse" : "whole",
+    referenceId: r => r === "whole" ? "137-current-whole-set" : r === "seahorse" ? "137-current-seahorse-valley" : "137-current-spiral-hub",
+  },
+  "sweep-138-burning-ship": {
+    stage: "138", dataFile: "burning-ship.json", route: "burning-ship", settleMs: 3000,
+    sources: ["src/app/presets.ts", "src/sims/burning-ship/kernel.ts", "src/sims/fractal/detail.ts", "e2e/harness/metrics.ts"],
+    shortlist: "Best scored view in each of the three shipped-anchor scale regions (harbour hull, mast, ridge-deep filaments); one representative per region, even if rejected. Hull/filament character is a manual visual finding, not a numerical label.",
+    priorCoverage: [
+      { source: "docs/sweeps/2026-10-30-interestingness-batch.md#live-audit", description: "Planning audit: Burning Ship has no historical harness config, grid, appendix or retained rankings. Old coverage ranges: none. No old Burning Ship candidate grid is repeated." },
+      { source: "src/app/presets.ts", description: "Shipped anchors: harbour (-0.5,-0.5,1;128), mast (-1.755,-0.03,14;260), ridge-deep (-1.744,-0.017,72;384). These are references, not novel candidates; palettePhase/cycleSpeed are overridden to 0 and autoIterations is the kernel default true." },
+      { source: "src/sims/burning-ship/kernel.ts", description: "Kernel default equals the mast preset geometry (-1.755,-0.03,14;260), automatic detail true, base view width 3.4. Schema ranges centerX [-2.2,1.2], centerY [-2,1], zoom [0.25,100000000], base iterations [16,2048]. Candidate base512 is a fixed measurement setting, not a parameter search." },
+      { source: "src/sims/fractal/detail.ts", description: "Effective = min(4096, bounded base + floor(48*log2(max(1,zoom)))) with automatic detail. All convergence rows record actual limits; impossible doubling uses lower reference and cap-limited uncertainty." },
+    ],
+    search: {
+      coarse: "3 shipped anchors × zoom factors [1.2,1.6,2.2,3] × x/y offsets [-0.2,+0.2] times anchor span 3.4/zoom = 48 views; centre rounded to 12 decimals, zoom to 6.",
+      inclusion: "Nearby nonidentical windows around all shipped anchor scales; all 48 retained, including empty/solid negatives.",
+      exclusion: "No global slider Cartesian product, far/deep zoom, palette search, motion or logistic-mandelbrot; refinement only around the leading coarse view in each anchor-scale region, at most 32 views.",
+      refined: "Best coarse window in each anchor-scale region. 3 centres × factors [1.15,1.45] × x/y offsets [-0.1,+0.1] times centre span 3.4/zoom = 24 views. First 48 entries are coarse; last 24 are refined.",
+      refinementCentres: BURNING_SHIP_REFINEMENT_CENTRES,
+    },
+    region: c => Number(c.params.zoom) >= 50 ? "ridge" : Number(c.params.zoom) >= 6 ? "mast" : "harbour",
+    referenceId: r => r === "harbour" ? "138-current-harbour" : r === "mast" ? "138-current-mast" : "138-current-ridge-deep",
+  },
+};
+
 /**
  * Run the full Cartesian sweep + the reference sets for one sim, score every
  * frame, rank by composite score, and write the artifacts (per-candidate
@@ -351,16 +408,17 @@ async function runSweep(
   const planned = sweepParams.map(params => ({
     id: paramKeys.map(k => `${k}${params[k]}`).join("_"), params,
   }));
-  const manifest = config.staticBoundary ? {
+  const staged = config.staticBoundary ? STATIC_STAGES[artifactId] : undefined;
+  const manifest = staged ? {
     slug, methodVersion: config.staticBoundary.methodVersion,
     grid: { width: config.gridWidth, height: config.gridHeight },
     warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
-    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 137 "',
+    command: `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep ${staged.stage} "`,
     determinism: "Fixed deterministic geometry; no RNG or seed; fresh kernel per measurement.",
     fixedParams: config.baseParams,
-    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/mandelbrot/kernel.ts", "src/sims/fractal/detail.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    sourceHashes: Object.fromEntries(staged.sources.map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
     validationPlan: {
-      shortlist: "Best scored view in each of the three anchor-scale regions; one representative per region, even if rejected. No numerical morphology labels.",
+      shortlist: staged.shortlist,
       resolutions: [128, 256], viewport: { width: 1200, height: 900 },
       presentation: { palette: "inferno", gamma: 0.7, contrast: 1.5, paletteSteps: 0, pointSize: 1, bloom: 0.3, invert: false, paused: true, palettePhase: 0, cycleSpeed: 0 },
       iterationMethod: "Compute actual zoom boost; request base=2*effective-boost only if base<=2048 and effective<=4096. Otherwise measure actual effective limit against a lower reference and mark cap-limited. Additional top-view base2048 cap probe is validation, not a searched view.",
@@ -369,25 +427,14 @@ async function runSweep(
     candidateCounts: { coarse: 48, refined: sweepParams.length - 48 },
     candidates: planned,
     effectiveLimits: planned.map(c => ({ id: c.id, effective: effectiveIterationLimit(Number(c.params.maxIterations), Number(c.params.zoom), Boolean(c.params.autoIterations)) })),
-    priorCoverage: [
-      { source: "docs/sweeps/2026-10-30-interestingness-batch.md#live-audit", description: "Planning audit: Mandelbrot has no historical harness config, grid, appendix or retained rankings. Old coverage ranges: none. No old Mandelbrot candidate grid is repeated." },
-      { source: "src/app/presets.ts", description: "Shipped anchors: whole-set (-0.5,0,1;128), seahorse-valley (-0.75,0.047,18;256), spiral-hub (-0.761574,-0.0847596,96;384). These are references, not novel candidates; palettePhase/cycleSpeed are overridden to 0." },
-      { source: "src/sims/mandelbrot/kernel.ts", description: "Kernel default (-0.5,0,1;128), automatic detail true. Schema centre ranges [-2,1] and [-1.5,1.5], zoom [0.25,100000000], base iterations [16,2048]. Candidate base512 is a fixed measurement setting, not a parameter search." },
-      { source: "src/sims/fractal/detail.ts", description: "Effective = min(4096, bounded base + floor(48*log2(max(1,zoom)))) with automatic detail. All convergence rows record actual limits; impossible doubling uses lower reference and cap-limited uncertainty." },
-    ],
-    search: {
-      coarse: "3 shipped anchors × zoom factors [1.2,1.6,2.2,3] × x/y offsets [-0.12,+0.12] times anchor span 3/zoom = 48 views; centre rounded to 12 decimals, zoom to 6.",
-      inclusion: "Nearby nonidentical windows around all shipped anchor scales; all 48 retained, including empty/solid negatives.",
-      exclusion: "No global slider Cartesian product, far/deep zoom, palette search, motion or logistic-mandelbrot; refinement only around leading distinct coarse anchor regions, at most32 views.",
-      refined: "Best coarse window in each original anchor-scale region; choose negative-y whole-set conjugate on tied score. 3 centres × factors [1.15,1.45] × x/y offsets [-0.06,+0.06] times centre span 3/zoom =24 views. First48 entries are coarse; last24 are refined.",
-      refinementCentres: MANDELBROT_REFINEMENT_CENTRES,
-    },
+    priorCoverage: staged.priorCoverage,
+    search: staged.search,
     references: config.references,
   } : undefined;
   if (manifest) {
     expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
     // Persist the declaration before the first kernel measurement.
-    writeText(`docs/sweeps/data/2026-10-30/137/manifest-${sweepParams.length === 48 ? "coarse" : "refined"}.json`, JSON.stringify(manifest, null, 2));
+    writeText(`docs/sweeps/data/2026-10-30/${staged!.stage}/manifest-${sweepParams.length === 48 ? "coarse" : "refined"}.json`, JSON.stringify(manifest, null, 2));
   }
   const candidates: ScoredCandidate[] = [];
 
@@ -489,7 +536,7 @@ async function runSweep(
     JSON.stringify({ ranked, references, ...(config.staticBoundary ? { methodVersion: config.staticBoundary.methodVersion } : {}) }, null, 2),
   );
 
-  if (manifest) await retainStaticEvidence(page, config, ranked, references, manifest);
+  if (manifest) await retainStaticEvidence(page, config, staged!, ranked, references, manifest);
 
   const coherenceNote = (c: ScoredCandidate): string =>
     (c.metrics.velocityCoherence === undefined
@@ -512,8 +559,8 @@ async function runSweep(
   return ranked;
 }
 
-async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: ScoredCandidate[], references: ScoredCandidate[], manifest: object): Promise<void> {
-  const root = "docs/sweeps/data/2026-10-30/137";
+async function retainStaticEvidence(page: Page, config: SimSweepConfig, staged: StaticStage, ranked: ScoredCandidate[], references: ScoredCandidate[], manifest: object): Promise<void> {
+  const root = `docs/sweeps/data/2026-10-30/${staged.stage}`;
   const imageRoot = "docs/images/sweeps-2026-10-30";
   const limit = (p: Params) => effectiveIterationLimit(Number(p.maxIterations), Number(p.zoom), Boolean(p.autoIterations));
   const drive = (p: Params, size: number) => page.evaluate(driveKernel, {
@@ -522,7 +569,7 @@ async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: 
   });
   // Keep spatially distinct evidence rather than three adjacent scalar winners.
   const finalists: ScoredCandidate[] = [];
-  const region = (c: ScoredCandidate) => Number(c.params.zoom) >= 100 ? "spiral" : Number(c.params.zoom) >= 10 ? "seahorse" : "whole";
+  const region = staged.region;
   for (const c of ranked) {
     if (c.metrics.score <= 0) continue;
     if (finalists.every(f => region(f) !== region(c))) finalists.push(c);
@@ -563,14 +610,14 @@ async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: 
       comparisonMetrics: staticBoundaryMetrics(comparison.frameA, 256, 256),
       membershipChangedFraction: membershipChanged / high.frameA.length,
       meanAbsoluteFieldDifference: absoluteDifference / high.frameA.length });
-    const fieldPath = `${imageRoot}/137-${c.id}-field-256.png`;
+    const fieldPath = `${imageRoot}/${staged.stage}-${c.id}-field-256.png`;
     writePng(fieldPath, high.frameA, 256, 256, 1);
-    const maskPath = `${imageRoot}/137-${c.id}-membership-256.png`;
+    const maskPath = `${imageRoot}/${staged.stage}-${c.id}-membership-256.png`;
     writePng(maskPath, high.frameA.map(v => v === 0 ? 0 : 1), 256, 256, 1);
-    const comparisonMaskPath = `${imageRoot}/137-${c.id}-comparison-membership-256.png`;
+    const comparisonMaskPath = `${imageRoot}/${staged.stage}-${c.id}-comparison-membership-256.png`;
     writePng(comparisonMaskPath, comparison.frameA.map(v => v === 0 ? 0 : 1), 256, 256, 1);
     // Exercise the actual application and its GPU renderer through its controls.
-    await page.goto("/#/mandelbrot");
+    await page.goto(`/#/${staged.route}`);
     await page.locator("[data-param-key=centerX]").waitFor();
     const pause = page.getByRole("button", { name: "Pause", exact: true });
     if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
@@ -607,8 +654,8 @@ async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: 
       return [e.dataset.paramKey!, e.type === "checkbox" ? e.checked : Number(e.value)];
     })));
     for (const [key, value] of Object.entries(c.params)) expect(inputs[key], `app input ${key}`).toBe(value);
-    await page.waitForTimeout(150);
-    const appPath = `${imageRoot}/137-${c.id}-app.png`;
+    await page.waitForTimeout(staged.settleMs);
+    const appPath = `${imageRoot}/${staged.stage}-${c.id}-app.png`;
     await page.screenshot({ path: appPath, animations: "disabled", timeout: 20_000 });
     const canvas = await page.locator("canvas").evaluate(el => ({ width: el.width, height: el.height, attributes: Object.fromEntries(Array.from(el.attributes, a => [a.name, a.value])) }));
     validation[validation.length - 1] = { ...validation[validation.length - 1], app: { viewport: { width: 1200, height: 900 }, inputs, canvas, palette: "inferno", presentation, invert: false, motion: "paused; phase0 and speed0", note: "GPU app renderer; landscape aspect differs from square CPU field. UI inputs retain full precision via step=any before input/change events." } };
@@ -635,12 +682,12 @@ async function retainStaticEvidence(page: Page, config: SimSweepConfig, ranked: 
     membershipChangedFraction: capField.frameA.filter((v, i) => (v === 0) !== (lowerField.frameA[i] === 0)).length / (256 * 256) };
   const result = { manifest, ranked, references,
     finalists: finalists.map(c => {
-      const referenceId = region(c) === "whole" ? "137-current-whole-set" : region(c) === "seahorse" ? "137-current-seahorse-valley" : "137-current-spiral-hub";
+      const referenceId = staged.referenceId(region(c));
       return { id: c.id, referenceId, images: [...images.get(c.id)!, ...images.get(referenceId)!] };
     }),
     calibration, replay, validation, iterationCapProbe, referenceImages: Object.fromEntries(images),
     replayTolerance: 1e-9, runtime: { browser: page.context().browser()?.version(), platform: process.platform, node: process.version } };
-  writeText(`${root}/mandelbrot.json`, JSON.stringify(result, null, 2));
+  writeText(`${root}/${staged.dataFile}`, JSON.stringify(result, null, 2));
   if (ranked.length === 48) writeText(`${root}/coarse-results.json`, JSON.stringify({ manifest, ranked, references }, null, 2));
 }
 
@@ -769,45 +816,52 @@ test("static boundary diagnostics expose invalid fields and ignore escape bright
   expect(invalid.score).toBe(0);
 });
 
-const staticReplayTest = process.env.SWEEP_REPLAY === "137" ? test : test.skip;
-staticReplayTest("137 independently replay retained geometry through direct browser imports", async ({ page }) => {
-  test.setTimeout(180_000);
-  const data = JSON.parse(readFileSync("docs/sweeps/data/2026-10-30/137/mandelbrot.json", "utf8"));
-  const actual: { id: string; score: number; maxAbsoluteDelta: number }[] = [];
-  for (const row of [...data.manifest.candidates, ...data.references]) {
-    const measured = await page.evaluate(async params => {
-      const kernelUrl = "/src/sims/mandelbrot/kernel.ts";
-      const metricsUrl = "/e2e/harness/metrics.ts";
-      const { MandelbrotKernel } = await import(/* @vite-ignore */ kernelUrl);
-      const { staticBoundaryMetrics } = await import(/* @vite-ignore */ metricsUrl);
-      const kernel = new MandelbrotKernel();
-      kernel.init(128, 128, params);
-      const result = staticBoundaryMetrics(kernel.readState(), 128, 128);
-      kernel.destroy();
-      return result;
-    }, row.params);
-    const expected = [...data.ranked, ...data.references].find(c => c.id === row.id);
-    let maxAbsoluteDelta = 0;
-    for (const [key, value] of Object.entries(measured)) {
-      maxAbsoluteDelta = Math.max(maxAbsoluteDelta, Math.abs(Number(value) - expected.metrics[key]));
+const REPLAY_KERNELS: Record<string, { dataFile: string; kernelUrl: string; kernelClass: string; slug: string }> = {
+  "137": { dataFile: "mandelbrot.json", kernelUrl: "/src/sims/mandelbrot/kernel.ts", kernelClass: "MandelbrotKernel", slug: "mandelbrot" },
+  "138": { dataFile: "burning-ship.json", kernelUrl: "/src/sims/burning-ship/kernel.ts", kernelClass: "BurningShipKernel", slug: "burning-ship" },
+};
+
+for (const [stage, replay] of Object.entries(REPLAY_KERNELS)) {
+  const staticReplayTest = process.env.SWEEP_REPLAY === stage ? test : test.skip;
+  staticReplayTest(`${stage} independently replay retained geometry through direct browser imports`, async ({ page }) => {
+    test.setTimeout(180_000);
+    const data = JSON.parse(readFileSync(`docs/sweeps/data/2026-10-30/${stage}/${replay.dataFile}`, "utf8"));
+    const actual: { id: string; score: number; maxAbsoluteDelta: number }[] = [];
+    for (const row of [...data.manifest.candidates, ...data.references]) {
+      const measured = await page.evaluate(async ({ params, kernelUrl, kernelClass }) => {
+        const metricsUrl = "/e2e/harness/metrics.ts";
+        const kernelModule = await import(/* @vite-ignore */ kernelUrl);
+        const { staticBoundaryMetrics } = await import(/* @vite-ignore */ metricsUrl);
+        const kernel = new kernelModule[kernelClass]();
+        kernel.init(128, 128, params);
+        const result = staticBoundaryMetrics(kernel.readState(), 128, 128);
+        kernel.destroy();
+        return result;
+      }, { params: row.params, kernelUrl: replay.kernelUrl, kernelClass: replay.kernelClass });
+      const expected = [...data.ranked, ...data.references].find(c => c.id === row.id);
+      let maxAbsoluteDelta = 0;
+      for (const [key, value] of Object.entries(measured)) {
+        maxAbsoluteDelta = Math.max(maxAbsoluteDelta, Math.abs(Number(value) - expected.metrics[key]));
+      }
+      expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
+      actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta });
     }
-    expect(maxAbsoluteDelta, row.id).toBeLessThanOrEqual(1e-9);
-    actual.push({ id: row.id, score: measured.score, maxAbsoluteDelta });
-  }
-  const candidateIds = new Set(data.manifest.candidates.map(c => c.id));
-  expect(actual.filter(c => candidateIds.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map(c => c.id));
-  const shipped = await page.evaluate(async () => {
-    const url = "/src/app/presets.ts";
-    return (await import(/* @vite-ignore */ url)).presetsFor("mandelbrot");
+    const candidateIds = new Set(data.manifest.candidates.map(c => c.id));
+    expect(actual.filter(c => candidateIds.has(c.id)).sort((a, b) => b.score - a.score).map(c => c.id)).toEqual(data.ranked.map(c => c.id));
+    const shipped = await page.evaluate(async slug => {
+      const url = "/src/app/presets.ts";
+      return (await import(/* @vite-ignore */ url)).presetsFor(slug);
+    }, replay.slug);
+    expect(data.references).toHaveLength(shipped.length + 1);
+    for (const preset of shipped) {
+      const row = data.references.find(r => r.id === `${stage}-current-${preset.id}`);
+      expect(row.params).toEqual({ ...preset.params, autoIterations: true, palettePhase: 0, cycleSpeed: 0 });
+    }
+    const artifactId = `sweep-${stage}-${replay.slug}`;
+    writeText(`e2e/artifacts/${artifactId}/independent-replay.json`, JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
+    console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
   });
-  expect(data.references).toHaveLength(shipped.length + 1);
-  for (const preset of shipped) {
-    const row = data.references.find(r => r.id === `137-current-${preset.id}`);
-    expect(row.params).toEqual({ ...preset.params, autoIterations: true, palettePhase: 0, cycleSpeed: 0 });
-  }
-  writeText("e2e/artifacts/sweep-137-mandelbrot/independent-replay.json", JSON.stringify({ tolerance: 1e-9, actual }, null, 2));
-  console.log(`Replayed ${actual.length} fields; identical ordering; maximum metric deviation ${Math.max(...actual.map(c => c.maxAbsoluteDelta))}`);
-});
+}
 
 // Full sweeps are opt-in (SWEEP=1) — they step many kernels and take minutes.
 const sweepTest = process.env.SWEEP ? test : test.skip;
@@ -817,6 +871,11 @@ const mixingTest = process.env.PARTICLE_LIFE_MIXING ? test : test.skip;
 sweepTest("sweep 137 Mandelbrot static boundaries", async ({ page }) => {
   test.setTimeout(900_000);
   await runSweep(page, SWEEP_CONFIGS["sweep-137-mandelbrot"]);
+});
+
+sweepTest("sweep 138 Burning Ship static boundaries", async ({ page }) => {
+  test.setTimeout(1_800_000);
+  await runSweep(page, SWEEP_CONFIGS["sweep-138-burning-ship"]);
 });
 
 mixingTest("re-score Particle Life references under channel mixing", async ({ page }) => {

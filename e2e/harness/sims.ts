@@ -840,6 +840,50 @@ const MARKUS_LYAPUNOV: SimSweepConfig = {
   ],
 };
 
+export const BURNING_SHIP_ANCHORS = [
+  { id: "harbour", centerX: -0.5, centerY: -0.5, zoom: 1 },
+  { id: "mast", centerX: -1.755, centerY: -0.03, zoom: 14 },
+  { id: "ridge-deep", centerX: -1.744, centerY: -0.017, zoom: 72 },
+];
+
+// Centres of the refinement pass, chosen from the retained coarse ranking.
+export const BURNING_SHIP_REFINEMENT_CENTRES: { centerX: number; centerY: number; zoom: number }[] = [
+  { centerX: -1.753444444444, centerY: -0.007555555556, zoom: 86.4 },
+  { centerX: 0.18, centerY: -1.18, zoom: 3 },
+  { centerX: -1.803571428571, centerY: 0.018571428571, zoom: 30.8 },
+];
+
+const BURNING_SHIP_SPAN = 3.4;
+
+const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
+  slug: "burning-ship", artifactId: "sweep-138-burning-ship",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { maxIterations: 512, autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [...BURNING_SHIP_ANCHORS.flatMap(anchor => [1.2, 1.6, 2.2, 3].flatMap(factor =>
+    [-0.2, 0.2].flatMap(dx => [-0.2, 0.2].map(dy => ({
+      centerX: Number((anchor.centerX + dx * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  )), ...BURNING_SHIP_REFINEMENT_CENTRES.flatMap(anchor => [1.15, 1.45].flatMap(factor =>
+    [-0.1, 0.1].flatMap(dx => [-0.1, 0.1].map(dy => ({
+      centerX: Number((anchor.centerX + dx * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  ))],
+  references: [
+    { id: "138-current-default", label: "Kernel default (motion disabled)", params: { centerX: -1.755, centerY: -0.03, zoom: 14, maxIterations: 260, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    ...BURNING_SHIP_ANCHORS.map((anchor, i) => ({
+      id: `138-current-${anchor.id}`, label: `${anchor.id} (motion disabled)`,
+      params: { centerX: anchor.centerX, centerY: anchor.centerY, zoom: anchor.zoom, maxIterations: [128, 260, 384][i], autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+    })),
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-141-elementary-cellular-automata": {
     slug: "elementary-cellular-automata", artifactId: "sweep-141-elementary-cellular-automata",
@@ -857,6 +901,7 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-140-markus-lyapunov": MARKUS_LYAPUNOV,
   "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
   "sweep-139-julia-set": JULIA_CONNECTIVITY,
+  "sweep-138-burning-ship": BURNING_SHIP_BOUNDARY,
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
   "lorenz-attractor": LORENZ,
