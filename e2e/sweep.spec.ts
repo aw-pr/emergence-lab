@@ -12,6 +12,7 @@ import {
   gaussianBlur,
   lyapunovSignMetrics,
   meanResultantLength,
+  multiLagSpatialAutocorrelation,
   scoreFrames,
   staticBoundaryMetrics,
   smoothPointCloudFrames,
@@ -2213,4 +2214,172 @@ test("143 Renderer snapshots keep declared seeds", async ({ page }) => {
     writeText(`${RD_ROOT}/renderer-seed-regression.json`, JSON.stringify(checks, null, 2));
     expect(mismatchedCells).toBe(0);
   }
+});
+
+
+const CELLULAR_ROOT = "docs/sweeps/data/2026-10-30/147";
+const CELLULAR_SLUGS = ["brians-brain", "cyclic-ca", "game-of-life"];
+const CELLULAR_PRIOR: Record<string, string> = {
+  "brians-brain": "August: birthCount[1,2,3,4] x seedDensity[0.06,0.12,0.18,0.22,0.28,0.36,0.45], dyingValue0.5. September: birth2 x seed[0.12,0.36] x dying[0.1,0.3,0.5,0.7,0.9]. Every new density differs. birth0 is an oscillation control; birth4/5 probe extinction, not expected promotions. September Math.fround fix and 0.9 afterglow retunes supersede the August escalation. All new sets hold dying0.5; firing-only coverage0.99; interior dying values are presentation only.",
+  "cyclic-ca": "August: states[4,6,8,10,14,20] x threshold[1,2,3,4] x neighbourhood[moore,vonNeumann]; finer rescue: states10..16 x threshold[1,2], vonNeumann. All eight new state counts[3,5,7,9,17,18,21,23] differ from both grids. Cross neighbourhood/threshold to test wave persistence versus jamming. Current Crystal is already threshold1, not a rescue target. seed0, stepsPerFrame1 fixed.",
+  "game-of-life": "August: B3 fixed, surviveMin[1,2,3] x surviveMax[3,4,5] x seedDensity[0.05,0.12,0.2,0.28,0.4]; spark0.1, ageShadingtrue. August30 appendix calibrated existing multi-lag on Maze-like and noise, no new rule search. Every new rule B1/B2/B23/B4 differs from B3. Cross three survival windows and spark[0,0.025,0.075,0.2], seedDensity0.28 fixed; no old full tuple repeated. Birth ranges are inclusive (B23), not B2/S3 notation.",
+};
+
+async function cellularCapture(page: Page, config: SimSweepConfig, params: Params, size: number, times: number[]) {
+  const samples = await rdCaptureSeries(page, config, params, size, times);
+  return samples.map(s => ({ ...s, metrics: { ...s.metrics,
+    multiLagStructure: multiLagSpatialAutocorrelation(rdDecode(s.frameA), size, size) } }));
+}
+function cellularSummary(samples: { metrics: InterestingnessMetrics }[]) {
+  const values = samples.map(s => s.metrics.multiLagStructure!);
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const summary = summarizeMetrics(samples.map(s => s.metrics));
+  return { ...summary, multiLagStructure: mean, spread: { ...summary.spread,
+    multiLagStructure: { min: Math.min(...values), max: Math.max(...values),
+      standardDeviation: Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length) } } };
+}
+function cellularDelta(actual: any, expected: any): number {
+  if (typeof actual === "number") return Math.abs(actual - expected);
+  return Math.max(0, ...Object.keys(actual).map(k => cellularDelta(actual[k], expected[k])));
+}
+
+for (const slug of CELLULAR_SLUGS) {
+  sweepTest(`sweep 147 ${slug} missed regimes`, async ({ page }) => {
+    test.setTimeout(3_600_000);
+    const config = SWEEP_CONFIGS[`sweep-147-${slug}`], times = config.multiSnapshot!.warmupSteps;
+    const output = `${CELLULAR_ROOT}/${slug}.json`;
+    const previous = existsSync(output) ? JSON.parse(readFileSync(output, "utf8")) : null;
+    const planned = expandSweep(config).map((params, i) => ({ id: `147-${slug}-c${String(i + 1).padStart(2, "0")}`, params }));
+    const manifest = {
+      slug, methodVersion: "cellular-persistence-v1", grid: { width: 128, height: 128 },
+      warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+      candidates: planned, references: config.references, fixedParams: config.baseParams, sampleSteps: times,
+      coverageThreshold: config.coverageThreshold, counts: { novel: 48, refinements: 0 },
+      priorCoverage: [{ source: `docs/sweeps/${slug}-interestingness.md`, description: CELLULAR_PRIOR[slug] },
+        { source: "e2e/harness/sims.ts", description: "Historical serialized configs unchanged. New artifact IDs only. All candidate values explicitly expanded in this manifest." },
+        { source: "src/app/presets.ts", description: "All three shipped presets retained as separate 147-current-* references, with implicit defaults made explicit (Life spark0.1/ageShadingtrue, Cyclic seed0/stepsPerFrame1). Brian Sparse/Storm dying0.9; Crystal threshold1." },
+        { source: `src/sims/${slug}/kernel.ts`, description: slug === "cyclic-ca" ? "mulberry32 initial random state depends on grid, states and explicit seed. Validation seeds0/1/2." : "Coordinate-hashed deterministic initial field; no supported seed parameter. Life sparks are deterministic functions of coordinates and generation, not Math.random. No invented seed replications." }],
+      command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 147 " --workers=1',
+      inclusion: "Complete 48-set declared interaction grid, novel full tuples relative to cited grids; no refinement or adaptive truncation.",
+      exclusion: "No dyingValue, Life age shading/density, Cyclic speed, broad slider search or production changes. Ranking is a shortlist, not aesthetic superiority.",
+      method: "Unchanged scoreFrames, arithmetic mean over200/500/1000. Existing multiLagSpatialAutocorrelation[1,2,3,4,6,8] reported separately, never changes composite. Persistence judged from separated frames, firing coverage, flux and longer horizon, not a new class metric.",
+      validationPlan: { finalists: 1, selection: "Highest mean score, retained even if rejected", sizes: [128, 384], steps: [200, 500, 1000, 2000], seeds: slug === "cyclic-ca" ? [0, 1, 2] : [null], replayTolerance: 1e-9 },
+      rawEncoding: "base64 zlib little-endian Float32; A at steps, B at steps+fluxGap; lossless before PNG quantisation",
+      clipping: "Periodic lattice, no projected/off-frame objects: offFrameClippingFraction0 by geometry; endpoints are legitimate discrete states, not floating-point saturation.",
+      presentation: "Grayscale kernel PNGs explicitly labelled field. Actual app Renderer WebGL2 snapshots at384sq, same primary channel/default colours, bloom0, exact declared steps; equal settings for finalist and references.",
+      sourceHashes: Object.fromEntries(["src/app/presets.ts", `src/sims/${slug}/kernel.ts`, "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    };
+    expect(planned).toHaveLength(48);
+    expect(new Set(planned.map(c => JSON.stringify(c.params))).size).toBe(48);
+    expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(51);
+    writeText(`${CELLULAR_ROOT}/manifest-${slug}.json`, JSON.stringify(manifest, null, 2));
+    const started = Date.now();
+    const pilot = await cellularCapture(page, config, planned[0].params, 128, times);
+    const pilotMs = Date.now() - started;
+    const estimatedMs = pilotMs * 51;
+    writeText(`${CELLULAR_ROOT}/pilot-${slug}.json`, JSON.stringify({ pilotMs, estimatedMs, budgetMs: 3_600_000, params: planned[0].params, metrics: cellularSummary(pilot) }, null, 2));
+    expect(estimatedMs, "Pilot cannot fit declared grid; split/re-brief required").toBeLessThan(2_400_000);
+    if (process.env.SWEEP_147_PILOT === "1") {
+      const render = await rdRender(page, config, planned[0].params, 200, `${ARTIFACT_ROOT}/${config.artifactId}/pilot-renderer.png`);
+      expect(render.grid).toEqual([384, 384]);
+      console.log(`${slug}: pilot ${pilotMs}ms, ranking estimate ${estimatedMs}ms`); return;
+    }
+    const raw: any[] = [], candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [];
+    for (const [i, c] of [...planned, ...config.references].entries()) {
+      const samples = await cellularCapture(page, config, c.params, 128, times);
+      const scored = { ...c, label: "label" in c ? c.label as string : c.id, metrics: cellularSummary(samples), methodVersion: manifest.methodVersion };
+      (i < 48 ? candidates : references).push(scored); raw.push({ id: c.id, params: c.params, samples });
+      if ((i + 1) % 12 === 0) console.log(`${slug}: measured ${i + 1}/51`);
+    }
+    const ranked = candidates.sort((a, b) => b.metrics.score - a.metrics.score), finalist = ranked[0];
+    if (previous) {
+      expect(ranked.map(c => c.id)).toEqual(previous.ranked.map(c => c.id));
+      expect(manifest.sourceHashes).toEqual(previous.manifest.sourceHashes);
+      for (const c of [...ranked, ...references]) expect(cellularDelta(c.metrics, [...previous.ranked, ...previous.references].find(r => r.id === c.id).metrics)).toBeLessThanOrEqual(1e-9);
+    }
+    writeText(`${CELLULAR_ROOT}/${slug}-raw.json`, JSON.stringify({ encoding: manifest.rawEncoding, rows: raw }));
+    writeText(`${ARTIFACT_ROOT}/${config.artifactId}/report.md`, metricsTable(ranked, config.axes.map(a => a.key)));
+    const sheet = new Float32Array(1024 * 768);
+    for (let i = 0; i < 48; i += 1) {
+      const field = rdDecode(raw[i].samples[0].frameA);
+      for (let y = 0; y < 128; y += 1) for (let x = 0; x < 128; x += 1) sheet[(Math.floor(i / 8) * 128 + y) * 1024 + i % 8 * 128 + x] = field[y * 128 + x];
+    }
+    writePng(`${RD_IMAGES}/147-${slug}-census.png`, sheet, 1024, 768, 1);
+    const validation: any[] = [], replay: any[] = [], paths: Record<string, string[]> = {};
+    const priorValidation = previous ? JSON.parse(readFileSync(previous.validation, "utf8")) : [];
+    for (const c of [finalist, ...references]) {
+      const fresh = await cellularCapture(page, config, c.params, 128, times);
+      const delta = cellularDelta(cellularSummary(fresh), c.metrics);
+      expect(delta).toBeLessThanOrEqual(1e-9); replay.push({ id: c.id, maxAbsoluteDelta: delta });
+      const readings: any[] = [], rendered: any[] = [], images: string[] = [];
+      for (const size of manifest.validationPlan.sizes) for (const seed of manifest.validationPlan.seeds) {
+        const params = seed === null ? c.params : { ...c.params, seed };
+        const samples = await cellularCapture(page, config, params, size, manifest.validationPlan.steps);
+        for (const sample of samples) {
+          const path = `${RD_IMAGES}/${c.id}-field-${size}-seed${seed ?? "none"}-t${sample.steps}.png`;
+          writePng(path, rdDecode(sample.frameA), size, size, 1); images.push(path);
+          readings.push({ ...sample, params, image: path });
+          if (previous) {
+            const old = priorValidation.find(v => v.id === c.id)?.readings.find(r => r.size === size && r.steps === sample.steps && r.params.seed === params.seed);
+            expect(old).toBeTruthy(); expect(cellularDelta(sample.metrics, old.metrics)).toBeLessThanOrEqual(1e-9);
+            expect(sample.diagnostics).toEqual(old.diagnostics);
+          }
+          if (size === 384 && (seed === null || seed === 0)) {
+            const path = `${RD_IMAGES}/${c.id}-renderer-t${sample.steps}.png`;
+            const info = await rdRender(page, config, params, sample.steps, path);
+            expect(info.grid).toEqual([size, size]);
+            expect(rdDecode(info.field)).toEqual(rdDecode(sample.frameA));
+            rendered.push({ steps: sample.steps, image: path, ...info, field: undefined }); images.push(path);
+          }
+        }
+      }
+      paths[c.id] = images; validation.push({ id: c.id, readings, rendered });
+      writeText(`${CELLULAR_ROOT}/${slug}-validation.json`, JSON.stringify(validation));
+      console.log(`${slug}: validated ${c.id}, exact replay delta ${delta}`);
+    }
+    writeText(output, JSON.stringify({ manifest, ranked, references,
+      finalists: [{ id: finalist.id, images: paths[finalist.id], referenceIds: references.map(c => c.id), recommendation: "Evidence selection; no promotion without visual sign-off" }],
+      referenceImages: Object.fromEntries(references.map(c => [c.id, paths[c.id]])),
+      rawFields: `${CELLULAR_ROOT}/${slug}-raw.json`, validation: `${CELLULAR_ROOT}/${slug}-validation.json`, replay,
+      elapsedMs: Date.now() - started, runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } }, null, 2));
+    console.log(`${slug}: complete 48 candidates, 3 references, finalist ${finalist.id}`);
+  });
+}
+
+const cellularReplayTest = process.env.SWEEP_REPLAY === "147" ? test : test.skip;
+cellularReplayTest("147 retained fields reproduce every metric and rank", async ({ page }) => {
+  test.setTimeout(120_000);
+  const summary: any[] = [];
+  for (const slug of CELLULAR_SLUGS) {
+    const result = JSON.parse(readFileSync(`${CELLULAR_ROOT}/${slug}.json`, "utf8"));
+    const raw = JSON.parse(readFileSync(result.rawFields, "utf8"));
+    const validation = JSON.parse(readFileSync(result.validation, "utf8"));
+    const config = SWEEP_CONFIGS[`sweep-147-${slug}`];
+    expect(raw.rows.map(c => c.id)).toEqual([...result.manifest.candidates, ...result.references].map(c => c.id));
+    const shipped = await page.evaluate(async slug => (await import(/* @vite-ignore */ "/src/app/presets.ts")).presetsFor(slug), slug);
+    expect(result.references).toHaveLength(shipped.length);
+    for (const preset of shipped) {
+      const ref = result.references.find(c => c.id === `147-current-${preset.id}`);
+      expect(ref).toBeTruthy();
+      expect(ref.params).toEqual({ ...preset.params,
+        ...(slug === "cyclic-ca" ? { seed: 0, stepsPerFrame: 1 } : slug === "game-of-life" ? { sparkRate: 0.1, ageShading: true } : {}) });
+    }
+    let maxAbsoluteDelta = 0;
+    const recompute = (s: any) => {
+      const a = rdDecode(s.frameA), b = rdDecode(s.frameB);
+      expect(rdDiagnostics(a)).toEqual(s.diagnostics.frameA); expect(rdDiagnostics(b)).toEqual(s.diagnostics.frameB);
+      const metrics = { ...scoreFrames(a, b, s.size, s.size, config.coverageThreshold), multiLagStructure: multiLagSpatialAutocorrelation(a, s.size, s.size) };
+      const delta = cellularDelta(metrics, s.metrics); maxAbsoluteDelta = Math.max(maxAbsoluteDelta, delta);
+      expect(delta).toBeLessThanOrEqual(1e-9); return { metrics };
+    };
+    const computed = raw.rows.map(c => ({ id: c.id, metrics: cellularSummary(c.samples.map(recompute)) }));
+    for (const c of [...result.ranked, ...result.references]) expect(cellularDelta(computed.find(r => r.id === c.id).metrics, c.metrics)).toBeLessThanOrEqual(1e-9);
+    expect(computed.slice(0, 48).sort((a, b) => b.metrics.score - a.metrics.score).map(c => c.id)).toEqual(result.ranked.map(c => c.id));
+    for (const row of validation) row.readings.forEach(recompute);
+    summary.push({ slug, ranked: result.ranked.length, references: result.references.length,
+      validationReadings: validation.reduce((n, v) => n + v.readings.length, 0), maxAbsoluteDelta,
+      identicalOrdering: true, shippedReferenceMatch: true });
+  }
+  writeText(`${CELLULAR_ROOT}/raw-recomputation.json`, JSON.stringify({ tolerance: 1e-9, summary }, null, 2));
+  console.log(JSON.stringify(summary));
 });

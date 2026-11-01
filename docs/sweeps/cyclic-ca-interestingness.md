@@ -153,3 +153,144 @@ byte-for-byte (SHA-256
 particular, states 12 / threshold 1 reproduced score 0.626241960108358,
 entropy 0.715982101662593, autocorrelation 0.5528182079276203, temporal flux
 0.4624744805532828, and coverage 0.4765625 exactly.
+
+## Missed regimes — 2026-10-30 (stage 147)
+
+### Method and retained evidence
+
+48/48 novel candidates and 3/3 current references completed, with zero skipped sweep tests. No refinement allowance used. Full parameters, ranked results, method version, runtime and exact commands are in [retained results](data/2026-10-30/147/cyclic-ca.json). The [pre-measurement manifest](data/2026-10-30/147/manifest-cyclic-ca.json) declares historical exclusions and citations; [pilot throughput](data/2026-10-30/147/pilot-cyclic-ca.json) admitted the complete grid before measurement. Historical text and configs above remain unchanged.
+
+All scoring uses a 128×128 periodic lattice, channel 0, dt 1, flux gap 4 and captures at 200/500/1000 kernel.step calls. The unchanged scoreFrames composite is averaged using summarizeMetrics. Existing multi-lag structure (lags 1/2/3/4/6/8) is reported separately and never alters the composite. Method version: `cellular-persistence-v1`. Coverage threshold is 0.5 (upper-half phase balance, not occupancy).
+
+[Losslessly compressed raw field pairs](data/2026-10-30/147/cyclic-ca-raw.json) preserve every candidate/reference reading, including dead and jammed results. [Finalist/reference validation](data/2026-10-30/147/cyclic-ca-validation.json) retains raw pairs, endpoints, renderer settings and all supported seeds at 128² and 384², at 200/500/1000 and the longer horizon 2000. All four sets use equal 384 px actual app WebGL2 Renderer snapshots with default colours, primary channel and bloom 0. Each screenshot field is checked exactly against the independent driver field. Field PNGs are grayscale kernel output, not app screenshots.
+
+### Searched and not searched
+
+48 = states{3,5,7,9,17,18,21,23} × threshold{1,2,3} × neighbourhood{moore,vonNeumann}. All state counts are absent from both the original grid and the10..16 Crystal rescue. stepsPerFrame 1 and seed 0 fixed for ranking. No speed or wider threshold search.
+
+August: states[4,6,8,10,14,20] x threshold[1,2,3,4] x neighbourhood[moore,vonNeumann]; finer rescue: states 10..16 x threshold[1,2], vonNeumann. All eight new state counts[3,5,7,9,17,18,21,23] differ from both grids. Cross neighbourhood/threshold to test wave persistence versus jamming. Current Crystal is already threshold 1, not a rescue target. seed 0, stepsPerFrame 1 fixed.
+
+### Ranked candidates and current references
+
+Top eight by mean composite; every other candidate is retained in JSON. Full params are shown to make rule interactions explicit.
+
+| rank/id | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| 1: 147-cyclic-ca-c43 | `{"stepsPerFrame":1,"seed":0,"states":23,"threshold":1,"neighbourhood":"moore"}` | 0.887482 | 0.881849 | 0.247312 | 0.471252 |
+| 2: 147-cyclic-ca-c31 | `{"stepsPerFrame":1,"seed":0,"states":18,"threshold":1,"neighbourhood":"moore"}` | 0.826388 | 0.820698 | 0.366173 | 0.505819 |
+| 3: 147-cyclic-ca-c25 | `{"stepsPerFrame":1,"seed":0,"states":17,"threshold":1,"neighbourhood":"moore"}` | 0.809534 | 0.803221 | 0.381275 | 0.469645 |
+| 4: 147-cyclic-ca-c15 | `{"stepsPerFrame":1,"seed":0,"states":7,"threshold":2,"neighbourhood":"moore"}` | 0.698317 | 0.895587 | 0.080733 | 0.501404 |
+| 5: 147-cyclic-ca-c11 | `{"stepsPerFrame":1,"seed":0,"states":5,"threshold":3,"neighbourhood":"moore"}` | 0.682128 | 0.887674 | 0.082153 | 0.539225 |
+| 6: 147-cyclic-ca-c09 | `{"stepsPerFrame":1,"seed":0,"states":5,"threshold":2,"neighbourhood":"moore"}` | 0.649724 | 0.812237 | 0.233063 | 0.373515 |
+| 7: 147-cyclic-ca-c21 | `{"stepsPerFrame":1,"seed":0,"states":9,"threshold":2,"neighbourhood":"moore"}` | 0.613615 | 0.687668 | 0.045204 | 0.523397 |
+| 8: 147-cyclic-ca-c32 | `{"stepsPerFrame":1,"seed":0,"states":18,"threshold":1,"neighbourhood":"vonNeumann"}` | 0.572791 | 0.426904 | 0.042103 | 0.461792 |
+
+Current references match all three shipped presets in `src/app/presets.ts`; implicit defaults are explicit in the new configs. Brian Sparse/Storm use dyingValue 0.9, Crystal uses threshold 1, Life uses sparkRate0.1/ageShading true. Stale historical rows retain their old IDs and values.
+
+| current reference | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| Demons (147-current-demons) | `{"states":14,"threshold":1,"neighbourhood":"moore","stepsPerFrame":1,"seed":0}` | 0.752092 | 0.744726 | 0.438354 | 0.500671 |
+| Turbulence (promoted: unfrozen) (147-current-turbulence) | `{"states":8,"threshold":2,"neighbourhood":"moore","stepsPerFrame":1,"seed":0}` | 0.725502 | 0.877153 | 0.076224 | 0.403219 |
+| Crystal lattice (147-current-crystal-lattice) | `{"states":12,"threshold":1,"neighbourhood":"vonNeumann","stepsPerFrame":1,"seed":0}` | 0.620960 | 0.542669 | 0.477378 | 0.491699 |
+
+### Persistence, seeds and diagnostics
+
+Each row below lists scores at 200/500/1000, their arithmetic mean and the2000-step flux. All three seed readings are reported where supported. Seed spread is max−min across those three means at the same size, not uncertainty or a distributional guarantee. Different-resolution readings are separate experiments, not exact numeric replays.
+
+| set | size | seed | score200 /500 /1000 | mean | flux2000 |
+|---|---:|---:|---|---:|---:|
+| 147-cyclic-ca-c43 | 128 | 0 | 0.890457 / 0.887107 / 0.884882 | 0.887482 | 0.279322 |
+| 147-cyclic-ca-c43 | 128 | 1 | 0.867896 / 0.888649 / 0.878822 | 0.878456 | 0.313321 |
+| 147-cyclic-ca-c43 | 128 | 2 | 0.860217 / 0.881392 / 0.879799 | 0.873802 | 0.285439 |
+| seed mean-score spread: 147-cyclic-ca-c43 | 128 | 0–2 | | 0.013680 | |
+| 147-cyclic-ca-c43 | 384 | 0 | 0.891657 / 0.886821 / 0.887766 | 0.888748 | 0.301456 |
+| 147-cyclic-ca-c43 | 384 | 1 | 0.895511 / 0.886049 / 0.886143 | 0.889234 | 0.300194 |
+| 147-cyclic-ca-c43 | 384 | 2 | 0.891020 / 0.884466 / 0.886796 | 0.887427 | 0.299033 |
+| seed mean-score spread: 147-cyclic-ca-c43 | 384 | 0–2 | | 0.001807 | |
+| 147-current-demons | 128 | 0 | 0.752768 / 0.751459 / 0.752047 | 0.752092 | 0.447669 |
+| 147-current-demons | 128 | 1 | 0.758442 / 0.757842 / 0.757363 | 0.757882 | 0.436401 |
+| 147-current-demons | 128 | 2 | 0.748861 / 0.756248 / 0.751042 | 0.752050 | 0.439838 |
+| seed mean-score spread: 147-current-demons | 128 | 0–2 | | 0.005832 | |
+| 147-current-demons | 384 | 0 | 0.744854 / 0.746159 / 0.745662 | 0.745558 | 0.436307 |
+| 147-current-demons | 384 | 1 | 0.748146 / 0.748366 / 0.748879 | 0.748463 | 0.438070 |
+| 147-current-demons | 384 | 2 | 0.745273 / 0.746039 / 0.747058 | 0.746123 | 0.439052 |
+| seed mean-score spread: 147-current-demons | 384 | 0–2 | | 0.002905 | |
+| 147-current-turbulence | 128 | 0 | 0.718774 / 0.731195 / 0.726536 | 0.725502 | 0.000000 |
+| 147-current-turbulence | 128 | 1 | 0.701837 / 0.639487 / 0.531997 | 0.624440 | 0.000000 |
+| 147-current-turbulence | 128 | 2 | 0.695153 / 0.731472 / 0.727838 | 0.718154 | 0.000000 |
+| seed mean-score spread: 147-current-turbulence | 128 | 0–2 | | 0.101061 | |
+| 147-current-turbulence | 384 | 0 | 0.719651 / 0.767112 / 0.770173 | 0.752312 | 0.032296 |
+| 147-current-turbulence | 384 | 1 | 0.717205 / 0.766526 / 0.775895 | 0.753209 | 0.032544 |
+| 147-current-turbulence | 384 | 2 | 0.719594 / 0.769584 / 0.767015 | 0.752064 | 0.037617 |
+| seed mean-score spread: 147-current-turbulence | 384 | 0–2 | | 0.001144 | |
+| 147-current-crystal-lattice | 128 | 0 | 0.626242 / 0.618875 / 0.617762 | 0.620960 | 0.483865 |
+| 147-current-crystal-lattice | 128 | 1 | 0.634902 / 0.616469 / 0.622228 | 0.624533 | 0.488281 |
+| 147-current-crystal-lattice | 128 | 2 | 0.625771 / 0.620067 / 0.622625 | 0.622821 | 0.485174 |
+| seed mean-score spread: 147-current-crystal-lattice | 128 | 0–2 | | 0.003573 | |
+| 147-current-crystal-lattice | 384 | 0 | 0.633214 / 0.618106 / 0.618116 | 0.623145 | 0.484429 |
+| 147-current-crystal-lattice | 384 | 1 | 0.631633 / 0.617465 / 0.619011 | 0.622703 | 0.484853 |
+| 147-current-crystal-lattice | 384 | 2 | 0.634697 / 0.619649 / 0.619653 | 0.624666 | 0.485571 |
+| seed mean-score spread: 147-current-crystal-lattice | 384 | 0–2 | | 0.001963 | |
+
+Across every retained ranking and validation pair: non-finite fraction0, out-of-range fraction0, and off-frame clipping0. The last is a geometric statement for a periodic lattice, not a measurement of motif crossings at the border. Endpoint fractions span lowerEndpointFraction: 0.000000–0.475708, upperEndpointFraction: 0.000000–0.611633. Endpoints are legal discrete states; empty fields remain in the ranking and are not promoted. Exact per-frame diagnostics are retained.
+
+### Interpretation and proposals
+
+The leading set is states 23/threshold 1/Moore. Its384² Renderer sequence starts as broad irregular patches at 200, resolves into nested square scrolls by 500, and retains the scroll layout through 1000/2000 while the phase fronts continue advancing. Independent seed 1/2 grayscale fields at 384²/2000 show the same broad square-scroll motif with different centres and connections. The128² field contains only a few large turns; the larger board establishes that the motif is not just a single small-board corner. Demons has tighter turns, Turbulence coarsens into large angular domains by 2000 at 384², and Crystal retains diagonal diamond bands. The broad scrolls preserve a different scale from both. These are manual visual descriptions, not numerical morphology classes.
+
+The23-state set has more scalar intensity levels and broader gradients than14-state Demons: its entropy and scalar autocorrelation advantage does not prove richer dynamics. Read the three-seed readings and time strips alongside the composite. Frozen/noisy candidates remain in the complete ranking; no thresholds have been relaxed to manufacture a winner.
+
+**Proposed promotion for operator review only:** consider an additional “Square scrolls” preset with `{states:23, threshold:1, neighbourhood:"moore", stepsPerFrame:1}` (seed 0 is a reproducibility setting). Preserve Demons, Turbulence and Crystal. This is a visual-review candidate, not an approved addition or replacement. The three seeds support repeatability of this observed motif, not a population guarantee.
+
+### Visual evidence
+
+[All48 candidates: grayscale census at 200](../images/sweeps-2026-10-30/147-cyclic-ca-census.png). Cells are128², eight columns × six rows in manifest order (left-to-right, top-to-bottom); this is a shortlist aid, not temporal evidence.
+
+Four separated frames follow for each finalist/reference. Renderer rows are actual app-renderer screenshots; field rows are grayscale. All links are retained, including seed controls.
+
+| set / representation |200 |500 |1000 |2000 |
+|---|---|---|---|---|
+| 147-cyclic-ca-c43-field-128-seed0 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed0-t2000.png) |
+| 147-cyclic-ca-c43-field-128-seed1 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed1-t2000.png) |
+| 147-cyclic-ca-c43-field-128-seed2 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-128-seed2-t2000.png) |
+| 147-cyclic-ca-c43-field-384-seed0 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed0-t2000.png) |
+| 147-cyclic-ca-c43-renderer | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-renderer-t2000.png) |
+| 147-cyclic-ca-c43-field-384-seed1 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed1-t2000.png) |
+| 147-cyclic-ca-c43-field-384-seed2 | [200](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-cyclic-ca-c43-field-384-seed2-t2000.png) |
+| 147-current-demons-field-128-seed0 | [200](../images/sweeps-2026-10-30/147-current-demons-field-128-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-128-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed0-t2000.png) |
+| 147-current-demons-field-128-seed1 | [200](../images/sweeps-2026-10-30/147-current-demons-field-128-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-128-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed1-t2000.png) |
+| 147-current-demons-field-128-seed2 | [200](../images/sweeps-2026-10-30/147-current-demons-field-128-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-128-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-128-seed2-t2000.png) |
+| 147-current-demons-field-384-seed0 | [200](../images/sweeps-2026-10-30/147-current-demons-field-384-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-384-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed0-t2000.png) |
+| 147-current-demons-renderer | [200](../images/sweeps-2026-10-30/147-current-demons-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-renderer-t2000.png) |
+| 147-current-demons-field-384-seed1 | [200](../images/sweeps-2026-10-30/147-current-demons-field-384-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-384-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed1-t2000.png) |
+| 147-current-demons-field-384-seed2 | [200](../images/sweeps-2026-10-30/147-current-demons-field-384-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-demons-field-384-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-demons-field-384-seed2-t2000.png) |
+| 147-current-turbulence-field-128-seed0 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed0-t2000.png) |
+| 147-current-turbulence-field-128-seed1 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed1-t2000.png) |
+| 147-current-turbulence-field-128-seed2 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-128-seed2-t2000.png) |
+| 147-current-turbulence-field-384-seed0 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed0-t2000.png) |
+| 147-current-turbulence-renderer | [200](../images/sweeps-2026-10-30/147-current-turbulence-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-renderer-t2000.png) |
+| 147-current-turbulence-field-384-seed1 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed1-t2000.png) |
+| 147-current-turbulence-field-384-seed2 | [200](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-turbulence-field-384-seed2-t2000.png) |
+| 147-current-crystal-lattice-field-128-seed0 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed0-t2000.png) |
+| 147-current-crystal-lattice-field-128-seed1 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed1-t2000.png) |
+| 147-current-crystal-lattice-field-128-seed2 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-128-seed2-t2000.png) |
+| 147-current-crystal-lattice-field-384-seed0 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed0-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed0-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed0-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed0-t2000.png) |
+| 147-current-crystal-lattice-renderer | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-renderer-t2000.png) |
+| 147-current-crystal-lattice-field-384-seed1 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed1-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed1-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed1-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed1-t2000.png) |
+| 147-current-crystal-lattice-field-384-seed2 | [200](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed2-t200.png) | [500](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed2-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed2-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-crystal-lattice-field-384-seed2-t2000.png) |
+
+### Reproduction and validation
+
+Start Vite from this worktree on vacant port 5173 (`npm run dev -- --host localhost --port 5173 --strictPort`), then run:
+
+```sh
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 147 cyclic-ca " --workers=1
+SWEEP_REPLAY=147 npx playwright test e2e/sweep.spec.ts -g "147 retained"
+SWEEP_CONTRACT=147 npx playwright test e2e/sweep-147.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+For all three kernels, use `-g "sweep 147 "`. The full command reruns the entire declared grid, then the finalist/references, requiring identical ordering and metric deltas≤1e-9 against retained results (including spreads and every validation seed/time). Raw replay independently decodes retained floats and recomputes every reading/rank, and checks current-reference provenance. Images are regenerated. Pilot-only mode `SWEEP_147_PILOT=1` is admission evidence only and must never be counted as a completed grid.
+
+Worker check commands, exits and counts are recorded in [checks](data/2026-10-30/147/checks.json); exact numeric replay summary is [raw recomputation](data/2026-10-30/147/raw-recomputation.json). Independent verifier replay and operator visual sign-off remain separate gates. Research acceptance does not change any production preset.

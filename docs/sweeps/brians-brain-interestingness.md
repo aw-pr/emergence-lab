@@ -224,3 +224,104 @@ Acceptance is visual: the card 79 verifier drives the browser to each preset
 and watches 300 steps for flooding to uniform or dying. The sim thumbnail
 `public/thumbnails/brians-brain.png` predates both the stage 72 comparison fix
 and this retune and is now stale; regenerating it is out of scope for card 79.
+
+## Missed regimes — 2026-10-30 (stage 147)
+
+### Method and retained evidence
+
+48/48 novel candidates and 3/3 current references completed, with zero skipped sweep tests. No refinement allowance used. Full parameters, ranked results, method version, runtime and exact commands are in [retained results](data/2026-10-30/147/brians-brain.json). The [pre-measurement manifest](data/2026-10-30/147/manifest-brians-brain.json) declares historical exclusions and citations; [pilot throughput](data/2026-10-30/147/pilot-brians-brain.json) admitted the complete grid before measurement. Historical text and configs above remain unchanged.
+
+All scoring uses a 128×128 periodic lattice, channel 0, dt 1, flux gap 4 and captures at 200/500/1000 kernel.step calls. The unchanged scoreFrames composite is averaged using summarizeMetrics. Existing multi-lag structure (lags 1/2/3/4/6/8) is reported separately and never alters the composite. Method version: `cellular-persistence-v1`. Coverage threshold is 0.99 (firing-only for Brian’s Brain; refractory brightness cannot count as firing).
+
+[Losslessly compressed raw field pairs](data/2026-10-30/147/brians-brain-raw.json) preserve every candidate/reference reading, including dead and jammed results. [Finalist/reference validation](data/2026-10-30/147/brians-brain-validation.json) retains raw pairs, endpoints, renderer settings and all supported seeds at 128² and 384², at 200/500/1000 and the longer horizon 2000. All four sets use equal 384 px actual app WebGL2 Renderer snapshots with default colours, primary channel and bloom 0. Each screenshot field is checked exactly against the independent driver field. Field PNGs are grayscale kernel output, not app screenshots.
+
+### Searched and not searched
+
+48 = birthCount{0,1,2,3,4,5} × seedDensity{0.015,0.035,0.085,0.155,0.31,0.52,0.68,0.85}. dyingValue 0.5 fixed; no afterglow search. These densities differ from every August/September sample. No density refinement, endpoints of dyingValue, renderer tuning or rule repair.
+
+August: birthCount[1,2,3,4] x seedDensity[0.06,0.12,0.18,0.22,0.28,0.36,0.45], dyingValue 0.5. September: birth 2 x seed[0.12,0.36] x dying[0.1,0.3,0.5,0.7,0.9]. Every new density differs. birth 0 is an oscillation control; birth 4/5 probe extinction, not expected promotions. September Math.fround fix and 0.9 afterglow retunes supersede the August escalation. All new sets hold dying0.5; firing-only coverage 0.99; interior dying values are presentation only.
+
+### Ranked candidates and current references
+
+Top eight by mean composite; every other candidate is retained in JSON. Full params are shown to make rule interactions explicit.
+
+| rank/id | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| 1: 147-brians-brain-c03 | `{"dyingValue":0.5,"birthCount":0,"seedDensity":0.085}` | 0.196333 | 0.121061 | 0.100464 | 0.202230 |
+| 2: 147-brians-brain-c04 | `{"dyingValue":0.5,"birthCount":0,"seedDensity":0.155}` | 0.191158 | 0.113005 | 0.099630 | 0.268087 |
+| 3: 147-brians-brain-c08 | `{"dyingValue":0.5,"birthCount":0,"seedDensity":0.85}` | 0.190706 | 0.114261 | 0.106832 | 0.184082 |
+| 4: 147-brians-brain-c01 | `{"dyingValue":0.5,"birthCount":0,"seedDensity":0.015}` | 0.180912 | 0.103248 | 0.110301 | 0.321777 |
+| 5: 147-brians-brain-c02 | `{"dyingValue":0.5,"birthCount":0,"seedDensity":0.035}` | 0.177726 | 0.103947 | 0.101145 | 0.159139 |
+| 6: 147-brians-brain-c11 | `{"dyingValue":0.5,"birthCount":1,"seedDensity":0.085}` | 0.170036 | 0.090712 | 0.357279 | 0.190938 |
+| 7: 147-brians-brain-c10 | `{"dyingValue":0.5,"birthCount":1,"seedDensity":0.035}` | 0.168200 | 0.087038 | 0.363393 | 0.190572 |
+| 8: 147-brians-brain-c13 | `{"dyingValue":0.5,"birthCount":1,"seedDensity":0.31}` | 0.166223 | 0.084419 | 0.358215 | 0.190531 |
+
+Current references match all three shipped presets in `src/app/presets.ts`; implicit defaults are explicit in the new configs. Brian Sparse/Storm use dyingValue 0.9, Crystal uses threshold 1, Life uses sparkRate0.1/ageShading true. Stale historical rows retain their old IDs and values.
+
+| current reference | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| Classic waves (147-current-classic) | `{"birthCount":2,"seedDensity":0.22,"dyingValue":0.5}` | 0.016935 | 0.342811 | 0.026703 | 0.010274 |
+| Sparse spirals (147-current-sparse-spirals) | `{"birthCount":2,"seedDensity":0.12,"dyingValue":0.9}` | 0.050446 | 0.368112 | 0.075332 | 0.026001 |
+| Storm (147-current-storm) | `{"birthCount":2,"seedDensity":0.36,"dyingValue":0.9}` | 0.073928 | 0.357244 | 0.108285 | 0.037354 |
+
+### Persistence, seeds and diagnostics
+
+Each row below lists scores at 200/500/1000, their arithmetic mean and the2000-step flux. All three seed readings are reported where supported. Seed spread is max−min across those three means at the same size, not uncertainty or a distributional guarantee. Different-resolution readings are separate experiments, not exact numeric replays.
+
+| set | size | seed | score200 /500 /1000 | mean | flux2000 |
+|---|---:|---:|---|---:|---:|
+| 147-brians-brain-c03 | 128 | unsupported | 0.198362 / 0.196386 / 0.194253 | 0.196333 | 0.070068 |
+| 147-brians-brain-c03 | 384 | unsupported | 0.193901 / 0.191621 / 0.188671 | 0.191398 | 0.075273 |
+| 147-current-classic | 128 | unsupported | 0.041279 / 0.005132 / 0.004393 | 0.016935 | 0.007874 |
+| 147-current-classic | 384 | unsupported | 0.041776 / 0.045353 / 0.042373 | 0.043167 | 0.063144 |
+| 147-current-sparse-spirals | 128 | unsupported | 0.064640 / 0.034346 / 0.052353 | 0.050446 | 0.044360 |
+| 147-current-sparse-spirals | 384 | unsupported | 0.045820 / 0.057714 / 0.046781 | 0.050105 | 0.073469 |
+| 147-current-storm | 128 | unsupported | 0.081164 / 0.064240 / 0.076378 | 0.073928 | 0.080927 |
+| 147-current-storm | 384 | unsupported | 0.051434 / 0.056345 / 0.046636 | 0.051472 | 0.074944 |
+
+Across every retained ranking and validation pair: non-finite fraction0, out-of-range fraction0, and off-frame clipping0. The last is a geometric statement for a periodic lattice, not a measurement of motif crossings at the border. Endpoint fractions span lowerEndpointFraction: 0.434631–1.000000, upperEndpointFraction: 0.000000–0.544189. Endpoints are legal discrete states; empty fields remain in the ranking and are not promoted. Exact per-frame diagnostics are retained.
+
+### Interpretation and proposals
+
+The highest score belongs to birth 0/seed 0.085, not to a richer version of the shipped wave rule. At384² the four Renderer frames show broad changing phase domains covered with fine speckle, rather than the sparse linear firing fronts of the references. It remains active at 2000, but spatial structure is only0.121 on the128² ranking mean. This is a rejected evidence selection: filling more cells and spreading the three intensities raises the composite without establishing a better motif. At1000, all 24 birth 3/4/5 sets have zero firing coverage; seven of eight birth 2 sets and seven of eight birth 1 sets retain firing cells. Those are observations of this deterministic field, not survival probabilities.
+
+The reference images retain moving fragments, diagonals and wave edges through 2000 at 384². Classic's128² coverage falls from0.024536 at 200 to0.002869 at 1000/2000, whereas at 384² it stays around0.024–0.026. Small periodic boards can lose most wave activity and must not decide app-scale quality. Sparse/Storm have a brighter afterglow at 0.9; this is the already-landed September retune, not a new dynamic rule. No seed parameter exists, so inventing three seed labels would not provide robustness evidence.
+
+**Proposed promotions: none.** Keep all three shipped motifs. The retained birth 0 example demonstrates a ranking failure mode; the sparse birth 2 alternatives have not established an app-scale improvement. No claims are made about unvalidated candidates beyond the128² census and raw readings.
+
+### Visual evidence
+
+[All48 candidates: grayscale census at 200](../images/sweeps-2026-10-30/147-brians-brain-census.png). Cells are128², eight columns × six rows in manifest order (left-to-right, top-to-bottom); this is a shortlist aid, not temporal evidence.
+
+Four separated frames follow for each finalist/reference. Renderer rows are actual app-renderer screenshots; field rows are grayscale. All links are retained, including seed controls.
+
+| set / representation |200 |500 |1000 |2000 |
+|---|---|---|---|---|
+| 147-brians-brain-c03-field-128-seednone | [200](../images/sweeps-2026-10-30/147-brians-brain-c03-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-brians-brain-c03-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-brians-brain-c03-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-brians-brain-c03-field-128-seednone-t2000.png) |
+| 147-brians-brain-c03-field-384-seednone | [200](../images/sweeps-2026-10-30/147-brians-brain-c03-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-brians-brain-c03-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-brians-brain-c03-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-brians-brain-c03-field-384-seednone-t2000.png) |
+| 147-brians-brain-c03-renderer | [200](../images/sweeps-2026-10-30/147-brians-brain-c03-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-brians-brain-c03-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-brians-brain-c03-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-brians-brain-c03-renderer-t2000.png) |
+| 147-current-classic-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-classic-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-classic-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-classic-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-classic-field-128-seednone-t2000.png) |
+| 147-current-classic-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-classic-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-classic-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-classic-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-classic-field-384-seednone-t2000.png) |
+| 147-current-classic-renderer | [200](../images/sweeps-2026-10-30/147-current-classic-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-classic-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-classic-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-classic-renderer-t2000.png) |
+| 147-current-sparse-spirals-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-128-seednone-t2000.png) |
+| 147-current-sparse-spirals-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-sparse-spirals-field-384-seednone-t2000.png) |
+| 147-current-sparse-spirals-renderer | [200](../images/sweeps-2026-10-30/147-current-sparse-spirals-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-sparse-spirals-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-sparse-spirals-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-sparse-spirals-renderer-t2000.png) |
+| 147-current-storm-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-storm-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-storm-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-storm-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-storm-field-128-seednone-t2000.png) |
+| 147-current-storm-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-storm-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-storm-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-storm-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-storm-field-384-seednone-t2000.png) |
+| 147-current-storm-renderer | [200](../images/sweeps-2026-10-30/147-current-storm-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-storm-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-storm-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-storm-renderer-t2000.png) |
+
+### Reproduction and validation
+
+Start Vite from this worktree on vacant port 5173 (`npm run dev -- --host localhost --port 5173 --strictPort`), then run:
+
+```sh
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 147 brians-brain " --workers=1
+SWEEP_REPLAY=147 npx playwright test e2e/sweep.spec.ts -g "147 retained"
+SWEEP_CONTRACT=147 npx playwright test e2e/sweep-147.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+For all three kernels, use `-g "sweep 147 "`. The full command reruns the entire declared grid, then the finalist/references, requiring identical ordering and metric deltas≤1e-9 against retained results (including spreads and every validation seed/time). Raw replay independently decodes retained floats and recomputes every reading/rank, and checks current-reference provenance. Images are regenerated. Pilot-only mode `SWEEP_147_PILOT=1` is admission evidence only and must never be counted as a completed grid.
+
+Worker check commands, exits and counts are recorded in [checks](data/2026-10-30/147/checks.json); exact numeric replay summary is [raw recomputation](data/2026-10-30/147/raw-recomputation.json). Independent verifier replay and operator visual sign-off remain separate gates. Research acceptance does not change any production preset.

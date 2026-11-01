@@ -920,6 +920,36 @@ const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
 };
 
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-147-brians-brain": {
+    ...BRIANS_BRAIN, artifactId: "sweep-147-brians-brain",
+    warmupSteps: 200, multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { dyingValue: 0.5 },
+    axes: [{ key: "birthCount", values: [0, 1, 2, 3, 4, 5] },
+      { key: "seedDensity", values: [0.015, 0.035, 0.085, 0.155, 0.31, 0.52, 0.68, 0.85] }],
+    references: BRIANS_BRAIN.references.map(r => ({ ...r, id: `147-current-${r.id}`,
+      params: { ...r.params, dyingValue: r.id === "classic" ? 0.5 : 0.9 } })),
+  },
+  "sweep-147-cyclic-ca": {
+    ...CYCLIC_CA, artifactId: "sweep-147-cyclic-ca",
+    multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { stepsPerFrame: 1, seed: 0 },
+    axes: [{ key: "states", values: [3, 5, 7, 9, 17, 18, 21, 23] },
+      { key: "threshold", values: [1, 2, 3] }, { key: "neighbourhood", values: ["moore", "vonNeumann"] }],
+    references: CYCLIC_CA.references.map(r => ({ ...r, id: `147-current-${r.id}`,
+      params: { ...r.params, threshold: r.id === "crystal-lattice" ? 1 : r.params.threshold } })),
+  },
+  "sweep-147-game-of-life": {
+    ...GAME_OF_LIFE, artifactId: "sweep-147-game-of-life",
+    multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { seedDensity: 0.28, ageShading: true },
+    axes: [{ key: "birthMin", values: [1, 2, 4] }, { key: "birthMax", values: [1, 2, 3, 4] },
+      { key: "surviveMin", values: [1, 2, 3] }, { key: "surviveMax", values: [3, 5] },
+      { key: "sparkRate", values: [0, 0.025, 0.075, 0.2] }],
+    sets: [[1, 1], [2, 2], [2, 3], [4, 4]].flatMap(([birthMin, birthMax]) =>
+      [[1, 3], [2, 3], [3, 5]].flatMap(([surviveMin, surviveMax]) =>
+        [0, 0.025, 0.075, 0.2].map(sparkRate => ({ birthMin, birthMax, surviveMin, surviveMax, sparkRate })))),
+    references: GAME_OF_LIFE.references.map(r => ({ ...r, id: `147-current-${r.id}` })),
+  },
   "sweep-143-gray-scott": {
     slug: "gray-scott", artifactId: "sweep-143-gray-scott",
     reactionDiffusion: { methodVersion: "rd-persistence-v1" },
