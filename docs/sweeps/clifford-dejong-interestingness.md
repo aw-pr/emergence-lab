@@ -61,3 +61,193 @@ Svensson moth 0.713. No Svensson promotion: the pass-2 winner (c 0.9, d 1.5,
   regardless of score.
 - Scores are comparable **within this run only** (they depend on the sweep-scale
   rendering knobs above, not the app defaults).
+
+## Stage 148: c/d interactions around a/b anchors (2026-10-30)
+
+Research and harness work only; no production preset, default or kernel changed. Clifford, De Jong and Svensson are three variants of one kernel, so this is three searches, not three kernels.
+
+### Method
+
+- Historical sweeps pinned c/d and swept a/b (Svensson also swept d at three values). Here every variant visits 4 a/b anchors x 4 c x 3 d = 48 explicit sets, with `map` explicit, 128x128 grid, 260 warm-up steps, flux gap 5, dt 1, and the historical render knobs (14000 points/frame, exposure 0.015, fade 0.99, **driftAmount 0**). Method version `attractor-cd-interaction-v1`. Scoring is the unchanged `scoreFrames` instrument; no new metric.
+- Anchors: Clifford (-1.4,1.6), (-1.8,-2.4), (1.7,1.3), (-2.2,2.0); De Jong (1.4,-2.3), (1.4,-2.8), (-2.0,1.2), (2.2,2.5); Svensson (1.4,1.56), (1.5,-1.8), (-1.7,1.9), (2.0,-0.9). c/d values are listed per variant in each result file's manifest.
+- Not searched: colour, exposure, fade, pointsPerFrame, colour mode, a/b away from the four anchors, and no refinement pass (allowance was up to 16; none run). Seeds are not supported: the kernel has no RNG and no seed parameter, so determinism replaces three-seed repeats.
+- All current shipped presets (4 Clifford incl. morph, 4 De Jong incl. morph, 2 Svensson) are re-measured under new `148-current-*` ids; historical reference rows are untouched. Morph presets keep their own drift, exposure, fade and point count.
+- Diagnostics per row: non-finite fraction (0 everywhere), fraction at the lower/upper channel endpoint, support fraction above 0.04, and off-frame clipping from 20000 map iterates against the kernel's analytic frame (0 everywhere).
+- Finalists (3 per variant) were picked from the census sheet for anchor diversity and rank, not by score alone. Each has renderer screenshots (actual app Renderer, WebGL2, 384px) and grayscale field PNGs at 128 and 384 at steps 260, 560 and 1260 (1260 is the longer-horizon repeat), plus a bounded-drift comparison (driftAmount 0.3, same three snapshots). Grayscale field PNGs are the harness density channel, **not** app screenshots.
+- Replay: every finalist and reference was re-scored in the same run; max absolute metric delta 0 (tolerance 1e-9).
+
+### Results
+
+#### Clifford
+
+Retained results: [`docs/sweeps/data/2026-10-30/148/clifford-dejong-clifford.json`](data/2026-10-30/148/clifford-dejong-clifford.json). Pre-measurement manifest: [`premeasurement-manifest.json`](data/2026-10-30/148/premeasurement-manifest.json). Census sheet (grayscale field, 8 columns, candidate order c01..c48): [148-clifford-census.png](../images/sweeps-2026-10-30/148-clifford-census.png).
+
+Collapsed sets (score < 0.01, a point or near-point): 7 of 48.
+
+Scores are single-snapshot at step 260 (the ranking instrument). Finalists are marked.
+
+| rank | id | a | b | c | d | score@260 | coverage | at upper endpoint |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 148-clifford-c12 (finalist) | -1.4 | 1.6 | 1.6 | 1.4 | 0.734 | 0.77 | 0.216 |
+| 2 | 148-clifford-c01 | -1.4 | 1.6 | -1.6 | -1.4 | 0.732 | 0.77 | 0.213 |
+| 3 | 148-clifford-c34 (finalist) | 1.7 | 1.3 | 1.6 | -1.4 | 0.731 | 0.76 | 0.194 |
+| 4 | 148-clifford-c27 | 1.7 | 1.3 | -1.6 | 1.4 | 0.730 | 0.76 | 0.194 |
+| 5 | 148-clifford-c03 | -1.4 | 1.6 | -1.6 | 1.4 | 0.730 | 0.77 | 0.229 |
+| 6 | 148-clifford-c43 (finalist) | -2.2 | 2 | 0.6 | -1.4 | 0.730 | 0.76 | 0.226 |
+| 7 | 148-clifford-c42 | -2.2 | 2 | -0.6 | 1.4 | 0.729 | 0.76 | 0.223 |
+| 8 | 148-clifford-c10 | -1.4 | 1.6 | 1.6 | -1.4 | 0.729 | 0.77 | 0.232 |
+| 9 | 148-clifford-c25 | 1.7 | 1.3 | -1.6 | -1.4 | 0.727 | 0.76 | 0.216 |
+| 10 | 148-clifford-c36 | 1.7 | 1.3 | 1.6 | 1.4 | 0.727 | 0.76 | 0.218 |
+
+Finalists (drift = driftAmount 0.3; each snapshot scored from a fresh kernel at that step; `mean` is the three-snapshot mean, not the 1260 score):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-clifford-c12 | 0.734 | 0.77 | 0.216 | 0.734 / 0.733 / 0.733 | 0.817 / 0.824 / 0.826 | 0.733 | 1.121 |
+| 148-clifford-c34 | 0.731 | 0.76 | 0.194 | 0.731 / 0.731 / 0.731 | 0.762 / 0.845 / 0.796 | 0.731 | 1.096 |
+| 148-clifford-c43 | 0.730 | 0.76 | 0.226 | 0.730 / 0.723 / 0.725 | 0.785 / 0.786 / 0.804 | 0.726 | 1.090 |
+
+Current shipped references, all shipped presets (morph rows use the preset's own drift, exposure, fade and point count, so their drift columns equal their static columns and are not comparable with the screening-knob rows):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-current-clifford-classic | 0.571 | 0.35 | 0.198 | 0.571 / 0.571 / 0.570 | 0.621 / 0.773 / 0.828 | 0.571 | 1.298 |
+| 148-current-clifford-veils | 0.740 | 0.79 | 0.213 | 0.740 / 0.741 / 0.741 | 0.894 / 0.815 / 0.810 | 0.741 | 1.133 |
+| 148-current-clifford-bloom | 0.730 | 0.69 | 0.175 | 0.730 / 0.733 / 0.734 | 0.785 / 0.823 / 0.738 | 0.732 | 1.068 |
+| 148-current-clifford-morph (morph preset, shipped knobs) | 0.740 | 0.79 | 0.364 | 0.740 / 0.746 / 0.686 | 0.740 / 0.746 / 0.686 | 0.724 | 1.000 |
+
+Images (renderer = actual app screenshot; field = grayscale harness density):
+
+- 148-clifford-c12: [field-128-t1260](../images/sweeps-2026-10-30/148-clifford-c12-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-clifford-c12-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-clifford-c12-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-clifford-c12-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-clifford-c12-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-clifford-c12-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-clifford-c12-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-clifford-c12-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-clifford-c12-renderer-384-t560.png)
+- 148-clifford-c34: [field-128-t1260](../images/sweeps-2026-10-30/148-clifford-c34-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-clifford-c34-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-clifford-c34-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-clifford-c34-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-clifford-c34-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-clifford-c34-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-clifford-c34-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-clifford-c34-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-clifford-c34-renderer-384-t560.png)
+- 148-clifford-c43: [field-128-t1260](../images/sweeps-2026-10-30/148-clifford-c43-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-clifford-c43-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-clifford-c43-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-clifford-c43-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-clifford-c43-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-clifford-c43-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-clifford-c43-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-clifford-c43-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-clifford-c43-renderer-384-t560.png)
+- 148-current-clifford-classic: [field-128-t560](../images/sweeps-2026-10-30/148-current-clifford-classic-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-clifford-classic-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-clifford-classic-renderer-384-t560.png)
+- 148-current-clifford-veils: [field-128-t560](../images/sweeps-2026-10-30/148-current-clifford-veils-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-clifford-veils-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-clifford-veils-renderer-384-t560.png)
+- 148-current-clifford-bloom: [field-128-t560](../images/sweeps-2026-10-30/148-current-clifford-bloom-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-clifford-bloom-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-clifford-bloom-renderer-384-t560.png)
+- 148-current-clifford-morph: [field-128-t1260](../images/sweeps-2026-10-30/148-current-clifford-morph-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-current-clifford-morph-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-current-clifford-morph-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-current-clifford-morph-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-current-clifford-morph-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-clifford-morph-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-current-clifford-morph-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-current-clifford-morph-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-clifford-morph-renderer-384-t560.png)
+
+#### De Jong
+
+Retained results: [`docs/sweeps/data/2026-10-30/148/clifford-dejong-dejong.json`](data/2026-10-30/148/clifford-dejong-dejong.json). Pre-measurement manifest: [`premeasurement-manifest.json`](data/2026-10-30/148/premeasurement-manifest.json). Census sheet (grayscale field, 8 columns, candidate order c01..c48): [148-dejong-census.png](../images/sweeps-2026-10-30/148-dejong-census.png).
+
+Collapsed sets (score < 0.01, a point or near-point): 6 of 48.
+
+Scores are single-snapshot at step 260 (the ranking instrument). Finalists are marked.
+
+| rank | id | a | b | c | d | score@260 | coverage | at upper endpoint |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 148-dejong-c13 (finalist) | 1.4 | -2.8 | -2.8 | -2.6 | 0.765 | 0.71 | 0.096 |
+| 2 | 148-dejong-c01 | 1.4 | -2.3 | -2.8 | -2.6 | 0.753 | 0.76 | 0.175 |
+| 3 | 148-dejong-c22 | 1.4 | -2.8 | 2.8 | -2.6 | 0.751 | 0.71 | 0.183 |
+| 4 | 148-dejong-c03 (finalist) | 1.4 | -2.3 | -2.8 | 1.4 | 0.739 | 0.73 | 0.205 |
+| 5 | 148-dejong-c43 (finalist) | 2.2 | 2.5 | 1.2 | -2.6 | 0.735 | 0.73 | 0.208 |
+| 6 | 148-dejong-c19 | 1.4 | -2.8 | 1.2 | -2.6 | 0.726 | 0.70 | 0.203 |
+| 7 | 148-dejong-c16 | 1.4 | -2.8 | -1.2 | -2.6 | 0.725 | 0.70 | 0.191 |
+| 8 | 148-dejong-c40 | 2.2 | 2.5 | -1.2 | -2.6 | 0.720 | 0.72 | 0.234 |
+| 9 | 148-dejong-c12 | 1.4 | -2.3 | 2.8 | 1.4 | 0.720 | 0.65 | 0.195 |
+| 10 | 148-dejong-c15 | 1.4 | -2.8 | -2.8 | 1.4 | 0.710 | 0.72 | 0.241 |
+
+Finalists (drift = driftAmount 0.3; each snapshot scored from a fresh kernel at that step; `mean` is the three-snapshot mean, not the 1260 score):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-dejong-c13 | 0.765 | 0.71 | 0.096 | 0.765 / 0.767 / 0.768 | 0.808 / 0.667 / 0.851 | 0.766 | 1.012 |
+| 148-dejong-c03 | 0.739 | 0.73 | 0.205 | 0.739 / 0.739 / 0.738 | 0.811 / 0.882 / 0.863 | 0.738 | 1.154 |
+| 148-dejong-c43 | 0.735 | 0.73 | 0.208 | 0.735 / 0.733 / 0.733 | 0.841 / 0.890 / 0.814 | 0.733 | 1.157 |
+
+Current shipped references, all shipped presets (morph rows use the preset's own drift, exposure, fade and point count, so their drift columns equal their static columns and are not comparable with the screening-knob rows):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-current-dejong-classic | 0.716 | 0.67 | 0.205 | 0.716 / 0.715 / 0.715 | 0.806 / 0.796 / 0.858 | 0.715 | 1.146 |
+| 148-current-dejong-swan | 0.762 | 0.73 | 0.166 | 0.762 / 0.762 / 0.762 | 0.785 / 0.809 / 0.851 | 0.762 | 1.069 |
+| 148-current-dejong-heart | 0.768 | 0.77 | 0.173 | 0.768 / 0.766 / 0.767 | 0.846 / 0.813 / 0.861 | 0.767 | 1.096 |
+| 148-current-dejong-morph (morph preset, shipped knobs) | 0.677 | 0.84 | 0.001 | 0.677 / 0.621 / 0.645 | 0.677 / 0.621 / 0.645 | 0.648 | 1.000 |
+
+Images (renderer = actual app screenshot; field = grayscale harness density):
+
+- 148-dejong-c13: [field-128-t1260](../images/sweeps-2026-10-30/148-dejong-c13-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-dejong-c13-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-dejong-c13-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-dejong-c13-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-dejong-c13-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-dejong-c13-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-dejong-c13-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-dejong-c13-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-dejong-c13-renderer-384-t560.png)
+- 148-dejong-c43: [field-128-t1260](../images/sweeps-2026-10-30/148-dejong-c43-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-dejong-c43-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-dejong-c43-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-dejong-c43-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-dejong-c43-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-dejong-c43-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-dejong-c43-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-dejong-c43-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-dejong-c43-renderer-384-t560.png)
+- 148-dejong-c03: [field-128-t1260](../images/sweeps-2026-10-30/148-dejong-c03-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-dejong-c03-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-dejong-c03-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-dejong-c03-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-dejong-c03-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-dejong-c03-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-dejong-c03-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-dejong-c03-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-dejong-c03-renderer-384-t560.png)
+- 148-current-dejong-classic: [field-128-t560](../images/sweeps-2026-10-30/148-current-dejong-classic-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-dejong-classic-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-dejong-classic-renderer-384-t560.png)
+- 148-current-dejong-swan: [field-128-t560](../images/sweeps-2026-10-30/148-current-dejong-swan-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-dejong-swan-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-dejong-swan-renderer-384-t560.png)
+- 148-current-dejong-heart: [field-128-t560](../images/sweeps-2026-10-30/148-current-dejong-heart-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-dejong-heart-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-dejong-heart-renderer-384-t560.png)
+- 148-current-dejong-morph: [field-128-t1260](../images/sweeps-2026-10-30/148-current-dejong-morph-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-current-dejong-morph-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-current-dejong-morph-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-current-dejong-morph-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-current-dejong-morph-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-dejong-morph-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-current-dejong-morph-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-current-dejong-morph-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-dejong-morph-renderer-384-t560.png)
+
+#### Svensson
+
+Retained results: [`docs/sweeps/data/2026-10-30/148/clifford-dejong-svensson.json`](data/2026-10-30/148/clifford-dejong-svensson.json). Pre-measurement manifest: [`premeasurement-manifest.json`](data/2026-10-30/148/premeasurement-manifest.json). Census sheet (grayscale field, 8 columns, candidate order c01..c48): [148-svensson-census.png](../images/sweeps-2026-10-30/148-svensson-census.png).
+
+Collapsed sets (score < 0.01, a point or near-point): 5 of 48.
+
+Scores are single-snapshot at step 260 (the ranking instrument). Finalists are marked.
+
+| rank | id | a | b | c | d | score@260 | coverage | at upper endpoint |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 148-svensson-c29 (finalist) | -1.7 | 1.9 | -0.8 | -1.2 | 0.744 | 0.72 | 0.169 |
+| 2 | 148-svensson-c16 (finalist) | 1.5 | -1.8 | -0.8 | -3.5 | 0.737 | 0.75 | 0.236 |
+| 3 | 148-svensson-c19 | 1.5 | -1.8 | 0.7 | -3.5 | 0.736 | 0.77 | 0.232 |
+| 4 | 148-svensson-c07 (finalist) | 1.4 | 1.56 | 0.7 | -3.5 | 0.736 | 0.73 | 0.206 |
+| 5 | 148-svensson-c04 | 1.4 | 1.56 | -0.8 | -3.5 | 0.734 | 0.73 | 0.214 |
+| 6 | 148-svensson-c28 | -1.7 | 1.9 | -0.8 | -3.5 | 0.730 | 0.77 | 0.243 |
+| 7 | 148-svensson-c17 | 1.5 | -1.8 | -0.8 | -1.2 | 0.712 | 0.70 | 0.166 |
+| 8 | 148-svensson-c14 | 1.5 | -1.8 | -2 | -1.2 | 0.711 | 0.72 | 0.243 |
+| 9 | 148-svensson-c32 | -1.7 | 1.9 | 0.7 | -1.2 | 0.709 | 0.63 | 0.188 |
+| 10 | 148-svensson-c05 | 1.4 | 1.56 | -0.8 | -1.2 | 0.708 | 0.71 | 0.172 |
+
+Finalists (drift = driftAmount 0.3; each snapshot scored from a fresh kernel at that step; `mean` is the three-snapshot mean, not the 1260 score):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-svensson-c29 | 0.744 | 0.72 | 0.169 | 0.744 / 0.745 / 0.746 | 0.813 / 0.841 / 0.847 | 0.745 | 1.119 |
+| 148-svensson-c16 | 0.737 | 0.75 | 0.236 | 0.737 / 0.736 / 0.738 | 0.750 / 0.799 / 0.828 | 0.737 | 1.075 |
+| 148-svensson-c07 | 0.736 | 0.73 | 0.206 | 0.736 / 0.738 / 0.737 | 0.845 / 0.790 / 0.835 | 0.737 | 1.118 |
+
+Current shipped references, all shipped presets (morph rows use the preset's own drift, exposure, fade and point count, so their drift columns equal their static columns and are not comparable with the screening-knob rows):
+
+| id | score@260 | coverage | at upper endpoint | static score @260 / @560 / @1260 | drift score @260 / @560 / @1260 | static mean of the three | drift mean / static mean |
+|---|---:|---:|---:|---|---|---:|---:|
+| 148-current-svensson-drape | 0.702 | 0.71 | 0.242 | 0.702 / 0.699 / 0.699 | 0.761 / 0.776 / 0.760 | 0.700 | 1.094 |
+| 148-current-svensson-moth | 0.713 | 0.69 | 0.208 | 0.713 / 0.710 / 0.710 | 0.723 / 0.821 / 0.784 | 0.711 | 1.091 |
+
+Images (renderer = actual app screenshot; field = grayscale harness density):
+
+- 148-svensson-c29: [field-128-t1260](../images/sweeps-2026-10-30/148-svensson-c29-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-svensson-c29-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-svensson-c29-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-svensson-c29-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-svensson-c29-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-svensson-c29-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-svensson-c29-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-svensson-c29-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-svensson-c29-renderer-384-t560.png)
+- 148-svensson-c16: [field-128-t1260](../images/sweeps-2026-10-30/148-svensson-c16-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-svensson-c16-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-svensson-c16-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-svensson-c16-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-svensson-c16-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-svensson-c16-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-svensson-c16-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-svensson-c16-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-svensson-c16-renderer-384-t560.png)
+- 148-svensson-c07: [field-128-t1260](../images/sweeps-2026-10-30/148-svensson-c07-field-128-t1260.png), [field-128-t260](../images/sweeps-2026-10-30/148-svensson-c07-field-128-t260.png), [field-128-t560](../images/sweeps-2026-10-30/148-svensson-c07-field-128-t560.png), [field-384-t1260](../images/sweeps-2026-10-30/148-svensson-c07-field-384-t1260.png), [field-384-t260](../images/sweeps-2026-10-30/148-svensson-c07-field-384-t260.png), [field-384-t560](../images/sweeps-2026-10-30/148-svensson-c07-field-384-t560.png), [renderer-384-t1260](../images/sweeps-2026-10-30/148-svensson-c07-renderer-384-t1260.png), [renderer-384-t260](../images/sweeps-2026-10-30/148-svensson-c07-renderer-384-t260.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-svensson-c07-renderer-384-t560.png)
+- 148-current-svensson-drape: [field-128-t560](../images/sweeps-2026-10-30/148-current-svensson-drape-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-svensson-drape-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-svensson-drape-renderer-384-t560.png)
+- 148-current-svensson-moth: [field-128-t560](../images/sweeps-2026-10-30/148-current-svensson-moth-field-128-t560.png), [field-384-t560](../images/sweeps-2026-10-30/148-current-svensson-moth-field-384-t560.png), [renderer-384-t560](../images/sweeps-2026-10-30/148-current-svensson-moth-renderer-384-t560.png)
+
+### Interpretation and manual visual findings
+
+Metric scores shortlist; they do not rank aesthetics. Repair run 2026-11-01: this section was rewritten against regenerated data. Previously retained attempt-1 results are archived under `data/2026-10-30/148/archive-attempt-1/`; the regenerated numbers for all 144 candidates and the eight earlier references are identical to them (the sweep is deterministic and the candidate list is unchanged). New in this run: the two shipped morph references, per-snapshot scores (a true 1260-step score is now retained next to the three-snapshot mean) and the pre-measurement manifest.
+
+Images opened by the worker in this run: renderer shots of both morph references at steps 260 and 1260, Clifford c12 (t1260), De Jong c13 (t1260), Svensson c29 (t260) and shipped Clifford veils (t560). Other images are retained and linked but were not individually inspected by the worker.
+
+- **c/d matters a lot.** Every variant has sets that collapse to a point or a thin curve when c/d change at a fixed a/b anchor (collapsed counts above: 7, 6 and 5 of 48), so the old pinned-c/d grids sampled one slice of a landscape with real dead regions.
+- **Field PNGs overstate density.** In the grayscale census most figures saturate near white, with 16-25% of cells at the upper endpoint. In the app renderer the same kinds of figure read as thin coloured filaments on black. Scores reward harness-scale density more than app look; do not read 0.73-0.77 as app-visible fill.
+- **Shapes seen in the renderer.** Clifford c12: wide open looping filaments with a bright pink centre, comparable in character to shipped veils but sparser. De Jong c13: three large ellipse-like lobes meeting at a bright knot. Svensson c29: a large ring with a ribbon-like crossing and strong blue contrast.
+- **Shipped morph presets behave differently from every screening row.** With drift 0.35 / 0.3, exposure 0.09 and 40000 points per frame they are not comparable with the 14000-point, 0.015-exposure rows. Clifford morph: score 0.740 at 260, 0.746 at 560, 0.686 at 1260; upper-endpoint fraction 0.364 (the highest of any row). At 260 steps the renderer shows a translucent pink/blue looping shell; by 1260 the drifted coefficients give a much denser, washed-out pink body with pale highlights, which fits the lower score. De Jong morph: 0.677 / 0.621 / 0.645, upper endpoint 0.001 (almost no saturation) and coverage 0.84; renderer shows overlapping ellipse shells at 260 and a different, darker swirl with a pale disc at 1260. Both morphs visibly change figure across the three separated times, so the drift persists as motion; this is three still frames, not a video review. The De Jong morph is the lowest-scoring shipped De Jong reference in this run.
+- **Gaps to the shipped static references are small.** Clifford best new 0.734 vs veils 0.740; De Jong best 0.765 vs heart 0.768; Svensson best 0.744 vs moth 0.713 and drape 0.702. Only Svensson shows a score lead, about 0.03.
+- **Bounded drift** (driftAmount 0.3 at the screening knobs). Drift mean / static mean ranges from 1.012 (De Jong c13) to 1.298 (Clifford classic) over the 17 non-morph rows, so drift raised the mean score for every non-morph row; the earlier note of 1.01-1.16 omitted Clifford classic. Drift scores are not monotone in time (for example De Jong c13: 0.808 / 0.667 / 0.851). Morph rows use their own drift, so their retention is 1.000 by construction.
+- **Long horizon.** Static finalists and static references stay within about 0.01 of their 260-step score through 1260 steps (largest finalist move: Clifford c43, 0.730 to 0.725): fixed-coefficient figures are stationary. Morph references are not (Clifford morph drops 0.054).
+- **Seeds.** Not supported: the kernel is deterministic with no seed parameter.
+
+### Novelty and prior coverage
+
+The pre-measurement manifest (`data/2026-10-30/148/premeasurement-manifest.json`, written by `sweep 148 pre-measurement manifest` before any measurement; its sha256 is embedded in each result file) records the historical coarse grids from `e2e/harness/sims.ts` and the exact new candidate lists. None of the 144 new candidates sits on an old a/b grid point with the old pinned c/d.
+
+The 2026-08-16 write-up also records a second, fine c/d pass at each map's pass-1 winner (Clifford (-1.8,-2.4), De Jong (1.4,-2.8), Svensson (-2.2,-2.2)). Its c/d ranges are not recorded anywhere in the repository (write-up, sims.ts, or commit 46638d257); only its outcomes are. So novelty is **not established** for the 12 Clifford and 12 De Jong candidates at those two anchors (c13-c24; De Jong finalist c13, the top-ranked De Jong set, is among them) and no bounds are fabricated here. The Svensson anchor (-2.2,-2.2) is not among the new Svensson anchors, so those candidates do not overlap the Svensson fine pass.
+
+### Proposed promotions
+
+None. Clifford and De Jong produce no clear win over the current references on score, and the visual look has not been signed off. The Svensson candidates c29, c16 and c07 are the only ones worth an operator look against drape/moth; this is a proposal to look, not to promote. Any preset change needs operator visual sign-off.
+
+### Reproduction
+
+```
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 148 " --workers=1
+SWEEP_CONTRACT=148 npx playwright test e2e/sweep-148.contract.spec.ts
+```
+
+Run order for the repaired evidence: `-g "sweep 148 pre-measurement"` first (writes the manifest), then the full selector above. Configs: `sweep-148-clifford-dejong-{clifford,dejong,svensson}` in `e2e/harness/sims.ts`; test in `e2e/sweep.spec.ts`. Finalist ids are fixed in `ATTR_FINALISTS`; with it empty the sweep is census-only.

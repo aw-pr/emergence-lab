@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
 import { SPECS as LORENZ_SPECS } from "../src/sims/lorenz-attractor/kernel.ts";
+import { MAP_SPECS } from "../src/sims/clifford-dejong/kernel.ts";
 import { driveKernel, driveKernelDiagnostic, type DiagnosticSnapshot, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
@@ -29,6 +30,8 @@ import {
   MARKUS_FINALISTS,
   MARKUS_REFINED_VIEWS,
   MARKUS_SEQUENCES,
+  ATTRACTOR_148_METHOD,
+  CLIFFORD_RENDER_148,
   BURNING_SHIP_REFINEMENT_CENTRES,
   expandSweep,
   type ReferenceSet,
@@ -2573,3 +2576,252 @@ test("146 sandpile loss diagnostic balances each row's own initial pile", async 
     if (expected !== undefined) expect(Math.abs(reported - expected)).toBeLessThan(1e-9);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Stage 148: Clifford / De Jong / Svensson c/d interactions around a/b anchors.
+// ---------------------------------------------------------------------------
+const ATTR_ROOT = "docs/sweeps/data/2026-10-30/148";
+const ATTR_IMAGES = "docs/images/sweeps-2026-10-30";
+const ATTR_VARIANTS = ["clifford", "dejong", "svensson"] as const;
+/** Evidence selections per variant, chosen from the census sheet after the first
+ * (finalist-free) pass. Empty keeps the pass census-only. */
+const ATTR_FINALISTS: Record<(typeof ATTR_VARIANTS)[number], string[]> = {
+  clifford: ["148-clifford-c12", "148-clifford-c34", "148-clifford-c43"],
+  dejong: ["148-dejong-c13", "148-dejong-c43", "148-dejong-c03"],
+  svensson: ["148-svensson-c29", "148-svensson-c16", "148-svensson-c07"],
+};
+/** Separated snapshots for the time strip; the last is the longer-horizon repeat. */
+const ATTR_STEPS = [260, 560, 1260];
+const ATTR_DRIFT = 0.3;
+const ATTR_RENDER_SIZE = 384;
+
+function attrDiagnostics(field: ArrayLike<number>, variant: string, params: Params) {
+  const n = field.length;
+  let bad = 0, lower = 0, upper = 0, support = 0;
+  for (let i = 0; i < n; i += 1) {
+    const v = field[i];
+    if (!Number.isFinite(v)) { bad += 1; continue; }
+    if (v <= 0) lower += 1;
+    if (v >= 1) upper += 1;
+    if (v > 0.04) support += 1;
+  }
+  // Off-frame clipping: iterate the map with the kernel's own analytic bounds
+  // and count points that land outside the framed half-extents.
+  const spec = MAP_SPECS[variant as keyof typeof MAP_SPECS];
+  const [bx, by] = spec.bounds(Number(params.a), Number(params.b), Number(params.c), Number(params.d));
+  let x = 0.1, y = 0.1, outside = 0;
+  const samples = 20000;
+  for (let i = 0; i < 100 + samples; i += 1) {
+    [x, y] = spec.apply(x, y, Number(params.a), Number(params.b), Number(params.c), Number(params.d));
+    if (i >= 100 && (Math.abs(x) > bx * 1.04 || Math.abs(y) > by * 1.04)) outside += 1;
+  }
+  return { nonFiniteFraction: bad / n, lowerEndpointFraction: lower / n, upperEndpointFraction: upper / n,
+    supportFractionAbove004: support / n, offFrameClippingFraction: outside / samples };
+}
+
+async function attrDrive(page: Page, config: SimSweepConfig, params: Params, size: number, times: number[]) {
+  return page.evaluate(driveKernel, { registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: size, gridHeight: size,
+    warmupSteps: times[0], sampleSteps: times, fluxGap: config.fluxGap, primaryChannel: config.primaryChannel, dt: config.dt, preserveRange: true });
+}
+
+async function attrRenderer(page: Page, params: Params, warmup: number, path: string) {
+  await page.setViewportSize({ width: ATTR_RENDER_SIZE, height: ATTR_RENDER_SIZE });
+  const info = await page.evaluate(async ({ params, warmup, size }) => {
+    const load = (u: string) => import(/* @vite-ignore */ u);
+    const [{ Renderer }, { CliffordDeJongKernel }, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+      load("/src/app/renderer.ts"), load("/src/sims/clifford-dejong/kernel.ts"), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts")]);
+    document.body.innerHTML = "";
+    const canvas = document.createElement("canvas"); canvas.id = "attractor-evidence";
+    canvas.style.cssText = `position:fixed;left:0;top:0;width:${size}px;height:${size}px`; document.body.appendChild(canvas);
+    class Snapshot extends CliffordDeJongKernel {
+      init(w: number, h: number, p: Params) { super.init(w, h, p); for (let i = 0; i < warmup; i += 1) super.step(1); }
+    }
+    const kernel = new Snapshot(), mode = getRenderMode("clifford-dejong");
+    const profile = qualityProfileFor("clifford-dejong", mode, "desktop");
+    const colourOptions = defaultColourOptionsFor("clifford-dejong", 1);
+    const r = new Renderer({ canvas, kernel, params, stepsPerFrame: 0, colourOptions,
+      displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    (window as any).__attractorRenderer = r;
+    return { canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer };
+  }, { params, warmup, size: ATTR_RENDER_SIZE });
+  expect(info.renderer).toBe("webgl2");
+  await page.locator("#attractor-evidence").screenshot({ path });
+  await page.evaluate(() => (window as any).__attractorRenderer.destroy());
+  return info;
+}
+
+const ATTR_PRE_PATH = `${ATTR_ROOT}/premeasurement-manifest.json`;
+const ATTR_FINE_PASS_ANCHORS: Record<string, [number, number]> = { clifford: [-1.8, -2.4], dejong: [1.4, -2.8], svensson: [-2.2, -2.2] };
+const sha256File = (p: string) => createHash("sha256").update(readFileSync(p)).digest("hex");
+
+function attrPlanned(variant: string) {
+  const config = SWEEP_CONFIGS[`sweep-148-clifford-dejong-${variant}`];
+  return { config, planned: expandSweep(config).map((params, i) => ({ id: `148-${variant}-c${String(i + 1).padStart(2, "0")}`, params })) };
+}
+
+/** Which planned sets sit on a historical a/b grid point with the historical pinned c/d (Svensson: d from its axis). */
+function attrHistoricalOverlap(variant: string) {
+  const { planned } = attrPlanned(variant);
+  const old = SWEEP_CONFIGS[`clifford-dejong-${variant}`];
+  const grid = (key: string) => old.axes.find(a => a.key === key)?.values ?? [];
+  const near = (v: number, list: number[]) => list.some(x => Math.abs(x - v) < 1e-9);
+  const pinned = old.baseParams;
+  const onGrid = planned.filter(({ params: p }) => {
+    const dOk = variant === "svensson" ? near(Number(p.d), grid("d")) : Number(p.d) === Number(pinned.d);
+    return near(Number(p.a), grid("a")) && near(Number(p.b), grid("b")) && Number(p.c) === Number(pinned.c) && dOk;
+  }).map(c => c.id);
+  const [fa, fb] = ATTR_FINE_PASS_ANCHORS[variant];
+  const atFineAnchor = planned.filter(({ params: p }) => Math.abs(Number(p.a) - fa) < 1e-9 && Math.abs(Number(p.b) - fb) < 1e-9).map(c => c.id);
+  return { onHistoricalGridWithPinnedCd: onGrid, atHistoricalFinePassAnchor: atFineAnchor, fineAnchor: { a: fa, b: fb } };
+}
+
+function attrPreManifest() {
+  const sources = ["src/app/presets.ts", "src/sims/clifford-dejong/kernel.ts", "e2e/harness/driver.ts", "e2e/harness/metrics.ts", "docs/sweeps/clifford-dejong-interestingness.md"];
+  return {
+    stage: "148-attractor-coefficient-interactions", authoredBefore: "repaired measurement run (re-brief 1, 2026-11-01)",
+    note: "Written to disk by `sweep 148 pre-measurement manifest` before any 148 candidate or reference is measured. Supersedes nothing: the attempt-1 manifest embedded in the result JSON was written after measurement and is archived under archive-attempt-1/.",
+    methodVersion: ATTRACTOR_148_METHOD,
+    sourceHashes: Object.fromEntries(sources.map(p => [p, sha256File(p)])),
+    historicalFinePass: {
+      source: "docs/sweeps/clifford-dejong-interestingness.md",
+      description: "The 2026-08-16 write-up records a second 'fine c/d' pass at each map's pass-1 winner: Clifford (-1.8,-2.4), De Jong (1.4,-2.8), Svensson (-2.2,-2.2). The c/d values and step sizes of that pass are not recorded in the write-up, e2e/harness/sims.ts or the commit that added them (46638d257). Only its outcomes are known: Clifford veils c -1.0 d 1.0, De Jong swan c 2.8 d -1.87, De Jong heart c 2.4 d -2.1, Svensson pass-2 winner c 0.9 d 1.5 (not promoted).",
+      gap: "Exact fine-pass bounds cannot be reconstructed, so novelty at the three fine-pass a/b anchors is unproven. Candidate rows at those anchors (listed per variant) are reported as possible overlap, not as novel. Bounds are not fabricated.",
+    },
+    variants: ATTR_VARIANTS.map(variant => {
+      const { config, planned } = attrPlanned(variant);
+      const historical = SWEEP_CONFIGS[`clifford-dejong-${variant}`];
+      return {
+        slug: `clifford-dejong-${variant}`, artifactId: config.artifactId,
+        grid: { width: config.gridWidth, height: config.gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+        fixedParams: { ...CLIFFORD_RENDER_148, note: "screening knobs; shipped morph references use their own knobs" },
+        historicalCoarseGrid: { axes: historical.axes.map(a => ({ key: a.key, values: a.values })), pinned: historical.baseParams, source: "e2e/harness/sims.ts (config clifford-dejong-" + variant + ", unchanged)" },
+        newAxes: { anchors: config.axes[0].values.length, c: config.axes[1].values, d: config.axes[2].values },
+        overlapAssessment: attrHistoricalOverlap(variant),
+        candidates: planned,
+        references: config.references.map(r => ({ id: r.id, label: r.label, params: r.params,
+          provenance: "src/app/presets.ts" + (/morph/.test(r.id) ? " (morph preset: shipped drift/exposure/fade/pointsPerFrame, not the screening knobs)" : "") })),
+        counts: { coarse: planned.length, refinements: 0, allowance: "48 novel sets + at most 16 refinements; none planned" },
+        stopping: "Fixed list; no adaptive refinement. Stop on any non-finite score.",
+      };
+    }),
+  };
+}
+
+sweepTest("sweep 148 pre-measurement manifest", () => {
+  writeText(ATTR_PRE_PATH, JSON.stringify(attrPreManifest(), null, 2));
+});
+
+for (const variant of ATTR_VARIANTS) {
+  sweepTest(`sweep 148 ${variant} c/d interactions`, async ({ page }) => {
+    test.setTimeout(3_600_000);
+    const slug = `clifford-dejong-${variant}`;
+    const config = SWEEP_CONFIGS[`sweep-148-${slug}`];
+    const sets = expandSweep(config);
+    const planned = sets.map((params, i) => ({ id: `148-${variant}-c${String(i + 1).padStart(2, "0")}`, params }));
+    expect(planned.length).toBeGreaterThanOrEqual(48);
+    expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
+    const historical = SWEEP_CONFIGS[slug];
+    expect(existsSync(ATTR_PRE_PATH), "pre-measurement manifest must exist on disk before measuring").toBe(true);
+    const pre = JSON.parse(readFileSync(ATTR_PRE_PATH, "utf8"));
+    const preVariant = pre.variants.find((v: any) => v.slug === slug);
+    expect(JSON.stringify(preVariant.candidates)).toBe(JSON.stringify(planned));
+    expect(JSON.stringify(preVariant.references.map((r: any) => [r.id, r.params]))).toBe(JSON.stringify(config.references.map(r => [r.id, r.params])));
+    const manifest = {
+      preMeasurementManifest: { path: ATTR_PRE_PATH, sha256: sha256File(ATTR_PRE_PATH) },
+      slug, methodVersion: ATTRACTOR_148_METHOD,
+      grid: { width: config.gridWidth, height: config.gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+      command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 148 " --workers=1',
+      candidates: planned,
+      fixedParams: { ...CLIFFORD_RENDER_148, note: "driftAmount 0 pins coefficients for morphology screening; bounded drift is compared separately for finalists" },
+      determinism: "No RNG: the kernel starts at (0.1,0.1) and iterates a fixed map; there is no seed parameter, so seed repeats are not supported and identical replays are expected to match to 1e-9.",
+      counts: { coarse: planned.length, refinements: 0, allowance: "48 novel sets + at most 16 refinements; no refinement pass was run" },
+      axes: { anchors: config.axes[0].values.length, c: config.axes[1].values, d: config.axes[2].values,
+        historicalAxes: historical.axes.map(a => ({ key: a.key, values: a.values })), historicalBase: historical.baseParams },
+      priorCoverage: [
+        { source: "e2e/harness/sims.ts", description: `Historical ${variant} config (id ${slug}, preserved unchanged): ${historical.axes.map(a => `${a.key} ${JSON.stringify(a.values)}`).join(" x ")}; base c/d ${JSON.stringify({ c: historical.baseParams.c, d: historical.baseParams.d })}. Not repeated here; this stage varies c and d at every candidate.` },
+        { source: "docs/sweeps/clifford-dejong-interestingness.md", description: "Original 2026-08-16 write-up: a/b grids with c/d pinned at a per-map anchor (Svensson also swept d at three values). Shipped promotions come from that run." },
+        { source: "docs/sweeps/clifford-dejong-interestingness.md", description: pre.historicalFinePass.description + " " + pre.historicalFinePass.gap },
+        { source: ATTR_PRE_PATH, description: `Overlap assessment (computed before measuring): ${JSON.stringify(preVariant.overlapAssessment)}` },
+        { source: "src/app/presets.ts", description: "All shipped clifford-dejong presets, including clifford-morph and dejong-morph with their own drift/exposure/fade/pointsPerFrame, are the current references, re-measured under 148-current-* ids." },
+        { source: "src/sims/clifford-dejong/kernel.ts", description: "Map definitions and analytic bounds; paramSchema ranges bound the search." },
+        { source: "docs/sweeps/2026-10-30-interestingness-batch.md", description: "Batch report: Clifford, De Jong and Svensson are three variants of one kernel; this stage tests c/d interactions." },
+      ],
+      inclusion: "All 48 sets retained, including thin, saturated and degenerate outcomes: 4 a/b anchors (shipped and diverse) x 4 c x 3 d, map explicit.",
+      exclusion: "No colour, exposure, fade, pointsPerFrame or drift search in the screening pass; no old-grid repeat; no production changes.",
+      sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/sims/clifford-dejong/kernel.ts", "e2e/harness/driver.ts", "e2e/harness/metrics.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    };
+    const diagnostics: Record<string, object> = {};
+    const measure = async (c: { id: string; params: Params }, label: string) => {
+      const scored = await scoreOne(page, config, c.id, label, c.params);
+      expect(Object.values(scored.metrics).filter(v => typeof v === "number").every(Number.isFinite), c.id).toBe(true);
+      const d = await attrDrive(page, config, c.params, config.gridWidth, [config.warmupSteps]);
+      const diag = attrDiagnostics(d.frameA, config.slug === "clifford-dejong" ? String(c.params.map) : variant, c.params);
+      expect(diag.nonFiniteFraction, c.id).toBe(0);
+      diagnostics[c.id] = diag;
+      return { scored, field: d.frameA };
+    };
+    const candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [];
+    const cols = 8, cell = 128;
+    const sheetW = cols * cell, sheetH = Math.ceil(planned.length / cols) * cell;
+    const sheet = new Float32Array(sheetW * sheetH);
+    for (const c of planned) {
+      const { scored, field } = await measure(c, c.id);
+      const i = candidates.length;
+      for (let y = 0; y < cell; y += 1) for (let x = 0; x < cell; x += 1) sheet[(Math.floor(i / cols) * cell + y) * sheetW + (i % cols) * cell + x] = field[y * cell + x];
+      candidates.push(scored);
+    }
+    for (const r of config.references) references.push((await measure(r, r.label)).scored);
+    const ranked = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+    const censusPath = `${ATTR_IMAGES}/148-${variant}-census.png`;
+    writePng(censusPath, sheet, sheetW, sheetH, 1);
+    writeText(`${ARTIFACT_ROOT}/sweep-148-${slug}/report.md`, metricsTable(ranked, ["a", "b", "c", "d"]));
+    writeText(`${ARTIFACT_ROOT}/sweep-148-${slug}/census.json`, JSON.stringify({ manifest, ranked, references, diagnostics }));
+    const finalistIds = ATTR_FINALISTS[variant];
+    if (!finalistIds.length) return;
+
+    const finalists = finalistIds.map(id => ranked.find(c => c.id === id)!);
+    expect(finalists.every(Boolean)).toBe(true);
+    const evidence: Record<string, object> = {}, replay: object[] = [];
+    const finalistRows: { id: string; images: string[] }[] = [];
+    const longConfig = { ...config, multiSnapshot: { warmupSteps: ATTR_STEPS } };
+    for (const c of [...finalists, ...references]) {
+      const isFinalist = finalists.includes(c);
+      const again = await scoreOne(page, config, c.id, c.label, c.params);
+      const delta = Math.max(...Object.entries(again.metrics).filter(([, v]) => typeof v === "number").map(([k, v]) => Math.abs((v as number) - (c.metrics as any)[k])));
+      expect(delta).toBeLessThanOrEqual(1e-9);
+      replay.push({ id: c.id, maxAbsoluteDelta: delta });
+      const isMorph = /morph/.test(c.id);
+      const times = isFinalist || isMorph ? ATTR_STEPS : [ATTR_STEPS[1]];
+      const rendererImages: string[] = [], fieldImages: string[] = [], renderInfo: object[] = [];
+      for (const t of times) {
+        const rp = `${ATTR_IMAGES}/${c.id}-renderer-${ATTR_RENDER_SIZE}-t${t}.png`;
+        renderInfo.push(await attrRenderer(page, c.params, t, rp)); rendererImages.push(rp);
+      }
+      for (const size of [128, 384]) {
+        const frames = await attrDrive(page, config, c.params, size, times);
+        for (const snap of frames.snapshots!) {
+          const fp = `${ATTR_IMAGES}/${c.id}-field-${size}-t${snap.steps}.png`;
+          writePng(fp, snap.frameA, size, size, 1); fieldImages.push(fp);
+        }
+      }
+      const longScore = await scoreOne(page, longConfig, c.id, c.label, c.params);
+      const driftScore = isMorph ? longScore : await scoreOne(page, { ...longConfig }, c.id, c.label, { ...c.params, driftAmount: ATTR_DRIFT });
+      const driftParams = isMorph ? c.params : { ...c.params, driftAmount: ATTR_DRIFT };
+      const perSnapshot: Record<string, { static: object; boundedDrift: object }> = {};
+      for (const t of ATTR_STEPS) {
+        const atT = { ...config, warmupSteps: t };
+        perSnapshot[String(t)] = { static: (await scoreOne(page, atT, c.id, c.label, c.params)).metrics, boundedDrift: (await scoreOne(page, atT, c.id, c.label, driftParams)).metrics };
+      }
+      evidence[c.id] = { perSnapshot, rendererImages, fieldImages, renderInfo,
+        longHorizon: { snapshots: ATTR_STEPS, metrics: longScore.metrics },
+        boundedDrift: { driftAmount: isMorph ? c.params.driftAmount : ATTR_DRIFT, shippedDriftPreset: isMorph, driftSpeed: "kernel default 0.5", snapshots: ATTR_STEPS, metrics: driftScore.metrics,
+          scoreRetention: driftScore.metrics.score / (longScore.metrics.score || 1) },
+        seeds: "not supported: kernel is deterministic with no seed parameter" };
+      if (isFinalist) finalistRows.push({ id: c.id, images: [...rendererImages, ...fieldImages, censusPath] });
+    }
+    writeText(`${ATTR_ROOT}/${slug}.json`, JSON.stringify({ manifest, ranked, references, finalists: finalistRows, diagnostics, evidence,
+      replay: { tolerance: 1e-9, workerRepeat: replay, independentVerifierRequired: true } }, null, 2));
+    console.log(`Attractor 148 ${variant}: ${candidates.length} candidates, ${references.length} references, ${finalists.length} evidence selections`);
+  });
+}

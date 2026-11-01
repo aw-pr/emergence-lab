@@ -355,6 +355,94 @@ const SVENSSON: SimSweepConfig = {
   ],
 };
 
+/**
+ * Stage 148: c/d interactions around diverse a/b anchors. The historical
+ * Clifford and De Jong sweeps pinned c/d and swept a/b; Svensson swept d only.
+ * Each variant here visits 4 anchors x 4 c x 3 d = 48 explicit sets with the
+ * same fixed render knobs as the historical configs (drift 0), so morphology
+ * is screened apart from motion. Current shipped coefficients are re-measured
+ * under new "148-current-*" ids; the historical reference rows stay untouched.
+ */
+export const ATTRACTOR_148_METHOD = "attractor-cd-interaction-v1";
+export const CLIFFORD_RENDER_148 = CLIFFORD_RENDER;
+/** Shipped morph render knobs from src/app/presets.ts; Clifford morph drifts at 0.35, De Jong morph overrides to 0.3. */
+const MORPH_RENDER = { driftAmount: 0.35, driftSpeed: 0.5, fade: 0.985, exposure: 0.09, pointsPerFrame: 40000 };
+
+function attractorInteractionSets(
+  map: string,
+  anchors: readonly (readonly [number, number])[],
+  cValues: readonly number[],
+  dValues: readonly number[],
+): Params[] {
+  const sets: Params[] = [];
+  for (const [a, b] of anchors) {
+    for (const c of cValues) {
+      for (const d of dValues) sets.push({ map, a, b, c, d });
+    }
+  }
+  return sets;
+}
+
+function attractorInteractionConfig(
+  variant: "clifford" | "dejong" | "svensson",
+  anchors: readonly (readonly [number, number])[],
+  cValues: readonly number[],
+  dValues: readonly number[],
+  references: ReferenceSet[],
+): SimSweepConfig {
+  return {
+    slug: "clifford-dejong",
+    artifactId: `sweep-148-clifford-dejong-${variant}`,
+    ...CLIFFORD_DEJONG_BASE,
+    baseParams: { ...CLIFFORD_RENDER },
+    axes: [
+      { key: "a", values: anchors.map(([a]) => a) },
+      { key: "c", values: [...cValues] },
+      { key: "d", values: [...dValues] },
+    ],
+    sets: attractorInteractionSets(variant, anchors, cValues, dValues),
+    references,
+  };
+}
+
+const ATTRACTOR_148_CLIFFORD = attractorInteractionConfig(
+  "clifford",
+  [[-1.4, 1.6], [-1.8, -2.4], [1.7, 1.3], [-2.2, 2.0]],
+  [-1.6, -0.6, 0.6, 1.6],
+  [-1.4, 0.3, 1.4],
+  [
+    { id: "148-current-clifford-classic", label: "Clifford classic (shipped)", params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7, ...CLIFFORD_RENDER } },
+    { id: "148-current-clifford-veils", label: "Clifford veils (shipped)", params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0, ...CLIFFORD_RENDER } },
+    { id: "148-current-clifford-bloom", label: "Clifford bloom (shipped)", params: { map: "clifford", a: -1.8, b: -2.0, c: -0.5, d: -0.9, ...CLIFFORD_RENDER } },
+    // Shipped morph preset, measured with its own drift/exposure/fade/point count (not the screening knobs).
+    { id: "148-current-clifford-morph", label: "Clifford morph (shipped)", params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0, ...MORPH_RENDER } },
+  ],
+);
+
+const ATTRACTOR_148_DEJONG = attractorInteractionConfig(
+  "dejong",
+  [[1.4, -2.3], [1.4, -2.8], [-2.0, 1.2], [2.2, 2.5]],
+  [-2.8, -1.2, 1.2, 2.8],
+  [-2.6, -0.8, 1.4],
+  [
+    { id: "148-current-dejong-classic", label: "De Jong classic (shipped)", params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-swan", label: "De Jong swan (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.8, d: -1.87, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-heart", label: "De Jong heart (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-morph", label: "De Jong morph (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1, ...MORPH_RENDER, driftAmount: 0.3 } },
+  ],
+);
+
+const ATTRACTOR_148_SVENSSON = attractorInteractionConfig(
+  "svensson",
+  [[1.4, 1.56], [1.5, -1.8], [-1.7, 1.9], [2.0, -0.9]],
+  [-2.0, -0.8, 0.7, 2.0],
+  [-3.5, -1.2, 1.8],
+  [
+    { id: "148-current-svensson-drape", label: "Svensson drape (shipped)", params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56, ...CLIFFORD_RENDER } },
+    { id: "148-current-svensson-moth", label: "Svensson moth (shipped)", params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9, ...CLIFFORD_RENDER } },
+  ],
+);
+
 /*
  * ---------------------------------------------------------------------------
  * Stage 57 (2026-08-23): the twelve remaining dynamic kernels.
@@ -1083,6 +1171,9 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "clifford-dejong-clifford": CLIFFORD,
   "clifford-dejong-dejong": DEJONG,
   "clifford-dejong-svensson": SVENSSON,
+  "sweep-148-clifford-dejong-clifford": ATTRACTOR_148_CLIFFORD,
+  "sweep-148-clifford-dejong-dejong": ATTRACTOR_148_DEJONG,
+  "sweep-148-clifford-dejong-svensson": ATTRACTOR_148_SVENSSON,
   lenia: LENIA,
   "belousov-zhabotinsky": BELOUSOV_ZHABOTINSKY,
   "belousov-zhabotinsky-diffusion": BELOUSOV_ZHABOTINSKY_DIFFUSION,
