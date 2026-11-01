@@ -5,16 +5,20 @@ exports zoom/iteration caps, the adaptive iteration-limit calculation and the
 analytic main-cardioid/period-two-bulb interior shortcut. There is no independent
 fractal sweep, ranking or preset.
 
-| Consumer | Research report | Coverage status at stage 137 |
+| Consumer | Research report | Final research status reconciled by stage 149 (2026-11-01) |
 |---|---|---|
-| Mandelbrot | [Boundary sweep](mandelbrot-interestingness.md) | Worker measurement completed: 48 coarse + 24 refined views, four current references, three evidence finalists; independent stage verification pending. No promotion proposed. |
-| Burning Ship | [Boundary sweep](burning-ship-interestingness.md) | Pending card 138; report link is a reserved destination, not completed evidence. |
-| Julia Set | [Connectivity sweep](julia-set-interestingness.md) | Pending card 139; report link is a reserved destination, not completed evidence. |
-| Markus–Lyapunov | [Sign-mix sweep](markus-lyapunov-interestingness.md) | Pending card 140; report link is a reserved destination, not completed evidence. Its Lyapunov field is not an escape-membership mask. |
+| Mandelbrot | [Boundary sweep](mandelbrot-interestingness.md) | 137 verifier PASS, merged `ce6e2a16d`: 48 coarse +24 refined, 4 current references. Fine boundary remains iteration-sensitive; no promotion. |
+| Burning Ship | [Boundary sweep](burning-ship-interestingness.md) | 138 retry verifier PASS, merged `abfec1e65`: 48 coarse +24 refined, 4 current references. Report bounds/links repaired; archived scientific evidence reused under re-brief, no new search claimed. No promotion. |
+| Julia Set | [Connectivity sweep](julia-set-interestingness.md) | 139 verifier PASS, merged `b4d05e01d`: 64 constants +24 refined views, 3 current references. Cropping/iteration sensitivity and fragmented negative retained; no promotion. |
+| Markus–Lyapunov | [Sign-mix sweep](markus-lyapunov-interestingness.md) | 140 verifier PASS, merged `c57dec8a8`: 48 coarse +24 refined, 2 current references. Shelved route; actual Renderer evidence rather than full app page. Its Lyapunov field is not an escape-membership mask. No promotion. |
 
 Consumer imports were checked directly in the four kernel modules. No consumer
-was counted twice or invented from the helper directory. Card 149 reconciles
-the final destinations and completed/pending/failed status after the serial run.
+was counted twice or invented from the helper directory. All four merged commits
+are ancestors of stage 149's dispatch base `c8a256767`. The
+[batch close-out](2026-10-30-interestingness-results.md) links worker/verifier
+records, exact manifests, retained images and the separate failed-stage outcomes.
+Research PASS accepts evidence on dev; operator visual sign-off remains separate
+from any production preset promotion. Stage 149 itself awaits verification.
 
 ## Iteration-limit method
 
