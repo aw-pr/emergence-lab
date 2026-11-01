@@ -9,7 +9,7 @@
 - **Base branch:** dev
 - **Run branch:** autometta/148-attractor-coefficient-interactions
 - **Worker effort:** medium
-- **Verifier effort:** high
+- **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
@@ -124,3 +124,19 @@ Restore only the deliverable diff from preserved `798e1256da9fd489946da420a188a8
 Add every current shipped reference, including clifford-morph and dejong-morph with their actual drift/exposure/fade/point count. Measure and independently replay these rows, retaining real renderer and temporal comparisons. Write a separate pre-measurement manifest to disk before the repaired run; include the historical c/d fine-pass evidence, exact source ranges and honest overlap/novelty assessment. Do not retroactively label the previous postmeasurement manifest as a premeasurement artifact. If the history cannot establish a required novelty claim, report the gap rather than fabricate bounds. Correct three-time mean labels currently saying score at1260 and the retention range to include1.2976600770980737. Run the complete repaired selector after the new manifest exists, retaining previous evidence as an archive. Do not alter any frozen assertion or historical config.
 
 Run cheap repository verification, the frozen oracle and contract gate once on the repaired tree. The verifier must independently check the corrected scientific path and every changed claim; matching the worker's own faulty calculation is not an independent correctness check. Unchanged previously accepted evidence may be cited only after proving its code/data are unchanged. Every original acceptance criterion remains mandatory; no tolerance, scope or promotion gate changes and no automatic retry.
+
+
+## Re-brief 2 — 2026-11-01 approved prose-only repair
+
+Operator explicitly approved this narrow repair and continued recommended escalation handling on 2026-11-01. This re-brief supersedes Re-brief 1's instructions to regenerate scientific evidence. Restore the deliverables from latest preserved `dcbd0806b8e50100d8ae6033f358bd87a3aed265`, NOT attempt 1. Retain current dev's stage cards and other landed work. Both roles remain mid-tier at medium effort; cross-family scientific judgement already passed in the preceding verifier.
+
+The primary checkout retains the previous verdict, worker envelope, logs, stage state and recorded budget under `state/archive/2026-11-01-prose-repair/148-attractor-coefficient-interactions/`. Read that verifier: criteria 1, 2, 3, 5 and 6 PASS; criterion 4 fails only two report claims. The preserved WIP contains 6099 accepted result values and 126 accepted images. Do not rerun the accepted sweeps, recapture images, rewrite manifests or change scientific code/data.
+
+Change only two claims in `docs/sweeps/clifford-dejong-interestingness.md` relative to the preserved deliverables:
+
+1. Replace `3 Clifford incl. morph, 3 De Jong incl. morph, 2 Svensson` with `4 Clifford incl. morph, 4 De Jong incl. morph, 2 Svensson`.
+2. Replace `The De Jong morph is the lowest-scoring shipped reference in this run.` with `The De Jong morph is the lowest-scoring shipped De Jong reference in this run.`
+
+Reproduce the claims against retained result JSON before and after the edit: reference counts 4/4/2; De Jong morph score 0.6766784096748064 is lowest among De Jong references but exceeds Clifford classic 0.5712962419184514. Inspect all report prose for consistent wording. Prove the restored harness, manifests, result JSON and all image blobs are identical to the latest WIP; the only deliverable difference against it must be the two report edits. Do not restore old stage metadata over this brief.
+
+Worker and verifier each run the cheap gates once: `npm run verify`, `SWEEP_CONTRACT=148 npx playwright test e2e/sweep-148.contract.spec.ts`, `scripts/check-contract-test-gate.sh --worktree`, and the existing baseline regression selector in criterion 5. The verifier independently checks both corrected claims and unchanged evidence/code blobs. Cite the archived prior PASS evidence for expensive criteria 2/3 rather than repeating them. Criteria and frozen assertions/digest remain unchanged; this is reuse of already independently accepted evidence, not waiver of missing evidence. If scientific deliverables differ, report the discrepancy before relying on prior evidence. Preserve honest FAIL/partial outcomes; never manufacture a PASS. No production promotion or deployment authority.
