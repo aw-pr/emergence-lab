@@ -56,7 +56,26 @@ export interface MultiSnapshotConfig {
   warmupSteps: number[];
 }
 
+/**
+ * Opt-in growth/criticality path (stage 146). Captures are taken at declared
+ * fixed steps (sandpile, Ising) or at declared occupied-cell milestones (DLA),
+ * so candidates are compared at equal simulated time or equal growth rather
+ * than after an arbitrary warmup. Diagnostics never feed the score.
+ */
+export interface GrowthCriticalityConfig {
+  methodVersion: "growth-criticality-v1";
+  sampleSteps?: number[];
+  milestones?: number[];
+  stepCap?: number;
+  /** Repeat horizon: absolute steps (fixed time) or a milestone (growth). */
+  longHorizon: number;
+  /** Second and larger resolutions for the finite-size check. */
+  validationSizes: number[];
+  seeds?: number[];
+}
+
 export interface SimSweepConfig {
+  growthCriticality?: GrowthCriticalityConfig;
   reactionDiffusion?: { methodVersion: "rd-persistence-v1" };
   eca?: { methodVersion: "eca-spacetime-v1" };
   staticBoundary?: { methodVersion: "static-boundary-v1" };
@@ -919,6 +938,52 @@ const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
   ],
 };
 
+const SANDPILE_146: SimSweepConfig = {
+  slug: "abelian-sandpile", artifactId: "sweep-146-abelian-sandpile",
+  growthCriticality: { methodVersion: "growth-criticality-v1", sampleSteps: [100, 250, 400], longHorizon: 1000, validationSizes: [128, 384] },
+  primaryChannel: 0, gridWidth: 256, gridHeight: 256, warmupSteps: 250, fluxGap: 4, dt: 1, coverageThreshold: 0.25,
+  baseParams: { initialPile: 30000, toppleThreshold: 4 },
+  axes: [
+    { key: "grainsPerStep", values: [3, 8, 20, 50, 120, 250] },
+    { key: "topplesPerStep", values: [600, 2000, 5000, 12000, 25000, 250000, 700000, 2000000] },
+  ],
+  references: ABELIAN_SANDPILE.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+
+// Metropolis acceptance depends on J/T and h/T only, so at h = 0 the physics is
+// a function of the ratio T/J; coupling and temperature are paired so every
+// candidate has a distinct ratio and a distinct (T, J) rather than a rescaled copy.
+const ISING_146_RATIOS = [1.4, 1.7, 1.9, 2.0, 2.1, 2.2, 2.25, 2.3, 2.35, 2.4, 2.5, 2.6, 2.7, 2.85, 3.0, 3.3];
+const ISING_146_COUPLINGS = [0.6, 1.4, 0.9, 1.5];
+const ISING_146: SimSweepConfig = {
+  slug: "ising-model", artifactId: "sweep-146-ising-model",
+  growthCriticality: { methodVersion: "growth-criticality-v1", sampleSteps: [100, 300, 900], longHorizon: 3000, validationSizes: [64, 256], seeds: [7, 11, 23] },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 300, fluxGap: 4, dt: 1, coverageThreshold: 0.5,
+  baseParams: { externalField: 0, sweepsPerStep: 0.5, seed: 7 },
+  axes: [
+    { key: "temperature", values: [] }, { key: "coupling", values: ISING_146_COUPLINGS }, { key: "initialState", values: ["random", "up", "checkerboard"] },
+  ],
+  sets: ISING_146_RATIOS.flatMap((ratio, i) => ["random", "up", "checkerboard"].map(initialState => {
+    const coupling = ISING_146_COUPLINGS[i % ISING_146_COUPLINGS.length];
+    return { temperature: Number((ratio * coupling).toFixed(3)), coupling, initialState };
+  })),
+  references: ISING_MODEL.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+ISING_146.axes[0].values = [...new Set((ISING_146.sets as Params[]).map(s => s.temperature as number))];
+
+const DLA_146: SimSweepConfig = {
+  slug: "diffusion-limited-aggregation", artifactId: "sweep-146-diffusion-limited-aggregation",
+  growthCriticality: { methodVersion: "growth-criticality-v1", milestones: [1000, 2500, 4500], stepCap: 6000, longHorizon: 20000, validationSizes: [192, 288], seeds: [7, 11, 23] },
+  primaryChannel: 0, gridWidth: 192, gridHeight: 192, warmupSteps: 6000, fluxGap: 6, dt: 1, coverageThreshold: 0.05,
+  baseParams: { walkersPerStep: 64, maxWalkSteps: 400, seed: 7 },
+  axes: [
+    { key: "stickiness", values: [0.04, 0.08, 0.22, 0.4, 0.62, 0.9] },
+    { key: "spawnRadius", values: [0.08, 0.16, 0.26, 0.5] },
+    { key: "seedCount", values: [2, 6] },
+  ],
+  references: DIFFUSION_LIMITED_AGGREGATION.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-147-brians-brain": {
     ...BRIANS_BRAIN, artifactId: "sweep-147-brians-brain",
@@ -950,6 +1015,9 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
         [0, 0.025, 0.075, 0.2].map(sparkRate => ({ birthMin, birthMax, surviveMin, surviveMax, sparkRate })))),
     references: GAME_OF_LIFE.references.map(r => ({ ...r, id: `147-current-${r.id}` })),
   },
+  "sweep-146-abelian-sandpile": SANDPILE_146,
+  "sweep-146-diffusion-limited-aggregation": DLA_146,
+  "sweep-146-ising-model": ISING_146,
   "sweep-143-gray-scott": {
     slug: "gray-scott", artifactId: "sweep-143-gray-scott",
     reactionDiffusion: { methodVersion: "rd-persistence-v1" },

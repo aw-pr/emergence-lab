@@ -162,3 +162,92 @@ out-score threshold 4 at the top of the table — the sweep's new best set is
 0.516. No promotion is taken here: this stage's scope is the conservation fix
 and its evidence, and the shipped presets are all healthy. Left as candidates
 for a future preset-tuning card.
+
+
+## Appendix: missed growth/criticality regimes — 2026-10-30 (stage 146)
+
+Method `growth-criticality-v1`. Full results: [abelian-sandpile.json](data/2026-10-30/146/abelian-sandpile.json) (manifest, all 48 ranked sets, all references, finalist evidence, per-capture readings and diagnostics); per-finalist validation readings: [abelian-sandpile-validation.json](data/2026-10-30/146/abelian-sandpile-validation.json); pre-measurement manifest: [manifest-abelian-sandpile.json](data/2026-10-30/146/manifest-abelian-sandpile.json). The historical results above are untouched; the references below are re-measured under new `146-current-*` IDs.
+
+### Method
+
+Fixed steps 100, 250 and 400 on 256², flux gap 4, coverage threshold 0.25 (same as the 2026-08 harness), one trajectory per candidate. Mean of the three readings is the ranked score; every reading is retained. Fixed for every set: initialPile 30000, toppleThreshold 4. The ranked score is the unchanged `scoreFrames` composite averaged over the captures (`summarizeMetrics`); no new metric or weight was introduced. Diagnostics are retained beside the score and never feed it: nonFiniteFraction (0 on every row) and endpointFraction are retained in the JSON; `relaxed` is the share of the three captures with an empty topple queue (1 = relaxed, 0 = standing backlog); `lostGrainFraction` is grains that left the open boundary over grains injected; `edgeTouchFraction` is the share of border cells holding grains; `extentFraction` is pile radius over half the grid. Kernel steps are fully deterministic.
+
+### Searched and not searched
+
+- **Searched:** grainsPerStep {3, 8, 20, 50, 120, 250} × topplesPerStep {600, 2000, 5000, 12000, 25000, 250000, 700000, 2000000} = 48 sets, all novel tuples (the 2026-08 grid pinned topplesPerStep at 120000 and stopped at 32 grains per step).
+- **Not searched:** initialPile and toppleThreshold (one value each; the 2026-08 grid already crossed them), grid size beyond the finite-size checks, and the pointer-impulse path. The 16-refinement allowance was not used.
+- **Prior coverage:** see the earlier sections of this file and the cited sources in the manifest: docs/sweeps/abelian-sandpile-interestingness.md, e2e/harness/sims.ts, src/sims/abelian-sandpile/kernel.ts, src/app/presets.ts.
+
+### Ranked candidates (top 10 and bottom 4 of 48; all 48 are in the JSON)
+
+| rank | id | grainsPerStep / topplesPerStep | score | autocorr | flux | coverage | relaxed | lostGrainFraction | edgeTouchFraction | extentFraction |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `146-sandpile-c39` | 120 / 700000 | **0.524** | 0.725 | 0.1095 | 0.365 | 1.00 | 0.00 | 0.00 | 0.72 |
+| 2 | `146-sandpile-c40` | 120 / 2000000 | **0.524** | 0.725 | 0.1095 | 0.365 | 1.00 | 0.00 | 0.00 | 0.72 |
+| 3 | `146-sandpile-c30` | 50 / 250000 | **0.522** | 0.759 | 0.0709 | 0.260 | 0.33 | 0.00 | 0.00 | 0.61 |
+| 4 | `146-sandpile-c31` | 50 / 700000 | **0.522** | 0.763 | 0.0586 | 0.262 | 1.00 | 0.00 | 0.00 | 0.61 |
+| 5 | `146-sandpile-c32` | 50 / 2000000 | **0.522** | 0.763 | 0.0586 | 0.262 | 1.00 | 0.00 | 0.00 | 0.61 |
+| 6 | `146-sandpile-c38` | 120 / 250000 | **0.507** | 0.698 | 0.1333 | 0.339 | 0.33 | 0.00 | 0.00 | 0.72 |
+| 7 | `146-sandpile-c23` | 20 / 700000 | **0.506** | 0.774 | 0.0353 | 0.217 | 1.00 | 0.00 | 0.00 | 0.56 |
+| 8 | `146-sandpile-c24` | 20 / 2000000 | **0.506** | 0.774 | 0.0353 | 0.217 | 1.00 | 0.00 | 0.00 | 0.56 |
+| 9 | `146-sandpile-c22` | 20 / 250000 | **0.506** | 0.769 | 0.0388 | 0.215 | 0.67 | 0.00 | 0.00 | 0.56 |
+| 10 | `146-sandpile-c14` | 8 / 250000 | **0.489** | 0.780 | 0.0231 | 0.199 | 1.00 | 0.00 | 0.00 | 0.53 |
+| 45 | `146-sandpile-c33` | 120 / 600 | **0.081** | 0.636 | 0.0154 | 0.028 | 0.00 | 0.00 | 0.00 | 0.22 |
+| 46 | `146-sandpile-c17` | 20 / 600 | **0.081** | 0.636 | 0.0155 | 0.028 | 0.00 | 0.00 | 0.00 | 0.22 |
+| 47 | `146-sandpile-c01` | 3 / 600 | **0.080** | 0.619 | 0.0151 | 0.028 | 0.00 | 0.00 | 0.00 | 0.22 |
+| 48 | `146-sandpile-c09` | 8 / 600 | **0.080** | 0.634 | 0.0149 | 0.028 | 0.00 | 0.00 | 0.00 | 0.22 |
+
+### Current references (re-measured, equal settings)
+
+| ref | id | grainsPerStep / topplesPerStep | score | autocorr | flux | coverage | relaxed | lostGrainFraction | edgeTouchFraction | extentFraction |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ref | `146-current-classic-critical` | 1 / 50000 | **0.418** | 0.587 | 0.1177 | 0.209 | 0.00 | 0.00 | 0.00 | 0.60 |
+| ref | `146-current-fast-avalanches` | 16 / 150000 | **0.408** | 0.486 | 0.2183 | 0.395 | 0.00 | 0.00 | 0.00 | 0.82 |
+| ref | `146-current-high-threshold` | 8 / 120000 | **0.418** | 0.525 | 0.1597 | 0.336 | 0.00 | 0.00 | 0.00 | 0.76 |
+
+### Interpretation
+
+Scores shortlist; they do not decide which pile looks better. What the retained images and diagnostics show:
+
+- **The topple budget, not the influx, is the axis that matters.** Mean score rises monotonically with `topplesPerStep` (0.082 at 600, 0.146 at 2000, 0.223 at 5000, 0.326 at 12000, 0.392 at 25000, 0.489 at 250000, 0.495 at 700000 and 2000000). Below about 25000 relaxations per step the queue never empties (`relaxed` 0.00 on all 30 sets at or below 25000), the pile stays a small speckled disc (extent 0.22 to 0.48 of the half-grid) and scores are low. At 600 per step all 6 influx values score only 0.080 to 0.089: the pile is pinned by relaxation capacity and the influx barely matters.
+- **Transient versus relaxed is visible in the numbers.** 700000 and 2000000 relaxations per step produce bit-identical readings wherever the queue empties (c39 equals c40, c31 equals c32, c23 equals c24), so a budget above roughly 700000 is saturated: those are the same observation, which is why the finalist slots skip them. The 250000 sets sit between: the queue is empty in 0.33 to 1.00 of captures (c30: backlog at steps 100 and 400, empty at 250). c30 and c31 share an influx of 50 grains per step and differ only in budget; their scores tie at 0.522 while flux differs (0.0709 against 0.0586).
+- **The shipped references are never relaxed in this window.** All three current presets keep a standing backlog at every capture (`relaxed` 0.00; classic critical holds roughly 7500 to 10500 pending topples), so their image is a mid-avalanche frame. That is a legitimate look (the app is also never paused), but it is not comparable to a relaxed pile.
+- **Visual finding (renderer, step 250).** The relaxed high-influx finalist c39 (120 grains, 700000 topples) shows a clean twelve-sided terrace pattern with smooth triangular facets and a fine lattice at the centre; the classic-critical reference at the same step is a finer, grainier speckle with no large facets and a smaller radius. These are manual observations from `146-sandpile-c39-renderer-t250.png` and `146-current-classic-critical-renderer-t250.png`, not a numerical class.
+- **Finite size matters here.** On 128² the c39 pile overflows (0.54 of grains lost, 0.78 of border cells touched, score 0.222 → 0.104 over the three captures); on 384² nothing leaves the grid and the score is 0.467 → 0.518. At 256² the long-horizon repeat (1000 steps) loses 0.10 of grains and touches 0.47 of the border, and the score drops to 0.317 from 0.524: the c39 ranking is a fact about steps 100 to 400 on this grid, not an asymptotic one. c30 and c31 stay inside the 256² frame at 1000 steps (score 0.515).
+- **Finite size for the shipped references (corrected 2026-11-01).** The first run of this stage reported `lostGrainFraction` 0 for the three references at every size because the diagnostic assumed the config-wide initial inventory of 30000 grains instead of each row's own `initialPile` (100000, 250000, 350000); the negative losses were then clamped to zero. The diagnostic now takes each row's own post-init inventory and no longer clamps, and `e2e/sweep.spec.ts` carries an independent mass-balance regression ("146 sandpile loss diagnostic balances each row's own initial pile"). Regenerated readings: on 128² at step 250 classic critical loses 0.1386 of its grains (0.0011, 0.1386, 0.3014 at steps 100, 250, 400; border touched 0.25, 0.66, 0.78), fast avalanches 0.6230 (0.2229 at step 100, 0.8009 at step 400) and high threshold 0.5125 (0.1451 and 0.7112). On 384² all three lose nothing. At 256² nothing is lost through step 400, so the ranked reference rows above are unchanged; at the 1000-step horizon fast avalanches loses 0.0479 of its grains (border touched 0.44) and high threshold loses none (border touched 0.13), where the first run had printed zero for both. Candidate rows, ranking order, scores and images were not affected: candidates all start from the config-wide 30000-grain pile the diagnostic was set up for, and the regeneration reproduced every candidate and score exactly. The references' 256² score at steps 100 to 400 is therefore valid, but the 128² reading is a heavily clipped look and the shipped presets are not comparable with candidates on a grid smaller than about 256².
+- **Pathological output.** No set produced non-finite values. c47 and c48 (250 grains per step at 700000 and 2000000 topples) touch the grid border (0.010 and 0.094 of border cells) and c48 loses 0.010 of its grains, so they are flagged as clipped rather than promoted. Endpoint fractions (cells at height 0 or 1) are 0.66 to 0.98 across all rows, normal for a field that is mostly empty plus saturated terraces.
+
+### Proposed promotions
+
+No change to a shipped preset is made by this stage. One candidate is offered for operator visual sign-off, not as a recommendation:
+
+| candidate | params | score (steps 100/250/400) | note |
+|---|---|---|---|
+| c30/c31 | initialPile 30000, toppleThreshold 4, grainsPerStep 50, topplesPerStep 250000 (c30) or 700000 (c31) | 0.522 | Stays inside the 256² frame to step 1000 (score 0.515 at the long horizon); c30 shows a standing backlog at some captures, c31 is relaxed. The pile is smaller than the c39 pile but does not overflow. |
+| c39 | initialPile 30000, toppleThreshold 4, grainsPerStep 120, topplesPerStep 700000 | 0.524 | Highest score and crisp relaxed terraces, but overflows 256² by step 1000 (10% of grains lost), so it is a time-limited look. Not proposed without an operator look at the images. |
+
+The three current shipped presets all score about 0.41 to 0.42 and keep a standing backlog at every capture. If the operator prefers a relaxed look, c31 is the cheaper candidate; otherwise no change.
+
+### Finalist and reference images
+
+Grayscale field PNGs are kernel-field dumps from the sweep driver (time strip at the three captures, a finite-size repeat at two other sizes, a longer-horizon repeat). The `renderer` PNGs are screenshots from the app's WebGL2 renderer at performance resolution at the middle step count; the renderer grid differs from the sweep grid, so those are app-scale views at equal step count, not numeric replays. Names carry the grid size, seed, kind and step.
+
+Finalists (top three by score among distinct measurements; evidence selections, not promotion recommendations):
+
+- `146-sandpile-c39`: [146-sandpile-c39-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-256-seednone-strip-t100.png), [146-sandpile-c39-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-256-seednone-strip-t250.png), [146-sandpile-c39-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-256-seednone-strip-t400.png), [146-sandpile-c39-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-128-seednone-size-t250.png), [146-sandpile-c39-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-384-seednone-size-t250.png), [146-sandpile-c39-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-sandpile-c39-field-256-seednone-long-t1000.png), [146-sandpile-c39-renderer-t250.png](../images/sweeps-2026-10-30/146-sandpile-c39-renderer-t250.png)
+- `146-sandpile-c30`: [146-sandpile-c30-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-256-seednone-strip-t100.png), [146-sandpile-c30-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-256-seednone-strip-t250.png), [146-sandpile-c30-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-256-seednone-strip-t400.png), [146-sandpile-c30-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-128-seednone-size-t250.png), [146-sandpile-c30-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-384-seednone-size-t250.png), [146-sandpile-c30-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-sandpile-c30-field-256-seednone-long-t1000.png), [146-sandpile-c30-renderer-t250.png](../images/sweeps-2026-10-30/146-sandpile-c30-renderer-t250.png)
+- `146-sandpile-c31`: [146-sandpile-c31-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-256-seednone-strip-t100.png), [146-sandpile-c31-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-256-seednone-strip-t250.png), [146-sandpile-c31-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-256-seednone-strip-t400.png), [146-sandpile-c31-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-128-seednone-size-t250.png), [146-sandpile-c31-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-384-seednone-size-t250.png), [146-sandpile-c31-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-sandpile-c31-field-256-seednone-long-t1000.png), [146-sandpile-c31-renderer-t250.png](../images/sweeps-2026-10-30/146-sandpile-c31-renderer-t250.png)
+
+References:
+
+- `146-current-classic-critical`: [146-current-classic-critical-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-256-seednone-strip-t100.png), [146-current-classic-critical-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-256-seednone-strip-t250.png), [146-current-classic-critical-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-256-seednone-strip-t400.png), [146-current-classic-critical-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-128-seednone-size-t250.png), [146-current-classic-critical-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-384-seednone-size-t250.png), [146-current-classic-critical-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-current-classic-critical-field-256-seednone-long-t1000.png), [146-current-classic-critical-renderer-t250.png](../images/sweeps-2026-10-30/146-current-classic-critical-renderer-t250.png)
+- `146-current-fast-avalanches`: [146-current-fast-avalanches-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-256-seednone-strip-t100.png), [146-current-fast-avalanches-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-256-seednone-strip-t250.png), [146-current-fast-avalanches-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-256-seednone-strip-t400.png), [146-current-fast-avalanches-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-128-seednone-size-t250.png), [146-current-fast-avalanches-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-384-seednone-size-t250.png), [146-current-fast-avalanches-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-field-256-seednone-long-t1000.png), [146-current-fast-avalanches-renderer-t250.png](../images/sweeps-2026-10-30/146-current-fast-avalanches-renderer-t250.png)
+- `146-current-high-threshold`: [146-current-high-threshold-field-256-seednone-strip-t100.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-256-seednone-strip-t100.png), [146-current-high-threshold-field-256-seednone-strip-t250.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-256-seednone-strip-t250.png), [146-current-high-threshold-field-256-seednone-strip-t400.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-256-seednone-strip-t400.png), [146-current-high-threshold-field-128-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-128-seednone-size-t250.png), [146-current-high-threshold-field-384-seednone-size-t250.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-384-seednone-size-t250.png), [146-current-high-threshold-field-256-seednone-long-t1000.png](../images/sweeps-2026-10-30/146-current-high-threshold-field-256-seednone-long-t1000.png), [146-current-high-threshold-renderer-t250.png](../images/sweeps-2026-10-30/146-current-high-threshold-renderer-t250.png)
+
+### Reproduction
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 abelian-sandpile" --workers=1
+```
+
+The full three-kernel command is `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 " --workers=1` (about 7 minutes). Setting `SWEEP_146_RANKING_ONLY=1` stops after the ranking. Replay on the same browser and runtime reproduced every finalist and reference reading to a maximum absolute deviation of 0 (tolerance 1e-9).

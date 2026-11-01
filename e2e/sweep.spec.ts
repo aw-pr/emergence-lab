@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
 import { SPECS as LORENZ_SPECS } from "../src/sims/lorenz-attractor/kernel.ts";
-import { driveKernel, type SweepDriverConfig } from "./harness/driver.ts";
+import { driveKernel, driveKernelDiagnostic, type DiagnosticSnapshot, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
   ecaClassSignals,
@@ -2382,4 +2382,194 @@ cellularReplayTest("147 retained fields reproduce every metric and rank", async 
   }
   writeText(`${CELLULAR_ROOT}/raw-recomputation.json`, JSON.stringify({ tolerance: 1e-9, summary }, null, 2));
   console.log(JSON.stringify(summary));
+});
+// Stage 146: growth and criticality regimes the 2026-08 sweeps missed.
+const GC_ROOT = "docs/sweeps/data/2026-10-30/146";
+const GC_SLUGS = ["abelian-sandpile", "diffusion-limited-aggregation", "ising-model"] as const;
+const GC_SHORT: Record<string, string> = { "abelian-sandpile": "sandpile", "diffusion-limited-aggregation": "dla", "ising-model": "ising" };
+const GC_METRICS = ["entropy", "variance", "spatialAutocorrelation", "coverage", "temporalFlux", "score"] as const;
+
+const GC_PRIOR: Record<string, { source: string; description: string }[]> = {
+  "abelian-sandpile": [
+    { source: "docs/sweeps/abelian-sandpile-interestingness.md", description: "Old grid: initialPile {25000,60000,120000,250000} x toppleThreshold {4,5,6,8} x grainsPerStep {1,32}, topplesPerStep pinned at 120000, 256x256, 200 warmup steps, flux gap 4; 32 sets plus 3 references; re-swept 2026-08-25 after the conservation fix. topplesPerStep was never varied and influx stopped at 32 grains/step." },
+    { source: "e2e/harness/sims.ts", description: "Historical config ABELIAN_SANDPILE preserved unchanged. References: classic-critical (100000,4,1,50000), fast-avalanches (250000,4,16,150000), high-threshold (350000,8,8,120000). New sets: initialPile 30000, threshold 4, grainsPerStep {3,8,20,50,120,250} x topplesPerStep {600,2000,5000,12000,25000,250000,700000,2000000}: no topplesPerStep value and no (pile, grains) pair repeats an old tuple." },
+    { source: "src/sims/abelian-sandpile/kernel.ts", description: "Schema: grainsPerStep 0..1000, topplesPerStep 1..2000000, initialPile 0..16000000, toppleThreshold 2..12. The topple budget bounds cell relaxations per step, so a low budget against high influx leaves a standing backlog (transient state); a high budget relaxes within the step." },
+    { source: "src/app/presets.ts", description: "Current shipped presets equal the three historical references; they are re-measured as new 146-current-* rows, historical rows untouched." },
+  ],
+  "diffusion-limited-aggregation": [
+    { source: "docs/sweeps/diffusion-limited-aggregation-interestingness.md", description: "Old grid: stickiness {0.15,0.3,0.5,0.75,1} x spawnRadius {0.03,0.06,0.12} x seedCount {1,4,12}, walkersPerStep 64, maxWalkSteps 400, seed 7, 192x192, 500 warmup steps. Every set had finished growing, so flux was exactly 0 and the ranking read the finished cluster only. spawnRadius 0.03 is clamped to the kernel minimum 0.05." },
+    { source: "e2e/harness/sims.ts", description: "Historical config DIFFUSION_LIMITED_AGGREGATION preserved unchanged. References: branching (stick 1, spawn 0.06, seeds 1), dense-coral (0.15, 0.06, 4), multi-seed (0.8, 0.06, 8). New sets: stickiness {0.04,0.08,0.22,0.4,0.62,0.9} x spawnRadius {0.08,0.16,0.26,0.5} x seedCount {2,6}; no value repeats an old axis value, and each set is read at fixed occupied-cell milestones 1000, 2500, 4500 (every candidate's finished cluster is larger than 5000 cells; edge stop is at 0.92 of the grid radius) rather than after a terminal-state warmup." },
+    { source: "src/sims/diffusion-limited-aggregation/kernel.ts", description: "spawnRadius 0.05..0.5 sets only the ring gap: clamp(round(min(w,h)*spawnRadius*0.25), 2, 16) cells, so 0.08->4, 0.16->8, 0.26->12, 0.5->16 cells (saturated from 0.33). Kernel stops feeding at 0.92 of the grid radius (isComplete). Walkers die after maxWalkSteps or leaving the kill ring." },
+    { source: "src/app/presets.ts", description: "Current shipped presets equal the three historical references with seed 7 added for determinism; re-measured as new 146-current-* rows." },
+  ],
+  "ising-model": [
+    { source: "docs/sweeps/ising-model-interestingness.md", description: "Old grids: temperature linspace(0.8,4,8) x coupling {0.6,0.8,1,1.4} at field 0, random initial state only (32 sets, T/J sampled at ~1.33, 2.14, 2.85 around the critical 2.269); external field sweep 0.003-0.2 at coupling 1, T {1.8,2.1,2.4}, positive field only. initialState, sweepsPerStep and the 1.9-2.7 T/J window were not searched at fine resolution." },
+    { source: "e2e/harness/sims.ts", description: "Historical config ISING_MODEL preserved unchanged. References: critical (2.269,1), cold-quench (0.7,1), hot-noise (4.5,1), field-sweep (1.8,1,h0.02). New sets: 16 T/J ratios {1.4,1.7,1.9,2.0,2.1,2.2,2.25,2.3,2.35,2.4,2.5,2.6,2.7,2.85,3.0,3.3} each paired with one coupling from {0.6,1.4,0.9,1.5} (T = ratio x coupling) and each at initialState random, up, checkerboard; field 0, sweepsPerStep 0.5, seed 7. 11 ratios lie in 2.0-2.7." },
+    { source: "src/sims/ising-model/kernel.ts", description: "Metropolis acceptance exp(-dE/T) with dE = 2 s (J sum + h): at h = 0 the dynamics depend only on T/J, so coupling is a rescaling and T/J is the physical axis; pairing keeps every (T,J) distinct. Negative-field and initialState down counterparts are spin-flip symmetry controls, not new regimes: one is run explicitly and reported." },
+    { source: "src/app/presets.ts", description: "Current shipped presets equal the four historical references with seed 7 pinned; re-measured as new 146-current-* rows." },
+  ],
+};
+
+async function gcCapture(page: Page, config: SimSweepConfig, params: Params, size: number,
+  opts: { sampleSteps?: number[]; milestones?: number[]; stepCap?: number } = {}) {
+  const gc = config.growthCriticality!;
+  const timing = opts.sampleSteps || opts.milestones ? opts : { sampleSteps: gc.sampleSteps, milestones: gc.milestones, stepCap: gc.stepCap };
+  const result = await page.evaluate(driveKernelDiagnostic, {
+    registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: size, gridHeight: size,
+    fluxGap: config.fluxGap, primaryChannel: config.primaryChannel, dt: config.dt,
+    ...timing,
+  });
+  return result.snapshots.map((s: DiagnosticSnapshot) => ({
+    steps: s.steps, target: s.target, diagnostics: s.diagnostics, frameA: s.frameA,
+    metrics: scoreFrames(s.frameA, s.frameB, result.width, result.height, config.coverageThreshold),
+  }));
+}
+
+function gcScore(id: string, label: string, params: Params, samples: Awaited<ReturnType<typeof gcCapture>>, methodVersion: string): ScoredCandidate {
+  const keys = Object.keys(samples[0].diagnostics);
+  const diagnostics = Object.fromEntries(keys.map(k => [k, samples.reduce((sum, s) => sum + s.diagnostics[k], 0) / samples.length]));
+  const metrics = { ...summarizeMetrics(samples.map(s => s.metrics)), diagnostics } as unknown as InterestingnessMetrics;
+  return { id, label, params, metrics, methodVersion };
+}
+
+function gcStrip(row: ScoredCandidate, samples: Awaited<ReturnType<typeof gcCapture>>) {
+  return { id: row.id, params: row.params, samples: samples.map(s => ({ steps: s.steps, target: s.target, metrics: s.metrics, diagnostics: s.diagnostics })) };
+}
+
+for (const slug of GC_SLUGS) {
+  sweepTest(`sweep 146 ${slug} missed regimes`, async ({ page }) => {
+    test.setTimeout(3_600_000);
+    const config = SWEEP_CONFIGS[`sweep-146-${slug}`];
+    const gc = config.growthCriticality!;
+    const short = GC_SHORT[slug];
+    const planned = expandSweep(config).map((params, i) => ({ id: `146-${short}-c${String(i + 1).padStart(2, "0")}`, params }));
+    const sampleKey = gc.sampleSteps ?? gc.milestones!;
+    const manifest = {
+      slug, methodVersion: gc.methodVersion,
+      grid: { width: config.gridWidth, height: config.gridHeight }, warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+      command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 " --workers=1',
+      candidates: planned, references: config.references, fixedParams: config.baseParams,
+      capture: gc.sampleSteps ? { mode: "fixed-steps", sampleSteps: gc.sampleSteps } : { mode: "occupied-cell-milestones", milestones: gc.milestones, stepCap: gc.stepCap },
+      priorCoverage: GC_PRIOR[slug],
+      candidateCounts: { novel: planned.length, refinements: 0 },
+      inclusion: "Exact full parameter tuples in declaration order; every candidate is retained and ranked, including pathological ones. Reference rows are separate 146-current-* IDs.",
+      exclusion: "No repeat of the historical grid, no production change, no promotion. The 16-refinement allowance was not used.",
+      determinism: slug === "abelian-sandpile" ? "Fully deterministic; no random source." : "Explicit seed parameter; fresh kernel per measurement; xorshift/hash driven. Finalists and references repeat at seeds 7, 11, 23.",
+      method: "Mean of unchanged scoreFrames metrics over the declared captures via summarizeMetrics, with population spread. Diagnostics (non-finite, endpoint fraction, and per-kernel growth/avalanche/domain readings) are retained beside the metrics and never feed score. Scores shortlist; they do not decide aesthetics.",
+      validationPlan: { finalists: "Top three by mean score among candidates with distinct measurements, kept as evidence even when rejected", sizes: [config.gridWidth, ...gc.validationSizes], longHorizon: gc.longHorizon, seeds: gc.seeds ?? null, replayTolerance: 1e-9 },
+      sourceHashes: Object.fromEntries(["src/app/presets.ts", `src/sims/${slug}/kernel.ts`, "e2e/harness/metrics.ts", "e2e/harness/driver.ts"].map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+    };
+    expect(new Set([...planned, ...config.references].map(c => c.id)).size).toBe(planned.length + config.references.length);
+    writeText(`${GC_ROOT}/manifest-${slug}.json`, JSON.stringify(manifest, null, 2));
+
+    const started = Date.now();
+    const pilot = await gcCapture(page, config, planned[0].params, config.gridWidth);
+    const pilotMs = Date.now() - started;
+    const projectedMs = pilotMs * (planned.length + config.references.length);
+    writeText(`${GC_ROOT}/pilot-${slug}.json`, JSON.stringify({ pilotMs, projectedMs, allowanceMs: 3_600_000, params: planned[0].params, steps: pilot.map(s => s.steps) }, null, 2));
+    expect(projectedMs, "Pilot cannot fit declared grid: split/re-brief required").toBeLessThan(3_000_000);
+
+    const candidates: ScoredCandidate[] = [], references: ScoredCandidate[] = [], readings: object[] = [];
+    for (const [i, row] of [...planned, ...config.references].entries()) {
+      const samples = await gcCapture(page, config, row.params, config.gridWidth);
+      const scored = gcScore(row.id, "label" in row ? row.label as string : row.id, row.params, samples, gc.methodVersion);
+      (i < planned.length ? candidates : references).push(scored);
+      readings.push(gcStrip(scored, samples));
+      if ((i + 1) % 12 === 0) console.log(`${slug}: measured ${i + 1}/${planned.length + config.references.length}`);
+    }
+    const ranked = [...candidates].sort((a, b) => b.metrics.score - a.metrics.score);
+    writeText(`${ARTIFACT_ROOT}/${config.artifactId}/report.md`, metricsTable(ranked, config.axes.map(a => a.key)));
+    writeText(`${GC_ROOT}/${slug}-ranking.json`, JSON.stringify({ manifest, ranked, references, readings }, null, 2));
+    console.log(`${slug}: ranked ${ranked.length}, projected ${projectedMs}ms, actual ${Date.now() - started}ms, top ${ranked[0].id} ${ranked[0].metrics.score.toFixed(4)}`);
+    if (process.env.SWEEP_146_RANKING_ONLY === "1") return;
+
+    const scale = (size: number) => Math.max(1, Math.round(384 / size));
+    // Candidates whose measurements are bit-identical to an earlier finalist (saturated topple budgets)
+    // are the same observation, so the finalist slot goes to the next distinct reading.
+    const signature = (c: ScoredCandidate) => GC_METRICS.map(k => (c.metrics as any)[k]).join("|");
+    const finalists = ranked.filter((c, i) => ranked.findIndex(o => signature(o) === signature(c)) === i).slice(0, 3);
+    const validation: object[] = [], replay: object[] = [], images = new Map<string, string[]>();
+    let symmetryControl: object | undefined;
+    for (const row of [...finalists, ...references]) {
+      const rowImages: string[] = [];
+      const again = await gcCapture(page, config, row.params, config.gridWidth);
+      const delta = Math.max(...again.flatMap((s, i) => GC_METRICS.map(k => Math.abs((s.metrics as any)[k] - (readings.find((r: any) => r.id === row.id) as any).samples[i].metrics[k]))));
+      expect(delta, row.id).toBeLessThanOrEqual(1e-9);
+      replay.push({ id: row.id, maxAbsoluteDelta: delta });
+      const note = (kind: string, size: number, seed: number | null, samples: typeof again, mid: number) => {
+        const path = `${RD_IMAGES}/${row.id}-field-${size}-seed${seed ?? "none"}-${kind}-t${samples[mid].steps}.png`;
+        writePng(path, samples[mid].frameA, size, size, scale(size)); rowImages.push(path); return path;
+      };
+      const entry: any = { id: row.id, readings: [] };
+      for (const [i, s] of again.entries()) {
+        entry.readings.push({ kind: "time-strip", size: config.gridWidth, seed: row.params.seed ?? null, steps: s.steps, target: s.target, metrics: s.metrics, diagnostics: s.diagnostics, image: note("strip", config.gridWidth, null, again, i) });
+      }
+      for (const size of gc.validationSizes) {
+        const bigger = await gcCapture(page, config, row.params, size);
+        entry.readings.push({ kind: "finite-size", size, steps: bigger[1].steps, metrics: bigger.map(s => s.metrics), diagnostics: bigger.map(s => s.diagnostics), image: note("size", size, null, bigger, 1) });
+      }
+      const long = await gcCapture(page, config, row.params, config.gridWidth, gc.sampleSteps
+        ? { sampleSteps: [gc.longHorizon] } : { milestones: [gc.longHorizon], stepCap: gc.longHorizon });
+      entry.readings.push({ kind: "long-horizon", size: config.gridWidth, steps: long[0].steps, target: long[0].target, metrics: long[0].metrics, diagnostics: long[0].diagnostics, image: note("long", config.gridWidth, null, long, 0) });
+      for (const seed of (gc.seeds ?? []).filter(s => s !== row.params.seed)) {
+        const seeded = await gcCapture(page, config, { ...row.params, seed }, config.gridWidth);
+        entry.readings.push({ kind: "seed", size: config.gridWidth, seed, metrics: seeded.map(s => s.metrics), diagnostics: seeded.map(s => s.diagnostics), meanScore: seeded.reduce((sum, s) => sum + s.metrics.score, 0) / seeded.length, image: note("seed", config.gridWidth, seed, seeded, 1) });
+      }
+      const midSteps = again[1].steps;
+      const rendered = await rdRender(page, config, row.params, midSteps, `${RD_IMAGES}/${row.id}-renderer-t${midSteps}.png`);
+      rowImages.push(`${RD_IMAGES}/${row.id}-renderer-t${midSteps}.png`);
+      entry.rendered = { steps: midSteps, image: rowImages[rowImages.length - 1], grid: rendered.grid, canvas: rendered.canvas, renderer: rendered.renderer,
+        note: "Actual app WebGL2 Renderer screenshot at performance resolution; the renderer grid differs from the sweep grid, so this is an app-scale view at equal step count, not an equal-growth or equal-size numeric replay." };
+      images.set(row.id, rowImages);
+      validation.push(entry);
+      console.log(`${slug}: validated ${row.id}, replay delta ${delta}`);
+    }
+    if (slug === "ising-model") {
+      const up = ranked.find(r => r.params.initialState === "up")!;
+      const a = await gcCapture(page, config, up.params, config.gridWidth, { sampleSteps: [gc.sampleSteps![1]] });
+      const b = await gcCapture(page, config, { ...up.params, initialState: "down" }, config.gridWidth, { sampleSteps: [gc.sampleSteps![1]] });
+      const mismatched = a[0].frameA.filter((v, i) => v !== 1 - b[0].frameA[i]).length;
+      symmetryControl = { id: up.id, flippedInitialState: "down", steps: gc.sampleSteps![1], mismatchedCells: mismatched, exactComplement: mismatched === 0 };
+    }
+    writeText(`${GC_ROOT}/${slug}-validation.json`, JSON.stringify(validation));
+    writeText(`${GC_ROOT}/${slug}.json`, JSON.stringify({ manifest, ranked, references,
+      finalists: finalists.map(f => ({ id: f.id, images: images.get(f.id), referenceIds: references.map(r => r.id) })),
+      referenceImages: Object.fromEntries(references.map(r => [r.id, images.get(r.id)])),
+      replay, replayTolerance: 1e-9, validation: `${GC_ROOT}/${slug}-validation.json`, readings, symmetryControl, elapsedMs: Date.now() - started,
+      runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } }, null, 2));
+    console.log(`${slug}: complete ${ranked.length} candidates, ${references.length} references, finalists ${finalists.map(f => f.id).join(",")}`);
+  });
+}
+
+test("146 sandpile loss diagnostic balances each row's own initial pile", async ({ page }) => {
+  await page.goto("/");
+  const SIZE = 128, STEPS = 250;
+  const rows: Array<{ params: Record<string, number>; expected?: number }> = [
+    { params: { initialPile: 100000, toppleThreshold: 4, grainsPerStep: 1, topplesPerStep: 50000 }, expected: 0.13855361596009974 },
+    { params: { initialPile: 250000, toppleThreshold: 4, grainsPerStep: 16, topplesPerStep: 150000 }, expected: 0.6230078740157481 },
+    { params: { initialPile: 350000, toppleThreshold: 8, grainsPerStep: 8, topplesPerStep: 120000 }, expected: 0.5125170454545455 },
+    { params: { initialPile: 30000, toppleThreshold: 4, grainsPerStep: 50, topplesPerStep: 8000 } },
+  ];
+  for (const { params, expected } of rows) {
+    const driven = await page.evaluate(driveKernelDiagnostic, {
+      registryUrl: REGISTRY_URL, slug: "abelian-sandpile", params, gridWidth: SIZE, gridHeight: SIZE,
+      fluxGap: 4, primaryChannel: 0, dt: 1, sampleSteps: [STEPS],
+    });
+    const reported = driven.snapshots[0].diagnostics.lostGrainFraction;
+    // Independent ledger: a separate kernel run, inventory taken from the row's own initialPile.
+    const ledger = await page.evaluate(async ({ registryUrl, params, size, steps }) => {
+      const reg: any = await import(/* @vite-ignore */ registryUrl);
+      const kernel = await reg.REGISTRY.find((e: any) => e.slug === "abelian-sandpile").load();
+      kernel.init(size, size, params);
+      for (let i = 0; i < steps; i += 1) kernel.step(1);
+      let total = 0;
+      for (const g of kernel.grains as Float32Array) total += g;
+      return { total };
+    }, { registryUrl: REGISTRY_URL, params, size: SIZE, steps: STEPS });
+    const injected = params.initialPile + params.grainsPerStep * STEPS;
+    const loss = (injected - ledger.total) / injected;
+    expect(loss, "grains cannot be created").toBeGreaterThanOrEqual(0);
+    expect(Math.abs(reported - loss)).toBeLessThan(1e-9);
+    if (expected !== undefined) expect(Math.abs(reported - expected)).toBeLessThan(1e-9);
+  }
 });
