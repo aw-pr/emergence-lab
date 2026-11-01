@@ -9,7 +9,7 @@
 - **Base branch:** dev
 - **Run branch:** autometta/146-growth-criticality-missed-regimes
 - **Worker effort:** medium
-- **Verifier effort:** high
+- **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
@@ -120,3 +120,13 @@ Operator scope and conditional-unpause approval is recorded in the batch report.
 The project TypeScript gate passes; its existing scope excludes e2e. Playwright parsed all twelve new specs (46 tests, all dormant without selection), and explicit node-only oracle runs exercise the frozen checkers. An additional standalone TypeScript check was unavailable because the existing checkout has no @types/node; no dependency/tooling change is commissioned for this extra check. Names and shapes were checked against existing harness/kernel source. The Lorenz `spread.score` is `{min,max,standardDeviation}`, so an equilibrium spread of zero remains a truthy object; a live five-identical-snapshot probe confirms this. Brian's Brain's firing threshold is 0.99 and attractor map enums are clifford/dejong/svensson in current source.
 
 Only 138/139 consume a new dependency: native Depends on checks completed status plus landed commit ancestry and refuses awaiting integration. All other cards remain serial without false success dependencies. Keep production source and protected scripts unchanged throughout this batch; their frozen hashes intentionally detect concurrent edits too. Stop for a real conflict rather than changing a digest or widening scope.
+
+## Re-brief 1 — 2026-11-01 authorised repair
+
+Operator authorised the repair sequence146,148,144. Existing acceptance criteria, frozen blocks/digests and production scope remain unchanged. Cross-family pairing stays as declared;146 is a bounded repair at medium effort. Dispatch remains serial because the harness and browser resources overlap.
+
+Restore only the deliverable diff from preserved `489bc5c0660c3423355553329e56677fb41219ef` onto current dev, merging shared harness additions without overwriting landed work. Archived verdict/envelope/logs: `state/archive/2026-11-01-repairs/146-growth-criticality-missed-regimes/` in the primary checkout. Read the archived verifier first. Preserve failed evidence and distinguish regenerated values from retained accepted evidence.
+
+Repair the sandpile diagnostic to derive initial inventory from each row's effective initialPile, rather than the config-wide 30000. Reproduce the defect before fixing it and add an independent mass-balance regression so clamping cannot hide an invalid initial inventory. Reference controls at 128x128/step250 must recover losses near 0.13855361596009974, 0.6230078740157481 and 0.5125170454545455 for classic-critical, fast-avalanches and high-threshold respectively. Regenerate affected sandpile numeric outputs and interpretation; unchanged simulation/image evidence may be retained with explicit provenance. Correct DLA final-milestone versus three-time-mean labels and dense-coral spread 0.004764001868966139. Do not rerun unchanged DLA/Ising searches solely to recreate accepted artifacts.
+
+Run cheap repository verification, the frozen oracle and contract gate once on the repaired tree. The verifier must independently check the corrected scientific path and every changed claim; matching the worker's own faulty calculation is not an independent correctness check. Unchanged previously accepted evidence may be cited only after proving its code/data are unchanged. Every original acceptance criterion remains mandatory; no tolerance, scope or promotion gate changes and no automatic retry.
