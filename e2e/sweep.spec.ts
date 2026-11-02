@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
+import { presetsFor } from "../src/app/presets.ts";
 import { SPECS as LORENZ_SPECS } from "../src/sims/lorenz-attractor/kernel.ts";
 import { MAP_SPECS } from "../src/sims/clifford-dejong/kernel.ts";
 import { driveKernel, driveKernelDiagnostic, type DiagnosticSnapshot, type SweepDriverConfig } from "./harness/driver.ts";
@@ -2825,3 +2826,418 @@ for (const variant of ATTR_VARIANTS) {
     console.log(`Attractor 148 ${variant}: ${candidates.length} candidates, ${references.length} references, ${finalists.length} evidence selections`);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Stage 144: missed boids / physarum / particle-life regimes.
+// ---------------------------------------------------------------------------
+const S144_ROOT = "docs/sweeps/data/2026-10-30/144";
+const S144_IMAGES = "docs/images/sweeps-2026-10-30";
+const S144_VERSION = "particle-trail-regimes-v1";
+const S144_SLUGS = ["boids", "physarum", "particle-life"] as const;
+const S144_DENSITY_SCALE = 2.25; // second resolution: (grid2 / grid1)^2 cells, 1.5x per side
+const S144_SUMMARY_KEYS = ["score", "entropy", "variance", "spatialAutocorrelation", "coverage", "temporalFlux", "velocityCoherence", "channelMixing"] as const;
+
+interface FrameDiagnostics {
+  nonFiniteFraction: number;
+  fractionAtZero: number;
+  fractionAtOne: number;
+  borderToMeanDensity: number;
+}
+
+/** Pathology guards, not quality scores: non-finite cells, cells pinned at the
+ * [0,1] channel endpoints, and the density on the outermost ring relative to the
+ * frame mean (a swarm piling against the frame edge reads far above 1). */
+function frameDiagnostics(frame: ArrayLike<number>, width: number, height: number): FrameDiagnostics {
+  let bad = 0, zero = 0, one = 0, sum = 0, border = 0, borderCells = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const v = frame[y * width + x];
+    const onBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+    if (!Number.isFinite(v)) { bad += 1; continue; }
+    if (v <= 0) zero += 1;
+    if (v >= 1) one += 1;
+    sum += v;
+    if (onBorder) { border += v; borderCells += 1; }
+  }
+  const n = width * height;
+  const mean = sum / n;
+  return {
+    nonFiniteFraction: bad / n, fractionAtZero: zero / n, fractionAtOne: one / n,
+    borderToMeanDensity: mean > 0 ? border / borderCells / mean : 0,
+  };
+}
+
+function s144Config(slug: string): SimSweepConfig {
+  return SWEEP_CONFIGS[`sweep-144-${slug}`];
+}
+
+function s144CandidateId(config: SimSweepConfig, params: Params): string {
+  return config.axes.map(a => `${a.key}${params[a.key]}`).join("_");
+}
+
+function s144Scale(slug: string, width: number): number {
+  return width >= 256 ? 2 : 3;
+}
+
+async function s144Frame(page: Page, config: SimSweepConfig, params: Params, warmupSteps: number, width = config.gridWidth, height = config.gridHeight) {
+  return page.evaluate(driveKernel, {
+    registryUrl: REGISTRY_URL, slug: config.slug, params, gridWidth: width, gridHeight: height,
+    warmupSteps, fluxGap: 0, primaryChannel: config.primaryChannel, dt: config.dt,
+  });
+}
+
+function s144Pick(ranked: ScoredCandidate[], config: SimSweepConfig, bad: Set<string>): ScoredCandidate[] {
+  const keys = config.axes.map(a => a.key);
+  const pool = ranked.filter(c => !bad.has(c.id)).slice(0, 16);
+  const picked: ScoredCandidate[] = [];
+  while (picked.length < 3 && pool.length) {
+    if (!picked.length) { picked.push(pool.shift()!); continue; }
+    // Diversity outranks a marginal score gain: take the highest-scoring candidate
+    // that differs from every pick in at least two swept parameters.
+    const next = pool.findIndex(c => picked.every(p => keys.filter(k => c.params[k] !== p.params[k]).length >= 2));
+    if (next < 0) break;
+    picked.push(pool.splice(next, 1)[0]);
+  }
+  return picked;
+}
+
+async function s144Measure(page: Page, config: SimSweepConfig, row: { id: string; label: string; params: Params }) {
+  const w = config.gridWidth, h = config.gridHeight, base = config.warmupSteps;
+  const count = (k: string) => Number(row.params[k]);
+  const countKey = config.slug === "physarum" ? "agentCount" : config.slug === "particle-life" ? "particleCount" : "boidCount";
+  const larger = { ...config, gridWidth: Math.round(w * 1.5), gridHeight: Math.round(h * 1.5) };
+  const largerParams = { ...row.params, [countKey]: Math.round(count(countKey) * S144_DENSITY_SCALE) };
+  const times: Record<string, InterestingnessMetrics> = {};
+  for (const mult of [1, 2, 4, 8]) times[`t${base * mult}`] = (await scoreOne(page, { ...config, warmupSteps: base * mult }, row.id, row.label, row.params)).metrics;
+  const seeds: Record<string, InterestingnessMetrics> = {};
+  if ("seed" in row.params) for (const delta of [1, 2]) {
+    const seed = Number(row.params.seed) + delta;
+    seeds[`seed${seed}`] = (await scoreOne(page, config, row.id, row.label, { ...row.params, seed })).metrics;
+  }
+  const pick = (m: InterestingnessMetrics) => Object.fromEntries(S144_SUMMARY_KEYS.filter(k => m[k] !== undefined).map(k => [k, m[k]]));
+  return {
+    id: row.id, params: row.params,
+    timeSamples: Object.fromEntries(Object.entries(times).map(([k, m]) => [k, pick(m)])),
+    seedSamples: Object.fromEntries(Object.entries(seeds).map(([k, m]) => [k, pick(m)])),
+    seedNote: "seed" in row.params ? "Base seed in the ranked row plus two neighbouring seeds; three readings, not a distributional guarantee." : "Boids has no seed input; kernel seeding is deterministic, so repeats are identical by construction.",
+    largerGrid: { width: larger.gridWidth, height: larger.gridHeight, params: largerParams, metrics: pick((await scoreOne(page, larger, row.id, row.label, largerParams)).metrics) },
+  };
+}
+
+for (const slug of S144_SLUGS) {
+  sweepTest(`sweep 144 ${slug} missed regimes`, async ({ page }) => {
+    test.setTimeout(3_300_000);
+    const config = s144Config(slug);
+    const artifactId = config.artifactId!;
+    const planned = expandSweep(config).map(params => ({ id: s144CandidateId(config, params), params }));
+    expect(new Set([...planned.map(c => c.id), ...config.references.map(r => r.id)]).size).toBe(planned.length + config.references.length);
+    const baseline = SWEEP_CONFIGS[slug];
+    const manifest = {
+      slug, methodVersion: S144_VERSION, grid: { width: config.gridWidth, height: config.gridHeight },
+      warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+      command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 "',
+      determinism: slug === "boids" ? "Kernel seeding is deterministic and has no seed input; fresh kernel per measurement." : "Explicit integer seed on every candidate and reference; fresh kernel per measurement.",
+      instrument: { primaryChannel: config.primaryChannel, coverageThreshold: config.coverageThreshold, pointCloud: config.pointCloud, composite: "scoreFrames unchanged", diagnostics: "frameDiagnostics (nonFinite, endpoint fractions, border ratio) are pathology guards only" },
+      fixedParams: config.baseParams,
+      axes: config.axes,
+      populationBasis: "Candidate population is held at the prior sweep's calibrated value; the second-resolution check scales it by the cell-count ratio (2.25); physarum's shipped counts are scaled by (256/384)^2.",
+      priorCoverage: [
+        { source: `docs/sweeps/${slug}-interestingness.md`, description: slug === "boids"
+          ? "2026-09-01 grid: visualRadius {16,24,32,44,56} x separation {0.1,0.2,0.35,0.55} x separationRadius {5,8,12}; alignment 0.06, cohesion 0.012, maxSpeed 16, boidCount 2500 and obstacleLayout none pinned. Not searched: alignment, cohesion, initialFlocks."
+          : slug === "physarum"
+            ? "2026-08-23 grid: sensorAngle {12,22.5,38,60} x sensorDistance {5,9,17} x turnSpeed {12,22.5,40}; moveSpeed 1, depositAmount 0.22, evaporation 0.9 pinned. Root mat shipped 2026-08-30 from that grid."
+            : "2026-08-23 grid: rmax {16,24,32} x forceScale {25,60,110} x matrixBias {-0.15,0.05,0.25}; friction 0.7, species 5, rmin 12, particleCount 3000 pinned." },
+        { source: "e2e/harness/sims.ts", description: `Historical ${slug} config (key "${slug}") is unchanged: baseParams ${JSON.stringify(baseline.baseParams)}, references ${baseline.references.map(r => r.id).join(", ")}.` },
+        { source: "src/app/presets.ts", description: "Shipped presets re-declared under 144-current-* ids; historical reference rows are preserved and not edited." },
+      ],
+      inclusion: slug === "boids"
+        ? "Alignment {0.01,0.15,0.2,0.25} x cohesion {0,0.03,0.04,0.05} x initialFlocks {1,6,12}: every value outside the earlier pinned alignment 0.06 / cohesion 0.012. All 48 retained, obstacle-free."
+        : slug === "physarum"
+          ? "Corners of evaporation {0.8,0.975} x depositAmount {0.06,0.6} x moveSpeed {0.5,2.5} x sensorDistance {3,14} with sensorAngle {8,30,80}; none matches an earlier pinned value. All 48 retained."
+          : "friction {0.1,0.35,0.9,0.97} x species {3,6,8} x forceScale {10,140} x matrixBias {-0.35,0.35}; every value outside the earlier friction 0.7 / species 5 / forceScale and matrixBias ranges. All 48 retained.",
+      exclusion: "No refinement round was run (allowance 16 unused); obstacles are visual-only and never ranked; no population or resolution search; logistic-mandelbrot untouched.",
+      candidates: planned, references: config.references,
+    };
+    writeText(`${S144_ROOT}/${slug}.manifest.json`, JSON.stringify(manifest, null, 2));
+
+    const ranked = await runSweep(page, config);
+    const artifacts = JSON.parse(readFileSync(`${ARTIFACT_ROOT}/${artifactId}/results.json`, "utf8"));
+    const references: ScoredCandidate[] = artifacts.references;
+    const finite = (c: ScoredCandidate) => Object.values(c.metrics).every(v => typeof v !== "number" || Number.isFinite(v));
+    expect(ranked.length).toBe(planned.length);
+    for (const c of [...ranked, ...references]) expect(finite(c), c.id).toBe(true);
+
+    const diagnostics: Record<string, FrameDiagnostics> = {};
+    for (const c of [...ranked.slice(0, 16), ...references]) {
+      const f = await s144Frame(page, config, c.params, config.warmupSteps);
+      diagnostics[c.id] = frameDiagnostics(f.frameA, f.width, f.height);
+    }
+    const rejected = new Set(ranked.slice(0, 16).filter(c => {
+      const d = diagnostics[c.id];
+      return d.nonFiniteFraction > 0 || d.fractionAtOne > 0.5 || d.fractionAtZero > 0.995;
+    }).map(c => c.id));
+    const picked = s144Pick(ranked, config, rejected);
+
+    const scale = s144Scale(slug, config.gridWidth);
+    for (const ref of references) {
+      const f = await s144Frame(page, config, ref.params, config.warmupSteps);
+      ref.thumb = `${S144_IMAGES}/${ref.id}-field.png`;
+      writePng(ref.thumb, f.frameA, f.width, f.height, scale);
+    }
+    const finalists = [];
+    for (const c of picked) {
+      const images: string[] = [];
+      for (const mult of [1, 2, 4]) {
+        const steps = config.warmupSteps * mult;
+        const f = await s144Frame(page, config, c.params, steps);
+        const path = `${S144_IMAGES}/144-${slug}-${c.id}-t${steps}-field.png`;
+        writePng(path, f.frameA, f.width, f.height, scale);
+        images.push(path);
+      }
+      const longSteps = config.warmupSteps * 8;
+      const long = await s144Frame(page, config, c.params, longSteps);
+      const longHorizonImage = `${S144_IMAGES}/144-${slug}-${c.id}-t${longSteps}-field.png`;
+      writePng(longHorizonImage, long.frameA, long.width, long.height, scale);
+      const obstacleVisual: Record<string, string> = {};
+      if (slug === "boids") for (const layout of ["breakwaters", "rocks", "reef"]) {
+        const f = await s144Frame(page, config, { ...c.params, obstacleLayout: layout }, config.warmupSteps * 2);
+        const path = `${S144_IMAGES}/144-boids-${c.id}-obstacle-${layout}-field.png`;
+        writePng(path, f.frameA, f.width, f.height, scale);
+        obstacleVisual[layout] = path;
+      }
+      finalists.push({ id: c.id, images, longHorizonImage, ...(slug === "boids" ? { obstacleVisual } : {}), validation: await s144Measure(page, config, { id: c.id, label: c.label, params: c.params }) });
+      console.log(`144 ${slug} validated ${c.id}`);
+    }
+    const referenceValidation = [];
+    for (const ref of references) referenceValidation.push(await s144Measure(page, config, ref));
+    if (slug === "boids") {
+      const balanced = references.find(r => r.id === "144-current-balanced-flock")!;
+      const obstacleReference: Record<string, string> = {};
+      for (const layout of ["breakwaters", "rocks", "reef"]) {
+        const f = await s144Frame(page, config, { ...balanced.params, obstacleLayout: layout }, config.warmupSteps * 2);
+        const path = `${S144_IMAGES}/144-boids-${balanced.id}-obstacle-${layout}-field.png`;
+        writePng(path, f.frameA, f.width, f.height, scale);
+        obstacleReference[layout] = path;
+      }
+      (referenceValidation as any[]).push({ id: "obstacle-reference", obstacleVisual: obstacleReference });
+    }
+
+    writeText(`${S144_ROOT}/${slug}.json`, JSON.stringify({
+      manifest,
+      ranked: ranked.map(({ thumb: _t, ...c }) => c),
+      references,
+      finalists,
+      referenceValidation,
+      diagnostics: { methodVersion: S144_VERSION, scope: "top-16 ranked candidates and all references at the sweep warmup", rows: diagnostics, rejectedAsPathological: [...rejected] },
+      imageKinds: "All PNGs under docs/images/sweeps-2026-10-30/144-* and the *-field.png reference thumbs are grayscale kernel-field renders (channel 0), not app renderer screenshots; app screenshots, where present, are named *-app.png.",
+      runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform },
+    }, null, 2));
+    console.log(JSON.stringify({ slug, top: ranked.slice(0, 5).map(c => [c.id, c.metrics.score]), finalists: finalists.map(f => f.id) }));
+  });
+}
+
+// Stage 144 supplement: actual app-renderer screenshots from a deterministic
+// fixed-step kernel-to-Renderer snapshot, scored at the same recorded grid.
+const S144_APP_VIEWPORT = { width: 1280, height: 800 }; // launch default only; every capture sets and records its own viewport
+const S144_APP_CANVAS = { width: 960, height: 600 };
+const S144_APP_CONCURRENCY = 4;
+const S144_APP_METHOD = "app-evidence-v2-fixed-step";
+const S144_APP_PRESET_IDS: Record<string, string> = {
+  "144-current-balanced-flock": "balanced-flock", "144-current-tight-flock": "tight-flock", "144-current-scatter": "scatter",
+  "144-current-veins": "veins", "144-current-coral-fans": "coral-fans", "144-current-filigree-web": "filigree-web", "144-current-root-mat": "root-mat",
+  "144-current-cells": "cells", "144-current-chasers": "chasers", "144-current-gas-clouds": "gas-clouds",
+};
+// Shipped finalist populations: boids shipped 17777; physarum Veins; particle life Cells.
+const S144_SHIPPED_FINALIST_COUNT: Record<string, number> = { boids: 17777, physarum: 32000, "particle-life": 6000 };
+const S144_COUNT_KEY: Record<string, string> = { boids: "boidCount", physarum: "agentCount", "particle-life": "particleCount" };
+// Kernel population ceilings (MAX_*_COUNT in each kernel); the effective count is
+// read back from the kernel and must equal the request, so these only choose grids.
+const S144_POPULATION_CAP: Record<string, number> = { boids: 40000, physarum: 300000, "particle-life": 20000 };
+
+interface S144Snapshot {
+  viewport: { width: number; height: number }; grid: [number, number]; canvas: [number, number]; kernelCalls: number; callsAfterSettle: number; dts: number[];
+  effectivePopulation: number; stateSha256: string; renderer: string; running: boolean; devicePixelRatio: number; resolution: string;
+}
+
+/** Fresh kernel -> exact `steps` fixed-dt calls -> real Renderer draws that state. */
+async function s144Snapshot(page: Page, slug: string, params: Params, canvasCss: { width: number; height: number }, steps: number, shotPath: string | null): Promise<S144Snapshot> {
+  await page.setViewportSize({ width: Math.max(canvasCss.width, 400), height: Math.max(canvasCss.height, 300) });
+  const info = await page.evaluate(async ({ slug, params, size, steps, countKey }) => {
+    const base = "http://localhost:5173/src/app/";
+    const reg: any = await import(/* @vite-ignore */ base + "registry.ts");
+    const rm: any = await import(/* @vite-ignore */ base + "renderModes.ts");
+    const qp: any = await import(/* @vite-ignore */ base + "qualityProfiles.ts");
+    const rd: any = await import(/* @vite-ignore */ base + "renderer.ts");
+    const ctl: any = await import(/* @vite-ignore */ base + "controls.ts");
+    const w: any = window;
+    w.__s144?.destroy();
+    document.getElementById("s144-canvas")?.remove();
+    const loaded = await reg.REGISTRY.find((e: any) => e.slug === slug).load();
+    const Base: any = loaded.constructor;
+    let grid: [number, number] = [0, 0];
+    let calls = 0;
+    const dts: number[] = [];
+    class SnapshotKernel extends Base {
+      init(width: number, height: number, p: any) {
+        // The app reseeds randomly per load; the snapshot pins the sweep's own seed (boids: none, i.e. 0).
+        super.init(width, height, { ...p, seed: typeof params.seed === "number" ? params.seed : 0 });
+        grid = [width, height];
+        calls = 0; dts.length = 0;
+        for (let i = 0; i < steps; i += 1) { super.step(1); calls += 1; dts.push(1); }
+      }
+      step(dt: number) { calls += 1; dts.push(dt); super.step(dt); }
+    }
+    const kernel: any = new SnapshotKernel();
+    const mode = rm.getRenderMode(slug);
+    const profile = qp.qualityProfileFor(slug, mode);
+    const canvas = document.createElement("canvas");
+    canvas.id = "s144-canvas";
+    canvas.style.cssText = `position:fixed;left:0;top:0;width:${size.width}px;height:${size.height}px;background:#000`;
+    document.body.appendChild(canvas);
+    const renderer = new rd.Renderer({
+      canvas, kernel, params: { ...ctl.defaultParamsFromSchema(kernel.paramSchema), ...params },
+      stepsPerFrame: 0, renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile,
+    });
+    renderer.pause();
+    w.__s144 = renderer;
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const state: Float32Array = kernel.readState();
+    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(state.buffer, state.byteOffset, state.byteLength));
+    const [gw, gh] = canvas.dataset.renderSize!.split("x").map(Number);
+    return {
+      grid: [gw, gh] as [number, number], canvas: [canvas.width, canvas.height] as [number, number],
+      kernelCalls: steps, callsAfterSettle: calls, dts: [...new Set(dts)],
+      effectivePopulation: Number(kernel[countKey]), renderedGrid: grid,
+      stateSha256: [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join(""),
+      renderer: canvas.dataset.renderer!, running: renderer.isRunning(), devicePixelRatio: window.devicePixelRatio, resolution: profile.defaultPreset,
+    };
+  }, { slug, params, size: canvasCss, steps, countKey: S144_COUNT_KEY[slug] });
+  expect(info.renderer).toBe("webgl2");
+  expect(info.running, "snapshot renderer must stay paused").toBe(false);
+  expect(info.callsAfterSettle, "no kernel call after the snapshot").toBe(steps);
+  expect(info.dts).toEqual([1]);
+  expect(info.renderedGrid).toEqual(info.grid);
+  if (shotPath) await page.locator("#s144-canvas").screenshot({ path: shotPath });
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("page has no viewport");
+  const { renderedGrid: _g, ...rest } = info;
+  return { viewport, ...rest } as S144Snapshot;
+}
+
+/** Plain fresh kernel on the renderer's grid, same call count at the same dt: the state the metrics measure. */
+async function s144MeasuredStateSha(page: Page, slug: string, params: Params, grid: [number, number], steps: number): Promise<string> {
+  return page.evaluate(async ({ slug, params, grid, steps }) => {
+    const reg: any = await import(/* @vite-ignore */ "http://localhost:5173/src/app/registry.ts");
+    const loaded = await reg.REGISTRY.find((e: any) => e.slug === slug).load();
+    const kernel: any = new loaded.constructor();
+    kernel.init(grid[0], grid[1], { ...params, seed: typeof params.seed === "number" ? params.seed : 0 });
+    for (let i = 0; i < steps; i += 1) kernel.step(1);
+    const state: Float32Array = kernel.readState();
+    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(state.buffer, state.byteOffset, state.byteLength));
+    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }, { slug, params, grid, steps });
+}
+
+/** Canvas whose renderer grid keeps the sweep density within the kernel's population cap. */
+function s144MatchedCanvas(slug: string, config: SimSweepConfig, sweepCount: number): { width: number; height: number; count: number } {
+  const density = sweepCount / (config.gridWidth * config.gridHeight);
+  const full = S144_APP_CANVAS.width * S144_APP_CANVAS.height;
+  const cap = S144_POPULATION_CAP[slug];
+  if (density * full <= cap) return { ...S144_APP_CANVAS, count: Math.round(density * full) };
+  const side = Math.floor(Math.sqrt(cap * 0.995 / density)); // square canvas, 0.5% headroom under the cap
+  return { width: side, height: side, count: Math.round(density * side * side) };
+}
+
+test.describe("sweep 144 app evidence", () => {
+  test.use({ viewport: S144_APP_VIEWPORT });
+  for (const slug of S144_SLUGS) {
+    sweepTest(`sweep 144 ${slug} app-renderer and shipped-population evidence`, async ({ page }) => {
+      test.setTimeout(7_200_000);
+      await page.goto("/");
+      const config = s144Config(slug);
+      const retained = JSON.parse(readFileSync(`${S144_ROOT}/${slug}.json`, "utf8"));
+      const countKey = S144_COUNT_KEY[slug];
+      const sweepCells = config.gridWidth * config.gridHeight;
+      const base = config.warmupSteps;
+      const steps = [base, base * 2, base * 4];
+      const presets = presetsFor(slug);
+      type Row = { id: string; kind: "reference" | "finalist"; population: string; label: string; params: Params; canvas: { width: number; height: number }; sweepDensity?: number };
+      const rows: Row[] = [];
+      for (const ref of retained.references as ScoredCandidate[]) {
+        const preset = presets.find(p => p.id === S144_APP_PRESET_IDS[ref.id]);
+        if (!preset) throw new Error(`no shipped preset for ${ref.id}`);
+        const params: Params = { ...ref.params, ...preset.params } as Params;
+        if (slug === "boids") params.obstacleLayout = "none";
+        rows.push({ id: ref.id, kind: "reference", population: `shipped ${params[countKey]}`, label: ref.label, params, canvas: S144_APP_CANVAS });
+      }
+      for (const f of retained.finalists as { id: string }[]) {
+        const cand = (retained.ranked as ScoredCandidate[]).find(c => c.id === f.id)!;
+        const sweepCount = Number(cand.params[countKey]);
+        const matched = s144MatchedCanvas(slug, config, sweepCount);
+        rows.push({ id: f.id, kind: "finalist", population: `matched-density ${matched.count}`, label: cand.label, params: { ...cand.params, [countKey]: matched.count } as Params,
+          canvas: { width: matched.width, height: matched.height }, sweepDensity: sweepCount / sweepCells });
+        const shipped = S144_SHIPPED_FINALIST_COUNT[slug];
+        rows.push({ id: f.id, kind: "finalist", population: `shipped ${shipped}`, label: cand.label, params: { ...cand.params, [countKey]: shipped } as Params, canvas: S144_APP_CANVAS });
+      }
+      const processRow = async (row: Row, page: Page): Promise<any> => {
+        const tag = `${row.kind === "reference" ? row.id : `144-${slug}-${row.id}`}-${row.population.replace(/[^a-z0-9]+/gi, "-")}`;
+        const requested = Number(row.params[countKey]);
+        const samples: any[] = [];
+        let grid: [number, number] = [0, 0];
+        let viewport = { width: 0, height: 0 };
+        for (const [index, target] of steps.entries()) {
+          const path = `${S144_IMAGES}/144-app-${slug}-${tag}-t${target}-app.png`;
+          const snap = await s144Snapshot(page, slug, row.params, row.canvas, target, path);
+          grid = snap.grid;
+          viewport = snap.viewport;
+          expect(snap.effectivePopulation, `${row.id} ${row.population}: effective population`).toBe(requested);
+          const measured = await s144MeasuredStateSha(page, slug, row.params, snap.grid, target);
+          expect(snap.stateSha256, `${row.id} ${row.population} t${target}: screenshot state equals measured state`).toBe(measured);
+          let repeatSha256: string | null = null;
+          if (index === 0) {
+            repeatSha256 = (await s144Snapshot(page, slug, row.params, row.canvas, target, null)).stateSha256;
+            expect(repeatSha256, `${row.id} ${row.population}: same-seed repeat`).toBe(snap.stateSha256);
+          }
+          samples.push({ steps: target, viewport: snap.viewport, kernelCalls: snap.kernelCalls, dt: 1, stateSha256: snap.stateSha256, measuredStateSha256: measured, repeatStateSha256: repeatSha256, image: path });
+          if (index === 0) Object.assign(samples[0], { canvasPixels: snap.canvas, devicePixelRatio: snap.devicePixelRatio, resolutionPreset: snap.resolution });
+        }
+        const effective = requested;
+        const cells = grid[0] * grid[1];
+        const gridConfig: SimSweepConfig = { ...config, gridWidth: grid[0], gridHeight: grid[1] };
+        const timeSamples: Record<string, Record<string, unknown>> = {};
+        for (const t of steps) {
+          const m = (await scoreOne(page, { ...gridConfig, warmupSteps: t }, row.id, row.label, row.params)).metrics;
+          timeSamples[`t${t}`] = Object.fromEntries(S144_SUMMARY_KEYS.filter(k => m[k] !== undefined).map(k => [k, m[k]]));
+          expect(Object.values(timeSamples[`t${t}`]).every(v => typeof v !== "number" || Number.isFinite(v)), `${row.id} t${t}`).toBe(true);
+        }
+        const density = effective / cells;
+        if (row.sweepDensity !== undefined && row.population.startsWith("matched")) {
+          expect(Math.abs(density - row.sweepDensity) / row.sweepDensity, `${row.id}: matched density`).toBeLessThan(0.005);
+        }
+        const result = {
+          id: row.id, kind: row.kind, population: row.population, params: row.params,
+          requestedPopulation: requested, effectivePopulation: effective, populationCap: S144_POPULATION_CAP[slug],
+          canvasCss: row.canvas, viewport, grid: { width: grid[0], height: grid[1] }, cells, density,
+          sweepDensity: row.sweepDensity ?? null, densityRelativeError: row.sweepDensity !== undefined && row.population.startsWith("matched") ? Math.abs(density - row.sweepDensity) / row.sweepDensity : null,
+          samples, images: samples.map(s => s.image), timeSamples,
+        };
+        console.log(`144 app ${slug} ${row.id} ${row.population} grid ${grid.join("x")}`);
+        return result;
+      };
+      const pages: Page[] = [page];
+      for (let i = 1; i < S144_APP_CONCURRENCY; i += 1) { const extra = await page.context().newPage(); await extra.goto("/"); pages.push(extra); }
+      const out: any[] = new Array(rows.length);
+      let next = 0;
+      await Promise.all(pages.map(async pg => { for (;;) { const idx = next++; if (idx >= rows.length) return; out[idx] = await processRow(rows[idx], pg); } }));
+      for (const extra of pages.slice(1)) await extra.close();
+      writeText(`${S144_ROOT}/${slug}.app-evidence.json`, JSON.stringify({
+        slug, methodVersion: `${S144_VERSION}-${S144_APP_METHOD}`,
+        viewportNote: "No single viewport: s144Snapshot sets page.viewportSize() to max(canvas CSS, 400x300) per capture; the actual value is recorded in each row's viewport and each sample's viewport.", shippedCanvasCss: S144_APP_CANVAS, sweepGrid: { width: config.gridWidth, height: config.gridHeight }, dt: 1,
+        clock: "No wall-clock. Each capture builds a fresh kernel, issues exactly `kernelCalls` step(1) calls inside init, then the real Renderer (stepsPerFrame 0, paused) draws that state. The interactive iteration counter is not used; for particle renderers it advances 10 per kernel call.",
+        note: "PNGs named *-app.png are canvas screenshots of the real Renderer (WebGL2, shipped quality profile and default resolution preset, default colour options). *-field.png files elsewhere are grayscale kernel-field renders. Numeric time samples use the recorded renderer grid and population through scoreOne; each screenshot state SHA-256 is asserted equal to a plain fresh kernel run at the same grid, seed, call count and dt, and the first sample is captured twice (same-seed repeat) with equal state hashes. Boids runs are obstacle-free; the app's schema default is reef. Boids has no seed input (kernel seeds are 0).",
+        populations: "requestedPopulation and effectivePopulation are both recorded from the actual kernel and asserted equal. matched-density rows keep sweep agents-per-cell within 0.5% on the recorded renderer grid; where that needs more than the kernel cap (Particle Life, 20000) the canvas shrinks instead of the population being clamped. shipped rows use the full shipped population on the 960x600 canvas and are not density-matched.",
+        runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform },
+        rows: out,
+      }, null, 2));
+    });
+  }
+});

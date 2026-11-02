@@ -1072,6 +1072,66 @@ const DLA_146: SimSweepConfig = {
   references: DIFFUSION_LIMITED_AGGREGATION.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
 };
 
+// Regimes the first boids/physarum/particle-life sweeps never visited. Each
+// config is additive (own artifactId) so the originals stay reproducible. Current
+// references carry new ids because the historical rows omit shipped presets
+// (Boids Scatter, Physarum Root mat) and pin different populations.
+const SWEEP_144_BOIDS: SimSweepConfig = {
+  ...BOIDS,
+  artifactId: "sweep-144-boids",
+  // Alignment/cohesion/initial-flock count; the 2026-09-01 grid held alignment
+  // 0.06 and cohesion 0.012 and never varied the seeding flock count.
+  baseParams: { boidCount: 2500, visualRadius: 36, separationRadius: 6, separation: 0.2, maxSpeed: 16, pointSize: 6, obstacleLayout: "none" },
+  axes: [
+    { key: "alignment", values: [0.01, 0.15, 0.2, 0.25] },
+    { key: "cohesion", values: [0, 0.03, 0.04, 0.05] },
+    { key: "initialFlocks", values: [1, 6, 12] },
+  ],
+  references: [
+    { id: "144-current-balanced-flock", label: "Balanced flock (shipped)", params: { boidCount: 2500, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+    { id: "144-current-tight-flock", label: "Tight flock (shipped)", params: { boidCount: 2500, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+    { id: "144-current-scatter", label: "Scatter (shipped)", params: { boidCount: 2500, visualRadius: 24, separationRadius: 10, maxSpeed: 26, alignment: 0.03, cohesion: 0.004, separation: 0.5, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+  ],
+};
+
+// Agent counts: shipped counts are for the app's 384² compute grid; 256²
+// carries (256/384)² of them, rounded to the nearest 100.
+const SWEEP_144_PHYSARUM: SimSweepConfig = {
+  ...PHYSARUM,
+  artifactId: "sweep-144-physarum",
+  baseParams: { agentCount: 14000, turnSpeed: 22.5, stepsPerFrame: 1, seed: 144 },
+  axes: [
+    { key: "evaporation", values: [0.8, 0.975] },
+    { key: "depositAmount", values: [0.06, 0.6] },
+    { key: "moveSpeed", values: [0.5, 2.5] },
+    { key: "sensorDistance", values: [3, 14] },
+    { key: "sensorAngle", values: [8, 30, 80] },
+  ],
+  references: [
+    { id: "144-current-veins", label: "Veins (shipped)", params: { agentCount: 14200, sensorAngle: 22.5, sensorDistance: 9, turnSpeed: 22.5, moveSpeed: 1, depositAmount: 0.24, evaporation: 0.9, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-coral-fans", label: "Coral fans (shipped)", params: { agentCount: 11600, sensorAngle: 15, sensorDistance: 17, turnSpeed: 14, moveSpeed: 1.35, depositAmount: 0.2, evaporation: 0.94, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-filigree-web", label: "Filigree web (shipped)", params: { agentCount: 26700, sensorAngle: 38, sensorDistance: 5, turnSpeed: 34, moveSpeed: 0.8, depositAmount: 0.12, evaporation: 0.96, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-root-mat", label: "Root mat (shipped)", params: { agentCount: 14000, sensorAngle: 60, sensorDistance: 5, turnSpeed: 12, moveSpeed: 1, depositAmount: 0.22, evaporation: 0.9, stepsPerFrame: 1, seed: 144 } },
+  ],
+};
+
+const SWEEP_144_PARTICLE_LIFE: SimSweepConfig = {
+  ...PARTICLE_LIFE,
+  artifactId: "sweep-144-particle-life",
+  baseParams: { particleCount: 3000, rmax: 24, rmin: 12, seed: 144 },
+  axes: [
+    { key: "friction", values: [0.1, 0.35, 0.9, 0.97] },
+    { key: "species", values: [3, 6, 8] },
+    { key: "forceScale", values: [10, 140] },
+    { key: "matrixBias", values: [-0.35, 0.35] },
+  ],
+  references: [
+    { id: "144-current-cells", label: "Cells (shipped)", params: { particleCount: 3000, species: 5, rmax: 40, rmin: 12, forceScale: 45, friction: 0.7, matrixBias: 0.08, seed: 144 } },
+    { id: "144-current-chasers", label: "Chasers (shipped)", params: { particleCount: 3000, species: 6, rmax: 48, rmin: 14, forceScale: 85, friction: 0.2, matrixBias: 0, seed: 144 } },
+    { id: "144-current-gas-clouds", label: "Gas clouds (shipped)", params: { particleCount: 3000, species: 4, rmax: 30, rmin: 8, forceScale: 22, friction: 0.45, matrixBias: -0.05, seed: 144 } },
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-147-brians-brain": {
     ...BRIANS_BRAIN, artifactId: "sweep-147-brians-brain",
@@ -1187,4 +1247,7 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "diffusion-limited-aggregation": DIFFUSION_LIMITED_AGGREGATION,
   "kuramoto-oscillators": KURAMOTO_OSCILLATORS,
   "particle-life": PARTICLE_LIFE,
+  "sweep-144-boids": SWEEP_144_BOIDS,
+  "sweep-144-physarum": SWEEP_144_PHYSARUM,
+  "sweep-144-particle-life": SWEEP_144_PARTICLE_LIFE,
 };
