@@ -1,3 +1,4 @@
+import { renderPresetLibrary } from "./presetLibrary.ts";
 import { resetActiveChrome, setActiveChrome, type LabChrome } from "./chrome.ts";
 import { setSimDocumentTitle } from "./docTitle.ts";
 import { renderGallery } from "./gallery.ts";
@@ -35,10 +36,14 @@ export function mountLab(
 
   let currentHandle: SimViewHandle | null = null;
   let token = 0;
+  let viewAbort: AbortController | undefined;
   let disposed = false;
 
   async function show(route: Route): Promise<void> {
     const current = ++token;
+    viewAbort?.abort();
+    viewAbort = new AbortController();
+    const signal = viewAbort.signal;
 
     currentHandle?.dispose();
     currentHandle = null;
@@ -49,9 +54,14 @@ export function mountLab(
         renderGallery(root);
         return;
 
+      case "presets":
+        setSimDocumentTitle("Presets");
+        currentHandle = renderPresetLibrary(root);
+        return;
+
       case "sim": {
         root.innerHTML = `<div class="loading">Loading ${escapeHtml(route.slug)}…</div>`;
-        const handle = await renderSimView(root, route.slug, route.variant);
+        const handle = await renderSimView(root, route.slug, route.variant, { presetId: route.presetId, presetsEnabled: !fixedRoute, signal });
         if (current !== token) {
           // A newer navigation happened while we were loading.
           handle.dispose();
@@ -86,6 +96,7 @@ export function mountLab(
       if (disposed) return;
       disposed = true;
       stopRouter();
+      viewAbort?.abort();
       token += 1; // strand any in-flight show()
       currentHandle?.dispose();
       currentHandle = null;

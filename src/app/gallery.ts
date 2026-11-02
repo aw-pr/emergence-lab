@@ -50,6 +50,12 @@ export function renderGallery(container: HTMLElement): void {
     "A collection of emergent-behaviour simulations. Pick one to watch it run.";
   header.appendChild(subtitle);
 
+  const presets = document.createElement("a");
+  presets.className = "preset-button gallery__presets";
+  presets.href = "#/presets";
+  presets.textContent = "Presets";
+  header.appendChild(presets);
+
   page.appendChild(header);
 
   const grid = document.createElement("ul");

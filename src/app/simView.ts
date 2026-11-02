@@ -1,3 +1,6 @@
+import { presetButton, presetNameDialog, resolveSavedPreset, savedPresetStore } from "./presetLibrary.ts";
+import type { PresetSnapshot } from "./savedPresets.ts";
+import { defaultDisplayOptionsFor, speedProfileFor } from "./savedPresets.ts";
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
 import { bakesFor, type BakedEntry } from "./bakedManifest.ts";
@@ -18,7 +21,6 @@ import {
   ControlsPanel,
   defaultParamsFromSchema,
   restorePersistedParams,
-  type StepsControlOptions,
 } from "./controls.ts";
 import {
   deleteCustomObstacleLayout,
@@ -194,6 +196,7 @@ export async function renderSimView(
   container: HTMLElement,
   slug: string,
   variant?: string,
+  options: { presetId?: string; presetsEnabled?: boolean; signal?: AbortSignal } = {},
 ): Promise<SimViewHandle> {
   container.innerHTML = "";
 
@@ -203,6 +206,36 @@ export async function renderSimView(
     renderUnknownSim(container, slug);
     return { dispose() {} };
   }
+
+  let loadedPreset: Awaited<ReturnType<typeof resolveSavedPreset>>;
+  if (options.presetId !== undefined) {
+    try {
+      loadedPreset = await resolveSavedPreset(options.presetId);
+      if (!loadedPreset || loadedPreset.snapshot.slug !== slug || loadedPreset.snapshot.variant !== variant) {
+        throw new Error("This preset is missing or does not match this route. Choose another preset or save a new configuration.");
+      }
+    } catch (error) {
+      if (!options.signal?.aborted) {
+        setSimDocumentTitle("Preset unavailable");
+        container.innerHTML = "";
+        const errorView = document.createElement("section");
+        errorView.className = "preset-library";
+        const title = document.createElement("h1");
+        title.textContent = "Preset unavailable";
+        const message = document.createElement("p");
+        message.setAttribute("role", "alert");
+        message.textContent = error instanceof Error ? error.message : String(error);
+        const back = document.createElement("a");
+        back.href = "#/presets";
+        back.textContent = "Presets";
+        errorView.append(title, message, back);
+        container.append(errorView);
+      }
+      return { dispose() {} };
+    }
+  }
+  if (options.signal?.aborted) return { dispose() {} };
+  const snapshot = loadedPreset?.snapshot;
 
   // A variant selects a named configuration within the same kernel (e.g. which
   // strange attractor). Falls back to the base entry when absent or unknown.
@@ -383,16 +416,19 @@ export async function renderSimView(
   try {
     kernel = await loadKernel(slug);
   } catch (error) {
-    renderLoadError(layout.body, slug, error);
+    immersiveAbort.abort();
+    if (!options.signal?.aborted) renderLoadError(layout.body, slug, error);
     return { dispose() {} };
   }
+
+  if (options.signal?.aborted) { immersiveAbort.abort(); kernel.destroy(); return { dispose() {} }; }
 
   const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
     ...(variantDef?.params ?? {}),
   };
-  const restored: SimParams = restorePersistedParams(
+  const restored: SimParams = snapshot ? { ...snapshot.params } : restorePersistedParams(
     slug,
     kernel.paramSchema,
     factoryParams,
@@ -400,7 +436,7 @@ export async function renderSimView(
   // Variants share one persistence key (the slug), so the variant's selector
   // param must win over any restored value—otherwise picking Rössler could
   // reopen as a previously-saved Lorenz.
-  const params: SimParams = variantDef
+  const params: SimParams = variantDef && !snapshot
     ? { ...restored, ...variantDef.params }
     : restored;
   // Prebaked clouds are machine-local, so the option list is only known once
@@ -411,6 +447,7 @@ export async function renderSimView(
     kernel.paramSchema,
     await bakesFor(slug),
   );
+  if (options.signal?.aborted) { immersiveAbort.abort(); kernel.destroy(); return { dispose() {} }; }
   const modelSource = controlsSchema.find((p) => p.key === "modelSource");
   if (
     typeof params.modelSource === "string" &&
@@ -422,30 +459,39 @@ export async function renderSimView(
     slug,
     kernel.channelCount,
   );
-  let colourOptions: ColourMapOptions = restoreRenderOptions(
+  let colourOptions: ColourMapOptions = snapshot ? { ...snapshot.colourOptions } : restoreRenderOptions(
     slug,
     factoryColourOptions,
   );
   const factoryDisplayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
-  let displayOptions: DisplayOptions = restoreDisplayOptions(
+  let displayOptions: DisplayOptions = snapshot ? { ...snapshot.displayOptions } : restoreDisplayOptions(
     slug,
     factoryDisplayOptions,
   );
   const speedProfile = speedProfileFor(slug);
-  let stepsPerFrame = speedProfile.initial;
+  let stepsPerFrame = snapshot?.stepsPerFrame ?? speedProfile.initial;
   const fractal = isFractalSlug(slug);
   const qualityProfile = qualityProfileFor(slug, renderMode);
   const defaultResolution = qualityProfile.defaultPreset;
-  const resolution = resolveResolution(slug, defaultResolution);
+  const resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
 
   // Sims whose kernel reports run completion (currently DLA) can auto-cycle
   // into a fresh randomised run when they finish. On by default when supported.
   const autoCycleSupported =
     typeof (kernel as { isComplete?: unknown }).isComplete === "function";
   const defaultAutoCycle = true;
-  const initialAutoCycle = autoCycleSupported
+  const initialAutoCycle = snapshot ? snapshot.autoCycle : autoCycleSupported
     ? resolveAutoCycle(slug, defaultAutoCycle)
     : false;
+
+  // Renderer supplies a fresh random seed on init; an explicit portable seed
+  // belongs to this configuration and must reach the real kernel unchanged.
+  let explicitSeed = params.seed;
+  if (slug === "physarum" || slug === "particle-life") {
+    const init = kernel.init.bind(kernel);
+    kernel.init = (width, height, next) => init(width, height,
+      explicitSeed === undefined ? next : { ...next, seed: explicitSeed });
+  }
 
   const renderer = new Renderer({
     canvas: layout.canvas,
@@ -465,7 +511,7 @@ export async function renderSimView(
     : undefined;
   let initialObstacleMessage = "";
   if (obstacleEditor) {
-    const persisted = loadCustomObstacleField(slug);
+    const persisted = snapshot ? snapshot.customObstacles ?? null : loadCustomObstacleField(slug);
     if (typeof persisted === "string") {
       const restoredField = obstacleEditor.importCustomObstacleLayout(persisted);
       if (!restoredField.ok) {
@@ -482,7 +528,7 @@ export async function renderSimView(
 
   let obstacleTools: BoidsObstacleTools | undefined;
   const persistObstacleField = (): void => {
-    if (!obstacleEditor) return;
+    if (!obstacleEditor || snapshot) return;
     saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
   };
   const finishObstacleEdit = (edited: boolean): boolean => {
@@ -543,13 +589,20 @@ export async function renderSimView(
 
   const controls = new ControlsPanel({
     slug,
+    presetSession: !!snapshot,
     container: layout.sidebar,
     simName: kernel.name,
-    paramSchema: controlsSchema,
+    paramSchema: snapshot ? controlsSchema.map((descriptor) => {
+      const portable = kernel.paramSchema.find((p) => p.key === descriptor.key);
+      return descriptor.type === "number" && portable
+        ? { ...descriptor, min: portable.min, max: portable.max }
+        : descriptor;
+    }) : controlsSchema,
     paramPresets: presetsFor(slug),
     initialParams: params,
     defaultParams: factoryParams,
     initialStepsPerFrame: stepsPerFrame,
+    defaultStepsPerFrame: speedProfile.initial,
     stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
     defaultColourOptions: factoryColourOptions,
@@ -558,7 +611,7 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
-    showExtremeResolution: slug === "logistic-mandelbrot",
+    showExtremeResolution: slug === "logistic-mandelbrot" || resolution === "extreme",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAutoCycleControl: autoCycleSupported,
@@ -598,6 +651,7 @@ export async function renderSimView(
         renderer.setDisplayOptions(displayOptions);
       },
       onParamChange: (next) => {
+        explicitSeed = next.seed;
         renderer.updateParams(next);
       },
       onResolutionChange: (preset) => {
@@ -609,6 +663,75 @@ export async function renderSimView(
     },
   });
 
+  let dismissPresetDialog: (() => void) | undefined;
+  if (options.presetsEnabled !== false) {
+    const tools = document.createElement("section");
+    tools.className = "preset-tools";
+    const library = document.createElement("a");
+    library.href = "#/presets";
+    library.textContent = "Presets";
+    library.className = "preset-tools__link";
+    const status = document.createElement("p");
+    status.className = "preset-tools__status";
+    status.setAttribute("role", "status");
+    const error = document.createElement("p");
+    error.className = "preset-error";
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+    const live = presetButton("Return to live model", () => {
+      controls.syncParamsFromExternal({ modelSource: LIVE_MODEL_SOURCE });
+      renderer.updateParams(controls.getParams());
+      error.hidden = true;
+      live.hidden = true;
+      status.textContent = "Live model selected. You can now save its configuration.";
+    });
+    live.hidden = true;
+    const capture = (): PresetSnapshot => ({
+      slug,
+      ...(variant ? { variant } : {}),
+      ...controls.getConfiguration(),
+      params: renderer.currentParams(),
+      ...(obstacleEditor ? { customObstacles: obstacleEditor.exportCustomObstacleLayout() } : {}),
+    });
+    const showStatus = (text: string) => {
+      status.textContent = text + (savedPresetStore.warning ? ` ${savedPresetStore.warning}` : "");
+    };
+    if (loadedPreset) showStatus(`${loadedPreset.source === "trial" ? "Trial" : "Personal preset"}: ${loadedPreset.name}. Changes stay in this session until you save${loadedPreset.source === "personal" ? " or update" : " a copy"}.`);
+    const save = presetButton("Save preset", () => {
+      const current = capture();
+      error.hidden = true;
+      if (current.params.modelSource !== undefined && current.params.modelSource !== LIVE_MODEL_SOURCE) {
+        error.textContent = "Local prebaked models cannot be saved. Return to the live model to save a portable configuration.";
+        error.hidden = false;
+        live.hidden = false;
+        return;
+      }
+      dismissPresetDialog = presetNameDialog({
+        parent: layout.body,
+        trigger: save,
+        title: "Save preset",
+        save: async (name) => {
+          const entry = await savedPresetStore.create(name, current);
+          showStatus(`Saved “${entry.name}”.`);
+        },
+      });
+    }, true);
+    tools.append(library, save);
+    if (loadedPreset?.source === "personal") {
+      const id = loadedPreset.id;
+      tools.append(presetButton("Update preset", () => {
+        error.hidden = true;
+        void savedPresetStore.update(id, capture()).then(() => showStatus("Preset updated from the current configuration."), (reason) => {
+          error.textContent = reason instanceof Error ? reason.message : String(reason);
+          error.hidden = false;
+          live.hidden = controls.getParams().modelSource === undefined || controls.getParams().modelSource === LIVE_MODEL_SOURCE;
+        });
+      }));
+    }
+    tools.append(status, error, live);
+    layout.body.classList.add("sim-view__body--presets");
+    layout.body.prepend(tools);
+  }
   layout.sidebar.prepend(layout.drawerHandle);
 
   const orbitMarkerReadout =
@@ -851,6 +974,7 @@ export async function renderSimView(
   return {
     dispose() {
       immersiveAbort.abort();
+      dismissPresetDialog?.();
       exitTopLayer(layout.body);
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
@@ -1428,88 +1552,6 @@ function renderFormula(container: HTMLElement, slug: string): void {
   }
 }
 
-interface SpeedProfile {
-  initial: number;
-  control: StepsControlOptions;
-}
-
-function speedProfileFor(slug: string): SpeedProfile {
-  const careful: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.1,
-    max: 4,
-    step: 0.05,
-  };
-  const balanced: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.25,
-    max: 8,
-    step: 0.25,
-  };
-  const growth: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.5,
-    max: 16,
-    step: 0.5,
-  };
-  const fractal: StepsControlOptions = {
-    label: "Colour cycle multiplier",
-    min: 0.5,
-    max: 2,
-    step: 0.05,
-  };
-  const swarm: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.5,
-    max: 8,
-    step: 0.5,
-  };
-
-  switch (slug) {
-    case "gray-scott":
-      return { initial: 1, control: balanced };
-    case "belousov-zhabotinsky":
-      // Slower default so the spiral fronts read as they unfurl; the finer
-      // (high-resolution) medium carries the detail.
-      return { initial: 1, control: balanced };
-    case "abelian-sandpile":
-      return { initial: 1, control: growth };
-    case "diffusion-limited-aggregation":
-      return { initial: 6, control: growth };
-    case "game-of-life":
-      return { initial: 1, control: careful };
-    case "elementary-cellular-automata":
-      return { initial: 1.5, control: careful };
-    case "brians-brain":
-      return { initial: 1, control: careful };
-    case "lorenz-attractor":
-      // All five attractors share this slug, so they all open at 1x. The orbit
-      // speed people actually feel is the kernel's stepsPerFrame (integration
-      // substeps per frame); this slider multiplies on top of it, and starting
-      // it anywhere but 1 makes "reset to defaults" look like a speed change.
-      return { initial: 1, control: careful };
-    case "clifford-dejong":
-      // The felt speed is pointsPerFrame; the slider multiplies whole step()
-      // calls (fade sweeps included), so it stays at 1x like the attractors.
-      return { initial: 1, control: careful };
-    case "boids":
-      // 1x, not faster: the renderer samples positions once per rendered
-      // frame, so at Nx the trail accumulator sees every Nth position and the
-      // streaks bead into dotted chains. At 1x they draw as the continuous
-      // comet-tails the native viewer shows.
-      return { initial: 1, control: swarm };
-    case "particle-life":
-      return { initial: 1, control: swarm };
-    case "mandelbrot":
-    case "julia-set":
-      return { initial: 1.8, control: fractal };
-    case "burning-ship":
-      return { initial: 0.5, control: fractal };
-    default:
-      return { initial: 1, control: balanced };
-  }
-}
-
 function defaultParamOverridesFor(slug: string): SimParams {
   switch (slug) {
     case "belousov-zhabotinsky":
@@ -1547,38 +1589,6 @@ function restoreRenderOptions(
     next.steps = Math.max(0, Math.min(64, Math.floor(stored.steps)));
   }
   return next;
-}
-
-function defaultDisplayOptionsFor(slug: string): DisplayOptions {
-  if (slug === "boids") {
-    // Trails on by default: flocks read as flowing ribbons.
-    return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
-  }
-  if (slug === "particle-life") {
-    // Matched to the native viewer's starfield look: crisp grains on black,
-    // no trail smear, just enough bloom to let dense clusters glow.
-    // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0, bloom: 0.15 };
-  }
-  if (slug === "lorenz-attractor") {
-    return { dotSize: 1, trailFade: 0, bloom: 0.4 };
-  }
-  if (slug === "clifford-dejong") {
-    // Fading is kernel-side (its fade param); renderer trails would smear the
-    // histogram. A touch of bloom lifts the saturated filament cores.
-    return { dotSize: 1, trailFade: 0, bloom: 0.35 };
-  }
-  switch (slug) {
-    // Modest glow on the bright-trace and fractal sims; off elsewhere.
-    case "mandelbrot":
-    case "julia-set":
-    case "burning-ship":
-      return { dotSize: 1, trailFade: 0, bloom: 0.3 };
-    case "logistic-mandelbrot":
-      return { dotSize: 1, trailFade: 0, bloom: 0.15 };
-    default:
-      return { dotSize: 1, trailFade: 0, bloom: 0 };
-  }
 }
 
 /** Factory display options overlaid with any persisted renderer visual options. */
