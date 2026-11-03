@@ -204,3 +204,39 @@ Findings (manual; screenshots viewed: first-ranked honeycomb finalist at matched
 - Viewport: the previous write-up and JSON gave a constant 1280×800; the actual per-capture viewport was different. It is now recorded per row and per sample (960×600 for every row (shipped and matched-density)). The supplemental numeric rows and state SHA-256 values from the re-run are identical to the attempt-4 evidence apart from this added field.
 - Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 3.4 min, supplemental test 5.3 min. The main-sweep JSON is byte-identical to the attempt-4 retained file.
 - Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the physarum kernel `wrap()` torus (`src/sims/physarum/kernel.ts:350-351`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: Veins shipped t1200 (trails cross the frame edge and continue on the opposite side). Not every image was inspected, and this is a visual finding, not a score.
+
+
+## Promotion appendix — 2026-11-03
+
+The operator selected **Restless threads** (trial label “Fine restless threads”)
+on visual review, calling it “best so far” and the favourite in
+[`uat-preset-review.md`](../UAT/uat-preset-review.md). It ships as the fifth
+Physarum preset, with `agentCount: 32000`, `sensorAngle: 30`,
+`sensorDistance: 3`, `turnSpeed: 22.5`, `moveSpeed: 2.5`,
+`depositAmount: 0.06`, `evaporation: 0.975`, and `stepsPerFrame: 1`.
+The four existing presets are unchanged.
+
+The source is the `kind: finalist`, `population: shipped 32000` row
+`evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30`
+in [`144/physarum.app-evidence.json`](data/2026-10-30/144/physarum.app-evidence.json).
+Its retained app-renderer screenshots are
+[t300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t300-app.png),
+[t600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t600-app.png), and
+[t1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t1200-app.png).
+The trial ran at seed 144. The shipped preset carries no seed and uses a fresh
+renderer seed each load, as accepted by the operator on 2026-11-03.
+
+Sweep 144 proposed no promotion of this row; its shipped-population scores
+fall from 0.717 to 0.683 to 0.646 over those three horizons. The operator's
+visual decision is the basis for promotion; the scores are not. The historical
+sweep conclusions and negative results above remain evidence of the
+instrument's limitations.
+
+
+Verified live by the worker at the default High quality profile on three fresh
+loads, with all eight control values matching the shipped preset. At side-panel
+iteration counters 610, 610 and 610 the frames showed fine, curling threads
+and loops rather than honeycomb walls or a blank field. Worker screenshots
+are retained at
+`e2e/artifacts/151-promote-144-trials/physarum-load-{1,2,3}.png`.
+The independent verifier's live check and retained screenshots remain pending.

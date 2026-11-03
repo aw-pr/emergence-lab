@@ -105,7 +105,9 @@ async function renderThumbnail(
 
     const dt = 1 / 30;
     if (renderMode === "particle") {
-      kernel.step(dt * steps);
+      for (let i = 0; i < steps; i += 1) {
+        kernel.step(dt);
+      }
     } else {
       for (let i = 0; i < steps; i += 1) {
         kernel.step(dt);

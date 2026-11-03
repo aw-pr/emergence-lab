@@ -382,3 +382,53 @@ Findings (manual; screenshots viewed: finalists `species8` and `species3` at mat
 - Viewport: the previous write-up and JSON gave a constant 1280×800; the actual per-capture viewport was different. It is now recorded per row and per sample (960×600 for the shipped rows and 400×329 (canvas 329×329) for the three matched-density rows). The supplemental numeric rows and state SHA-256 values from the re-run are identical to the attempt-4 evidence apart from this added field.
 - Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 12.9 min, supplemental test 26.6 min. The main-sweep JSON is byte-identical to the attempt-4 retained file.
 - Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the particle-life kernel `wrap()` torus (`src/sims/particle-life/kernel.ts:83-90`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: finalist friction0.97/species6/forceScale140/bias-0.35 matched-density t300 (329×329: speckle fills the frame, no cut-off). Not every image was inspected, and this is a visual finding, not a score.
+
+
+## Default appendix — 2026-11-03
+
+The operator selected the **Eight-species attraction** trial as the new kernel
+default after visual review, describing “atom / molecule like structures”
+and preferring it to the previous default in
+[`uat-preset-review.md`](../UAT/uat-preset-review.md). The old default was
+`particleCount: 5901`, `species: 5`, `rmax: 77`, `rmin: 45`,
+`forceScale: 108`, `friction: 0.8`, `matrixBias: 0.15`.
+The new default is `particleCount: 6000`, `species: 8`, `rmax: 24`,
+`rmin: 12`, `forceScale: 140`, `friction: 0.97`, `matrixBias: 0.35`.
+Point size remains 3; **Cells, Chasers and Gas clouds are unchanged**.
+
+The source is the `kind: finalist`, `population: shipped 6000` row
+`friction0.97_species8_forceScale140_matrixBias0.35` in
+[`144/particle-life.app-evidence.json`](data/2026-10-30/144/particle-life.app-evidence.json),
+with the retained [t600 app-renderer screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t600-app.png).
+The trial used seed 144; the shipped default has no pinned seed and uses a
+fresh renderer seed each load, as accepted by the operator on 2026-11-03.
+
+Sweep 144 proposed no promotion. Its metric set could not reliably rank
+species structure: this row dropped to **0.534 at 1200 steps in the 128²
+sweep**, scored **0.910 / 0.923 at seeds 145 / 146**, and scored only
+**0.02** at shipped population (0.020 / 0.014 / 0.012 at t150 / t300 / t600).
+Seed and horizon sensitivity remain known limitations. The operator accepted
+these caveats on looks on 2026-11-03; the scores do not justify this default
+change or establish superiority over the retained presets.
+
+
+`public/thumbnails/particle-life.png` was regenerated with
+`node scripts/generate-thumbnails.mjs` after repairing the thumbnail painter
+to make repeated `step(1 / 30)` calls for particle sims instead of a single
+scaled call (which the Particle Life kernel clamped). With the
+`"particle-life": 600` entry in `STEPS_BY_SLUG`, the first repaired render
+shows discrete multi-colour clumps against sparse scatter; no higher step
+count was needed. The earlier attempt's 48-, 600- and 6,000-step images
+remained scatter because of that painter defect. No thumbnail was hand-edited
+or copied. Ten unrelated thumbnails rewritten by generation were restored
+from `dev`; all other 25 thumbnails retain their base bytes. The Boids
+thumbnail also changes under the repaired painter, but is deliberately kept
+at its committed bytes for regeneration in a later card.
+
+Worker live checks at the default Ultra quality profile showed discrete
+multi-colour clumps against sparse scatter on three fresh loads at iteration
+counters 610, 610 and 610. The eight controls matched the new defaults;
+Cells → Kernel default and Reset to defaults restored them. A custom rmax
+of 40 survived reload; clearing storage restored 24. Retained screenshots:
+`e2e/artifacts/151-promote-144-trials/particle-life-load-{1,2,3}.png`.
+Independent verifier checks and the operator's final look remain pending.

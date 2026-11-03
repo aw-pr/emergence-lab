@@ -340,6 +340,22 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         stepsPerFrame: 1,
       },
     },
+    {
+      // Operator decision 2026-11-03: stage-144 row
+      // evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30.
+      id: "restless-threads",
+      label: "Restless threads",
+      params: {
+        agentCount: 32000,
+        sensorAngle: 30,
+        sensorDistance: 3,
+        turnSpeed: 22.5,
+        moveSpeed: 2.5,
+        depositAmount: 0.06,
+        evaporation: 0.975,
+        stepsPerFrame: 1,
+      },
+    },
   ],
   "particle-life": [
     {
