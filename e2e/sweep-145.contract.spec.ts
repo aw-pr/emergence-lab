@@ -10,7 +10,7 @@ import { scoreFrames } from "./harness/metrics.ts";
 // AUTOMETTA-CONTRACT-BEGIN card=docs/stages/145-phase-missed-regimes.md
 const STAGE = 145;
 const contractTest = process.env.SWEEP_CONTRACT === String(STAGE) ? test : test.skip;
-const SLUGS = ["kuramoto-oscillators", "swarmalators"];
+const SLUGS = ["kuramoto-oscillators"]; // Swarmalators deferred by operator decision 2026-11-03 (re-brief 2); its pilot evidence stays retained
 const MINIMUM = 64;
 const MAXIMUM = 80;
 const OLD_KEYS = ["gray-scott", "boids", "lorenz-attractor", "clifford-dejong-clifford", "clifford-dejong-dejong", "clifford-dejong-svensson", "lenia", "belousov-zhabotinsky", "belousov-zhabotinsky-diffusion", "physarum", "swarmalators", "abelian-sandpile", "brians-brain", "cyclic-ca", "game-of-life", "ising-model", "diffusion-limited-aggregation", "kuramoto-oscillators", "particle-life"];
@@ -93,10 +93,14 @@ contractTest(`sweep ${STAGE} oracle accepts complete shape and rejects defective
 });
 
 contractTest(`sweep ${STAGE} preserves production source, guard scripts and historical configurations`, () => {
-  const paths = [...new Set(execFileSync("git", ["ls-files", "-co", "--exclude-standard", "src", "scripts/git-hooks/pre-push", "scripts/publish-sync.sh"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n"))].sort();
-  const hash = createHash("sha256");
-  for (const p of paths) hash.update(p).update("\0").update(readFileSync(resolve(ROOT, p))).update("\0");
-  expect(hash.digest("hex")).toBe("b07b3867e129dfb1c64e6f85a8da54863ff2aa3a194ea0a55dec013b2447cf71");
+  // Production source and the guard scripts must equal the branch point on dev: a fixed hash would
+  // break the moment any later card lands (card 150 did), so compare trees instead.
+  expect(execFileSync("git", ["status", "--porcelain", "--", "src", "scripts/git-hooks/pre-push", "scripts/publish-sync.sh"], { cwd: ROOT, encoding: "utf8" }).trim()).toBe("");
+  const branchPoint = execFileSync("git", ["merge-base", "HEAD", "dev"], { cwd: ROOT, encoding: "utf8" }).trim();
+  for (const path of ["src", "scripts/git-hooks/pre-push", "scripts/publish-sync.sh"]) {
+    const tree = (rev: string) => execFileSync("git", ["rev-parse", `${rev}:${path}`], { cwd: ROOT, encoding: "utf8" }).trim();
+    expect(tree("HEAD"), `${path} differs from the branch point on dev`).toBe(tree(branchPoint));
+  }
   expect(scoreFrames([0,0,1,1], [0,1,0,1], 2, 2, 0.5)).toEqual({ entropy: 0.2, variance: 0.25, spatialAutocorrelation: 0, coverage: 0.5, temporalFlux: 0.5, score: 0.09000000000000001 });
   const old = Object.fromEntries(OLD_KEYS.map(k => [k, SWEEP_CONFIGS[k]]));
   expect(createHash("sha256").update(JSON.stringify(old)).digest("hex")).toBe("edfe7b93e982768fe779ae462e7b3319a958af3e86e3fa6f7a9770064951a33f");
