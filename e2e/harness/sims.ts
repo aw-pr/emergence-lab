@@ -1094,6 +1094,27 @@ const SWEEP_144_BOIDS: SimSweepConfig = {
   ],
 };
 
+// Stage 152: faster flocks in several clumps going different ways. Stage 144
+// pinned maxSpeed at 16 and cohesion at 0, so nothing could gather; this grid
+// raises both and varies the seeding flock count, at the shipped population.
+// The harness rewrites nothing here: pointSize stays the kernel default and the
+// kernel's capture-time seed is never part of a set.
+const SWEEP_152_BOIDS: SimSweepConfig = {
+  ...BOIDS,
+  artifactId: "sweep-152-boids",
+  baseParams: { boidCount: 17777, visualRadius: 36, separationRadius: 6, separation: 0.2, alignment: 0.15, obstacleLayout: "none" },
+  axes: [
+    { key: "maxSpeed", values: [24, 32, 40] },
+    { key: "cohesion", values: [0.01, 0.02, 0.035] },
+    { key: "initialFlocks", values: [3, 6, 12] },
+  ],
+  references: [
+    { id: "152-current-balanced-flock", label: "Balanced flock (shipped)", params: { boidCount: 17777, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, initialFlocks: 6, obstacleLayout: "none" } },
+    { id: "152-current-tight-flock", label: "Tight flock (shipped)", params: { boidCount: 17777, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, initialFlocks: 6, obstacleLayout: "none" } },
+    { id: "152-current-scatter", label: "Scatter (shipped)", params: { boidCount: 17777, visualRadius: 24, separationRadius: 10, maxSpeed: 26, alignment: 0.03, cohesion: 0.004, separation: 0.5, initialFlocks: 6, obstacleLayout: "none" } },
+  ],
+};
+
 // Agent counts: shipped counts are for the app's 384² compute grid; 256²
 // carries (256/384)² of them, rounded to the nearest 100.
 const SWEEP_144_PHYSARUM: SimSweepConfig = {
@@ -1250,4 +1271,5 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "sweep-144-boids": SWEEP_144_BOIDS,
   "sweep-144-physarum": SWEEP_144_PHYSARUM,
   "sweep-144-particle-life": SWEEP_144_PARTICLE_LIFE,
+  "sweep-152-boids": SWEEP_152_BOIDS,
 };

@@ -243,3 +243,72 @@ Findings (manual; screenshots viewed: Balanced flock, finalist 0.25/12 and final
 - Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 9.0 min, supplemental test 1.0 h. The main-sweep JSON is byte-identical to the attempt-4 retained file.
 - Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the boids kernel `wrap()` torus (`src/sims/boids/kernel.ts:646-654`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: Balanced flock shipped t880 (bands run off one edge and re-enter on the opposite one, nothing is cut). Not every image was inspected, and this is a visual finding, not a score.
 - Obstacle frames (direct links, grayscale kernel-field renders, not app screenshots, not ranked): Balanced flock [breakwaters](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-reef-field.png). Finalist `alignment0.25_cohesion0_initialFlocks12`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-reef-field.png). Finalist `alignment0.15_cohesion0_initialFlocks6`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-reef-field.png). Finalist `alignment0.01_cohesion0_initialFlocks1`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-reef-field.png).
+
+## 2026-11-03 — clump sweep (stage 152)
+
+The operator rejected the three stage-144 Boids trials on 2026-11-03 and asked for "faster with multiple clumps going in different directions". Stage 144 could not find that regime: it pinned `maxSpeed` at 16, every finalist had cohesion 0, and its composite rewards even coverage. This sweep uses a new instrument at the shipped population and hands over a shortlist as an importable presets file. No default, preset or kernel changes.
+
+### Method and instrument
+
+- Capture: stage-144 fixed-step method. Fresh kernel per capture, exactly `steps` calls of `step(1)`, real WebGL2 `Renderer` paused at `stepsPerFrame` 0 on a 960×600 CSS canvas, effective population asserted equal to 17777, viewport recorded per sample (960×600 throughout), `stateSha256` of the state drawn. Steps 300, 600 and 1200. Main captures use kernel seed 0; finalist repeats use seeds 1, 2 and 3 at 600 steps.
+- Reading: `e2e/harness/clumps.ts`, imported into the page through the Vite origin and applied to the same `readState` that is hashed. Density is blurred (radius 6, wrapping on the torus), thresholded at 0.25 of the blurred maximum, labelled into 4-connected components (wrapping on both axes), and components under 3% of total raw mass are dropped. Each kept component's heading is the direction of its density-weighted velocity sum; heading spread is 1 minus the mass-weighted resultant of the unit headings (0 for one clump, 1 for balanced opposition). Mean speed is the density-weighted Speed channel (a fraction of `maxSpeed`) scaled by the row's `maxSpeed`. `velocityCoherence` is kept as an extra column.
+- Ranking rule (frozen): per sample `clamp((clumps − 1)/4, 0, 1) × headingSpread × clamp(meanSpeed/40, 0, 1)`; the row score is the minimum over its three samples.
+- Note on mass: the Boids kernel clamps the Density channel to [0, 1] (occupancy, not a boid count), so "mass" here is occupied-cell count and the 3% cut is a share of occupied cells. The frozen fixtures are unaffected.
+
+### Searched and not searched
+
+Searched (27 sets): `maxSpeed` {24, 32, 40} × `cohesion` {0.01, 0.02, 0.035} × `initialFlocks` {3, 6, 12}, at 17777 boids, visual radius 36, separation radius 6, separation 0.2, alignment 0.15, no obstacles, default point size. Not searched: alignment, visual radius, separation, separation radius, obstacles, population, other canvas sizes, seeds beyond the finalist repeats.
+
+### Ranking (top 10 of 27)
+
+Columns are at 300 / 600 / 1200 steps.
+
+| id | score | clumps | heading spread | mean speed |
+|---|---|---|---|---|
+| `maxSpeed32_cohesion0.035_initialFlocks6` | 3.2e-5 | 4 / 4 / 3 | 0.000 / 0.000 / 0.000 | 31.2 / 30.9 / 30.9 |
+| `maxSpeed24_cohesion0.035_initialFlocks6` | 2.7e-5 | 4 / 4 / 4 | 0.000 / 0.000 / 0.000 | 22.8 / 23.0 / 23.0 |
+| `maxSpeed24_cohesion0.02_initialFlocks12` | 1.1e-5 | 5 / 4 / 3 | 0.001 / 0.000 / 0.000 | 23.1 / 22.9 / 22.9 |
+| `maxSpeed32_cohesion0.035_initialFlocks12` | 9.0e-6 | 3 / 4 / 3 | 0.000 / 0.000 / 0.000 | 31.2 / 31.0 / 30.9 |
+| `maxSpeed40_cohesion0.035_initialFlocks12` | 5.7e-6 | 4 / 4 / 3 | 0.001 / 0.000 / 0.000 | 39.2 / 38.8 / 38.8 |
+| `maxSpeed24_cohesion0.035_initialFlocks3` | 3.4e-6 | 3 / 3 / 3 | 0.000 / 0.000 / 0.000 | 22.8 / 23.0 / 22.9 |
+| `maxSpeed24_cohesion0.035_initialFlocks12` | 1.9e-6 | 4 / 2 / 2 | 0.000 / 0.000 / 0.000 | 23.2 / 23.1 / 23.0 |
+| `maxSpeed32_cohesion0.01_initialFlocks12` | 2.8e-7 | 2 / 3 / 2 | 0.000 / 0.000 / 0.000 | 30.0 / 30.0 / 30.0 |
+| `maxSpeed24_cohesion0.02_initialFlocks6` | 1.0e-8 | 4 / 3 / 2 | 0.000 / 0.000 / 0.000 | 23.2 / 23.0 / 22.9 |
+| `maxSpeed24_cohesion0.01_initialFlocks3` | 0.0e+0 | 2 / 2 / 1 | 0.001 / 0.000 / 0.000 | 22.7 / 22.7 / 22.7 |
+
+All 27 sets scored below 4e-5. The order among them is set by a handful of near-zero heading-spread readings and should not be read as a preference.
+
+### References
+
+| id | score | clumps | heading spread | mean speed |
+|---|---|---|---|---|
+| `152-current-balanced-flock` | 0.0e+0 | 2 / 3 / 1 | 0.000 / 0.000 / 0.000 | 15.0 / 15.0 / 15.1 |
+| `152-current-tight-flock` | 4.1e-5 | 4 / 4 / 4 | 0.001 / 0.000 / 0.000 | 19.2 / 19.2 / 19.1 |
+| `152-current-scatter` | 0.0e+0 | 0 / 0 / 0 | 0.000 / 0.000 / 0.000 | 20.5 / 20.5 / 20.0 |
+
+### Finalists and repeats
+
+The finalists are the top three ranked ids. Frames: `docs/images/sweeps-2026-11-03/152-boids-<id>-t<steps>.png`; repeats `152-boids-<id>-seed<k>-t600.png`; references `152-current-*-t<steps>.png`.
+
+| id | repeats at 600 steps |
+|---|---|
+| `maxSpeed32_cohesion0.035_initialFlocks6` | seed 1: 1 clumps, spread 0.000, speed 30.9<br>seed 2: 3 clumps, spread 0.000, speed 30.8<br>seed 3: 3 clumps, spread 0.000, speed 30.8 |
+| `maxSpeed24_cohesion0.035_initialFlocks6` | seed 1: 4 clumps, spread 0.000, speed 22.9<br>seed 2: 3 clumps, spread 0.002, speed 23.0<br>seed 3: 3 clumps, spread 0.000, speed 22.8 |
+| `maxSpeed24_cohesion0.02_initialFlocks12` | seed 1: 2 clumps, spread 0.000, speed 23.1<br>seed 2: 2 clumps, spread 0.000, speed 23.0<br>seed 3: 3 clumps, spread 0.000, speed 22.9 |
+
+### Interpretation
+
+- **The grid did not reach the regime.** Across all 30 rows and 90 samples the largest heading spread read 0.0009 and the lowest `velocityCoherence` was 0.9955. Every clump in every frame moves the same way: at 17777 boids on this torus, alignment 0.15 with visual radius 36 locks the whole population to one heading before 300 steps, whatever the seeding flock count. Clumps do form (up to 6 at one sample, 3 or 4 for most cohesion 0.035 rows) and persist, and speed is high (about 0.94 to 0.98 of `maxSpeed`), but they travel in parallel. Per the card this is a finding, not a failure; no sets were added.
+- Frames viewed: finalist `maxSpeed24_cohesion0.035_initialFlocks6` at 600 steps is six compact, similarly oriented ellipses (closer to "several clumps" than the shipped Balanced flock's bands, but with one shared heading); `maxSpeed40_cohesion0.035_initialFlocks12` at 600 steps is two long fast streaming bands and a few fragments, again parallel; `maxSpeed32_cohesion0.02_initialFlocks12` at 300 steps is broad curving streams. None reads as the cohesion-zero speckle failure reference, and none shows different headings.
+- Faster: every candidate is above the shipped Balanced flock's mean speed of 15.0 (candidates read 22.7 to 39.2).
+- The instrument sees clump count, clump headings and speed from one rendered state. It cannot see motion over time, trails, or whether clumps are about to merge. A heading spread near zero here means parallel travel, not stasis.
+- Hypothesis for a later card, not tested here: different headings probably need alignment low enough, or visual radius small enough, that flocks do not couple on a torus this size; both were pinned in this grid.
+- Presets file: the three finalists plus `maxSpeed40_cohesion0.035_initialFlocks12`, added after viewing its frames as the fastest sustained clumped regime (three or four clumps at all steps at about 39 mean speed). It is on the shortlist for its look, not its score.
+
+### Reproduction
+
+`CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids" --global-timeout=14400000` exited 0 in 45.5 minutes (1 passed; the presets and replay tests are opt-in and skipped), four pages in parallel. Per-row wall-clock ran from 71 s to 773 s (recorded per row as `wallClockMs`). Presets file with extras: `CI=1 SWEEP=1 SWEEP_152_PRESET_IDS=<id>[,<id>] npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids presets"`. Replay for the verifier: `CI=1 SWEEP=1 SWEEP_152_REPLAY=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids replay"` re-captures the three finalists and three references (seed 0 at all steps, seeds 11 to 13 at 600) into `e2e/artifacts/152-boids-clump-sweep/replay/replay.json`.
+
+Evidence: [`152/boids.json`](data/2026-11-03/152/boids.json), [`152/boids.presets.json`](data/2026-11-03/152/boids.presets.json), images in [`docs/images/sweeps-2026-11-03/`](../images/sweeps-2026-11-03/).
+
+No promotion is proposed; the shortlist awaits the operator's import and look.

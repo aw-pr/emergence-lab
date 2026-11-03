@@ -1,11 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, copyFileSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { effectiveIterationLimit } from "../src/sims/fractal/detail.ts";
 import { presetsFor } from "../src/app/presets.ts";
 import { SPECS as LORENZ_SPECS } from "../src/sims/lorenz-attractor/kernel.ts";
 import { MAP_SPECS } from "../src/sims/clifford-dejong/kernel.ts";
+import { clumpScore, type ClumpReading } from "./harness/clumps.ts";
 import { driveKernel, driveKernelDiagnostic, type DiagnosticSnapshot, type SweepDriverConfig } from "./harness/driver.ts";
 import {
   channelMixing,
@@ -3056,12 +3057,14 @@ const S144_POPULATION_CAP: Record<string, number> = { boids: 40000, physarum: 30
 interface S144Snapshot {
   viewport: { width: number; height: number }; grid: [number, number]; canvas: [number, number]; kernelCalls: number; callsAfterSettle: number; dts: number[];
   effectivePopulation: number; stateSha256: string; renderer: string; running: boolean; devicePixelRatio: number; resolution: string;
+  /** Present only when the caller asked for a clump readout of the drawn state. */
+  clump?: ClumpReading & { velocityCoherence: number };
 }
 
 /** Fresh kernel -> exact `steps` fixed-dt calls -> real Renderer draws that state. */
-async function s144Snapshot(page: Page, slug: string, params: Params, canvasCss: { width: number; height: number }, steps: number, shotPath: string | null): Promise<S144Snapshot> {
+async function s144Snapshot(page: Page, slug: string, params: Params, canvasCss: { width: number; height: number }, steps: number, shotPath: string | null, clumpOptions?: typeof S152_METRIC_OPTIONS): Promise<S144Snapshot> {
   await page.setViewportSize({ width: Math.max(canvasCss.width, 400), height: Math.max(canvasCss.height, 300) });
-  const info = await page.evaluate(async ({ slug, params, size, steps, countKey }) => {
+  const info = await page.evaluate(async ({ slug, params, size, steps, countKey, clumpOptions }) => {
     const base = "http://localhost:5173/src/app/";
     const reg: any = await import(/* @vite-ignore */ base + "registry.ts");
     const rm: any = await import(/* @vite-ignore */ base + "renderModes.ts");
@@ -3103,14 +3106,26 @@ async function s144Snapshot(page: Page, slug: string, params: Params, canvasCss:
     const state: Float32Array = kernel.readState();
     const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(state.buffer, state.byteOffset, state.byteLength));
     const [gw, gh] = canvas.dataset.renderSize!.split("x").map(Number);
+    let clump: any;
+    if (clumpOptions) {
+      // The same readState the digest above covers, read through the Vite origin so no second kernel exists.
+      const cm: any = await import(/* @vite-ignore */ "http://localhost:5173/e2e/harness/clumps.ts");
+      const mm: any = await import(/* @vite-ignore */ "http://localhost:5173/e2e/harness/metrics.ts");
+      const cells = gw * gh;
+      if (state.length !== cells * 4) throw new Error(`state length ${state.length} is not ${cells} cells x 4 channels`);
+      const channel = (c: number) => { const out = new Float32Array(cells); for (let i = 0; i < cells; i += 1) out[i] = state[i * 4 + c]; return out; };
+      const [density, speed, vx, vy] = [channel(0), channel(1), channel(2), channel(3)];
+      clump = { ...cm.clumpRegime({ width: gw, height: gh, density, speed, vx, vy }, clumpOptions), velocityCoherence: mm.velocityCoherence(vx, vy) };
+    }
     return {
+      clump,
       grid: [gw, gh] as [number, number], canvas: [canvas.width, canvas.height] as [number, number],
       kernelCalls: steps, callsAfterSettle: calls, dts: [...new Set(dts)],
       effectivePopulation: Number(kernel[countKey]), renderedGrid: grid,
       stateSha256: [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join(""),
       renderer: canvas.dataset.renderer!, running: renderer.isRunning(), devicePixelRatio: window.devicePixelRatio, resolution: profile.defaultPreset,
     };
-  }, { slug, params, size: canvasCss, steps, countKey: S144_COUNT_KEY[slug] });
+  }, { slug, params, size: canvasCss, steps, countKey: S144_COUNT_KEY[slug], clumpOptions: clumpOptions ?? null });
   expect(info.renderer).toBe("webgl2");
   expect(info.running, "snapshot renderer must stay paused").toBe(false);
   expect(info.callsAfterSettle, "no kernel call after the snapshot").toBe(steps);
@@ -3240,4 +3255,213 @@ test.describe("sweep 144 app evidence", () => {
       }, null, 2));
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Stage 152: faster flocks in several clumps going different ways.
+// ---------------------------------------------------------------------------
+const S152_ROOT = "docs/sweeps/data/2026-11-03/152";
+const S152_DATA = `${S152_ROOT}/boids.json`;
+const S152_PRESETS = `${S152_ROOT}/boids.presets.json`;
+const S152_IMAGES = "docs/images/sweeps-2026-11-03";
+const S152_ARTIFACTS = "e2e/artifacts/152-boids-clump-sweep";
+const S152_VERSION = "boids-clump-regime-v1";
+const S152_STEPS = [300, 600, 1200];
+const S152_METRIC_OPTIONS = { blurRadius: 6, threshold: 0.25, minMassFraction: 0.03 };
+const S152_CANVAS = { width: 960, height: 600 };
+const S152_CONCURRENCY = 4;
+const S152_POPULATION = 17777;
+const S152_MAIN_SEED = 0;
+const S152_REPEAT_SEEDS = [1, 2, 3];
+const S152_REPEAT_STEPS = 600;
+const S152_FINALISTS = 3;
+const S152_COMMAND = 'CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids" --global-timeout=14400000';
+const S152_REPLAY_COMMAND = 'CI=1 SWEEP=1 SWEEP_152_REPLAY=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids replay" --global-timeout=14400000';
+const s152Main = process.env.SWEEP && !process.env.SWEEP_152_REPLAY ? test : test.skip;
+const s152Replay = process.env.SWEEP && process.env.SWEEP_152_REPLAY ? test : test.skip;
+const s152Presets = process.env.SWEEP && process.env.SWEEP_152_PRESET_IDS !== undefined ? test : test.skip;
+
+interface S152Sample {
+  steps: number; seed: number; kernelCalls: number; viewport: { width: number; height: number };
+  clumps: number; headingSpread: number; speedFraction: number; meanSpeed: number; velocityCoherence: number;
+  masses: number[]; headings: number[]; stateSha256: string; image: string | null; artifact: string | null;
+}
+interface S152Row { id: string; label: string; params: Params; effectivePopulation: number; samples: S152Sample[]; metrics: { score: number; minClumps: number; minHeadingSpread: number; minMeanSpeed: number }; wallClockMs: number }
+
+const s152Label = (p: Params) => `speed ${p.maxSpeed}, cohesion ${p.cohesion}, ${p.initialFlocks} flocks`;
+const s152Id = (config: SimSweepConfig, p: Params) => config.axes.map(a => `${a.key}${p[a.key]}`).join("_");
+
+/** One fixed-step app-renderer capture of a Boids state, with the clump reading taken from that same state. */
+async function s152Capture(page: Page, params: Params, seed: number, steps: number, shotPath: string, retainedImage: string | null): Promise<S152Sample> {
+  const snap = await s144Snapshot(page, "boids", { ...params, seed } as Params, S152_CANVAS, steps, shotPath, S152_METRIC_OPTIONS);
+  expect(snap.effectivePopulation, "effective population").toBe(S152_POPULATION);
+  expect(snap.kernelCalls).toBe(steps);
+  const clump = snap.clump!;
+  expect([clump.headingSpread, clump.meanSpeed, clump.velocityCoherence].every(Number.isFinite), "finite readings").toBe(true);
+  const maxSpeed = Number(params.maxSpeed);
+  return {
+    steps, seed, kernelCalls: snap.kernelCalls, viewport: snap.viewport,
+    clumps: clump.clumps, headingSpread: clump.headingSpread, speedFraction: clump.meanSpeed, meanSpeed: clump.meanSpeed * maxSpeed,
+    velocityCoherence: clump.velocityCoherence, masses: clump.masses, headings: clump.headings,
+    stateSha256: snap.stateSha256, image: retainedImage, artifact: retainedImage ? null : shotPath,
+  };
+}
+
+function s152Score(samples: S152Sample[]): S152Row["metrics"] {
+  return {
+    score: clumpScore(samples),
+    minClumps: Math.min(...samples.map(s => s.clumps)),
+    minHeadingSpread: Math.min(...samples.map(s => s.headingSpread)),
+    minMeanSpeed: Math.min(...samples.map(s => s.meanSpeed)),
+  };
+}
+
+/** Run `jobs` across a pool of pages that share the context; the first page is the test's own. */
+async function s152Pool<T, R>(page: Page, jobs: T[], work: (job: T, pg: Page) => Promise<R>): Promise<R[]> {
+  const pages: Page[] = [page];
+  for (let i = 1; i < Math.min(S152_CONCURRENCY, jobs.length); i += 1) { const extra = await page.context().newPage(); await extra.goto("/"); pages.push(extra); }
+  const out: R[] = new Array(jobs.length);
+  let next = 0;
+  await Promise.all(pages.map(async pg => { for (;;) { const idx = next++; if (idx >= jobs.length) return; out[idx] = await work(jobs[idx], pg); } }));
+  for (const extra of pages.slice(1)) await extra.close();
+  return out;
+}
+
+async function s152BuildPresets(page: Page, rows: { id: string; params: Params }[]): Promise<unknown[]> {
+  return page.evaluate(async rows => {
+    const base = "http://localhost:5173/src/app/";
+    const reg: any = await import(/* @vite-ignore */ base + "registry.ts");
+    const cm: any = await import(/* @vite-ignore */ base + "colormap.ts");
+    const qp: any = await import(/* @vite-ignore */ base + "qualityProfiles.ts");
+    const rm: any = await import(/* @vite-ignore */ base + "renderModes.ts");
+    const sp: any = await import(/* @vite-ignore */ base + "savedPresets.ts");
+    const kernel = await reg.findEntry("boids").load();
+    const defaults = Object.fromEntries(kernel.paramSchema.map((p: any) => [p.key, p.default]));
+    const colourOptions = cm.defaultColourOptionsFor("boids", kernel.channelCount);
+    kernel.destroy();
+    return rows.map(row => {
+      const p = row.params as any;
+      return {
+        id: `boids-152-${row.id}`,
+        name: `Boids 152 · speed ${p.maxSpeed}, cohesion ${p.cohesion}, ${p.initialFlocks} flocks`,
+        snapshot: {
+          slug: "boids", params: { ...defaults, ...p }, colourOptions: structuredClone(colourOptions),
+          displayOptions: sp.defaultDisplayOptionsFor("boids"),
+          resolution: qp.qualityProfileFor("boids", rm.getRenderMode("boids"), "desktop").defaultPreset,
+          stepsPerFrame: sp.speedProfileFor("boids").initial, autoCycle: false,
+        },
+      };
+    });
+  }, rows);
+}
+
+function s152WritePresets(entries: unknown[]): void {
+  writeText(S152_PRESETS, JSON.stringify({ format: "emergence-presets", version: 1, presets: entries }, null, 2) + "\n");
+}
+
+test.describe("sweep 152 boids clump regimes", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  s152Main("sweep 152 boids clump regimes", async ({ page }) => {
+    test.setTimeout(14_000_000);
+    const config = SWEEP_CONFIGS["sweep-152-boids"];
+    const sets = expandSweep(config);
+    const candidates = sets.map(params => ({ id: s152Id(config, params), label: s152Label(params), params }));
+    expect(new Set(candidates.map(c => c.id)).size).toBe(27);
+    const references = config.references.map(r => ({ id: r.id, label: r.label, params: r.params as Params }));
+    const manifest = {
+      slug: "boids", methodVersion: S152_VERSION, command: S152_COMMAND, canvasCss: S152_CANVAS, steps: S152_STEPS, metricOptions: S152_METRIC_OPTIONS,
+      seeds: { main: S152_MAIN_SEED, repeats: S152_REPEAT_SEEDS, repeatSteps: S152_REPEAT_STEPS },
+      ranking: "row score = min over samples of clamp((clumps-1)/4,0,1) x headingSpread x clamp(meanSpeed/40,0,1); meanSpeed = speedFraction x the row's maxSpeed",
+      candidates, references: references.map(r => ({ id: r.id, params: r.params })),
+      priorCoverage: [
+        { source: "e2e/harness/sims.ts", description: "SWEEP_144_BOIDS and the 2026-07-16 BOIDS grid: maxSpeed pinned at 16, cohesion 0 in every stage-144 finalist, 2500-boid 200x200 sweep grids" },
+        { source: "docs/sweeps/boids-interestingness.md", description: "stage-144 report and app-renderer supplement; its composite rewards even coverage, the opposite of clumping" },
+        { source: "docs/sweeps/data/2026-10-30/144/boids.json", description: "stage-144 retained ranking and finalists" },
+      ],
+    };
+    const ranked: S152Row[] = [];
+    const referenceRows: S152Row[] = [];
+    let finalists: unknown[] = [];
+    const runtime = { startedAt: new Date().toISOString(), browser: page.context().browser()?.version(), node: process.version, platform: process.platform };
+    const save = (status: string) => writeText(S152_DATA, JSON.stringify({
+      status, manifest,
+      ranked: [...ranked].sort((a, b) => b.metrics.score - a.metrics.score),
+      references: referenceRows, finalists, runtime,
+    }, null, 2) + "\n");
+    save("running: manifest written, nothing measured yet");
+
+    type Job = { kind: "candidate" | "reference"; row: { id: string; label: string; params: Params } };
+    const jobs: Job[] = [...references.map(row => ({ kind: "reference" as const, row })), ...candidates.map(row => ({ kind: "candidate" as const, row }))];
+    mkdirSync(S152_ARTIFACTS, { recursive: true });
+    await s152Pool(page, jobs, async (job, pg) => {
+      const t0 = Date.now();
+      const samples: S152Sample[] = [];
+      for (const steps of S152_STEPS) {
+        const reference = job.kind === "reference";
+        const shot = reference ? `${S152_IMAGES}/${job.row.id}-t${steps}.png` : `${S152_ARTIFACTS}/${job.row.id}-t${steps}.png`;
+        mkdirSync(reference ? S152_IMAGES : S152_ARTIFACTS, { recursive: true });
+        samples.push(await s152Capture(pg, job.row.params, S152_MAIN_SEED, steps, shot, reference ? shot : null));
+      }
+      const row: S152Row = { ...job.row, effectivePopulation: S152_POPULATION, samples, metrics: s152Score(samples), wallClockMs: Date.now() - t0 };
+      (job.kind === "reference" ? referenceRows : ranked).push(row);
+      save(`running: ${ranked.length} of ${candidates.length} candidates, ${referenceRows.length} of ${references.length} references`);
+      console.log(`152 ${job.kind} ${row.id} score ${row.metrics.score.toFixed(4)} clumps ${samples.map(s => s.clumps).join("/")} spread ${samples.map(s => s.headingSpread.toFixed(2)).join("/")} speed ${samples.map(s => s.meanSpeed.toFixed(1)).join("/")} in ${(row.wallClockMs / 1000).toFixed(0)}s`);
+      return row;
+    });
+    const order = new Map(candidates.map((c, i) => [c.id, i]));
+    ranked.sort((a, b) => b.metrics.score - a.metrics.score || order.get(a.id)! - order.get(b.id)!);
+    referenceRows.sort((a, b) => references.findIndex(r => r.id === a.id) - references.findIndex(r => r.id === b.id));
+    expect(ranked.length, "every set measured").toBe(27);
+    expect(referenceRows.length, "every reference measured").toBe(3);
+
+    const top = ranked.slice(0, S152_FINALISTS);
+    for (const row of top) for (const sample of row.samples) {
+      const retained = `${S152_IMAGES}/152-boids-${row.id}-t${sample.steps}.png`;
+      copyFileSync(sample.artifact!, retained);
+      sample.image = retained;
+      sample.artifact = null;
+    }
+    save("running: ranked, finalist repeats pending");
+    const repeatJobs = top.flatMap(row => S152_REPEAT_SEEDS.map(seed => ({ row, seed })));
+    const repeats = await s152Pool(page, repeatJobs, async ({ row, seed }, pg) => {
+      const shot = `${S152_IMAGES}/152-boids-${row.id}-seed${seed}-t${S152_REPEAT_STEPS}.png`;
+      return { id: row.id, sample: await s152Capture(pg, row.params, seed, S152_REPEAT_STEPS, shot, shot) };
+    });
+    finalists = top.map(row => ({ id: row.id, repeats: repeats.filter(r => r.id === row.id).map(r => r.sample) }));
+    save("complete");
+    s152WritePresets(await s152BuildPresets(page, top));
+    console.log(`152 finalists ${top.map(r => r.id).join(", ")}`);
+  });
+
+  s152Presets("sweep 152 boids presets", async ({ page }) => {
+    const retained = JSON.parse(readFileSync(S152_DATA, "utf8"));
+    const extra = process.env.SWEEP_152_PRESET_IDS!.split(",").map(s => s.trim()).filter(Boolean);
+    const ids: string[] = [...retained.finalists.map((f: { id: string }) => f.id), ...extra.filter(id => !retained.finalists.some((f: { id: string }) => f.id === id))];
+    const rows = ids.map(id => { const row = (retained.ranked as S152Row[]).find(r => r.id === id); if (!row) throw new Error(`${id} is not a ranked candidate`); return { id, params: row.params }; });
+    expect(rows.length).toBeLessThanOrEqual(9);
+    s152WritePresets(await s152BuildPresets(page, rows));
+  });
+
+  s152Replay("sweep 152 boids replay", async ({ page }) => {
+    test.setTimeout(7_200_000);
+    const retained = JSON.parse(readFileSync(S152_DATA, "utf8"));
+    const rows: { id: string; params: Params }[] = [
+      ...retained.finalists.map((f: { id: string }) => (retained.ranked as S152Row[]).find(r => r.id === f.id)!),
+      ...retained.references,
+    ];
+    // Seed 0 repeats the retained main captures at all three steps; seeds 11 to 13 at 600 steps are fresh runs.
+    const replaySeeds = [11, 12, 13];
+    const jobs = rows.flatMap(row => [
+      ...S152_STEPS.map(steps => ({ row, seed: S152_MAIN_SEED, steps })),
+      ...replaySeeds.map(seed => ({ row, seed, steps: S152_REPEAT_STEPS })),
+    ]);
+    mkdirSync(`${S152_ARTIFACTS}/replay`, { recursive: true });
+    const samples = await s152Pool(page, jobs, async ({ row, seed, steps }, pg) => {
+      const sample = await s152Capture(pg, row.params, seed, steps, `${S152_ARTIFACTS}/replay/${row.id}-seed${seed}-t${steps}.png`, null);
+      return { id: row.id, ...sample };
+    });
+    writeText(`${S152_ARTIFACTS}/replay/replay.json`, JSON.stringify({ command: S152_REPLAY_COMMAND, retained: S152_DATA, samples }, null, 2) + "\n");
+    for (const s of samples) console.log(`152 replay ${s.id} seed ${s.seed} t${s.steps} clumps ${s.clumps} spread ${s.headingSpread.toFixed(3)} speed ${s.meanSpeed.toFixed(2)}`);
+  });
 });
