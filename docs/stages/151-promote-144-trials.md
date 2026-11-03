@@ -8,12 +8,12 @@
 - **Verifier:** Claude Sonnet 5.5 <claude-sonnet-5-5@local>
 - **Base branch:** dev
 - **Run branch:** autometta/151-promote-144-trials
-- **Worker effort:** high
+- **Worker effort:** medium (repair attempt 2; attempt 1 ran at high)
 - **Verifier effort:** high
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Dispatch:** serial
-- **Pairing rationale:** the diff is literal values, two test lines, one regenerated PNG and two doc appendices, so a coding-tier Codex worker suffices. Acceptance is partly visual (each regime must still read as the reviewed trial on fresh seeds), so the verifier is a Claude seat driving headless Chromium, the established cross-family pairing for preset promotions (cards 68, 69, 75). No frontier seat: the operator gives the final look.
+- **Pairing rationale:** the diff is literal values, two test lines, one regenerated PNG and two doc appendices, so a coding-tier Codex worker suffices. Acceptance is partly visual (each regime must still read as the reviewed trial on fresh seeds), so the verifier is a Claude seat driving headless Chromium, the established cross-family pairing for preset promotions (cards 68, 69, 75). No frontier seat: the operator gives the final look. Attempt 2 is a repair (Re-brief 1): same Sol worker at medium effort restoring preserved work; the verifier stays at high because no verifier ran on attempt 1 and every browser criterion is still to be judged independently.
 - **Open decisions:** none
 - **Readiness:** see Readiness review.
 
@@ -138,3 +138,23 @@ Baseline at `35a730ba3` (clean `dev`, stage 150 landed): `npm run verify` exit 0
 Cold read: GPT-6.1 Sol via `codex exec --sandbox read-only` on 2026-11-03 (about 58k tokens). Findings and how they were folded in: the all-three-loads criterion conflicted with a two-of-three escalation threshold (made consistent: any failing load fails and stops); "600 steps" was undefined (now the side-panel iteration counter); screenshots had no home inside the six-path rule (now the git-ignored artifacts directory); the 48-step thumbnail default may show no clumps (one `STEPS_BY_SLUG` line now permitted and claimed); the oracle's coverage was overstated (Contract test paragraph rewritten to say what it does not cover and criterion 8 now checks the diff textually); Cells was described as the old default (corrected to the closest retained reference); the UAT file does not record the seed and fragility decisions (recorded in Operator decisions). No material finding remains unassigned.
 
 Preparation spend: one orchestrator session of about 25 minutes including the interview, oracle authoring with red proof and a scripted reference, and the cold read; over the 15-minute checkpoint by the reference and cold read, both of which found or closed real defects. No production implementation was authored; the reference worktree was deleted.
+
+## Re-brief 1 — 2026-11-03 repair: the thumbnail painter single-steps particle sims
+
+Attempt 1 (GPT-6.1 Sol, about 3.2M tokens) is preserved at `bc27da1c32b12bc783d09b5cb1fbbd130e21517a` on `wip/151-promote-144-trials-attempt-1`. Its own envelope is honest and accurate: deliverables 1, 2, 3, 5 and 6 are done and pass the worker's checks (`npm run verify` 406 pass; the frozen suite 7/7 with no skips; the contract gate 0; a scope audit showing a pure insertion in `src/app/presets.ts` and only the two assertion lines in the kernel test); six live loads matched the Visual goal in kind with every control reading equal to the card's values; `rmax` 40 persisted and cleared storage restored 24. Only deliverable 4 failed: the regenerated `public/thumbnails/particle-life.png` is a uniform scatter, and the 600-step and 6000-step renders were byte-identical.
+
+**The defect is in the painter, not the worker's values.** `renderThumbnail` in `src/app/thumbnail.ts` treats particle render modes specially: instead of looping `steps` calls of `kernel.step(dt)` as it does for every other mode, it issues one call `kernel.step(dt * steps)`. The Particle Life kernel clamps `dt` to at most 2 (`src/sims/particle-life/kernel.ts`, `step`), so any step count collapses into a single two-unit step and the `STEPS_BY_SLUG` line the card permitted can never change the result. The card's scope made that line the only lever; that was the card's error. The operator approved this repair and its scope change on 2026-11-03.
+
+**Start from the preserved commit** (`git checkout bc27da1c32b12bc783d09b5cb1fbbd130e21517a -- src/app/presets.ts src/sims/particle-life/kernel.ts src/sims/particle-life/kernel.test.cjs docs/sweeps/physarum-interestingness.md docs/sweeps/particle-life-interestingness.md scripts/generate-thumbnails.mjs` onto the fresh run worktree, which is cut from current `dev` and already carries this re-brief). Do not re-derive those deliverables; re-run the cheap criteria (1 and 2) once over them.
+
+**Then fix exactly this:**
+
+1. `src/app/thumbnail.ts` — in `renderThumbnail`, make the particle branch step the kernel `steps` times with the same `dt` the other modes use, so the step count is real. Keep the painter's other behaviour (seed 1, overrides, backend draw) unchanged. This is the only change to that file; it is now within scope (criterion 8 and Path claims are amended accordingly).
+2. `scripts/generate-thumbnails.mjs` — keep one `STEPS_BY_SLUG` entry for `"particle-life"`, choosing a value at which the regenerated still shows the clumped regime (the live app reaches it by about 600 interactive iterations; the 640×400 thumbnail grid holds the same 6000 particles at about twice the live density, so clumps may form sooner; try 600 first and raise if needed, recording what was tried). No other change to the script.
+3. Regenerate; commit only `public/thumbnails/particle-life.png`; restore every other thumbnail from `dev` as attempt 1 did and list which ones the run rewrote. The Boids thumbnail would also change under the repaired painter (it currently reflects one ten-unit step); it is deliberately left as committed and the Particle Life appendix (deliverable 6) gains one sentence saying so, so a later card can regenerate it.
+4. View the new PNG before writing the envelope. If it still reads as uniform scatter after the loop fix and a raised step count, record the attempts and stop; do not touch anything else.
+
+**Amended criterion 8:** the diff may touch the six deliverable paths plus `scripts/generate-thumbnails.mjs` (one `STEPS_BY_SLUG` line) plus `src/app/thumbnail.ts` (the particle branch of `renderThumbnail` only). The frozen contract is unchanged: it does not pin `src/app/thumbnail.ts`, and its thumbnail assertion (hash changed, other 25 unchanged) still applies. Criterion 6 (`PRESET_CONTRACT=150 …`) was not run by attempt 1 and is still required of the verifier.
+
+**Verifier:** no verifier ran on attempt 1, so judge every criterion as written, with criterion 8 as amended above. Attempt 1's screenshots under its worktree are gone with the requeue; the worker's new envelope must carry fresh ones. The operator's aesthetic sign-off follows your PASS.
+
