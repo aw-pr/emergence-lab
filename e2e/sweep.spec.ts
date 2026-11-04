@@ -3465,3 +3465,316 @@ test.describe("sweep 152 boids clump regimes", () => {
     for (const s of samples) console.log(`152 replay ${s.id} seed ${s.seed} t${s.steps} clumps ${s.clumps} spread ${s.headingSpread.toFixed(3)} speed ${s.meanSpeed.toFixed(2)}`);
   });
 });
+
+const PHASE145_ROOT = "docs/sweeps/data/2026-10-30/145";
+const PHASE145_METHOD = "phase-observations-v1";
+
+function phase145Plan(config: SimSweepConfig) {
+  return {
+    slug: config.slug, methodVersion: PHASE145_METHOD,
+    grid: { width: config.gridWidth, height: config.gridHeight },
+    warmupSteps: config.warmupSteps, fluxGap: config.fluxGap, dt: config.dt,
+    command: 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 145 "',
+    fixedParams: config.baseParams, axes: config.axes,
+    candidates: expandSweep(config).map((params, i) => ({ id: `145-${config.slug}-c${String(i + 1).padStart(2, "0")}`, params })),
+    references: config.references,
+    priorCoverage: [
+      { source: `docs/sweeps/${config.slug}-interestingness.md`, description: config.slug === "swarmalators"
+        ? "Historical 25-point J=[-1,-0.5,0.1,0.5,1] × K=[-1.5,-0.75,-0.1,0.5,1]; appendix repeats that grid with masked circular statistics. frequencySpread=0, noise=0, seed1; 128²,250 steps. New sets all have positive spread and noise; no old full parameter set repeated. Six historical references remain unchanged under old config IDs."
+        : "Historical 40-point coupling=[0.6,1.2,1.8,3.2,4.6] × spread=[0.1,0.3,0.45,0.8] × mode=[local,global]; appendix repeats that grid with circular statistics. noise=.015, initialPattern=vortices, seed1;128²,400 steps. New coupling values, spread=.55 and waves/random starts differ in every candidate; no old full parameter set repeated. Four old reference rows retained unchanged." },
+      { source: "e2e/harness/sims.ts", description: "Old grids and appendix configurations remain serialized unchanged. New config has 64 coarse candidates, zero refinements; all declared points are mandatory, with no cap/truncation." },
+      { source: "src/app/presets.ts", description: "All current presets copied into new reference IDs, with explicit kernel-default values for omitted seed/noise/trail/camera settings. Kernel default is an additional row; Swarmalators default duplicates Active phase wave by design." },
+      { source: `src/sims/${config.slug}/kernel.ts`, description: "Exact default values and supported seed read from kernel.init; dt argument is ignored in favour of timestep. Current kernel real state, including Swarmalators trail accumulator and view fit, is measured; not particle-level order." },
+    ],
+    determinism: "Fresh kernel per frame pair; explicit seed1 for grid; validation seeds1,7,23 replay each separately in same Chromium. No unseeded RNG.",
+    instrument: "Unchanged scoreFrames composite is a texture shortlist only; circular resultant length and lag1 coherence are existing instruments. Phase balance=1-resultant; circular persistence=mean cos(2π(B-A)) on jointly occupied cells. Neither diagnostic enters score. Linear flux is not interpreted as phase motion.",
+    search: { coarse: 64, refined: 0,
+      inclusion: "Interactions omitted by historical grid, bounded near coupling boundaries; all negatives retained.",
+      exclusion: config.slug === "swarmalators" ? "No population, A/B, timestep, trail or camera search; no zero-noise/zero-spread coarse sets; shelving preserved." : "No timestep or spread search; vortices are current references and old coverage, not a new initial-pattern axis. No whole-slider grid." },
+    validationPlan: { finalists: 3, resolutions: [128, 256], seeds: [1, 7, 23], steps: [400, 600, 800, 1600],
+      selection: "Kuramoto: highest texture local, global resultant closest to .5, highest global resultant. Swarmalators: highest texture, resultant closest to .5, lowest resultant; deduplicate and fill by score. These are evidence selections, not promotion decisions.",
+      replay: "Replay full grid once independently in same runtime, identical ordering and <=1e-9 absolute numeric delta. All finalist/reference base rows replayed too. Alternate resolutions/seeds are robustness checks, not exact replays.",
+      images: "All selected/reference seed1 frames at both sizes and all four times retained as field PNGs. Kuramoto also uses actual app Renderer deterministic snapshots and real route UI captures. Swarmalators phase colour+density field captures only; app screenshots N/A, shelved route." },
+  };
+}
+
+function phase145Diagnostics(phaseA: number[], phaseB: number[], densityA?: number[], densityB?: number[]) {
+  let included = 0, persistence = 0, nonFinite = 0, lower = 0, upper = 0, outOfRange = 0;
+  for (let i = 0; i < phaseA.length; i += 1) {
+    const a = phaseA[i], b = phaseB[i];
+    for (const v of [a, b]) {
+      if (!Number.isFinite(v)) nonFinite += 1;
+      if (v === 0) lower += 1;
+      if (v === 1) upper += 1;
+      if (v < 0 || v > 1) outOfRange += 1;
+    }
+    if ((!densityA || densityA[i] > .05) && (!densityB || densityB[i] > .05)) {
+      persistence += Math.cos(2 * Math.PI * (b - a)); included += 1;
+    }
+  }
+  return { circularPersistence: included ? persistence / included : 0, jointOccupancy: included / phaseA.length,
+    phaseNonFiniteFraction: nonFinite / (2 * phaseA.length), phaseLowerEndpointFraction: lower / (2 * phaseA.length),
+    phaseUpperEndpointFraction: upper / (2 * phaseA.length), phaseOutOfRangeFraction: outOfRange / (2 * phaseA.length) };
+}
+
+async function phase145Sample(page: Page, config: SimSweepConfig, params: Params) {
+  const row = await scoreOne(page, config, "sample", "sample", params);
+  const drive = (channel: number) => page.evaluate(driveKernel, { registryUrl: REGISTRY_URL, slug: config.slug, params,
+    gridWidth: config.gridWidth, gridHeight: config.gridHeight, warmupSteps: config.warmupSteps,
+    fluxGap: config.fluxGap, dt: config.dt, primaryChannel: channel, preserveRange: true });
+  const phase = await drive(config.phase!.channel);
+  const density = config.phase!.occupancy ? await drive(config.phase!.occupancy.channel) : undefined;
+  const primary = density ?? phase;
+  const frameHash = (v: number[]) => createHash("sha256").update(Buffer.from(new Float32Array(v).buffer)).digest("hex");
+  const size = config.gridWidth;
+  let borderOccupied = 0, borderCount = 0;
+  for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) {
+    if (x !== 0 && y !== 0 && x !== size - 1 && y !== size - 1) continue;
+    borderCount += 1;
+    if (!density || density.frameA[y * size + x] > .05) borderOccupied += 1;
+  }
+  const metrics = { ...row.metrics, phaseBalance: 1 - row.metrics.meanResultantLength!,
+    ...phase145Diagnostics(phase.frameA, phase.frameB, density?.frameA, density?.frameB),
+    primaryNonFiniteFraction: primary.frameA.filter(v => !Number.isFinite(v)).length / primary.frameA.length,
+    primaryLowerEndpointFraction: primary.frameA.filter(v => v === 0).length / primary.frameA.length,
+    primaryUpperEndpointFraction: primary.frameA.filter(v => v === 1).length / primary.frameA.length,
+    borderOccupiedFraction: borderOccupied / borderCount };
+  expect(Object.values(metrics).every(v => typeof v === "number" && Number.isFinite(v))).toBe(true);
+  expect(metrics.phaseNonFiniteFraction).toBe(0);
+  expect(metrics.primaryNonFiniteFraction).toBe(0);
+  return { metrics, phase, density, hashes: { phaseA: frameHash(phase.frameA), phaseB: frameHash(phase.frameB), primaryA: frameHash(primary.frameA), primaryB: frameHash(primary.frameB) } };
+}
+
+const PHASE145_IMAGES = "docs/images/sweeps-2026-10-30";
+
+async function phase145AppSnapshot(page: Page, params: Params, steps: number, path: string | null) {
+  await page.setViewportSize({ width: 640, height: 480 });
+  const info = await page.evaluate(async ({ params, steps }) => {
+    const load = (url: string) => import(/* @vite-ignore */ url);
+    const [{ Renderer }, { KuramotoOscillatorsKernel }, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
+      load("/src/app/renderer.ts"), load("/src/sims/kuramoto-oscillators/kernel.ts"), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts"),
+    ]);
+    (window as any).__phase145Renderer?.destroy();
+    document.body.innerHTML = "";
+    const canvas = document.createElement("canvas"); canvas.id = "phase145-app";
+    canvas.style.cssText = "position:fixed;left:0;top:0;width:640px;height:480px";
+    document.body.appendChild(canvas);
+    const kernel = new KuramotoOscillatorsKernel(), mode = getRenderMode("kuramoto-oscillators");
+    const profile = qualityProfileFor("kuramoto-oscillators", mode, "desktop");
+    const colourOptions = defaultColourOptionsFor("kuramoto-oscillators", 1);
+    const renderer: any = new Renderer({ canvas, kernel, params, stepsPerFrame: 0, colourOptions,
+      renderMode: mode, resolution: profile.defaultPreset, qualityProfile: profile });
+    renderer.pause();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const backend = renderer.backend, gpu = backend.kuramoto;
+    if (!renderer.usesDirectRendering() || !gpu?.ready) throw new Error("Kuramoto app requires its shipped GPU simulation path");
+    // Renderer normally supplies a fresh random seed. Re-initialise the same
+    // backend with the declared seed before issuing exact GPU step calls.
+    backend.setGrid(renderer.gridWidth, renderer.gridHeight, kernel, mode, params);
+    if (gpu.iteration !== 0) throw new Error("GPU clock did not reset");
+    if (!backend.advanceDirect(steps, params)) throw new Error("GPU advance failed");
+    renderer.draw();
+    const gl = gpu.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gpu.phaseFbos[gpu.activeIndex]);
+    const rgba = new Float32Array(gpu.width * gpu.height * 4);
+    gl.readPixels(0, 0, gpu.width, gpu.height, gl.RGBA, gl.FLOAT, rgba);
+    const error = gl.getError();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (error !== gl.NO_ERROR) throw new Error(`GPU readback error ${error}`);
+    const phase = new Float32Array(gpu.width * gpu.height);
+    let nonFinite = 0, lower = 0, upper = 0, outside = 0;
+    for (let i = 0; i < phase.length; i += 1) {
+      const v = rgba[i * 4]; phase[i] = v;
+      if (!Number.isFinite(v)) nonFinite++;
+      if (v === 0) lower++;
+      if (v === 1) upper++;
+      if (v < 0 || v > 1) outside++;
+    }
+    const hash = await crypto.subtle.digest("SHA-256", phase.buffer);
+    renderer.draw();
+    (window as any).__phase145Renderer = renderer;
+    return { grid: [gpu.width, gpu.height], canvas: [canvas.width, canvas.height], devicePixelRatio: devicePixelRatio,
+      resolution: profile.defaultPreset, colourOptions, mode, renderer: canvas.dataset.renderer,
+      gpuSteps: gpu.iteration, running: renderer.isRunning(), seed: params.seed,
+      phaseSha256: [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join(""),
+      diagnostics: { nonFiniteFraction: nonFinite / phase.length, lowerEndpointFraction: lower / phase.length,
+        upperEndpointFraction: upper / phase.length, outOfRangeFraction: outside / phase.length } };
+  }, { params, steps });
+  expect(info.renderer).toBe("webgl2"); expect(info.running).toBe(false);
+  expect(info.gpuSteps).toBe(steps); expect(info.diagnostics.nonFiniteFraction).toBe(0);
+  expect(info.diagnostics.outOfRangeFraction).toBe(0);
+  if (path) await page.locator("#phase145-app").screenshot({ path });
+  return { ...info, viewport: page.viewportSize() };
+}
+
+async function phase145AppEvidence(page: Page, rows: any[], times: number[]) {
+  const appEvidence: any[] = [];
+  for (const c of rows) {
+    for (const steps of times) {
+      const path = `${PHASE145_IMAGES}/${c.id}-t${steps}-app.png`;
+      const snapshot = await phase145AppSnapshot(page, c.params, steps, path);
+      let repeatSha256: string | undefined;
+      if (steps === 400) {
+        repeatSha256 = (await phase145AppSnapshot(page, c.params, steps, null)).phaseSha256;
+        expect(repeatSha256).toBe(snapshot.phaseSha256);
+      }
+      appEvidence.push({ id: c.id, params: c.params, steps, image: path, ...snapshot, repeatSha256 });
+    }
+    console.log(`145 app-renderer ${c.id}`);
+  }
+  return appEvidence;
+}
+
+sweepTest("phase 145 GPU app capture pilot", async ({ page }) => {
+  test.setTimeout(180_000);
+  mkdirSync(PHASE145_IMAGES, { recursive: true });
+  const params = SWEEP_CONFIGS["sweep-145-kuramoto-oscillators"].references[0].params;
+  const first = await phase145AppSnapshot(page, params, 400, null);
+  const again = await phase145AppSnapshot(page, params, 400, null);
+  expect(first.phaseSha256).toBe(again.phaseSha256);
+  console.log(JSON.stringify(first));
+});
+
+sweepTest("sweep 145 kuramoto-oscillators missed regimes", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const config = SWEEP_CONFIGS["sweep-145-kuramoto-oscillators"];
+  // Preserve the pre-measurement declaration, including the original command.
+  const manifest = JSON.parse(readFileSync(`${PHASE145_ROOT}/${config.slug}-manifest.json`, "utf8"));
+  expect(manifest.candidates.map((c: any) => c.params)).toEqual(expandSweep(config));
+  expect(manifest.references).toEqual(config.references);
+  const replay = process.env.PHASE145_REPLAY === "1";
+  const retainedPath = `${PHASE145_ROOT}/${config.slug}.json`;
+  const previous = replay ? JSON.parse(readFileSync(retainedPath, "utf8")) : null;
+  const runtime = await page.evaluate(() => ({ userAgent: navigator.userAgent, platform: navigator.platform }));
+  const ranked: any[] = [], references: any[] = [], raw: any[] = [];
+  const measure = async (c: { id: string; label?: string; params: Params }) => {
+    const sample = await phase145Sample(page, config, c.params);
+    const encode = (field: number[]) => deflateSync(Buffer.from(new Float32Array(field).buffer)).toString("base64");
+    raw.push({ id: c.id, params: c.params, phaseA: encode(sample.phase.frameA), phaseB: encode(sample.phase.frameB) });
+    return { id: c.id, label: c.label ?? c.id, params: c.params, methodVersion: PHASE145_METHOD,
+      metrics: sample.metrics, hashes: sample.hashes };
+  };
+  const started = Date.now();
+  for (const c of manifest.candidates) {
+    ranked.push(await measure(c));
+    if (ranked.length % 16 === 0) console.log(`145 ranked ${ranked.length}/64 in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  }
+  ranked.sort((a, b) => b.metrics.score - a.metrics.score);
+  for (const c of config.references) references.push(await measure(c));
+  writeText(`${PHASE145_ROOT}/kuramoto-oscillators-raw.json`, JSON.stringify({ encoding: "zlib-base64-float32-le", width: config.gridWidth, height: config.gridHeight, rows: raw }));
+  const global = ranked.filter(c => c.params.couplingMode === "global");
+  const selected = [ranked.find(c => c.params.couplingMode === "local")!,
+    [...global].sort((a,b) => Math.abs(a.metrics.meanResultantLength - .5) - Math.abs(b.metrics.meanResultantLength - .5))[0],
+    [...global].sort((a,b) => b.metrics.meanResultantLength - a.metrics.meanResultantLength)[0]];
+  expect(new Set(selected.map(c => c.id)).size).toBe(3);
+  const finalists = selected.map(c => ({ id: c.id, images: [] as string[] }));
+  const validation: any[] = [], appEvidence: any[] = [];
+  let maxMetricDelta = 0;
+  const compare = (actual: any, expected: any) => {
+    expect(actual.hashes).toEqual(expected.hashes);
+    for (const key of Object.keys(expected.metrics)) {
+      const delta = Math.abs(actual.metrics[key] - expected.metrics[key]);
+      expect(delta, `${actual.id} ${key}`).toBeLessThanOrEqual(1e-9);
+      maxMetricDelta = Math.max(maxMetricDelta, delta);
+    }
+  };
+  if (replay) {
+    expect(ranked.map(c => c.id)).toEqual(previous.ranked.map((c: any) => c.id));
+    for (const row of [...ranked, ...references]) compare(row, [...previous.ranked, ...previous.references].find((c: any) => c.id === row.id));
+    expect(finalists.map(c => c.id)).toEqual(previous.finalists.map((c: any) => c.id));
+  }
+  // Validate references on the same seed/size/time grid as the evidence selections.
+  for (const c of [...selected, ...references]) {
+    for (const size of manifest.validationPlan.resolutions) for (const seed of manifest.validationPlan.seeds) {
+      for (const steps of manifest.validationPlan.steps) {
+        const params = { ...c.params, seed }, cfg = { ...config, gridWidth: size, gridHeight: size, warmupSteps: steps };
+        const sample = await phase145Sample(page, cfg, params);
+        const fieldImage = seed === 1 ? `${PHASE145_IMAGES}/${c.id}-s${size}-seed1-t${steps}-field.png` : null;
+        const row = { id: c.id, size, seed, steps, params, metrics: sample.metrics, hashes: sample.hashes, fieldImage };
+        if (replay) compare(row, previous.validation.find((r: any) => r.id === c.id && r.size === size && r.seed === seed && r.steps === steps));
+        else if (fieldImage) writePng(fieldImage, sample.phase.frameA, size, size, 1);
+        validation.push(row);
+        if (fieldImage) finalists.find(f => f.id === c.id)?.images.push(fieldImage);
+      }
+    }
+    console.log(`145 validated ${c.id}: 24 seed/size/time readings`);
+  }
+  if (!replay) {
+    writeText(retainedPath, JSON.stringify({ manifest, ranked, references, finalists, validation, runtime, appEvidence: [], presentationComplete: false }, null, 2));
+    mkdirSync(PHASE145_IMAGES, { recursive: true });
+    appEvidence.push(...await phase145AppEvidence(page, [...selected, ...references], manifest.validationPlan.steps));
+    const routeContext = await phase145RouteContext(page);
+    writeText(retainedPath, JSON.stringify({ manifest, ranked, references, finalists, validation, appEvidence,
+      runtime, elapsedSeconds: (Date.now() - started) / 1000,
+      routeContext,
+      imageKinds: "*-field.png: grayscale normalised phase, no renderer. *-app.png: real WebGL2 Renderer and shipped GPU Kuramoto simulation, paused fixed GPU step count, equal 640x480 CSS canvas, default quality; GPU visuals are separate from exact CPU metric replay. Actual viewport/grid/DPR and state hashes recorded per capture.",
+      borderInterpretation: "Kuramoto occupies every toroidal grid cell. Border occupancy is 1; no particle support or off-frame clipping applies. Phase endpoints are coordinate wrap, not density saturation."
+    }, null, 2));
+  } else {
+    writeText(`${PHASE145_ROOT}/kuramoto-oscillators-worker-replay.json`, JSON.stringify({ runtime, tolerance: 1e-9,
+      ranked, references, validation, identicalOrdering: true, exactStateHashes: true, maxMetricDelta }, null, 2));
+  }
+});
+
+async function phase145RouteContext(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.goto("/?sweep145=context#/kuramoto-oscillators");
+  await page.locator("[data-param-key=coupling]").waitFor();
+  const pause = page.getByRole("button", { name: "Pause", exact: true });
+  if (await pause.count()) await pause.evaluate(el => (el as HTMLButtonElement).click());
+  const image = `${PHASE145_IMAGES}/145-kuramoto-live-route-context.png`;
+  await page.screenshot({ path: image, animations: "disabled" });
+  return { image, url: "/?sweep145=context#/kuramoto-oscillators", viewport: page.viewportSize(),
+    note: "Real app route context, paused after load; app-random seed and wall time. Not a fixed-step numeric comparison." };
+}
+
+sweepTest("phase 145 live route context", async ({ page }) => {
+  const path = `${PHASE145_ROOT}/kuramoto-oscillators.json`;
+  const result = JSON.parse(readFileSync(path, "utf8"));
+  result.routeContext = await phase145RouteContext(page);
+  writeText(path, JSON.stringify(result, null, 2));
+});
+
+sweepTest("phase 145 app renderer evidence", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const path = `${PHASE145_ROOT}/kuramoto-oscillators.json`;
+  const result = JSON.parse(readFileSync(path, "utf8"));
+  const rows = [...result.finalists.map((f: any) => result.ranked.find((r: any) => r.id === f.id)), ...result.references];
+  result.appEvidence = await phase145AppEvidence(page, rows, result.manifest.validationPlan.steps);
+  writeText(path, JSON.stringify(result, null, 2));
+});
+
+test("phase 145 retained fields reproduce base metrics", () => {
+  const result = JSON.parse(readFileSync(`${PHASE145_ROOT}/kuramoto-oscillators.json`, "utf8"));
+  const raw = JSON.parse(readFileSync(`${PHASE145_ROOT}/kuramoto-oscillators-raw.json`, "utf8"));
+  const decode = (text: string) => {
+    const bytes = inflateSync(Buffer.from(text, "base64"));
+    return Array.from({ length: bytes.length / 4 }, (_, i) => bytes.readFloatLE(i * 4));
+  };
+  const expected = [...result.ranked, ...result.references];
+  expect(raw.rows.map((r: any) => r.id).sort()).toEqual(expected.map((r: any) => r.id).sort());
+  for (const r of raw.rows) {
+    const a = decode(r.phaseA), b = decode(r.phaseB);
+    expect(a.length).toBe(raw.width * raw.height);
+    expect(b.length).toBe(a.length);
+    const resultant = meanResultantLength(a);
+    const metrics = { ...scoreFrames(a, b, raw.width, raw.height, .5), meanResultantLength: resultant,
+      circularSpatialAutocorrelation: circularSpatialAutocorrelation(a, raw.width, raw.height),
+      phaseBalance: 1 - resultant, ...phase145Diagnostics(a, b),
+      primaryNonFiniteFraction: a.filter(v => !Number.isFinite(v)).length / a.length,
+      primaryLowerEndpointFraction: a.filter(v => v === 0).length / a.length,
+      primaryUpperEndpointFraction: a.filter(v => v === 1).length / a.length, borderOccupiedFraction: 1 };
+    const saved = expected.find((c: any) => c.id === r.id);
+    expect(r.params).toEqual(saved.params);
+    for (const key of Object.keys(saved.metrics)) expect(Math.abs(metrics[key] - saved.metrics[key]), `${r.id} ${key}`).toBeLessThanOrEqual(1e-9);
+  }
+});
+
+test("phase 145 circular persistence respects wrap and occupancy", () => {
+  const wrap = phase145Diagnostics([.99], [.01]);
+  expect(wrap.circularPersistence).toBeCloseTo(Math.cos(.04 * Math.PI), 14);
+  const masked = phase145Diagnostics([.2, 0], [.2, .5], [1, 0], [1, 0]);
+  expect(masked.circularPersistence).toBe(1);
+  expect(masked.jointOccupancy).toBe(.5);
+  expect(phase145Diagnostics([0], [0], [0], [0]).jointOccupancy).toBe(0);
+});

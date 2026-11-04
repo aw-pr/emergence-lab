@@ -1153,7 +1153,46 @@ const SWEEP_144_PARTICLE_LIFE: SimSweepConfig = {
   ],
 };
 
+const PHASE_145_KURAMOTO: SimSweepConfig = {
+  slug: "kuramoto-oscillators", artifactId: "sweep-145-kuramoto-oscillators",
+  primaryChannel: 0, phase: { channel: 0 },
+  gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 6, dt: 1,
+  coverageThreshold: 0.5,
+  baseParams: { frequencySpread: 0.55, timestep: 0.045, seed: 1 },
+  axes: [
+    { key: "couplingMode", values: ["local", "global"] },
+    { key: "coupling", values: [0.7, 1, 1.4, 2.4] },
+    { key: "initialPattern", values: ["waves", "random"] },
+    { key: "noise", values: [0, 0.04, 0.16, 0.4] },
+  ],
+  references: [
+    { id: "145-current-default", label: "Kernel default", params: { coupling: 1.8, frequencySpread: 0.45, timestep: 0.045, couplingMode: "local", initialPattern: "vortices", noise: 0.015, seed: 1 } },
+    ...KURAMOTO_OSCILLATORS.references.map(r => ({ ...r, id: `145-current-${r.id}`, params: { ...r.params } })),
+  ],
+};
+
+const PHASE_145_SWARMALATORS: SimSweepConfig = {
+  slug: "swarmalators", artifactId: "sweep-145-swarmalators",
+  primaryChannel: 0, phase: { channel: 1, occupancy: { channel: 0, threshold: 0.05 } },
+  gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 6, dt: 1,
+  coverageThreshold: 0.05,
+  baseParams: { particleCount: 384, A: 1, B: 18, timestep: 0.05, seed: 1,
+    trailPersistence: 0.85, cameraDrift: 0.5 },
+  axes: [
+    { key: "J", values: [0.1, 1] },
+    { key: "K", values: [-0.8, -0.2, 0.2, 0.8] },
+    { key: "frequencySpread", values: [0.05, 0.2, 0.45, 0.8] },
+    { key: "noise", values: [0.08, 0.4] },
+  ],
+  references: [
+    { id: "145-current-default", label: "Kernel default (shelved)", params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1, trailPersistence: 0.85, cameraDrift: 0.5 } },
+    ...SWARMALATORS.references.map(r => ({ ...r, id: `145-current-${r.id}`, params: { ...r.params, trailPersistence: 0.85, cameraDrift: 0.5 } })),
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-145-kuramoto-oscillators": PHASE_145_KURAMOTO,
+  "sweep-145-swarmalators": PHASE_145_SWARMALATORS,
   "sweep-147-brians-brain": {
     ...BRIANS_BRAIN, artifactId: "sweep-147-brians-brain",
     warmupSteps: 200, multiSnapshot: { warmupSteps: [200, 500, 1000] },

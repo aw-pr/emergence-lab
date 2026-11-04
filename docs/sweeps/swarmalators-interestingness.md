@@ -125,3 +125,109 @@ The shared synthetic wrap check used a constant eight-step phase gradient
 across both grid axes. It scored 0.333333 under the linear autocorrelation and
 0.707107 circularly, recording that the circular reading sees through the
 1-to-0 wrap.
+
+
+## Missed-regime preflight — 2026-10-30 batch, executed 2026-10-31
+
+**Partial: stopped before the full sweep under the card's throughput stop rule.**
+No new ranking, regime finding, aesthetic judgement or promotion is claimed.
+Historical results above remain historical; these pilot observations do not replace them.
+
+### Method and declaration
+
+The additive `sweep-145-swarmalators` configuration uses the real kernel via the existing
+`driveKernel`, `scoreOne`, `scoreFrames`, resultant-length and circular-coherence helpers.
+[Exact pre-measurement manifest](data/2026-10-30/145/swarmalators-manifest.json),
+[pilot readings and runtime](data/2026-10-30/145/swarmalators-pilot.json), and
+[commands, exits and incomplete checks](data/2026-10-30/145/preflight-checks.json) are retained.
+The manifest predates measurement and lists all 64 exact candidate parameter sets,
+fixed parameters, prior-grid citations, default/preset reference parameters and validation plan.
+No complete result file `swarmalators.json` exists: no full grid was admitted.
+
+Grid128×128, warmup400 kernel calls, gap6, driver dt1. Both kernels use their own
+explicit timestep rather than the driver's dt argument. Seed1 is pinned. The pilot
+measured only the first and last declared sets; these are additional throughput
+probes, not a completed or truncated candidate sweep. Zero of64 full-grid candidates
+and zero of7 current-reference rows were executed as a complete sweep.
+
+The unchanged composite remains a texture diagnostic with known phase-wrap bias.
+It does not decide phase motion or aesthetic superiority. Resultant length measures
+global phase order, circular lag1 coherence measures local agreement; phase balance
+is1−resultant. Circular persistence is mean cos(2π(B−A)), using the intersection
+of density>.05 masks for Swarmalators. This raster diagnostic includes trails/view-fit
+and is not particle-level phase tracking. None of these diagnostics alters scoring.
+The supplemental wrap/occupancy regression passes. Raw phase and primary-field
+nonfinite/endpoint fractions and occupied-border fractions are in the pilot JSON.
+Border occupancy is only a clipping warning proxy, not proof that no particle is off-frame.
+No visual clipping inspection was performed.
+
+### Searched and not-searched axes
+
+Declared axes: `[{"key":"J","values":[0.1,1]},{"key":"K","values":[-0.8,-0.2,0.2,0.8]},{"key":"frequencySpread","values":[0.05,0.2,0.45,0.8]},{"key":"noise","values":[0.08,0.4]}]`.
+Only two pilot parameter sets below were measured; the64-set declaration remains
+unexecuted. Zero refinements. Inclusion/exclusion reasons and exact historical ranges
+are in the manifest, citing the historical sections above, harness config, current
+presets and kernel. No historical candidate grid was rerun.
+
+### Pilot observations, not a ranking
+
+| pilot | full parameters | seconds | legacy score | resultant | circular coherence |
+|---|---|---:|---:|---:|---:|
+| `145-swarmalators-c01` | `{"particleCount":384,"A":1,"B":18,"timestep":0.05,"seed":1,"trailPersistence":0.85,"cameraDrift":0.5,"J":0.1,"K":-0.8,"frequencySpread":0.05,"noise":0.08}` | 10.097 | 0.554796457 | 0.028323257 | 0.804685007 |
+| `145-swarmalators-c64` | `{"particleCount":384,"A":1,"B":18,"timestep":0.05,"seed":1,"trailPersistence":0.85,"cameraDrift":0.5,"J":1,"K":0.8,"frequencySpread":0.8,"noise":0.4}` | 10.023 | 0.598495376 | 0.079090294 | 0.786592935 |
+
+Mean measured sample cost: **10.060s**. Conservative estimate:
+**11086.12s (184.8min)** against60min per kernel.
+Estimator: mean pilot cost × [2×(64+reference count) +
+(3+reference count)×24×4]. The first term allows grid+same-runtime replay;
+24 is2 sizes×3 seeds×4 times, with factor4 conservatively allowing larger grids
+and the longer horizon. This is an intentionally conservative extrapolation,
+not a measured full-run duration. It does not yet include image-production overhead.
+Kuramoto fits this preflight; Swarmalators estimates184.8min and blocks the grouped
+card. The card explicitly requires stopping before a full run and splitting/re-briefing
+when the declared work cannot fit. No candidate count, population, validation count,
+reference set, threshold or allocation was reduced to bypass this gate.
+
+### Current references and interpretation
+
+Declared references are the kernel default plus every current preset, copied from
+`src/app/presets.ts`, with omitted defaults made explicit from the named kernel.
+Kuramoto has5 reference rows; Swarmalators has7, including its default/Active phase
+wave duplicate deliberately retained with distinct IDs. Historical references are
+unchanged under their old artifact IDs. None of the new current-reference rows has
+been fully measured or visually compared. Swarmalators remains shelved; its eventual
+colour/phase and density PNGs must be labelled kernel fields. App screenshots are N/A
+for that shelved route. No app or field PNGs were captured for either kernel here.
+
+Stationary, travelling and partially synchronised regimes remain **unclassified**.
+No numeric replay, three-seed robustness spread, time strips, longer-horizon repeat,
+or matched app-scale visual comparison was completed. There are no finalists.
+Missing scientific/visual evidence is incomplete, not a negative search result.
+
+### Proposed promotions and reproduction
+
+**None.** The next operator decision is a split/re-brief that fits the measured
+throughput, potentially commissioning a single-pass channel capture separately.
+No production kernel, preset, default, interface or shelving change is proposed.
+
+```bash
+PHASE145_PILOT=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 145 "
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 145 "
+SWEEP_CONTRACT=145 npx playwright test e2e/sweep-145.contract.spec.ts
+npm run verify
+scripts/check-contract-test-gate.sh --worktree
+```
+
+The first command executed2 tests with0 skips and exits1 at the Swarmalators budget
+gate. The second is the required full-grid command but currently guarded: it runs
+preflight and fails explicitly rather than pretending to execute a complete sweep.
+It was not run as a full sweep. The third exits1:2 structural/protected-invariant
+checks pass; retained-result evidence is missing. `npm run verify` exits0.
+The worktree gate exits1 on the existing stage111 association with `sweep.spec.ts`
+(which has the unchanged stage70 block, not a stage111 marker). This mapping is
+outside this card's scope and was not repaired. Selected legacy browser checks
+reproduce the documented Gray-Scott score/coverage mismatch exactly;5 checks pass,
+1 fails and1 opt-in test skips, including the new passing wrap/occupancy check.
+Frozen stage145 file and all production/history invariants remain unchanged.
+
+**2026-11-03 operator decision:** Swarmalators is deferred to a future card: the preserved pilot estimated about 185 minutes against its 60-minute kernel allocation. Stage 145 now runs Kuramoto only; shelving remains unchanged.
