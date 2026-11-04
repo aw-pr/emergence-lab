@@ -159,6 +159,82 @@ test("obstacle layout none is byte-identical to the released kernel fixture", ()
   assert.equal(Buffer.compare(actual, releasedFixture), 0);
 });
 
+test("the population immediately below binning retains the base trajectory", () => {
+  const { createHash } = require("node:crypto");
+  const kernel = new BoidsKernel();
+  kernel.init(320, 200, { boidCount: 255, seed: 17, obstacleLayout: "none" });
+  for (let step = 0; step < 8; step += 1) kernel.step(1);
+  assert.equal(
+    createHash("sha256").update(Buffer.from(kernel.readState().buffer)).digest("hex"),
+    "a2c8807eacb1eb12f36777dbecc562c5fe90c1dc5eedc134943fe54be2dc82f1",
+  );
+});
+
+test("binned sampling reaches both sides and weights cells by population", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 512, obstacleLayout: "none" });
+  kernel.x.fill(82.5);
+  kernel.x.fill(42.5, 1, 128);
+  kernel.x[0] = 62.5;
+  kernel.y.fill(62.5);
+  kernel.vx.fill(0);
+  kernel.vy.fill(0);
+  const samples = [];
+  kernel.applySteer = (i, count, vx, vy, centerX) => {
+    if (i === 0) samples.push({ count, meanX: centerX / count });
+  };
+  for (let step = 1; step <= 32; step += 1) {
+    kernel.stepCounter = step;
+    kernel.computeForcesBinned(6, 6);
+  }
+  const expected = (384 - 127) * 20 / 511;
+  for (const sample of samples) {
+    assert.ok(sample.count >= 71 && sample.count <= 72, "candidate work stays bounded");
+    assert.ok(Math.abs(sample.meanX - expected) < 0.6, "neither cell order nor equal-cell weighting wins");
+  }
+});
+
+test("sparse binned neighbourhoods visit each candidate once across torus seams", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none" });
+  kernel.x.fill(80);
+  kernel.y.fill(80);
+  kernel.x.set([2, 148, 6]);
+  kernel.y.set([2, 2, 148]);
+  kernel.vx.fill(0);
+  kernel.vy.fill(0);
+  let sample;
+  kernel.applySteer = (i, count, vx, vy, centerX, centerY) => {
+    if (i === 0) sample = { count, centerX, centerY };
+  };
+  kernel.computeForcesBinned(6, 6);
+  assert.deepEqual(sample, { count: 2, centerX: 0, centerY: -4 });
+});
+
+test("binned propulsion preserves direction and buffers and respects the speed bounds", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", maxSpeed: 10 });
+  const buffers = [kernel.binStarts, kernel.binCursor, kernel.binItems, kernel.boidBins];
+  kernel.applySteer = (i) => {
+    kernel.nextVx[i] = 3;
+    kernel.nextVy[i] = 4;
+  };
+  kernel.computeForcesBinned(6, 6);
+  assert.ok(Math.abs(kernel.nextVx[0] - 4.2) < 1e-6);
+  assert.ok(Math.abs(kernel.nextVy[0] - 5.6) < 1e-6);
+  delete kernel.applySteer;
+  for (let step = 0; step < 8; step += 1) {
+    kernel.step(1);
+    for (let i = 0; i < kernel.vx.length; i += 1) {
+      const speed = Math.hypot(kernel.vx[i], kernel.vy[i]);
+      assert.ok(speed >= 7 - 1e-6 && speed <= 10 + 1e-6);
+    }
+  }
+  for (const [index, name] of ["binStarts", "binCursor", "binItems", "boidBins"].entries()) {
+    assert.equal(kernel[name], buffers[index], `${name} is reused between steps`);
+  }
+});
+
 test("init creates the expected state shape and readState reference is stable", () => {
   const kernel = new BoidsKernel();
   kernel.init(16, 12, {});

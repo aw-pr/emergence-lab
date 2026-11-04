@@ -312,3 +312,97 @@ The finalists are the top three ranked ids. Frames: `docs/images/sweeps-2026-11-
 Evidence: [`152/boids.json`](data/2026-11-03/152/boids.json), [`152/boids.presets.json`](data/2026-11-03/152/boids.presets.json), images in [`docs/images/sweeps-2026-11-03/`](../images/sweeps-2026-11-03/).
 
 No promotion is proposed; the shortlist awaits the operator's import and look.
+
+
+## 2026-11-04 — unbiased neighbour sampling (stage 153)
+
+The binned kernel now counts and flattens its cells into reusable buffers, then takes at most 72 evenly spaced candidates across the combined nine-cell neighbourhood. A seed-, boid- and step-dependent hash chooses the sample phase. Every candidate has the same inclusion probability; cells contribute in proportion to their population, and reaching an accepted-neighbour count no longer ends the scan on one side. All candidates are tested against the existing toroidal visual and separation radii. Sparse neighbourhoods visit every candidate once.
+
+After the existing steering and upper speed bound, the binned path raises nonzero velocities below 0.7 × maxSpeed to that speed without changing their heading. These are the only new tuning constants: `NEIGHBOUR_CANDIDATES = 72` and `MIN_SPEED_FRACTION = 0.7`. The brute-force path, wander, parameter schema, defaults, presets, initial flock assignment, obstacles and renderer interface are unchanged. New buffers are allocated in init, reused during steps and released in destroy. The nine-entry neighbourhood scratch buffer is reused for the lifetime of the kernel.
+
+**The stage-144 and stage-152 Boids readings predate this change and remain historical evidence.** Their frames, scores and presets have not been regenerated or re-scored.
+
+### Fixed-step readings
+
+Base: `b133231e843cb65938a4e40f48e79229642d8fc7`. Each row uses a fresh 960×600 kernel, 17777 boids, schema defaults except `obstacleLayout: "none"`, the listed seed, and calls to `step(1)`. Agreement is the length of the mean unit velocity; heading is its atan2 in radians; speed is the mean individual velocity magnitude. Occupied share counts distinct `(floor(x/8), floor(y/8))` cells over 120×75. Values are descriptive, not extra acceptance thresholds.
+
+| Seed | Steps | Heading agreement | Heading (rad) | Mean speed | Occupied share |
+|---|---|---|---|---|---|
+| 0 | 100 | 0.617024 | -2.214952 | 25.837755 | 0.731556 |
+| 0 | 300 | 0.993119 | -2.245534 | 30.616658 | 0.856222 |
+| 0 | 600 | 0.993303 | -2.248280 | 30.642089 | 0.874889 |
+| 1 | 100 | 0.531952 | 2.414603 | 25.563880 | 0.779889 |
+| 1 | 300 | 0.993153 | 2.386672 | 30.556046 | 0.871889 |
+| 1 | 600 | 0.993171 | 2.398542 | 30.595114 | 0.872000 |
+| 2 | 100 | 0.161984 | 1.601013 | 25.432098 | 0.791444 |
+| 2 | 300 | 0.992945 | 1.944255 | 30.516640 | 0.873222 |
+| 2 | 600 | 0.993163 | 1.952721 | 30.548799 | 0.875222 |
+
+These large fixed steps produce nearly global alignment by step 300 and broad coverage; the settled heading varies with seed. This does not establish spatial clumping. The live app advances by elapsed-time steps, much smaller than 1, and its appearance is assessed separately below. Keeping different headings beyond step 100 is not claimed.
+
+### Step cost
+
+One Node process per kernel/run, seed unset, 960×600, defaults with no obstacles, 100 warm-up steps, then the mean over steps 101–200 with `step(1)`. Base and new were alternated on this machine. All six processes exited 0.
+
+| Kernel | Run 1 (ms/step) | Run 2 | Run 3 | Median |
+|---|---|---|---|---|
+| Base | 28.108439 | 28.241695 | 25.503898 | 28.108439 |
+| New | 25.015748 | 41.649358 | 20.911257 | 25.015748 |
+
+The median is **11.0027% lower** than the base, within the allowed 15% increase. The slow second new run is retained; no outlier was discarded. The bounded candidate pass also avoids the old unbounded traversal through out-of-radius members of crowded cells.
+
+### Alternatives examined
+
+The card's equal-per-cell reference was read but not applied. The implementation uses one population-weighted sample rather than giving each cell an equal candidate allowance. Exploratory scratch variants tested dividing separation by the visual neighbour count, its square root, or the number of separating neighbours, and lowering the binned wander amplitude. These were examined at seed 0 with the same fixed-step measurement procedure; they did not change the delivered source.
+
+| Scratch variant | Occupied share at 100 / 300 / 600 | Mean speed at 600 |
+|---|---|---|
+| mean-separation | 0.6609 / 0.8370 / 0.8553 | 30.7115 |
+| sqrt-separation | 0.6681 / 0.8444 / 0.8591 | 30.7147 |
+| quiet | 0.6402 / 0.9031 / 0.9126 | 29.2093 |
+| mean-quiet | 0.2911 / 0.2201 / 0.1171 | 25.6712 |
+| sqrt-quiet | 0.4277 / 0.5950 / 0.2031 | 26.7431 |
+| mean-soft | 0.4680 / 0.6369 / 0.5168 | 27.9169 |
+| contact-quiet | 0.5218 / 0.5310 / 0.8094 | 27.4426 |
+
+Here `quiet` means 0.2 × existing wander, `soft` means 0.4 × existing wander, `mean` divides separation by visual neighbour count, `sqrt` by its square root, and `contact` by separating neighbour count. Reducing separation alone still spread broadly. Combining mean separation with quiet wander passed the six-test oracle in scratch but its diagnostic point plots contracted into many tiny blobs by step 600. It was rejected. The live app showed coherent hulls with the original sum and unchanged wander, so none of those extra steering changes was retained. Diagnostic point plots are not app-renderer acceptance evidence.
+
+
+### Live app review (worker evidence; verifier must repeat)
+
+Headless Chromium with `--use-angle=metal --enable-gpu`, isolated port 17783, fresh browser storage per load, 1280×800 viewport, `#/boids`, default speed 1.0×, layout set to none and Clear boulders pressed. The app selected a 1280×735 compute grid and 17777 boids. Read-only observation hooks exposed the kernel inputs and last dt; a requestAnimationFrame counter measured frame rate. The code under test was otherwise unchanged. Each load retained frames at approximately 5, 15, 30 and 60 seconds. The observations confirm schema defaults, zero obstacles and distinct random seeds.
+
+| Load | Seed | 60-second average fps | Console / page errors |
+|---|---|---|---|
+| New 1 | -1032595816 | 41.37 | 0 |
+| New 2 | 749760136 | 41.34 | 0 |
+
+Both opening frames show six separate, differently oriented flocks. At 15 seconds the flocks are bending and crossing; at 30 seconds they form broad curved streams; by 60 seconds they have merged into elongated bands with substantial empty areas and visible hulls. In kind, all eight frames are closest to the stage-144 Balanced flock shape reference. None reads as the near-uniform speckle reference or the stage-152 tiny hard-edged balls. The dark geometric wakes belong to the unchanged trail rendering; the bright flock bodies have curved hulls. This is a worker visual assessment, not operator acceptance. Independent verifier judgement is still required.
+
+Frames (untracked evidence):
+
+| Load | 5 seconds | 15 seconds | 30 seconds | 60 seconds |
+|---|---|---|---|---|
+| 1 | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-5s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-15s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-30s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-60s.png) |
+| 2 | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-5s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-15s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-30s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-60s.png) |
+
+The fixed-step numeric table and the live view answer different questions: `step(1)` displaces boids much farther per steering update than the app's measured dt (roughly 0.024–0.027 seconds in the retained new-kernel frames). Broad fixed-step coverage is reported openly rather than presented as evidence of the app's flock hulls.
+
+The base kernel, served from commit `b133231e843cb65938a4e40f48e79229642d8fc7` into the otherwise identical app at the same viewport and settings, averaged **33.11 fps** over its 60-second load (seed -1951832022, 0 console/page errors). New loads averaged **41.37 and 41.34 fps**. The frame counter covered approximately 60.2–60.3 seconds including screenshot overhead; browser runs were serial. These are descriptive frame-rate readings, not a substitute for the controlled Node step-cost comparison. Base frames and exact observations are in `e2e/artifacts/153-boids-unbiased-neighbours/base-browser.json` and `base-load1-*.png`.
+
+
+### Validation and verifier handoff
+
+| Command | Exit | Result |
+|---|---|---|
+| `npm run verify` | 0 | Both TypeScript checks, 419 passing tests, 51 opt-in skips, zero failures, and production build. Existing large-bundle advisory only. |
+| `node --test src/sims/boids/kernel.test.cjs` | 0 | 40 passed, no skips. New tests cover population weighting, both sides of a dense neighbourhood, sparse toroidal census, bounded sampling, speed bounds, buffer reuse, and a byte-exact base trajectory at 255 boids. |
+| `npm run build:test && env -u BOIDS_153_KERNEL BOIDS_153=1 node --test src/sims/boids/neighbourSampling.contract.test.cjs` | 0 | Six passed, no skips, on the final implementation. |
+| `scripts/check-contract-test-gate.sh print src/sims/boids/neighbourSampling.contract.test.cjs` | 0 | `sha256:9a2f256bb06255524d57498306881f47ad8499013f628b0f5fb71373aa28edb5`, unchanged. |
+| `git diff --check` | 0 | No whitespace errors. |
+| `git diff --name-only b133231e843cb65938a4e40f48e79229642d8fc7` | 0 | Only `src/sims/boids/kernel.ts`, `src/sims/boids/kernel.test.cjs` and this report. |
+| `git diff --name-only b133231e843cb65938a4e40f48e79229642d8fc7..HEAD` | 0 | Empty: the worker made no commits. Use the dirty-tree comparison above before orchestration commits. |
+
+Exact scripts, commands/exits, raw readings, all six timing runs, rejected-variant readings, source hashes, browser setup observations and frames are retained under `e2e/artifacts/153-boids-unbiased-neighbours/` (untracked). Entry points are `commands.json`, `measure.cjs`, `browser-check.cjs`, `readings-v1.json`, `benchmarks.json`, `alternatives.json`, `new-browser.json`, `base-browser.json`, `verify.log` and `oracle.log`. Node was v26.5.0. Two preliminary UI captures failed because of the button's accessible name, and one observer capture missed Vite's cache-busting query; the harnesses were corrected and those failures are recorded in `commands.json`. None was a kernel or WebGL2 failure. The isolated worker server has been stopped.
+
+Worker criteria 1–4 are satisfied; the worker's supplementary evidence supports 5–6. Independent verifier reruns and the verifier's scope/visual judgement remain due. The operator's criterion-8 look on dev remains due. No work was committed, merged, published or promoted; main, labs and the public mirror are untouched.
