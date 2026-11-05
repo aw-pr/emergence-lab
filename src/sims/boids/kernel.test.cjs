@@ -86,7 +86,7 @@ test("metadata matches the renderer contract", () => {
   const boidCount = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "boidCount",
   );
-  assert.equal(boidCount.default, 17777);
+  assert.equal(boidCount.default, 28000);
   assert.equal(boidCount.max, 28000);
 
   const maxSpeed = kernel.paramSchema.find(
@@ -162,7 +162,7 @@ test("obstacle layout none matches the pinned trajectory fixture", () => {
 test("the population immediately below binning retains the base trajectory", () => {
   const { createHash } = require("node:crypto");
   const kernel = new BoidsKernel();
-  kernel.init(320, 200, { boidCount: 255, seed: 17, obstacleLayout: "none" });
+  kernel.init(320, 200, { boidCount: 255, seed: 17, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
   for (let step = 0; step < 8; step += 1) kernel.step(1);
   assert.equal(
     createHash("sha256").update(Buffer.from(kernel.readState().buffer)).digest("hex"),
@@ -172,7 +172,7 @@ test("the population immediately below binning retains the base trajectory", () 
 
 test("binned sampling reaches both sides and weights cells by population", () => {
   const kernel = new BoidsKernel();
-  kernel.init(150, 150, { boidCount: 512, obstacleLayout: "none" });
+  kernel.init(150, 150, { boidCount: 512, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
   kernel.x.fill(82.5);
   kernel.x.fill(42.5, 1, 128);
   kernel.x[0] = 62.5;
@@ -196,7 +196,7 @@ test("binned sampling reaches both sides and weights cells by population", () =>
 
 test("sparse binned neighbourhoods visit each candidate once across torus seams", () => {
   const kernel = new BoidsKernel();
-  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none" });
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
   kernel.x.fill(80);
   kernel.y.fill(80);
   kernel.x.set([2, 148, 6]);
@@ -213,7 +213,7 @@ test("sparse binned neighbourhoods visit each candidate once across torus seams"
 
 test("binned propulsion preserves direction and buffers and respects the speed bounds", () => {
   const kernel = new BoidsKernel();
-  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", maxSpeed: 10 });
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", maxSpeed: 10, visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
   const buffers = [kernel.binStarts, kernel.binCursor, kernel.binItems, kernel.boidBins];
   kernel.applySteer = (i) => {
     kernel.nextVx[i] = 3;
