@@ -99,7 +99,7 @@ test("metadata matches the renderer contract", () => {
     (descriptor) => descriptor.key === "obstacleLayout",
   );
   assert.equal(obstacleLayout.type, "enum");
-  assert.equal(obstacleLayout.default, "reef");
+  assert.equal(obstacleLayout.default, "none");
   assert.deepEqual(obstacleLayout.options, [
     "none",
     "breakwaters",

@@ -263,7 +263,7 @@ function obstacleLayoutParam(params: SimParams): ObstacleLayout {
   return typeof value === "string" &&
     (OBSTACLE_LAYOUTS as readonly string[]).includes(value)
     ? (value as ObstacleLayout)
-    : "reef";
+    : "none";
 }
 
 function mulberry32(seed: number): () => number {
@@ -387,7 +387,7 @@ export class BoidsKernel implements SimKernel {
       key: "obstacleLayout",
       label: "Obstacle layout",
       type: "enum",
-      default: "reef",
+      default: "none",
       options: OBSTACLE_LAYOUTS,
       group: "Obstacles",
       info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. Dropped boulders sit over every layout and survive layout changes. Custom provides an empty preset beneath them, while None leaves only the dropped boulders. Changing the layout resets the flock.",
@@ -527,7 +527,7 @@ export class BoidsKernel implements SimKernel {
   private alignment = DEFAULT_ALIGNMENT;
   private cohesion = DEFAULT_COHESION;
   private separation = DEFAULT_SEPARATION;
-  private obstacleLayout: ObstacleLayout = "reef";
+  private obstacleLayout: ObstacleLayout = "none";
   private obstacleAmount = 0.5;
   private presetObstacles: Obstacle[] = [];
   private obstacles: Obstacle[] = [];
