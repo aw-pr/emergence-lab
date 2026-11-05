@@ -42,6 +42,8 @@ const DEFAULT_POINT_SIZE = 4;
 /** Matches the native viewer's spec: six ring-arranged flocks at load, so the
  * first frames read as flocking rather than a uniform speckle. */
 const DEFAULT_INITIAL_FLOCKS = 6;
+/** Radians each ring flock aims off the centre, all to the same side. */
+const FLOCK_AIM_SKEW = 0;
 const MAX_BOID_COUNT = 40000;
 /** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
  * from freezing into rigid crystalline order, but too much washes the flocking
@@ -1680,8 +1682,8 @@ export class BoidsKernel implements SimKernel {
   }
 
   /** Ported from the native viewer's seedClusteredBoids: flocks start as
-   * tight discs on a ring about the centre, each already heading tangentially,
-   * so heading-hue colour reads as coherent lanes from the first frame. */
+   * tight discs on a ring about the centre, each already heading just off the
+   * centre, so the flocks converge and heading-hue colour reads from frame one. */
   private seedClusteredBoids(random: () => number): void {
     const count = this.initialFlocks;
     const centreX = this.width * 0.5;
@@ -1698,7 +1700,10 @@ export class BoidsKernel implements SimKernel {
         (TWO_PI * flock) / count + (random() - 0.5) * 0.16;
       centresX[flock] = centreX + Math.cos(ringAngle) * ringX;
       centresY[flock] = centreY + Math.sin(ringAngle) * ringY;
-      headings[flock] = ringAngle + Math.PI / 2 + (random() - 0.5) * 0.35;
+      headings[flock] =
+        Math.atan2(centreY - centresY[flock], centreX - centresX[flock]) +
+        FLOCK_AIM_SKEW +
+        (random() - 0.5) * 0.35;
     }
 
     for (let i = 0; i < this.boidCount; i += 1) {
