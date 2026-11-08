@@ -488,8 +488,9 @@ export async function renderSimView(
   let stepsPerFrame = snapshot?.stepsPerFrame ?? speedProfile.initial;
   const fractal = isFractalSlug(slug);
   const qualityProfile = qualityProfileFor(slug, renderMode);
-  const defaultResolution = qualityProfile.defaultPreset;
-  const resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
+  let defaultResolution = qualityProfile.defaultPreset;
+  const chosenResolution = snapshot?.resolution ?? loadResolution(slug);
+  let resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
 
   // Sims whose kernel reports run completion (currently DLA) can auto-cycle
   // into a fresh randomised run when they finish. On by default when supported.
@@ -521,6 +522,17 @@ export async function renderSimView(
     autoCycle: initialAutoCycle,
     qualityProfile,
   });
+
+  // A default that assumes GPU-resident stepping is withdrawn once the backend
+  // turns out to step this sim on the CPU; a saved choice is kept as made.
+  const cpuFallbackPreset = qualityProfile.cpuFallbackPreset;
+  if (cpuFallbackPreset !== undefined && !renderer.usesDirectRendering()) {
+    defaultResolution = cpuFallbackPreset;
+    if (chosenResolution == null) {
+      resolution = cpuFallbackPreset;
+      renderer.setResolution(resolution);
+    }
+  }
 
   const obstacleEditor = slug === "boids"
     ? kernel as SimKernel & BoidsObstacleEditor

@@ -3,6 +3,11 @@ import type { ResolutionPreset } from "./resolutionPreset.ts";
 
 export interface QualityProfile {
   defaultPreset: ResolutionPreset;
+  /**
+   * Preset to use instead of defaultPreset when the backend steps this sim on
+   * the CPU. Present only when the default assumes GPU-resident stepping.
+   */
+  cpuFallbackPreset?: ResolutionPreset;
   /** Source cells per CSS pixel before the preset cell budget is applied. */
   computeScale: number;
   /** Device-pixel ratio ceiling for the standalone display backing store. */
@@ -95,8 +100,16 @@ export function qualityProfileFor(
   // draw-side density slider keeps the frame cost adjustable without a
   // rebuild, so the densest tier is the right default here.
   if (slug === "logistic-mandelbrot") defaultPreset = "extreme";
-  if (slug === "gray-scott" || slug === "belousov-zhabotinsky" || slug === "physarum") {
+  if (slug === "belousov-zhabotinsky" || slug === "physarum") {
     defaultPreset = "high";
+  }
+  // Gray-Scott steps GPU-resident on WebGL2 with float render targets, where
+  // the ultra grid costs under a millisecond a frame. The CPU kernel needs
+  // about 400 ms a frame there, so it keeps the grid it had before.
+  let cpuFallbackPreset: ResolutionPreset | undefined;
+  if (slug === "gray-scott") {
+    defaultPreset = "ultra";
+    cpuFallbackPreset = "high";
   }
   if (slug === "lenia") defaultPreset = "performance";
 
@@ -110,6 +123,12 @@ export function qualityProfileFor(
   } else if (tier === "phone") {
     defaultPreset = capPreset(defaultPreset, "balanced");
     if (PHONE_FORCED_PERFORMANCE.has(slug)) defaultPreset = "performance";
+  }
+  if (
+    cpuFallbackPreset !== undefined &&
+    PRESET_ORDER.indexOf(cpuFallbackPreset) >= PRESET_ORDER.indexOf(defaultPreset)
+  ) {
+    cpuFallbackPreset = undefined;
   }
 
   let computeScale = mode === "field" || mode === "smooth" ? 1.2 : 1;
@@ -126,6 +145,7 @@ export function qualityProfileFor(
     mode === "orbit3d";
   return {
     defaultPreset,
+    ...(cpuFallbackPreset === undefined ? {} : { cpuFallbackPreset }),
     computeScale,
     displayDprCap: expensiveDisplay ? 3 : 2.5,
     maxDisplayDimension: expensiveDisplay ? 6144 : 4096,

@@ -920,7 +920,8 @@ export class Renderer {
     return 786_432;
   }
 
-  private usesDirectRendering(): boolean {
+  /** True while the backend steps this simulation itself, with no CPU kernel step. */
+  usesDirectRendering(): boolean {
     return (
       this.backend.supportsDirectRendering?.(
         this.renderMode,

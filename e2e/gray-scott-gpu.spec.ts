@@ -74,6 +74,8 @@ test("gray-scott steps GPU-resident on webgl2", async ({ page }) => {
   await page.getByLabel("Kernel preset").selectOption("waves");
   await expectGpuResident(page);
 
+  // The GPU path makes the ultra grid the desktop default.
+  await expect(page.getByLabel("Grid quality")).toHaveValue("ultra");
   await page.getByLabel("Grid quality").selectOption("ultra");
   await expectGpuResident(page);
   const [width, height] = ((await canvas.getAttribute("data-render-size")) ?? "0x0")
@@ -103,6 +105,8 @@ test("CPU fallbacks keep stepping", async ({ page }) => {
   await expect(canvas).toHaveAttribute("data-simulation-renderer", "cpu-kernel");
   await expectStepping(page);
   expect(await passCount(page)).toBe(-1);
+  // Without GPU stepping the ultra default gives way to the CPU grid.
+  await expect(page.getByLabel("Grid quality")).toHaveValue("high");
 
   await page.goto("/?simulationRenderer=cpu#/kuramoto-oscillators");
   await expect(canvas).toHaveAttribute("data-simulation-renderer", "cpu-kernel");
@@ -120,6 +124,7 @@ test("CPU fallbacks keep stepping", async ({ page }) => {
   await page.goto("/#/gray-scott");
   await expect(canvas).toHaveAttribute("data-simulation-renderer", "cpu-kernel");
   await expectStepping(page);
+  await expect(page.getByLabel("Grid quality")).toHaveValue("high");
   const [width, height] = ((await canvas.getAttribute("data-render-size")) ?? "0x0")
     .split("x")
     .map(Number);
