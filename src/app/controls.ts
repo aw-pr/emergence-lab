@@ -387,18 +387,23 @@ export class ControlsPanel {
       button("Fullscreen", () => this.callbacks.onToggleFullscreen()),
     );
     transport.appendChild(transportButtons);
+    this.container.appendChild(transport);
 
-    transport.appendChild(
+    // A block of its own so a section inserted after the transport buttons
+    // (the Presets list) sits directly under them.
+    const pace = document.createElement("div");
+    pace.className = "controls__pace";
+    pace.appendChild(
       this.buildStepsControl(options.initialStepsPerFrame, options.stepsControl, (value) =>
         this.callbacks.onStepsPerFrameChange(value),
       ),
     );
 
     if (this.showAutoCycleControl) {
-      transport.appendChild(this.buildAutoCycleControl());
+      pace.appendChild(this.buildAutoCycleControl());
     }
 
-    this.container.appendChild(transport);
+    this.container.appendChild(pace);
 
     const viewParamKeys = new Set(options.viewParamKeys ?? []);
     const viewSection = collapsibleSection(this.slug, "View", "controls__view");

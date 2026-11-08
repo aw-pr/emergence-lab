@@ -1238,7 +1238,8 @@ textarea.boids-obstacle-layouts__input {
   text-align: right;
 }
 
-.controls__transport {
+.controls__transport,
+.controls__pace {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1247,18 +1248,11 @@ textarea.boids-obstacle-layouts__input {
   margin-bottom: 16px;
 }
 
-/* One row of four. Labels may wrap inside a button ("Reset to / defaults"),
- * never past it. */
+/* One full-width row per button. */
 .controls__transport-buttons {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 6px;
-}
-
-.controls__transport-buttons > .control__button {
-  padding: 7px 4px;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .control__button {
