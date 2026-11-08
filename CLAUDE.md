@@ -49,7 +49,12 @@ which hands the operator a shortlist and changes no default. Stages 103
 gated on 103) were queued on 2026-10-06 and have since landed.
 Stages 105-107 (second refinement level, tail refinement default, wider extreme pool) landed and shipped 2026-10-08/09 with exposure 0.5 and edge glow 0.25 as the new defaults.
 
-Gray-Scott stays the priority kernel for future refinement.
+Gray-Scott stays the priority kernel for future refinement. On 2026-11-08 it
+moved to GPU-resident stepping in the WebGL2 backend (`src/app/grayScottGpu.ts`,
+Kuramoto pattern) with the CPU kernel as fallback, and ultra became its desktop
+default grid; the per-sim fallback lives in `qualityProfileFor`'s
+`cpuFallbackPreset`. The same-day interestingness re-run is in
+`docs/sweeps/2026-11-08-operator-rerun.md`.
 
 ## Worktrees and branches
 
