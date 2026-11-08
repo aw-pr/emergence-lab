@@ -1,5 +1,7 @@
 # Julia Set interestingness sweep — 2026-10-30
 
+> **Evidence files.** Sweep evidence (ranked JSON, manifests, screenshots) is not kept in the repository; the harness writes it to git-ignored folders. File names below are plain text so they can be matched against a local run.
+
 **Research outcome: no promotion proposed.** Completed 64 new constant pairs and 24 refined views, plus all three current references. The score leader is cropped and iteration-sensitive; a wider lobed view and a fragmented view are retained as contrasting evidence. These are observed raster morphologies, not mathematical connectivity classifications. Independent cross-family verification and operator visual review remain separate.
 
 ## Method
@@ -8,7 +10,7 @@ Reused the stage 137 driver, `scoreOne`, `staticBoundaryMetrics` and PNG/report 
 
 Each row starts a fresh deterministic kernel: primary channel0, warmup0, fluxGap0, dt1, no RNG/seed. Candidates pin centre(0,0), base512, adaptive detail=false, palettePhase0 and cycleSpeed0. No rotation setting exists. Validation uses 256×256 at the same settings and exact effective iteration doubling. References retain their shipped base/adaptive settings, with phase/cycling disabled; differing reference iteration limits are recorded and are a comparability limitation.
 
-Full evidence: [ranked results, manifest, replay, convergence and screenshot settings](data/2026-10-30/139/julia-set.json), [coarse pre-measurement declaration](data/2026-10-30/139/manifest-coarse.json), [refined pre-measurement declaration](data/2026-10-30/139/manifest-refined.json), [preserved coarse results](data/2026-10-30/139/coarse-results.json), [direct-import replay](data/2026-10-30/139/direct-replay.json), [command outcomes and attempt accounting](data/2026-10-30/139/verification.json). Every row retains complete parameters and numeric metrics. Shortlist/reference 128² raw fields are linked below.
+Full evidence: ranked results, manifest, replay, convergence and screenshot settings, coarse pre-measurement declaration, refined pre-measurement declaration, preserved coarse results, direct-import replay, command outcomes and attempt accounting. Every row retains complete parameters and numeric metrics. Shortlist/reference 128² raw fields are listed below.
 
 ## Searched and not searched
 
@@ -27,7 +29,7 @@ Not searched: panning, global slider ranges, deep zoom, iteration count as an op
 
 ## Ranked candidates
 
-Top twelve of 88; complete ordering and all parameters are in the linked JSON. All candidates use the fixed settings stated above.
+Top twelve of 88; complete ordering and all parameters are in the ranked JSON. All candidates use the fixed settings stated above.
 
 | Rank | ID | cRe | cIm | zoom | score128 | interior128 | edge128 | coarse edge128 |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
@@ -72,22 +74,22 @@ App screenshots are colour GPU output at landscape aspect. Field PNGs are256² C
 
 | Candidate app screenshot | Current Dendrite reference, identical presentation |
 |---|---|
-| ![139-c68 app](../images/sweeps-2026-10-30/139-139-c68-app.png) | ![current Dendrite app](../images/sweeps-2026-10-30/139-139-current-dendrite-app.png) |
-| ![139-c65 app](../images/sweeps-2026-10-30/139-139-c65-app.png) | ![current Dendrite app](../images/sweeps-2026-10-30/139-139-current-dendrite-app.png) |
-| ![139-c87 app](../images/sweeps-2026-10-30/139-139-c87-app.png) | ![current Dendrite app](../images/sweeps-2026-10-30/139-139-current-dendrite-app.png) |
+| `139-139-c68-app.png` | `139-139-current-dendrite-app.png` |
+| `139-139-c65-app.png` | `139-139-current-dendrite-app.png` |
+| `139-139-c87-app.png` | `139-139-current-dendrite-app.png` |
 
 Every retained image and the raw field for each selected view:
 
 | ID / role | App screenshot | Grayscale field256 | Binary512 or shipped limit | Binary doubled limit | Raw field128 |
 |---|---|---|---|---|---|
-| 139-c68 (candidate) | [app](../images/sweeps-2026-10-30/139-139-c68-app.png) | [field](../images/sweeps-2026-10-30/139-139-c68-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-c68-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-c68-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-c68.field-128.json) |
-| 139-c65 (candidate) | [app](../images/sweeps-2026-10-30/139-139-c65-app.png) | [field](../images/sweeps-2026-10-30/139-139-c65-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-c65-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-c65-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-c65.field-128.json) |
-| 139-c87 (candidate) | [app](../images/sweeps-2026-10-30/139-139-c87-app.png) | [field](../images/sweeps-2026-10-30/139-139-c87-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-c87-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-c87-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-c87.field-128.json) |
-| 139-current-default (current reference) | [app](../images/sweeps-2026-10-30/139-139-current-default-app.png) | [field](../images/sweeps-2026-10-30/139-139-current-default-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-current-default-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-current-default-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-current-default.field-128.json) |
-| 139-current-dendrite (current reference) | [app](../images/sweeps-2026-10-30/139-139-current-dendrite-app.png) | [field](../images/sweeps-2026-10-30/139-139-current-dendrite-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-current-dendrite-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-current-dendrite-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-current-dendrite.field-128.json) |
-| 139-current-rabbit (current reference) | [app](../images/sweeps-2026-10-30/139-139-current-rabbit-app.png) | [field](../images/sweeps-2026-10-30/139-139-current-rabbit-field-256.png) | [binary](../images/sweeps-2026-10-30/139-139-current-rabbit-membership-256.png) | [doubled](../images/sweeps-2026-10-30/139-139-current-rabbit-comparison-membership-256.png) | [raw](data/2026-10-30/139/139-current-rabbit.field-128.json) |
+| 139-c68 (candidate) | `139-139-c68-app.png` | `139-139-c68-field-256.png` | `139-139-c68-membership-256.png` | `139-139-c68-comparison-membership-256.png` | `139-c68.field-128.json` |
+| 139-c65 (candidate) | `139-139-c65-app.png` | `139-139-c65-field-256.png` | `139-139-c65-membership-256.png` | `139-139-c65-comparison-membership-256.png` | `139-c65.field-128.json` |
+| 139-c87 (candidate) | `139-139-c87-app.png` | `139-139-c87-field-256.png` | `139-139-c87-membership-256.png` | `139-139-c87-comparison-membership-256.png` | `139-c87.field-128.json` |
+| 139-current-default (current reference) | `139-139-current-default-app.png` | `139-139-current-default-field-256.png` | `139-139-current-default-membership-256.png` | `139-139-current-default-comparison-membership-256.png` | `139-current-default.field-128.json` |
+| 139-current-dendrite (current reference) | `139-139-current-dendrite-app.png` | `139-139-current-dendrite-field-256.png` | `139-139-current-dendrite-membership-256.png` | `139-139-current-dendrite-comparison-membership-256.png` | `139-current-dendrite.field-128.json` |
+| 139-current-rabbit (current reference) | `139-139-current-rabbit-app.png` | `139-139-current-rabbit-field-256.png` | `139-139-current-rabbit-membership-256.png` | `139-139-current-rabbit-comparison-membership-256.png` | `139-current-rabbit.field-128.json` |
 
-Additional coarse raw fields preserved: [c01](data/2026-10-30/139/139-c01.field-128.json), [c17](data/2026-10-30/139/139-c17.field-128.json).
+Additional coarse raw fields preserved: c01, c17.
 
 ## Resolution, iteration and pathology checks
 
