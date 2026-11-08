@@ -1,5 +1,6 @@
-import { presetButton, presetNameDialog, resolveSavedPreset, savedPresetStore } from "./presetLibrary.ts";
-import type { PresetSnapshot } from "./savedPresets.ts";
+import { presetButton, presetHref, presetNameDialog, resolveSavedPreset, savedPresetStore } from "./presetLibrary.ts";
+import type { PresetSnapshot, SavedPreset } from "./savedPresets.ts";
+import { trialPresets } from "./trialPresets.ts";
 import { defaultDisplayOptionsFor, speedProfileFor } from "./savedPresets.ts";
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
@@ -709,9 +710,86 @@ export async function renderSimView(
       params: renderer.currentParams(),
       ...(obstacleEditor ? { customObstacles: obstacleEditor.exportCustomObstacleLayout() } : {}),
     });
+    let undo: SavedPreset | undefined;
     const showStatus = (text: string) => {
+      undo = undefined;
       status.textContent = text + (savedPresetStore.warning ? ` ${savedPresetStore.warning}` : "");
     };
+    const showError = (reason: unknown) => {
+      error.textContent = reason instanceof Error ? reason.message : String(reason);
+      error.hidden = false;
+    };
+
+    // This sim's presets, loaded by name and deleted by the cross with the
+    // library page's Undo; trials load but are not the visitor's to delete.
+    const list = document.createElement("ul");
+    list.className = "preset-tools__list";
+    list.setAttribute("aria-label", "Presets for this simulation");
+    const forThisSim = (preset: SavedPreset) =>
+      preset.snapshot.slug === slug && (preset.snapshot.variant ?? "") === (variant ?? "");
+    const undoButton = presetButton("Undo", () => {
+      const removed = undo;
+      if (!removed) return;
+      error.hidden = true;
+      void savedPresetStore.restore(removed).then(async () => {
+        showStatus(`Restored “${removed.name}”.`);
+        await refreshList();
+      }, showError);
+    });
+    const deletePreset = (preset: SavedPreset) => {
+      error.hidden = true;
+      void savedPresetStore.delete(preset.id).then(async (removed) => {
+        await refreshList();
+        showStatus(`Deleted “${preset.name}”.`);
+        undo = removed;
+        status.append(" ", undoButton);
+        undoButton.focus();
+      }, showError);
+    };
+    const presetRow = (preset: SavedPreset, source: "personal" | "trial") => {
+      const row = document.createElement("li");
+      row.className = "preset-row";
+      row.dataset.presetId = preset.id;
+      row.dataset.presetSource = source;
+      row.dataset.presetSlug = preset.snapshot.slug;
+      const open = document.createElement("a");
+      open.className = "preset-row__open";
+      open.href = presetHref(preset);
+      open.textContent = preset.name;
+      if (loadedPreset?.id === preset.id) open.setAttribute("aria-current", "true");
+      row.append(open);
+      if (source === "trial") {
+        const tag = document.createElement("span");
+        tag.className = "preset-row__tag";
+        tag.textContent = "Trial";
+        row.append(tag);
+      } else {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "preset-row__delete";
+        remove.setAttribute("aria-label", `Delete ${preset.name}`);
+        remove.textContent = "✕";
+        remove.addEventListener("click", () => deletePreset(preset));
+        row.append(remove);
+      }
+      return row;
+    };
+    const refreshList = async () => {
+      const [personal, trials] = await Promise.all([savedPresetStore.list(), trialPresets()]);
+      const rows = [
+        ...personal.filter(forThisSim).map((preset) => presetRow(preset, "personal")),
+        ...trials.filter(forThisSim).map((preset) => presetRow(preset, "trial")),
+      ];
+      if (!rows.length) {
+        const empty = document.createElement("li");
+        empty.className = "preset-row preset-row--empty";
+        empty.textContent = "No presets for this simulation yet.";
+        rows.push(empty);
+      }
+      list.replaceChildren(...rows);
+    };
+    void refreshList().catch(showError);
+
     if (loadedPreset) showStatus(`${loadedPreset.source === "trial" ? "Trial" : "Personal preset"}: ${loadedPreset.name}. Changes stay in this session until you save${loadedPreset.source === "personal" ? " or update" : " a copy"}.`);
     const save = presetButton("Save preset", () => {
       const current = capture();
@@ -729,6 +807,7 @@ export async function renderSimView(
         save: async (name) => {
           const entry = await savedPresetStore.create(name, current);
           showStatus(`Saved “${entry.name}”.`);
+          await refreshList();
         },
       });
     }, true);
@@ -738,13 +817,12 @@ export async function renderSimView(
       tools.append(presetButton("Update preset", () => {
         error.hidden = true;
         void savedPresetStore.update(id, capture()).then(() => showStatus("Preset updated from the current configuration."), (reason) => {
-          error.textContent = reason instanceof Error ? reason.message : String(reason);
-          error.hidden = false;
+          showError(reason);
           live.hidden = controls.getParams().modelSource === undefined || controls.getParams().modelSource === LIVE_MODEL_SOURCE;
         });
       }));
     }
-    tools.append(status, error, live);
+    tools.append(list, status, error, live);
     section.appendChild(tools);
     controls.insertAfterTransport(section);
   }
