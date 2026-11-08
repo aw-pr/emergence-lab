@@ -83,7 +83,7 @@ for (const slug of ALL_SLUGS) {
       const after = await readIterations(page);
       expect(after, `${slug} should be stepping`).toBeGreaterThan(before);
       if (
-        slug === "kuramoto-oscillators" &&
+        (slug === "kuramoto-oscillators" || slug === "gray-scott") &&
         (await canvas.getAttribute("data-renderer")) === "webgl2"
       ) {
         await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
