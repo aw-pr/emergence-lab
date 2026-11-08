@@ -38,6 +38,8 @@ state/logs/
 test-results/
 playwright-report/
 e2e/artifacts/
+docs/sweeps/data/
+docs/images/sweeps-*/
 .cache/ms-playwright/
 dist-lib/
 public/baked/

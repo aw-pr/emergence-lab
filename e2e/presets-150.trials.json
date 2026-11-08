@@ -1,0 +1,147 @@
+{
+  "stage": 144,
+  "note": "Shipped-population finalists each trial preset must reproduce, in library order.",
+  "trials": {
+    "physarum": [
+      {
+        "id": "evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8",
+        "population": "shipped 32000",
+        "params": {
+          "agentCount": 32000,
+          "turnSpeed": 22.5,
+          "stepsPerFrame": 1,
+          "seed": 144,
+          "evaporation": 0.975,
+          "depositAmount": 0.6,
+          "moveSpeed": 0.5,
+          "sensorDistance": 14,
+          "sensorAngle": 8
+        }
+      },
+      {
+        "id": "evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80",
+        "population": "shipped 32000",
+        "params": {
+          "agentCount": 32000,
+          "turnSpeed": 22.5,
+          "stepsPerFrame": 1,
+          "seed": 144,
+          "evaporation": 0.8,
+          "depositAmount": 0.6,
+          "moveSpeed": 2.5,
+          "sensorDistance": 14,
+          "sensorAngle": 80
+        }
+      },
+      {
+        "id": "evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30",
+        "population": "shipped 32000",
+        "params": {
+          "agentCount": 32000,
+          "turnSpeed": 22.5,
+          "stepsPerFrame": 1,
+          "seed": 144,
+          "evaporation": 0.975,
+          "depositAmount": 0.06,
+          "moveSpeed": 2.5,
+          "sensorDistance": 3,
+          "sensorAngle": 30
+        }
+      }
+    ],
+    "particle-life": [
+      {
+        "id": "friction0.97_species8_forceScale140_matrixBias0.35",
+        "population": "shipped 6000",
+        "params": {
+          "particleCount": 6000,
+          "rmax": 24,
+          "rmin": 12,
+          "seed": 144,
+          "friction": 0.97,
+          "species": 8,
+          "forceScale": 140,
+          "matrixBias": 0.35
+        }
+      },
+      {
+        "id": "friction0.97_species6_forceScale140_matrixBias-0.35",
+        "population": "shipped 6000",
+        "params": {
+          "particleCount": 6000,
+          "rmax": 24,
+          "rmin": 12,
+          "seed": 144,
+          "friction": 0.97,
+          "species": 6,
+          "forceScale": 140,
+          "matrixBias": -0.35
+        }
+      },
+      {
+        "id": "friction0.1_species3_forceScale10_matrixBias-0.35",
+        "population": "shipped 6000",
+        "params": {
+          "particleCount": 6000,
+          "rmax": 24,
+          "rmin": 12,
+          "seed": 144,
+          "friction": 0.1,
+          "species": 3,
+          "forceScale": 10,
+          "matrixBias": -0.35
+        }
+      }
+    ],
+    "boids": [
+      {
+        "id": "alignment0.25_cohesion0_initialFlocks12",
+        "population": "shipped 17777",
+        "params": {
+          "boidCount": 17777,
+          "visualRadius": 36,
+          "separationRadius": 6,
+          "separation": 0.2,
+          "maxSpeed": 16,
+          "pointSize": 6,
+          "obstacleLayout": "none",
+          "alignment": 0.25,
+          "cohesion": 0,
+          "initialFlocks": 12
+        }
+      },
+      {
+        "id": "alignment0.15_cohesion0_initialFlocks6",
+        "population": "shipped 17777",
+        "params": {
+          "boidCount": 17777,
+          "visualRadius": 36,
+          "separationRadius": 6,
+          "separation": 0.2,
+          "maxSpeed": 16,
+          "pointSize": 6,
+          "obstacleLayout": "none",
+          "alignment": 0.15,
+          "cohesion": 0,
+          "initialFlocks": 6
+        }
+      },
+      {
+        "id": "alignment0.01_cohesion0_initialFlocks1",
+        "population": "shipped 17777",
+        "params": {
+          "boidCount": 17777,
+          "visualRadius": 36,
+          "separationRadius": 6,
+          "separation": 0.2,
+          "maxSpeed": 16,
+          "pointSize": 6,
+          "obstacleLayout": "none",
+          "alignment": 0.01,
+          "cohesion": 0,
+          "initialFlocks": 1
+        }
+      }
+    ]
+  }
+}

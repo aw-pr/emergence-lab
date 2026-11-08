@@ -1,10 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 test.use({ actionTimeout: 10_000 });
 
 const KEY = "el:saved-presets:v1";
-const artifact = (name: string) => `e2e/fixtures/presets-150/${name}`;
+const TRIALS: Record<string, { id: string; params: Record<string, unknown> }[]> =
+  JSON.parse(readFileSync("e2e/presets-150.trials.json", "utf8")).trials;
+const ARTIFACT_DIR = "e2e/artifacts/presets-150";
+mkdirSync(ARTIFACT_DIR, { recursive: true });
+const artifact = (name: string) => `${ARTIFACT_DIR}/${name}`;
 const personal = (page: Page, name: string) => page.locator('[data-preset-source="personal"]').filter({ has: page.getByText(name, { exact: true }) });
 async function library(page: Page) {
   await page.getByRole("link", { name: "Presets", exact: true }).click();
@@ -78,8 +82,7 @@ test("150 supplemental: real trial kernel inputs, defaults and lifecycle", async
   });
   const retained: any[] = [];
   for (const slug of ["physarum", "particle-life", "boids"]) {
-    const data = JSON.parse(readFileSync(`docs/sweeps/data/2026-10-30/144/${slug}.app-evidence.json`, "utf8"));
-    const row = data.rows.find((r: any) => r.kind === "finalist" && r.population.startsWith("shipped"));
+    const row = TRIALS[slug][0];
     const item = page.locator(`[data-preset-source="trial"][data-preset-slug="${slug}"]`).first();
     await item.getByRole("button", { name: "Open", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
