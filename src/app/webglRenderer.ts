@@ -2992,11 +2992,9 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
     gl.uniform1i(this.uniforms.streamerMode, isAttractorState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.streamerWidth, numericParam(params, "ribbonWidth", 2.1));
-    const meanDir = boidsMeanDirection(
-      state,
-      kernel.channelCount,
-      this.gridWidth * this.gridHeight,
-    );
+    const meanDir = isBoidsState(kernel)
+      ? boidsMeanDirection(state, kernel.channelCount, this.gridWidth * this.gridHeight)
+      : [0, 0];
     gl.uniform2f(this.uniforms.boidsMeanDir, meanDir[0], meanDir[1]);
   }
 }
