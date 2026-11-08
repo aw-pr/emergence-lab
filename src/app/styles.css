@@ -986,6 +986,46 @@ textarea.boids-obstacle-layouts__input {
   }
 }
 
+.sim-view__edge-zone {
+  display: none;
+}
+
+/* Hidden controls on a fine pointer: the panel parks just off the left edge
+ * and slides back in over the stage while the pointer rests on that edge, on
+ * the panel or on its tab, or while keyboard focus is inside it. The tab stays
+ * put at the edge (inside the panel's padding) so a click on it pins the
+ * panel open. Touch keeps the tab alone. */
+@media (min-width: 721px) and (hover: hover) and (pointer: fine) {
+  .sim-view--controls-hidden:not(.sim-view--immersive) .sim-view__edge-zone {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    width: 12px;
+  }
+
+  .sim-view--controls-hidden:not(.sim-view--immersive) .sim-view__sidebar {
+    display: block;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+  }
+
+  .sim-view--controls-hidden:not(.sim-view--immersive)
+    .sim-view__body:has(
+      .sim-view__edge-zone:hover,
+      .sim-view__sidebar:hover,
+      .sim-view__sidebar:focus-within,
+      .sim-view__sidebar-tab:hover
+    )
+    .sim-view__sidebar {
+    transform: translateX(0);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.35);
+  }
+}
+
 /* Immersive-only edge handle for opening the drawer on touch; irrelevant
  * (and hidden) in normal layout where the sidebar is already visible. */
 .sim-view__drawer-handle {

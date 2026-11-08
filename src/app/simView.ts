@@ -1558,9 +1558,23 @@ function buildLayout(
   };
   showControls(true);
   sidebarTab.addEventListener("click", () => {
-    showControls(page.classList.contains("sim-view--controls-hidden"));
+    const show = page.classList.contains("sim-view--controls-hidden");
+    showControls(show);
+    // Focus left on a control inside the panel would hold the hidden panel
+    // open through its :focus-within reveal.
+    const root = body.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement;
+    if (!show && focused instanceof HTMLElement && sidebar.contains(focused)) focused.blur();
   });
   body.appendChild(sidebarTab);
+
+  // With the controls hidden, resting a fine pointer on the stage's left edge
+  // slides them back in over the stage until it leaves (styles.css); the tab
+  // still pins them open.
+  const edgeZone = document.createElement("div");
+  edgeZone.className = "sim-view__edge-zone";
+  edgeZone.setAttribute("aria-hidden", "true");
+  body.appendChild(edgeZone);
 
   page.appendChild(body);
 
