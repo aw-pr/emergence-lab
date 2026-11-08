@@ -129,7 +129,7 @@ export function renderPresetLibrary(container: HTMLElement): { dispose(): void }
   const header = element("header", "preset-library__header");
   header.append(element("h1", "", "Presets"), element("p", "preset-library__intro", "Keep a configuration. Come back to it. Start something new."));
   const local = element("div", "preset-library__local");
-  local.append(element("p", "", "Personal presets are saved in this browser, on this site."), element("p", "", "Export a backup to move them elsewhere. Vite and a deployed site do not share storage. Opening a preset starts a fresh run; it does not restore a live field or camera gestures."));
+  local.append(element("p", "", "Personal presets are saved in this browser, on this site."), element("p", "", "Export a backup to move them elsewhere. Opening a preset starts a fresh run; it does not restore a live field or camera gestures."));
   const backups = element("div", "preset-library__backups");
   const exportButton = presetButton("Export presets", () => {
     void savedPresetStore.list().then((entries) => {

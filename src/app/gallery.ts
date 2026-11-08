@@ -41,7 +41,7 @@ export function renderGallery(container: HTMLElement): void {
   }
 
   const title = document.createElement("h1");
-  title.textContent = "emergence-lab";
+  title.textContent = "Emergence Lab";
   header.appendChild(title);
 
   const subtitle = document.createElement("p");

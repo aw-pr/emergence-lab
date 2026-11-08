@@ -370,7 +370,7 @@ export class ControlsPanel {
       button("Reset to defaults", () => this.resetToDefaults()),
     );
     transport.appendChild(
-      button("Maximise", () => this.callbacks.onToggleFullscreen()),
+      button("Fullscreen", () => this.callbacks.onToggleFullscreen()),
     );
 
     transport.appendChild(
