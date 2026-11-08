@@ -1,3 +1,20 @@
+import {
+  clamp01,
+  fillGrayScottInitialField,
+  grayScottImpulseDisc,
+  readGrayScottConfig,
+  GRAY_SCOTT_DEFAULT_DT,
+  GRAY_SCOTT_DEFAULT_DU,
+  GRAY_SCOTT_DEFAULT_DV,
+  GRAY_SCOTT_DEFAULT_F,
+  GRAY_SCOTT_DEFAULT_K,
+  GRAY_SCOTT_DEFAULT_STENCIL,
+  GRAY_SCOTT_DEFAULT_STEPS_PER_FRAME,
+  GRAY_SCOTT_MIN_DT,
+  GRAY_SCOTT_STENCILS,
+  type GrayScottStencil,
+} from "./model.js";
+
 type ParamDescriptor = {
   key: string;
   label: string;
@@ -26,93 +43,17 @@ interface SimKernel {
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
-const DEFAULT_DU = 0.2097;
-const DEFAULT_DV = 0.105;
-// Keep Du:Dv close to 2:1 for stable explicit-Euler integration.
-// Waves regime; propagating fronts. Switch via the Coral, Mitosis, or Worms preset for branching, spot, or filament dynamics.
-const DEFAULT_F = 0.018;
-const DEFAULT_K = 0.0487;
+const DEFAULT_DU = GRAY_SCOTT_DEFAULT_DU;
+const DEFAULT_DV = GRAY_SCOTT_DEFAULT_DV;
+const DEFAULT_F = GRAY_SCOTT_DEFAULT_F;
+const DEFAULT_K = GRAY_SCOTT_DEFAULT_K;
 const CHANNEL_COUNT = 2;
-
-/**
- * Laplacian stencils. Five-point reads the four edge neighbours and is what
- * every shipped preset was tuned on. Nine-point adds the diagonals with the
- * isotropic 1-4-1 weighting (Patra-Karttunen): the same O(h²) accuracy, but
- * its leading error term is rotationally symmetric, so the grid's axes stop
- * leaking into the pattern. It also has a smaller spectral radius (16/3 against
- * 8), which lifts the explicit-Euler ceiling on Du from 0.25 to 0.375.
- */
-const STENCIL_OPTIONS = ["five-point", "nine-point"] as const;
-type Stencil = (typeof STENCIL_OPTIONS)[number];
-const DEFAULT_STENCIL: Stencil = "nine-point";
-const DEFAULT_DT = 1;
-const DEFAULT_STEPS_PER_FRAME = 1;
-const MIN_DT = 0.125;
-
-/**
- * Seed geometry in cells, never as a fraction of the grid.
- *
- * The reaction's length scale is fixed by Du, Dv, F and k, which are per-cell,
- * so it does not grow with the canvas. A blob much wider than that scale has a
- * flat, U-depleted interior that a high kill rate empties from the middle out:
- * measured on a 700x560 grid, mitosis blobs of radius 3 and 5 survive while 8,
- * 13 and 20 all die. Sizing the seed as a share of the grid therefore works at
- * 256² and silently kills mitosis at the resolutions the sim actually runs at.
- *
- * So radius is a constant, and a bigger grid gets more origins rather than
- * bigger ones: spacing is what fills the frame, radius is what survives.
- */
-const SEED_BLOB_RADIUS = 4;
-const SEED_SPACING = 56;
-/** Keep the outermost ring inside the frame rather than against the edge. */
-const SEED_EXTENT = 0.44;
-
-function clamp01(value: number): number {
-  if (value < 0) {
-    return 0;
-  }
-  if (value > 1) {
-    return 1;
-  }
-  return value;
-}
-
-function numberParam(
-  params: SimParams,
-  key: string,
-  fallback: number,
-): number {
-  const value = params[key];
-  return typeof value === "number" ? value : fallback;
-}
-
-function stencilParam(params: SimParams, fallback: Stencil): Stencil {
-  const value = params.stencil;
-  return value === "five-point" || value === "nine-point" ? value : fallback;
-}
-
-function timeStepParam(params: SimParams, fallback: number): number {
-  const value = numberParam(params, "dt", fallback);
-  if (!Number.isFinite(value) || value < MIN_DT || value > 1) {
-    return fallback;
-  }
-
-  // Keep the physical time per frame exact: only reciprocal-integer substeps
-  // are selectable, and the slider's eighths snap to the nearest dyadic value.
-  const substeps = 2 ** Math.round(Math.log2(1 / value));
-  return 1 / Math.min(8, Math.max(1, substeps));
-}
-
-function clampStepCount(value: number): number {
-  const floored = Math.floor(value);
-  if (floored < 1) {
-    return 1;
-  }
-  if (floored > 60) {
-    return 60;
-  }
-  return floored;
-}
+const STENCIL_OPTIONS = GRAY_SCOTT_STENCILS;
+type Stencil = GrayScottStencil;
+const DEFAULT_STENCIL = GRAY_SCOTT_DEFAULT_STENCIL;
+const DEFAULT_DT = GRAY_SCOTT_DEFAULT_DT;
+const DEFAULT_STEPS_PER_FRAME = GRAY_SCOTT_DEFAULT_STEPS_PER_FRAME;
+const MIN_DT = GRAY_SCOTT_MIN_DT;
 
 export class GrayScottKernel implements SimKernel {
   readonly name = "Gray-Scott";
@@ -224,23 +165,16 @@ export class GrayScottKernel implements SimKernel {
       this.next.fill(0);
     }
 
-    this.du = numberParam(params, "Du", DEFAULT_DU);
-    this.dv = numberParam(params, "Dv", DEFAULT_DV);
-    this.feed = numberParam(params, "F", DEFAULT_F);
-    this.kill = numberParam(params, "k", DEFAULT_K);
-    this.stencil = stencilParam(params, DEFAULT_STENCIL);
-    this.dt = timeStepParam(params, DEFAULT_DT);
-    this.stepsPerFrame = clampStepCount(
-      numberParam(params, "stepsPerFrame", DEFAULT_STEPS_PER_FRAME),
-    );
+    const config = readGrayScottConfig(params);
+    this.du = config.du;
+    this.dv = config.dv;
+    this.feed = config.feed;
+    this.kill = config.kill;
+    this.stencil = config.stencil;
+    this.dt = config.dt;
+    this.stepsPerFrame = config.stepsPerFrame;
 
-    for (let cell = 0; cell < this.width * this.height; cell += 1) {
-      const index = cell * this.channelCount;
-      this.state[index] = 1;
-      this.state[index + 1] = 0;
-    }
-
-    this.seedOrigins();
+    fillGrayScottInitialField(this.state, this.width, this.height);
   }
 
   step(_dt: number): void {
@@ -420,14 +354,15 @@ export class GrayScottKernel implements SimKernel {
       return;
     }
 
-    const s = clamp01(strength);
-    if (s <= 0) {
+    const disc = grayScottImpulseDisc(x, y, radius, strength);
+    if (!disc) {
       return;
     }
 
-    const centreX = Math.round(x);
-    const centreY = Math.round(y);
-    const r = Math.max(1, Math.round(radius));
+    const s = disc.strength;
+    const centreX = disc.centreX;
+    const centreY = disc.centreY;
+    const r = disc.radius;
     const radiusSq = r * r;
 
     for (let dy = -r; dy <= r; dy += 1) {
@@ -460,84 +395,6 @@ export class GrayScottKernel implements SimKernel {
     this.height = 0;
     this.state = new Float32Array(0);
     this.next = new Float32Array(0);
-  }
-
-  /**
-   * Seed rings of small V blobs in an otherwise full U field.
-   *
-   * Every regime needs the same local starting condition: a compact patch of V
-   * sitting in undepleted U, which it then feeds on. That is what decides
-   * whether V survives at all — the UV² term needs the reservoir. A previous
-   * version painted one large pre-grown wave instead, fitted to the waves
-   * regime; it depleted U across a third of the domain and left V spread too
-   * thin to sustain, so mitosis (high k) went extinct within a few hundred
-   * steps and spots decayed. A painted approximation can only ever be correct
-   * for the regime it was fitted to.
-   *
-   * Many origins rather than one is what fills a 960² grid quickly, which is
-   * what the warm start was reaching for: real dynamics from correct seeds,
-   * rather than an approximation of where those dynamics would have arrived.
-   * Concentric rings keep the radial symmetry that makes the pattern read as a
-   * mandala, and the whole layout is deterministic so the tests can lock it.
-   *
-   * See SEED_BLOB_RADIUS for why the geometry is in cells: sizing any of this
-   * as a share of the grid reproduces the extinction it was meant to fix, just
-   * at the larger resolutions rather than everywhere.
-   */
-  private seedOrigins(): void {
-    if (this.width === 0 || this.height === 0) {
-      return;
-    }
-    const centreX = Math.floor(this.width / 2);
-    const centreY = Math.floor(this.height / 2);
-    const minAxis = Math.min(this.width, this.height);
-    // Only a grid too small to hold the constant shrinks it, which the live
-    // resolutions (384² and up) never do.
-    const radius = Math.max(1, Math.min(SEED_BLOB_RADIUS, Math.floor(minAxis / 4)));
-    // Blobs closer than this merge into one front and no regime's character
-    // survives the merge. On a grid too small for the constant, fall back to
-    // whatever the grid can hold.
-    const spacing = Math.min(
-      SEED_SPACING,
-      Math.max(3 * radius + 4, Math.floor(minAxis / 4)),
-    );
-    const extent = minAxis * SEED_EXTENT;
-
-    this.seedBlob(centreX, centreY, radius);
-    let ring = 0;
-    for (let ringRadius = spacing; ringRadius <= extent; ringRadius += spacing) {
-      // Constant arc spacing, so a wider ring carries more origins instead of
-      // stretching the same few apart.
-      const count = Math.max(6, Math.round((2 * Math.PI * ringRadius) / spacing));
-      // Offset alternate rings so blobs interleave rather than lining up into
-      // spokes, which would bias growth along those radii.
-      const phase = ring % 2 === 1 ? Math.PI / count : 0;
-      for (let i = 0; i < count; i += 1) {
-        const angle = (i / count) * Math.PI * 2 + phase;
-        this.seedBlob(
-          Math.round(centreX + Math.cos(angle) * ringRadius),
-          Math.round(centreY + Math.sin(angle) * ringRadius),
-          radius,
-        );
-      }
-      ring += 1;
-    }
-  }
-
-  private seedBlob(centreX: number, centreY: number, radius: number): void {
-    const radiusSquared = radius * radius;
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      const y = centreY + dy;
-      if (y < 0 || y >= this.height) continue;
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        const x = centreX + dx;
-        if (x < 0 || x >= this.width) continue;
-        if (dx * dx + dy * dy > radiusSquared) continue;
-        const index = (y * this.width + x) * this.channelCount;
-        this.state[index] = 0.5;
-        this.state[index + 1] = 0.25;
-      }
-    }
   }
 }
 
