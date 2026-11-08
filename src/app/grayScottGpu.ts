@@ -16,7 +16,11 @@ import { createProgram, createQuadVao, mustCreate } from "./webglHelpers.ts";
  */
 export const GRAY_SCOTT_MAX_PASSES_PER_ADVANCE = 960;
 
-/** The sampler unit both programs read state from; units 0-3 belong to the backend. */
+/**
+ * The sampler unit both programs read state from. The backend presents from
+ * unit 0; every pass binds its own texture here, so sharing the unit with the
+ * Kuramoto simulation is harmless.
+ */
 const STATE_UNIT = 4;
 
 /** Canvas expando present while Gray-Scott state lives on the GPU. */

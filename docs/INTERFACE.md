@@ -280,11 +280,11 @@ export interface SimKernel {
   A pure display/viewport resize must NOT call `init()` — it only rescales the
   canvas; the grid and simulation state are preserved.
 - Call `destroy()` when swapping kernels or unmounting.
-- Do not import from `src/sims/**` directly. Kernels load dynamically.
-  The one exception is a sim's pure, dependency-free `model.ts` (seeding,
-  param parsing), which a backend may import to run that sim GPU-resident
-  through the optional direct-rendering hooks in `rendererBackend.ts`
-  (Kuramoto, Gray-Scott, logistic-Mandelbrot). Never import a kernel class.
+- Do not import a kernel class from `src/sims/**`. Kernels load dynamically.
+  A sim's pure, dependency-free modules (a `model.ts` with seeding and param
+  parsing, a layout store) may be imported by `src/app`; that is how a backend
+  runs a sim GPU-resident through the optional direct-rendering hooks in
+  `rendererBackend.ts` (Kuramoto, Gray-Scott).
 
 ## Testing a pure `src/app` module
 
