@@ -385,13 +385,13 @@ export async function renderSimView(
       // swallows the first Esc to leave fullscreen (immersiveForced stays set,
       // so the overlay persists); this handler then catches the next Esc, once
       // no fullscreen element remains, and drops the overlay too.
-      // An open About panel takes this Esc for itself (the popover's own
-      // close request), so the overlay stays.
+      // An Esc the About panel already claimed to close itself leaves the
+      // overlay in place.
       if (
         event.key === "Escape" &&
+        !event.defaultPrevented &&
         immersiveForced &&
-        !document.fullscreenElement &&
-        !layout.aboutPanel?.isOpen()
+        !document.fullscreenElement
       ) {
         immersiveForced = false;
         exitTopLayer(layout.body);
@@ -1612,9 +1612,9 @@ function buildLayout(
 /**
  * The narrative in a top-layer popover over the running stage. Top layer
  * because the embedded lab sits inside a host page whose ancestors can clip
- * or out-stack anything positioned normally. An `auto` popover brings Escape
- * and click-away dismissal; the About button is its invoker, so clicking it
- * while open closes the panel rather than light-dismissing and reopening it.
+ * or out-stack anything positioned normally. A `manual` popover, so working
+ * the sim or its controls leaves it open: only its cross, the About button
+ * (its invoker, a toggle) or Escape close it.
  */
 function attachAboutPanel(options: {
   page: HTMLElement;
@@ -1645,7 +1645,7 @@ function attachAboutPanel(options: {
 
   const popover = typeof panel.showPopover === "function";
   if (popover) {
-    panel.popover = "auto";
+    panel.popover = "manual";
     button.popoverTargetElement = panel;
     close.popoverTargetElement = panel;
     close.popoverTargetAction = "hide";
@@ -1694,31 +1694,11 @@ function attachAboutPanel(options: {
     if (focusWasLostFrom(panel)) button.focus({ preventScroll: true });
   };
 
-  // A host page's own About button calls toggleAbout() from a click that
-  // lands after the pointerup which already light-dismissed the panel; seen
-  // naively, that click would only ever reopen it.
-  let pointerDown = false;
-  let lastPointerUp = -Infinity;
-  let pointerClosedAt = -Infinity;
-  window.addEventListener("pointerdown", () => { pointerDown = true; }, { capture: true, signal });
-  window.addEventListener(
-    "pointerup",
-    () => {
-      pointerDown = false;
-      lastPointerUp = performance.now();
-    },
-    { capture: true, signal },
-  );
-
   if (popover) {
     panel.addEventListener(
       "beforetoggle",
       (event) => {
-        if ((event as ToggleEvent).newState === "open") {
-          place();
-        } else if (pointerDown || performance.now() - lastPointerUp < 100) {
-          pointerClosedAt = performance.now();
-        }
+        if ((event as ToggleEvent).newState === "open") place();
       },
       { signal },
     );
@@ -1755,27 +1735,25 @@ function attachAboutPanel(options: {
   if (!popover) {
     button.addEventListener("click", () => (isOpen() ? hide() : show()), { signal });
     close.addEventListener("click", hide, { signal });
-    window.addEventListener(
-      "keydown",
-      (event) => {
-        if (event.key === "Escape") hide();
-      },
-      { signal },
-    );
   }
+  // A manual popover has no close request of its own. An Escape that belongs
+  // to an open dialog (the preset name dialog) is left to the dialog.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || !isOpen()) return;
+      if (event.composedPath().some((node) => node instanceof HTMLDialogElement)) return;
+      hide();
+      // Claimed, so the immersive overlay's own Escape handler leaves it be.
+      event.preventDefault();
+    },
+    { signal },
+  );
 
   return {
     isOpen,
     open: show,
-    toggle() {
-      if (isOpen()) {
-        hide();
-      } else if (performance.now() - pointerClosedAt < 400) {
-        pointerClosedAt = -Infinity;
-      } else {
-        show();
-      }
-    },
+    toggle: () => (isOpen() ? hide() : show()),
     close: hide,
   };
 }
