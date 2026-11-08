@@ -212,7 +212,7 @@ Findings (manual; screenshots viewed: first-ranked honeycomb finalist at matched
 
 The operator selected **Restless threads** (trial label “Fine restless threads”)
 on visual review, calling it “best so far” and the favourite in
-[`uat-preset-review.md`](../UAT/uat-preset-review.md). It ships as the fifth
+`docs/UAT/uat-preset-review.md`. It ships as the fifth
 Physarum preset, with `agentCount: 32000`, `sensorAngle: 30`,
 `sensorDistance: 3`, `turnSpeed: 22.5`, `moveSpeed: 2.5`,
 `depositAmount: 0.06`, `evaporation: 0.975`, and `stepsPerFrame: 1`.

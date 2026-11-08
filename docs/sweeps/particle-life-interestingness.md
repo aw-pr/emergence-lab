@@ -391,7 +391,7 @@ Findings (manual; screenshots viewed: finalists `species8` and `species3` at mat
 The operator selected the **Eight-species attraction** trial as the new kernel
 default after visual review, describing “atom / molecule like structures”
 and preferring it to the previous default in
-[`uat-preset-review.md`](../UAT/uat-preset-review.md). The old default was
+`docs/UAT/uat-preset-review.md`. The old default was
 `particleCount: 5901`, `species: 5`, `rmax: 77`, `rmin: 45`,
 `forceScale: 108`, `friction: 0.8`, `matrixBias: 0.15`.
 The new default is `particleCount: 6000`, `species: 8`, `rmax: 24`,
