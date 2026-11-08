@@ -1,5 +1,7 @@
 # Burning Ship boundary interestingness sweep — card 138
 
+> **Evidence files.** Sweep evidence (ranked JSON, manifests, screenshots) is not kept in the repository; the harness writes it to git-ignored folders. File names below are plain text so they can be matched against a local run.
+
 Static boundary detail around the three shipped Burning Ship views. Method `static-boundary-v1` (geometry only, no time, palette or flux term). Part of the shared fractal coverage in [fractal-interestingness.md](fractal-interestingness.md).
 
 ```bash
@@ -8,7 +10,7 @@ SWEEP_REPLAY=138 npx playwright test e2e/sweep.spec.ts -g "138 independently rep
 SWEEP_CONTRACT=138 npx playwright test e2e/sweep-138.contract.spec.ts
 ```
 
-Retained data: [burning-ship.json](data/2026-10-30/138/burning-ship.json) (ranked, references, manifest, finalists, replay, validation), [coarse-results.json](data/2026-10-30/138/coarse-results.json) (first 48 views), manifests [coarse](data/2026-10-30/138/manifest-coarse.json) and [refined](data/2026-10-30/138/manifest-refined.json), and per-finalist raw 128×128 fields beside them.
+Retained data: `burning-ship.json` (ranked, references, manifest, finalists, replay, validation), `coarse-results.json` (first 48 views), manifests `manifest-coarse.json` and `manifest-refined.json`, and per-finalist raw 128×128 fields beside them.
 
 ## Method
 
@@ -73,47 +75,47 @@ Every finalist and reference doubled exactly within the cap. The cap probe could
 
 Candidate `centerX-1.757379629629_centerY-0.011490740741_zoom99.36`; params `{"maxIterations": 512, "autoIterations": true, "palettePhase": 0, "cycleSpeed": 0, "centerX": -1.757379629629, "centerY": -0.011490740741, "zoom": 99.36}`.
 
-- candidate app renderer screenshot (1200×900): ![candidate app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-app.png)
-- candidate grayscale escape field 256×256: ![candidate grayscale escape field 256×256](../images/sweeps-2026-10-30/138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-field-256.png)
-- candidate membership mask (zero/nonzero) 256×256: ![candidate membership mask (zero/nonzero) 256×256](../images/sweeps-2026-10-30/138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-membership-256.png)
-- candidate doubled-limit comparison mask 256×256: ![candidate doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-comparison-membership-256.png)
-- reference app renderer screenshot (1200×900): ![reference app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-138-current-ridge-deep-app.png)
-- reference grayscale escape field 256×256: ![reference grayscale escape field 256×256](../images/sweeps-2026-10-30/138-138-current-ridge-deep-field-256.png)
-- reference membership mask 256×256: ![reference membership mask 256×256](../images/sweeps-2026-10-30/138-138-current-ridge-deep-membership-256.png)
-- reference doubled-limit comparison mask 256×256: ![reference doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-138-current-ridge-deep-comparison-membership-256.png)
+- candidate app renderer screenshot (1200×900): `138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-app.png`
+- candidate grayscale escape field 256×256: `138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-field-256.png`
+- candidate membership mask (zero/nonzero) 256×256: `138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-membership-256.png`
+- candidate doubled-limit comparison mask 256×256: `138-centerX-1.757379629629_centerY-0.011490740741_zoom99.36-comparison-membership-256.png`
+- reference app renderer screenshot (1200×900): `138-138-current-ridge-deep-app.png`
+- reference grayscale escape field 256×256: `138-138-current-ridge-deep-field-256.png`
+- reference membership mask 256×256: `138-138-current-ridge-deep-membership-256.png`
+- reference doubled-limit comparison mask 256×256: `138-138-current-ridge-deep-comparison-membership-256.png`
 
 ### harbour hull region: candidate rank 2 (score 0.0215) versus `138-current-harbour`
 
 Candidate `centerX0.293333333333_centerY-1.066666666667_zoom4.35`; params `{"maxIterations": 512, "autoIterations": true, "palettePhase": 0, "cycleSpeed": 0, "centerX": 0.293333333333, "centerY": -1.066666666667, "zoom": 4.35}`.
 
-- candidate app renderer screenshot (1200×900): ![candidate app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-app.png)
-- candidate grayscale escape field 256×256: ![candidate grayscale escape field 256×256](../images/sweeps-2026-10-30/138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-field-256.png)
-- candidate membership mask (zero/nonzero) 256×256: ![candidate membership mask (zero/nonzero) 256×256](../images/sweeps-2026-10-30/138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-membership-256.png)
-- candidate doubled-limit comparison mask 256×256: ![candidate doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-comparison-membership-256.png)
-- reference app renderer screenshot (1200×900): ![reference app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-138-current-harbour-app.png)
-- reference grayscale escape field 256×256: ![reference grayscale escape field 256×256](../images/sweeps-2026-10-30/138-138-current-harbour-field-256.png)
-- reference membership mask 256×256: ![reference membership mask 256×256](../images/sweeps-2026-10-30/138-138-current-harbour-membership-256.png)
-- reference doubled-limit comparison mask 256×256: ![reference doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-138-current-harbour-comparison-membership-256.png)
+- candidate app renderer screenshot (1200×900): `138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-app.png`
+- candidate grayscale escape field 256×256: `138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-field-256.png`
+- candidate membership mask (zero/nonzero) 256×256: `138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-membership-256.png`
+- candidate doubled-limit comparison mask 256×256: `138-centerX0.293333333333_centerY-1.066666666667_zoom4.35-comparison-membership-256.png`
+- reference app renderer screenshot (1200×900): `138-138-current-harbour-app.png`
+- reference grayscale escape field 256×256: `138-138-current-harbour-field-256.png`
+- reference membership mask 256×256: `138-138-current-harbour-membership-256.png`
+- reference doubled-limit comparison mask 256×256: `138-138-current-harbour-comparison-membership-256.png`
 
 ### mast region: candidate rank 44 (score 0.0013) versus `138-current-mast`
 
 Candidate `centerX-1.792532467532_centerY0.007532467532_zoom44.66`; params `{"maxIterations": 512, "autoIterations": true, "palettePhase": 0, "cycleSpeed": 0, "centerX": -1.792532467532, "centerY": 0.007532467532, "zoom": 44.66}`.
 
-- candidate app renderer screenshot (1200×900): ![candidate app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-app.png)
-- candidate grayscale escape field 256×256: ![candidate grayscale escape field 256×256](../images/sweeps-2026-10-30/138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-field-256.png)
-- candidate membership mask (zero/nonzero) 256×256: ![candidate membership mask (zero/nonzero) 256×256](../images/sweeps-2026-10-30/138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-membership-256.png)
-- candidate doubled-limit comparison mask 256×256: ![candidate doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-comparison-membership-256.png)
-- reference app renderer screenshot (1200×900): ![reference app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-138-current-mast-app.png)
-- reference grayscale escape field 256×256: ![reference grayscale escape field 256×256](../images/sweeps-2026-10-30/138-138-current-mast-field-256.png)
-- reference membership mask 256×256: ![reference membership mask 256×256](../images/sweeps-2026-10-30/138-138-current-mast-membership-256.png)
-- reference doubled-limit comparison mask 256×256: ![reference doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-138-current-mast-comparison-membership-256.png)
+- candidate app renderer screenshot (1200×900): `138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-app.png`
+- candidate grayscale escape field 256×256: `138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-field-256.png`
+- candidate membership mask (zero/nonzero) 256×256: `138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-membership-256.png`
+- candidate doubled-limit comparison mask 256×256: `138-centerX-1.792532467532_centerY0.007532467532_zoom44.66-comparison-membership-256.png`
+- reference app renderer screenshot (1200×900): `138-138-current-mast-app.png`
+- reference grayscale escape field 256×256: `138-138-current-mast-field-256.png`
+- reference membership mask 256×256: `138-138-current-mast-membership-256.png`
+- reference doubled-limit comparison mask 256×256: `138-138-current-mast-comparison-membership-256.png`
 
-Current-default reference (`138-current-default`, identical parameters to the mast reference, so its images repeat the mast ones) images, linked so all 28 retained images are accounted for:
+Current-default reference (`138-current-default`, identical parameters to the mast reference, so its images repeat the mast ones) images, listed so all 28 retained images are accounted for:
 
-- default app renderer screenshot (1200×900): ![default app renderer screenshot (1200×900)](../images/sweeps-2026-10-30/138-138-current-default-app.png)
-- default grayscale escape field 256×256: ![default grayscale escape field 256×256](../images/sweeps-2026-10-30/138-138-current-default-field-256.png)
-- default membership mask 256×256: ![default membership mask 256×256](../images/sweeps-2026-10-30/138-138-current-default-membership-256.png)
-- default doubled-limit comparison mask 256×256: ![default doubled-limit comparison mask 256×256](../images/sweeps-2026-10-30/138-138-current-default-comparison-membership-256.png)
+- default app renderer screenshot (1200×900): `138-138-current-default-app.png`
+- default grayscale escape field 256×256: `138-138-current-default-field-256.png`
+- default membership mask 256×256: `138-138-current-default-membership-256.png`
+- default doubled-limit comparison mask 256×256: `138-138-current-default-comparison-membership-256.png`
 
 App screenshots are the real GPU renderer at 1200×900 with inferno palette, gamma 0.7, contrast 1.5, bloom 0.3, paused, phase and speed 0, after a 3 s settle. Field and mask PNGs are grayscale CPU kernel fields at 256×256 and are not renderer output. Caveat: the app views are landscape, use their own camera and could not be matched cell for cell to the square CPU fields (for example the mast reference sits small in the frame centre), so the screenshots and the scored fields are corroborating, not identical, evidence. The app HUD zoom badge reads ×14.0 in every screenshot, because the harness sets parameters through the input events and the badge does not follow them; the inputs were read back and matched every candidate parameter, and the rendered views differ as expected.
 
