@@ -14,8 +14,7 @@
 - **Verifier panel:** false
 - **Dispatch:** serial
 - **Pairing rationale:** a layout card whose acceptance is how the screen is used, judged in a real browser in both mounts. Opus 5.5 worker on the first attempt (Astra second, not first, per the operator's 2026-10-10 steer); Astra as the UI verifier, the seat the operator has seen do well on interaction and UI judgement, cross-family.
-- **Open decisions:**
-  1. Embedded mount (site owns the chrome): the lab has no bar of its own there. Recommended: the Gallery link and the About control become compact overlay pills at the stage's top-left, in the immersive exit pill's style, and the element exposes `toggleAbout()` beside `toggleImmersive()` so a later promo-flow card can put About next to Fullscreen in the host bar. Alternative: a slim lab bar under the host bar, which keeps a fourth stacked band.
+- **Open decisions:** none. Settled by the operator on 2026-11-08: the embedded mount uses overlay pills (Gallery and About at the stage's top-left in the immersive exit pill's style) and the element exposes `toggleAbout()` beside `toggleImmersive()`; no slim lab bar when the site owns the chrome.
 - **Readiness:** HELD by the operator on 2026-11-08 while autometta is being updated; gated on card 154's operator look. See Readiness review.
 
 ## Surfacing concern
