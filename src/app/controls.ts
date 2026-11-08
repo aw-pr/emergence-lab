@@ -1,4 +1,5 @@
 import type { ParamDescriptor, SimParams } from "./types.ts";
+import { siteOwnsChrome } from "./chrome.ts";
 import {
   COLOUR_PRESETS,
   type ColourMapOptions,
@@ -192,6 +193,7 @@ export class ControlsPanel {
     }
   >();
   private playPauseBtn!: HTMLButtonElement;
+  private transport!: HTMLElement;
   private fpsLabel!: HTMLSpanElement;
   private iterationLabel!: HTMLSpanElement;
   private stepsInput?: HTMLInputElement;
@@ -277,6 +279,12 @@ export class ControlsPanel {
     );
   }
 
+  /** Places a section owned by the view (the preset tools) directly under the
+   *  transport row, above the generated sections. */
+  insertAfterTransport(section: HTMLElement): void {
+    this.transport.after(section);
+  }
+
   /** Detaches document-level listeners backing the info popovers. */
   dispose(): void {
     this.infoDismissAbort.abort();
@@ -339,6 +347,8 @@ export class ControlsPanel {
     const title = document.createElement("h2");
     title.className = "controls__title";
     title.textContent = options.simName;
+    // The host's bar names the sim when the site owns the chrome.
+    title.hidden = siteOwnsChrome();
     header.appendChild(title);
 
     const metrics = document.createElement("div");
@@ -360,18 +370,23 @@ export class ControlsPanel {
 
     const transport = document.createElement("div");
     transport.className = "controls__transport";
+    this.transport = transport;
+
+    const transportButtons = document.createElement("div");
+    transportButtons.className = "controls__transport-buttons";
 
     this.playPauseBtn = button("Pause", () => this.callbacks.onPlayPause());
     this.playPauseBtn.setAttribute("aria-pressed", "true");
-    transport.appendChild(this.playPauseBtn);
+    transportButtons.appendChild(this.playPauseBtn);
 
-    transport.appendChild(button("Reset", () => this.callbacks.onReset()));
-    transport.appendChild(
+    transportButtons.appendChild(button("Reset", () => this.callbacks.onReset()));
+    transportButtons.appendChild(
       button("Reset to defaults", () => this.resetToDefaults()),
     );
-    transport.appendChild(
+    transportButtons.appendChild(
       button("Fullscreen", () => this.callbacks.onToggleFullscreen()),
     );
+    transport.appendChild(transportButtons);
 
     transport.appendChild(
       this.buildStepsControl(options.initialStepsPerFrame, options.stepsControl, (value) =>

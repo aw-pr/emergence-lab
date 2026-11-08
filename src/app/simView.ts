@@ -185,11 +185,17 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
 export interface SimViewHandle {
   dispose(): void;
   /**
-   * Toggle immersive mode (the top-layer overlay that hides the description
-   * header and parameter sidebar). Optional because the early-error paths
-   * (unknown sim, kernel load failure) return before the toggle exists.
+   * Toggle immersive mode (the top-layer overlay that hides the lab bar and
+   * parameter sidebar). Optional because the early-error paths (unknown sim,
+   * kernel load failure) return before the toggle exists.
    */
   toggleImmersive?(): void;
+  /**
+   * Open or close the About panel (the sim's narrative, over the running
+   * stage). Optional for the same reason as toggleImmersive, and a no-op for
+   * a sim with no narrative.
+   */
+  toggleAbout?(): void;
 }
 
 export async function renderSimView(
@@ -247,6 +253,9 @@ export async function renderSimView(
   setSimDocumentTitle(name);
 
   const about = aboutFor(slug, variantDef?.variant);
+  // Lives as long as the view: aborted by dispose() and by every early return
+  // below, so window listeners never outlive the layout they serve.
+  const immersiveAbort = new AbortController();
   const layout = buildLayout(
     container,
     {
@@ -256,13 +265,14 @@ export async function renderSimView(
       about,
     },
     slug,
+    immersiveAbort.signal,
   );
   const renderMode = getRenderMode(slug);
   if (shouldUseSmoothCanvasPresentation(renderMode)) {
     layout.canvas.classList.add("sim-view__canvas--smooth");
   }
 
-  // Immersive mode (header gone, settings as an auto-hiding edge drawer) is a
+  // Immersive mode (lab bar gone, settings as an auto-hiding edge drawer) is a
   // CSS overlay first and native fullscreen second: requestFullscreen is
   // denied in some contexts (no transient activation, embedded pages, iOS has
   // no API at all), so the Maximise button never depends on it. The class
@@ -296,7 +306,6 @@ export async function renderSimView(
     body.removeAttribute("popover");
   };
   let immersiveForced = false;
-  const immersiveAbort = new AbortController();
   const updateImmersive = () => {
     const native = document.fullscreenElement === layout.body;
     const windowFullscreen =
@@ -372,10 +381,13 @@ export async function renderSimView(
       // swallows the first Esc to leave fullscreen (immersiveForced stays set,
       // so the overlay persists); this handler then catches the next Esc, once
       // no fullscreen element remains, and drops the overlay too.
+      // An open About panel takes this Esc for itself (the popover's own
+      // close request), so the overlay stays.
       if (
         event.key === "Escape" &&
         immersiveForced &&
-        !document.fullscreenElement
+        !document.fullscreenElement &&
+        !layout.aboutPanel?.isOpen()
       ) {
         immersiveForced = false;
         exitTopLayer(layout.body);
@@ -665,7 +677,8 @@ export async function renderSimView(
 
   let dismissPresetDialog: (() => void) | undefined;
   if (options.presetsEnabled !== false) {
-    const tools = document.createElement("section");
+    const section = collapsibleSection(slug, "Presets", "controls__presets");
+    const tools = document.createElement("div");
     tools.className = "preset-tools";
     const library = document.createElement("a");
     library.href = "#/presets";
@@ -729,8 +742,8 @@ export async function renderSimView(
       }));
     }
     tools.append(status, error, live);
-    layout.body.classList.add("sim-view__body--presets");
-    layout.body.prepend(tools);
+    section.appendChild(tools);
+    controls.insertAfterTransport(section);
   }
   layout.sidebar.prepend(layout.drawerHandle);
 
@@ -975,6 +988,7 @@ export async function renderSimView(
     dispose() {
       immersiveAbort.abort();
       dismissPresetDialog?.();
+      layout.aboutPanel?.close();
       exitTopLayer(layout.body);
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
@@ -985,6 +999,7 @@ export async function renderSimView(
       controls.dispose();
     },
     toggleImmersive,
+    toggleAbout: () => layout.aboutPanel?.toggle(),
   };
 }
 
@@ -1217,9 +1232,17 @@ interface SimLayout {
    *  attached in renderSimView, where toggleImmersive is in scope. */
   immersiveExit: HTMLButtonElement;
   legend: HTMLElement;
-  /** The narrative panel, so the pointer wiring can add its own note to it. */
+  /** The narrative's sections, so the pointer wiring can add its own note. */
   about?: HTMLElement;
+  /** The About popover that holds those sections. */
+  aboutPanel?: AboutPanel;
   fractalHud?: FractalHud;
+}
+
+interface AboutPanel {
+  isOpen(): boolean;
+  toggle(): void;
+  close(): void;
 }
 
 interface FractalHud {
@@ -1295,19 +1318,19 @@ function buildLayout(
   container: HTMLElement,
   header: SimHeader,
   slug: string,
+  signal: AbortSignal,
 ): SimLayout {
   const page = document.createElement("section");
   page.className = "sim-view";
 
-  const top = document.createElement("header");
-  top.className = "sim-view__header";
+  const siteChrome = siteOwnsChrome();
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
   // Hosted by the site (framed or embedded inline), the app's internal gallery
   // is a redundant copy of the site's /labs page, so send visitors there
   // instead. Standalone (and direct /labs/app/ visits) keep the in-app gallery.
-  if (siteOwnsChrome()) {
+  if (siteChrome) {
     back.href = getChrome().siteGalleryHref;
     // Only the iframe shell needs to break out of its frame.
     if (isFramedBySite()) back.target = "_top";
@@ -1315,57 +1338,46 @@ function buildLayout(
     back.href = "#/";
   }
   back.textContent = "← Gallery";
-  top.appendChild(back);
 
-  // Hosted by the site, the bar directly above already names the sim, so a
-  // title block here is a second copy of it sitting in a column of its own
-  // with the narrative's full height beside it. Drop it and let the narrative
-  // have the width. Standalone there is no bar, so the title stays.
-  const titleBlock = document.createElement("div");
-  titleBlock.className = "sim-view__title-block";
-  titleBlock.hidden = siteOwnsChrome();
+  let aboutButton: HTMLButtonElement | undefined;
+  if (header.about) {
+    aboutButton = document.createElement("button");
+    aboutButton.type = "button";
+    aboutButton.className = "sim-view__about-button";
+    aboutButton.setAttribute("aria-expanded", "false");
+    aboutButton.textContent = "About";
+  }
 
-  const title = document.createElement("h1");
-  title.className = "sim-view__title";
-  title.textContent = header.name;
-  titleBlock.appendChild(title);
+  // Standalone, one slim bar names the sim and carries the way out and the
+  // narrative. Hosted by the site, the host's bar already names the sim, so
+  // the same two controls float as pills over the stage instead of costing
+  // the stage a row.
+  if (!siteChrome) {
+    const bar = document.createElement("header");
+    bar.className = "sim-view__bar";
 
-  if (header.family || header.subtitle) {
-    const subtitle = document.createElement("p");
-    subtitle.className = "sim-view__subtitle";
+    const title = document.createElement("h1");
+    title.className = "sim-view__title";
+    title.textContent = header.name;
+    bar.append(back, title);
+
     if (header.family) {
       const tag = document.createElement("span");
       tag.className = "sim-view__family";
       tag.textContent = header.family;
-      subtitle.appendChild(tag);
+      bar.appendChild(tag);
     }
+    if (aboutButton) bar.appendChild(aboutButton);
     if (header.subtitle) {
-      subtitle.appendChild(document.createTextNode(header.subtitle));
+      const subtitle = document.createElement("p");
+      subtitle.className = "sim-view__subtitle";
+      subtitle.textContent = header.subtitle;
+      // The bar truncates it to one line; the full line stays a hover away.
+      subtitle.title = header.subtitle;
+      bar.appendChild(subtitle);
     }
-    titleBlock.appendChild(subtitle);
+    page.appendChild(bar);
   }
-
-  top.appendChild(titleBlock);
-
-  const about = header.about ? buildAbout(header.about, slug) : undefined;
-  if (about) {
-    // Phone widths collapse the narrative behind this disclosure (the stage
-    // and controls need the room more than the prose); the button itself only
-    // exists visually below the stacked-layout breakpoint.
-    const aboutToggle = document.createElement("button");
-    aboutToggle.type = "button";
-    aboutToggle.className = "sim-view__about-toggle";
-    aboutToggle.setAttribute("aria-expanded", "false");
-    aboutToggle.textContent = "About this simulation";
-    aboutToggle.addEventListener("click", () => {
-      const open = about.classList.toggle("sim-view__about--open");
-      aboutToggle.setAttribute("aria-expanded", String(open));
-    });
-    top.appendChild(aboutToggle);
-    top.appendChild(about);
-  }
-
-  page.appendChild(top);
 
   const body = document.createElement("div");
   body.className = "sim-view__body";
@@ -1393,6 +1405,16 @@ function buildLayout(
   const legend = document.createElement("div");
   legend.className = "sim-view__legend";
   stage.appendChild(legend);
+
+  // Top-left, the corner the immersive exit pill uses; immersive hides these,
+  // so the two never share it.
+  if (siteChrome) {
+    const pills = document.createElement("div");
+    pills.className = "sim-view__pills";
+    pills.appendChild(back);
+    if (aboutButton) pills.appendChild(aboutButton);
+    stage.appendChild(pills);
+  }
 
   body.appendChild(stage);
 
@@ -1433,7 +1455,41 @@ function buildLayout(
 
   body.appendChild(sidebar);
 
+  // Normal layout only (hidden in immersive and on phones, which have their
+  // own reveals). One device-wide choice: hiding the controls on one sim
+  // hides them on every sim.
+  const sidebarTab = document.createElement("button");
+  sidebarTab.type = "button";
+  sidebarTab.className = "sim-view__sidebar-tab";
+  const showControls = (shown: boolean) => {
+    page.classList.toggle("sim-view--controls-hidden", !shown);
+    sidebarTab.setAttribute("aria-expanded", String(shown));
+    sidebarTab.setAttribute("aria-label", shown ? "Hide controls" : "Show controls");
+  };
+  showControls(!loadControlsHidden());
+  sidebarTab.addEventListener("click", () => {
+    const shown = page.classList.contains("sim-view--controls-hidden");
+    showControls(shown);
+    saveControlsHidden(!shown);
+  });
+  body.appendChild(sidebarTab);
+
   page.appendChild(body);
+
+  let about: HTMLElement | undefined;
+  let aboutPanel: AboutPanel | undefined;
+  if (header.about && aboutButton) {
+    about = buildAbout(header.about, slug);
+    aboutPanel = attachAboutPanel({
+      page,
+      button: aboutButton,
+      sections: about,
+      stage,
+      name: header.name,
+      signal,
+    });
+  }
+
   container.appendChild(page);
 
   return {
@@ -1446,8 +1502,207 @@ function buildLayout(
     immersiveExit,
     legend,
     about,
+    aboutPanel,
     fractalHud,
   };
+}
+
+const CONTROLS_HIDDEN_KEY = "el:controls-hidden";
+
+function loadControlsHidden(): boolean {
+  try {
+    return window.localStorage.getItem(CONTROLS_HIDDEN_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveControlsHidden(hidden: boolean): void {
+  try {
+    window.localStorage.setItem(CONTROLS_HIDDEN_KEY, String(hidden));
+  } catch {
+    // Storage blocked: the choice lasts until the page reloads.
+  }
+}
+
+/**
+ * The narrative in a top-layer popover over the running stage. Top layer
+ * because the embedded lab sits inside a host page whose ancestors can clip
+ * or out-stack anything positioned normally. An `auto` popover brings Escape
+ * and click-away dismissal; the About button is its invoker, so clicking it
+ * while open closes the panel rather than light-dismissing and reopening it.
+ */
+function attachAboutPanel(options: {
+  page: HTMLElement;
+  button: HTMLButtonElement;
+  sections: HTMLElement;
+  stage: HTMLElement;
+  name: string;
+  signal: AbortSignal;
+}): AboutPanel {
+  const { button, stage, signal } = options;
+  const panel = document.createElement("section");
+  panel.className = "sim-view__about-panel";
+  panel.setAttribute("aria-label", `About ${options.name}`);
+
+  const head = document.createElement("div");
+  head.className = "sim-view__about-head";
+  const kicker = document.createElement("p");
+  kicker.className = "sim-view__about-kicker";
+  kicker.textContent = options.name;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "sim-view__about-close";
+  close.setAttribute("aria-label", "Close About");
+  close.textContent = "✕";
+  head.append(kicker, close);
+  panel.append(head, options.sections);
+  options.page.appendChild(panel);
+
+  const popover = typeof panel.showPopover === "function";
+  if (popover) {
+    panel.popover = "auto";
+    button.popoverTargetElement = panel;
+    close.popoverTargetElement = panel;
+    close.popoverTargetAction = "hide";
+  } else {
+    panel.hidden = true;
+  }
+
+  const isOpen = () =>
+    popover ? panel.matches(":popover-open") : !panel.hidden;
+
+  // Under the bar or pill, over the stage and clear of the sidebar while the
+  // stage is wide enough to read in; a narrow stage lends it the viewport.
+  // Phones override all of this with a full-width sheet (styles.css).
+  const place = () => {
+    const anchor = button.getBoundingClientRect();
+    const box = stage.getBoundingClientRect();
+    const anchored = anchor.width > 0 && anchor.height > 0;
+    const top = Math.max(8, anchored ? anchor.bottom + 8 : box.top + 12);
+    const left = Math.max(8, box.left + 12);
+    const right =
+      box.width >= 480 ? box.right - 12 : document.documentElement.clientWidth - 8;
+    panel.style.setProperty("--about-top", `${Math.round(top)}px`);
+    panel.style.setProperty("--about-left", `${Math.round(left)}px`);
+    panel.style.setProperty("--about-max-width", `${Math.round(Math.max(240, right - left))}px`);
+    panel.style.setProperty(
+      "--about-max-height",
+      `${Math.round(Math.max(160, window.innerHeight - top - 12))}px`,
+    );
+  };
+
+  let openAbort: AbortController | undefined;
+  const opened = () => {
+    button.setAttribute("aria-expanded", "true");
+    openAbort?.abort();
+    openAbort = new AbortController();
+    window.addEventListener("resize", place, { signal: openAbort.signal });
+    // A host page that scrolls carries the anchor away from a fixed panel.
+    window.addEventListener("scroll", place, {
+      signal: openAbort.signal,
+      capture: true,
+      passive: true,
+    });
+  };
+  const closed = () => {
+    openAbort?.abort();
+    button.setAttribute("aria-expanded", "false");
+    if (focusWasLostFrom(panel)) button.focus({ preventScroll: true });
+  };
+
+  // A host page's own About button calls toggleAbout() from a click that
+  // lands after the pointerup which already light-dismissed the panel; seen
+  // naively, that click would only ever reopen it.
+  let pointerDown = false;
+  let lastPointerUp = -Infinity;
+  let pointerClosedAt = -Infinity;
+  window.addEventListener("pointerdown", () => { pointerDown = true; }, { capture: true, signal });
+  window.addEventListener(
+    "pointerup",
+    () => {
+      pointerDown = false;
+      lastPointerUp = performance.now();
+    },
+    { capture: true, signal },
+  );
+
+  if (popover) {
+    panel.addEventListener(
+      "beforetoggle",
+      (event) => {
+        if ((event as ToggleEvent).newState === "open") {
+          place();
+        } else if (pointerDown || performance.now() - lastPointerUp < 100) {
+          pointerClosedAt = performance.now();
+        }
+      },
+      { signal },
+    );
+    panel.addEventListener(
+      "toggle",
+      (event) => {
+        if ((event as ToggleEvent).newState === "open") opened();
+        else closed();
+      },
+      { signal },
+    );
+  }
+
+  const show = () => {
+    if (isOpen()) return;
+    if (popover) {
+      panel.showPopover();
+      return;
+    }
+    panel.hidden = false;
+    place();
+    opened();
+  };
+  const hide = () => {
+    if (!isOpen()) return;
+    if (popover) {
+      panel.hidePopover();
+      return;
+    }
+    panel.hidden = true;
+    closed();
+  };
+
+  if (!popover) {
+    button.addEventListener("click", () => (isOpen() ? hide() : show()), { signal });
+    close.addEventListener("click", hide, { signal });
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") hide();
+      },
+      { signal },
+    );
+  }
+
+  return {
+    isOpen,
+    toggle() {
+      if (isOpen()) {
+        hide();
+      } else if (performance.now() - pointerClosedAt < 400) {
+        pointerClosedAt = -Infinity;
+      } else {
+        show();
+      }
+    },
+    close: hide,
+  };
+}
+
+/** True when closing the panel left focus nowhere useful: inside the panel
+ * itself, or on the bare document. Focus the host page holds stays put. */
+function focusWasLostFrom(panel: HTMLElement): boolean {
+  const root = panel.getRootNode() as Document | ShadowRoot;
+  const active = root.activeElement;
+  if (active && active !== document.body) return panel.contains(active);
+  return document.activeElement === null || document.activeElement === document.body;
 }
 
 function buildFractalHud(): FractalHud {
@@ -1480,8 +1735,8 @@ function buildFractalHud(): FractalHud {
   return { root, zoomLabel, zoomIn, zoomOut, home };
 }
 
-/** The narrative panel filling the header space beside the title: where the
- * model came from, and what its equations say. */
+/** The narrative the About panel shows: where the model came from, and what
+ * its equations say. */
 function buildAbout(about: SimAbout, slug: string): HTMLElement {
   const root = document.createElement("div");
   root.className = "sim-view__about";

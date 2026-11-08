@@ -236,14 +236,17 @@ code {
   min-height: 0;
 }
 
-.sim-view__header {
+/* Standalone only: one slim line naming the sim, with the way back and the
+ * narrative behind About. Hosted by the site there is no bar; the same two
+ * controls float over the stage as pills (.sim-view__pills). */
+.sim-view__bar {
   display: flex;
-  align-items: flex-start;
-  /* Wide column gap so the narrative reads as its own panel rather than as
-   * runover from the title. */
-  gap: 16px 56px;
-  flex-wrap: wrap;
-  padding: 16px 24px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  min-width: 0;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
 }
@@ -251,96 +254,233 @@ code {
 .sim-view__back {
   font-size: 13px;
   color: var(--fg-dim);
-  line-height: 24px;
+  white-space: nowrap;
 }
 
 .sim-view__back:hover {
   color: var(--fg);
 }
 
-.sim-view__title {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.005em;
+.sim-view__bar .sim-view__back {
+  flex: none;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  line-height: 20px;
 }
 
-.sim-view__subtitle {
+.sim-view__title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: rgba(232, 236, 244, 0.65);
-  max-width: 100%;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sim-view__family {
-  display: inline-block;
-  margin-right: 8px;
+  flex: none;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: rgba(232, 236, 244, 0.85);
   background: rgba(168, 185, 209, 0.1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  vertical-align: middle;
 }
 
-/* Title and subtitle only: the equations moved in beside the prose that
- * explains them, so this no longer needs a formula box's width. */
-.sim-view__title-block {
-  display: grid;
+.sim-view__subtitle {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--fg-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-view__about-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
   gap: 8px;
-  min-width: 0;
-  flex: 0 1 300px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  line-height: 1;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
-/* display:grid above would otherwise beat the hidden attribute. */
-.sim-view__title-block[hidden] {
-  display: none;
+/* Drawn rather than typed, so the button's accessible name stays "About". */
+.sim-view__about-button::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border-right: 1.5px solid var(--accent-bright);
+  border-bottom: 1.5px solid var(--accent-bright);
+  transform: rotate(45deg);
+  transition: transform 150ms ease, margin 150ms ease;
 }
 
-/* Narrative filling the header space beside the title. Bounded in height so a
- * long entry can never push the stage below the fold; the sim is the point.
- *
- * Capped in width too: left to fill a 2560px viewport the two columns reach
- * ~900px, which is about 140 characters a line and stops being readable. The
- * cap trades trailing space at ultra-wide for a sane measure. */
-/* Interactive sims carry a third column ("Try it"), which narrows the columns
- * and makes the prose taller. Sized so three fit without scrolling on a wide
- * screen: past ~1200px auto-fit opens an empty fourth track, so cap below it
- * and let the max-height catch the narrower viewports. */
-.sim-view__about {
-  flex: 1 1 420px;
-  min-width: 0;
-  display: grid;
-  /* auto-fit sizes the count from the track minimum, so the columns reflow on
-   * their own as the panel narrows, and any track a two-section sim does not
-   * use collapses to 0px.
-   *
-   * The width cap has to come from the panel rather than the track: a
-   * minmax(270px, 520px) track would have auto-fit count repetitions against
-   * the 520px maximum, which drops a 1236px panel to two columns when three
-   * would have fitted. So cap the panel at what the section count needs at
-   * ~520px a column, which is about 70 characters a line. A fixed cap cannot
-   * do this: 1140px is right for three columns and far too wide for two. */
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  max-width: calc(
-    var(--about-columns, 2) * 520px + (var(--about-columns, 2) - 1) * 28px
-  );
-  gap: 10px 28px;
-  /* A cap, not a height: only the longest entry (Belousov-Zhabotinsky, whose
-   * three equations alone run 91px) comes near it, so the rest of the header
-   * stays as short as its own content. The media queries below bound it
-   * harder on small screens, where scrolling is the accepted trade. */
-  max-height: 220px;
+.sim-view__about-button:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent-line);
+}
+
+.sim-view__about-button[aria-expanded="true"] {
+  background: var(--accent-wash-strong);
+  border-color: var(--accent-line);
+}
+
+.sim-view__about-button[aria-expanded="true"]::after {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+
+.sim-view__bar :is(a, button):focus-visible,
+.sim-view__pills :is(a, button):focus-visible,
+.sim-view__about-panel button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Hosted by the site: ← Gallery and About over the stage's top-left corner,
+ * in the immersive exit pill's idiom. Immersive hides them, so the exit pill
+ * has the corner to itself there. The legend keeps the bottom-left. */
+.sim-view__pills {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+
+.sim-view__pills > .sim-view__back,
+.sim-view__pills > .sim-view__about-button {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--accent-line-faint);
+  border-radius: var(--radius);
+  background: rgba(4, 9, 17, 0.76);
+  backdrop-filter: blur(10px);
+  color: color-mix(in srgb, var(--fg) 86%, transparent);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sim-view__pills > .sim-view__back:hover,
+.sim-view__pills > .sim-view__about-button:hover,
+.sim-view__pills > .sim-view__about-button[aria-expanded="true"] {
+  background: var(--accent-wash);
+  border-color: var(--accent-bright);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* The About panel: a bordered card on promo-flow's reading surface, in the
+ * top layer (a popover, see attachAboutPanel in simView.ts) under the bar or
+ * pill, so the sim keeps running beside and around it. Position and caps come
+ * from the anchor at open time. No `display` here: the UA's
+ * [popover]:not(:popover-open) rule is what hides it. */
+.sim-view__about-panel {
+  position: fixed;
+  inset: var(--about-top, 56px) auto auto var(--about-left, 12px);
+  width: fit-content;
+  max-width: var(--about-max-width, calc(100vw - 24px));
+  height: auto;
+  max-height: var(--about-max-height, 70vh);
+  margin: 0;
+  padding: 14px 20px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg-elev) 95%, transparent);
+  border: 1px solid var(--accent-line-faint);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.sim-view__about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -8px 12px 0;
+}
+
+.sim-view__about-kicker {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+
+.sim-view__about-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sim-view__about-close:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-wash);
+  color: var(--fg);
+}
+
+/* Sized from the section count (--about-columns, set by syncAboutColumns) at
+ * ~340px a column, about 55 characters a line, then capped by the panel, which
+ * the anchor keeps clear of the sidebar. auto-fit reflows the columns as the
+ * panel narrows. */
+.sim-view__about {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  width: calc(
+    var(--about-columns, 2) * 340px + (var(--about-columns, 2) - 1) * 28px
+  );
+  max-width: 100%;
+  gap: 16px 28px;
 }
 
 .sim-view__about-label {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: var(--label-tracking);
@@ -351,30 +491,15 @@ code {
 .sim-view__about-text {
   margin: 0;
   font-size: 13.5px;
-  line-height: 1.5;
-  color: rgba(232, 236, 244, 0.82);
+  line-height: 1.55;
+  color: rgba(232, 236, 244, 0.86);
   text-wrap: pretty;
 }
 
-/* Too narrow to sit beside the title without collapsing to one long column:
- * drop it to its own full-width row, where it still gets two columns. */
-@media (max-width: 1150px) {
-  .sim-view__about {
-    flex-basis: 100%;
-    max-height: 148px;
-  }
-}
-
-/* Desktop and tablet always show the narrative; the phone disclosure button
- * only exists below the stacked-layout breakpoint (see the 720px block). */
-.sim-view__about-toggle {
-  display: none;
-}
-
-/* Sits inside the narrative's maths column now, so it can be no wider than one
- * column. Keep the wrap rather than stacking outright: short equations still
- * share a row (the attractors' three fit on one), and only the wide ones
- * (Gray-Scott, Belousov-Zhabotinsky) drop onto their own line. */
+/* Inside the maths column, so no wider than one column. Keep the wrap rather
+ * than stacking outright: short equations still share a row (the attractors'
+ * three fit on one), and only the wide ones (Gray-Scott,
+ * Belousov-Zhabotinsky) drop onto their own line. */
 .sim-view__formula {
   display: flex;
   flex-wrap: wrap;
@@ -383,7 +508,7 @@ code {
   margin-bottom: 8px;
   padding: 8px 10px;
   color: rgba(232, 236, 244, 0.9);
-  background: rgba(168, 185, 209, 0.06);
+  background: rgba(2, 6, 23, 0.35);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow-x: auto;
@@ -402,9 +527,12 @@ code {
 }
 
 .sim-view__body {
+  --sidebar-width: 320px;
+  --sidebar-rail: 18px;
+  position: relative;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
   min-height: 0;
 }
 
@@ -776,8 +904,80 @@ textarea.boids-obstacle-layouts__input {
 .sim-view__sidebar {
   background: var(--bg-elev);
   border-left: 1px solid var(--border);
-  padding: 24px 20px;
+  padding: 20px 20px 24px;
   overflow-y: auto;
+}
+
+/* Hide controls / Show controls, normal layout only. Shown, a small tab hangs
+ * off the sidebar's stage edge at mid-height (clear of the top-right HUDs and
+ * the bottom-left legend). Hidden, the sidebar's column narrows to a rail the
+ * tab fills, so the whole strip is the way back. */
+.sim-view__sidebar-tab {
+  position: absolute;
+  top: 50%;
+  right: var(--sidebar-width);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sidebar-rail);
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--accent-line-faint);
+  border-right: none;
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: var(--bg-elev);
+  color: var(--fg-dim);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.sim-view__sidebar-tab::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.sim-view__sidebar-tab:hover {
+  border-color: var(--accent-line);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-elev));
+  color: var(--fg);
+}
+
+.sim-view__sidebar-tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+@media (min-width: 721px) {
+  .sim-view--controls-hidden:not(.sim-view--immersive) .sim-view__body {
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-rail);
+  }
+
+  .sim-view--controls-hidden:not(.sim-view--immersive) .sim-view__sidebar {
+    display: none;
+  }
+
+  .sim-view--controls-hidden:not(.sim-view--immersive) .sim-view__sidebar-tab {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    transform: none;
+  }
+
+  .sim-view--controls-hidden .sim-view__sidebar-tab::before {
+    margin-left: 3px;
+    transform: rotate(135deg);
+  }
 }
 
 /* Immersive-only edge handle for opening the drawer on touch; irrelevant
@@ -788,8 +988,8 @@ textarea.boids-obstacle-layouts__input {
 
 /* Immersive-only exit control — an on-screen way back that doesn't depend on
  * Esc (touch has none) or on remembering the Fullscreen button toggles too.
- * Irrelevant (and hidden) in normal layout where the header's own nav is
- * visible. */
+ * Irrelevant (and hidden) in normal layout, where the lab bar or the stage
+ * pills carry the way out. */
 .sim-view__immersive-exit {
   display: none;
 }
@@ -803,9 +1003,11 @@ textarea.boids-obstacle-layouts__input {
 
 /* Immersive layout: set by JS for the app's own Fullscreen (native fullscreen
  * on the body) AND for browser/OS-level fullscreen (viewport == screen,
- * standalone only). The explainer header drops away and the stage takes the
- * whole viewport. */
-.sim-view--immersive .sim-view__header {
+ * standalone only). The lab bar, the stage pills and the hide tab drop away
+ * and the stage takes the whole viewport; the sidebar becomes the drawer. */
+.sim-view--immersive .sim-view__bar,
+.sim-view--immersive .sim-view__pills,
+.sim-view--immersive .sim-view__sidebar-tab {
   display: none;
 }
 
@@ -1005,6 +1207,7 @@ textarea.boids-obstacle-layouts__input {
 }
 
 .controls__metrics {
+  margin-left: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1034,8 +1237,18 @@ textarea.boids-obstacle-layouts__input {
   margin-bottom: 16px;
 }
 
-.controls__transport > .control__button {
-  align-self: stretch;
+/* One row of four. Labels may wrap inside a button ("Reset to / defaults"),
+ * never past it. */
+.controls__transport-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 6px;
+}
+
+.controls__transport-buttons > .control__button {
+  padding: 7px 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
 }
 
 .control__button {
@@ -1074,6 +1287,7 @@ textarea.boids-obstacle-layouts__input {
 .controls__view h3,
 .controls__colour h3,
 .controls__params summary,
+.controls__presets summary,
 .controls__view summary,
 .controls__colour summary {
   margin: 0 0 12px;
@@ -1084,6 +1298,7 @@ textarea.boids-obstacle-layouts__input {
 }
 
 .controls__params summary,
+.controls__presets summary,
 .controls__view summary,
 .controls__colour summary {
   cursor: pointer;
@@ -1096,6 +1311,7 @@ textarea.boids-obstacle-layouts__input {
 }
 
 .controls__params summary:hover,
+.controls__presets summary:hover,
 .controls__view summary:hover,
 .controls__colour summary:hover {
   background: var(--accent-wash);
@@ -1103,12 +1319,14 @@ textarea.boids-obstacle-layouts__input {
 }
 
 .controls__params summary::-webkit-details-marker,
+.controls__presets summary::-webkit-details-marker,
 .controls__view summary::-webkit-details-marker,
 .controls__colour summary::-webkit-details-marker {
   display: none;
 }
 
 .controls__params summary::before,
+.controls__presets summary::before,
 .controls__view summary::before,
 .controls__colour summary::before {
   content: "\25B8";
@@ -1119,12 +1337,14 @@ textarea.boids-obstacle-layouts__input {
 }
 
 details[open].controls__params summary::before,
+details[open].controls__presets summary::before,
 details[open].controls__view summary::before,
 details[open].controls__colour summary::before {
   transform: rotate(90deg);
 }
 
 details.controls__params:not([open]) summary,
+details.controls__presets:not([open]) summary,
 details.controls__view:not([open]) summary,
 details.controls__colour:not([open]) summary {
   margin-bottom: 0;
@@ -1306,69 +1526,40 @@ details.controls__colour:not([open]) summary {
 }
 
 @media (max-width: 720px) {
-  /* Slimmed to a compact bar: back link and title share one row, the
-   * subtitle/family tag drop out entirely (the about disclosure below
-   * already carries that context), and the about toggle keeps its own row
-   * underneath. Embedded (title block hidden by JS), this leaves just the
-   * back link and the toggle — reads as one slim bar either way. */
-  .sim-view__header {
-    align-items: center;
-    padding: 10px 16px;
-    gap: 6px 16px;
+  /* The bar keeps the way back, the title and About on one line; the family
+   * tag and subtitle drop out (About carries the context). */
+  .sim-view__bar {
+    gap: 10px;
+    height: 40px;
+    padding: 0 12px;
   }
-  .sim-view__title-block {
-    flex: 1 1 auto;
-    min-width: 0;
+  .sim-view__bar .sim-view__back {
+    padding-right: 10px;
   }
-  .sim-view__title {
-    overflow: hidden;
-    font-size: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .sim-view__subtitle {
+  .sim-view__bar .sim-view__family,
+  .sim-view__bar .sim-view__subtitle {
     display: none;
   }
-  .sim-view__formula {
-    max-width: calc(100vw - 88px);
+  .sim-view__bar .sim-view__about-button {
+    margin-left: auto;
+  }
+  .sim-view__sidebar-tab {
+    display: none;
   }
 
-  /* The narrative used to render open here, clipped mid-sentence with an
-   * unsignposted inner scroll and the formula below its fold. Collapsed
-   * behind a disclosure instead, the reclaimed height goes to the stage and
-   * the controls panel; opened deliberately, it gets more room than the old
-   * clip ever gave it. */
-  .sim-view__about-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-basis: 100%;
-    padding: 2px 0;
-    border: 0;
-    background: none;
-    color: var(--fg-dim);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: var(--label-tracking);
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-  .sim-view__about-toggle::before {
-    content: "▸";
-    color: var(--accent-bright);
-    opacity: 0.75;
-  }
-  .sim-view__about-toggle[aria-expanded="true"]::before {
-    content: "▾";
+  /* About opens as a full-width sheet under the bar, scrolling inside itself
+   * rather than running off the screen. */
+  .sim-view__about-panel {
+    inset: var(--about-top, 48px) 8px auto 8px;
+    width: auto;
+    max-width: none;
+    max-height: var(--about-max-height, 70vh);
+    padding: 12px 16px 16px;
   }
   .sim-view__about {
-    display: none;
+    width: auto;
   }
-  .sim-view__about--open {
-    display: grid;
-    max-height: 200px;
-  }
+
   /* Collapsed by default: the drawer toggle is a content-height row and the
    * sidebar is hidden outright, so the stage takes the rest. Rows are capped
    * by grid tracks rather than a max-height on the sidebar throughout this
@@ -1558,11 +1749,12 @@ details.controls__colour:not([open]) summary {
 .preset-dialog h2 { margin: 0 0 24px; font-size: 25px; font-weight: 550; letter-spacing: -0.025em; }
 .preset-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
 .preset-dialog__actions .preset-button { min-width: 90px; }
-.preset-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0 0 16px; border-bottom: 1px solid var(--border); }
+.preset-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .preset-tools__link { flex: 1; min-width: 75px; padding: 10px 0; }
 .preset-tools__status { width: 100%; margin: 0; font-size: 12px; color: #a8b9d1; overflow-wrap: anywhere; }
 .preset-tools__status:empty { display: none; }
-.preset-tools .preset-button { padding: 8px 12px; }
+.preset-tools .preset-button { min-height: 36px; padding: 8px 12px; }
+.preset-tools .preset-error { width: 100%; margin: 0; padding: 8px 10px; font-size: 12px; }
 .gallery__presets { margin-top: 18px; }
 .preset-library [hidden], .preset-tools [hidden], .preset-dialog [hidden] { display: none !important; }
 @media (max-width: 720px) {
@@ -1577,24 +1769,4 @@ details.controls__colour:not([open]) summary {
   .preset-item__actions .preset-button { padding-inline: 12px; }
   .preset-empty { padding: 22px; }
   .preset-dialog { padding: 24px; }
-}
-
-.sim-view__body--presets { grid-template-rows: auto minmax(0, 1fr); }
-.sim-view__body--presets > .preset-tools {
-  grid-column: 1 / -1;
-  order: -1;
-  padding: 10px 20px;
-  background: var(--bg-elev);
-}
-.sim-view__body--presets .preset-tools__link { flex: 0 0 auto; margin-right: 12px; }
-.sim-view__body--presets .preset-tools__status { flex: 1; width: auto; min-width: 200px; margin-left: 12px; }
-.sim-view__body--presets .preset-tools .preset-error { width: 100%; margin: 0; }
-.sim-view--immersive .sim-view__body--presets { grid-template-rows: auto minmax(0, 1fr); }
-.sim-view--immersive .sim-view__body--presets > .preset-tools { padding-left: 64px; padding-right: 28px; min-height: 64px; }
-@media (max-width: 720px) {
-  .sim-view__body--presets { grid-template-rows: auto minmax(360px, 1fr) auto auto; }
-  .sim-view--params-open .sim-view__body--presets { grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 56%); }
-  .sim-view--immersive .sim-view__body--presets { grid-template-rows: auto minmax(0, 1fr); }
-  .sim-view__body--presets > .preset-tools { padding: 10px 16px; }
-  .sim-view__body--presets .preset-tools__status { flex-basis: 100%; margin: 0; }
 }
