@@ -14,6 +14,11 @@ import {
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
 import {
+  createGpuGrayScott,
+  type GpuGrayScottSimulation,
+  type GrayScottDiagnosticCanvas,
+} from "./grayScottGpu.ts";
+import {
   createProgram,
   createQuadVao,
   mustCreate,
@@ -1301,6 +1306,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly program: WebGLProgram;
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
+  private readonly grayScott: GpuGrayScottSimulation | null;
   private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
@@ -1389,6 +1395,7 @@ export class WebGLRendererBackend implements RendererBackend {
     this.kuramoto = floatTargets
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
+    this.grayScott = floatTargets ? createGpuGrayScott(gl, this.quadBuffer) : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
     this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
@@ -1462,6 +1469,7 @@ export class WebGLRendererBackend implements RendererBackend {
   ): boolean {
     if (this.supportsOrbit3d(mode, kernel)) return true;
     if (this.supportsGpuKuramoto(mode, kernel)) return true;
+    if (this.supportsGpuGrayScott(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
     // adjacent complex coordinates collapse together, so retain the CPU
@@ -1482,15 +1490,27 @@ export class WebGLRendererBackend implements RendererBackend {
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
     if (this.supportsOrbit3d(mode, kernel)) {
       this.kuramoto?.releaseState();
+      this.releaseGrayScott();
       this.updateOrbit3dParams(params);
       return;
     }
     this.orbit3d?.cancelBuild();
     if (this.supportsGpuKuramoto(mode, kernel)) {
+      this.releaseGrayScott();
       this.kuramoto?.initialise(this.gridWidth, this.gridHeight, params);
       return;
     }
     this.kuramoto?.releaseState();
+    // A failed initialise marks the simulation failed, so the gate below and
+    // the renderer's next supportsDirectRendering() both fall back to the CPU.
+    if (
+      this.supportsGpuGrayScott(mode, kernel) &&
+      this.grayScott?.initialise(this.gridWidth, this.gridHeight, params)
+    ) {
+      this.attachGrayScottDiagnostics();
+      return;
+    }
+    this.releaseGrayScott();
     if (this.supportsDirectRendering(mode, kernel, params)) return;
     this.configureTexture(kernel.channelCount);
   }
@@ -1499,6 +1519,7 @@ export class WebGLRendererBackend implements RendererBackend {
     steps: number,
     params: Record<string, number | boolean | string>,
   ): boolean {
+    if (this.grayScott?.ready) return this.grayScott.advance(steps);
     return this.kuramoto?.advance(steps, params) ?? false;
   }
 
@@ -1508,6 +1529,9 @@ export class WebGLRendererBackend implements RendererBackend {
     radius: number,
     strength: number,
   ): boolean {
+    if (this.grayScott?.ready) {
+      return this.grayScott.applyImpulse(x, y, radius, strength);
+    }
     return this.kuramoto?.applyImpulse(x, y, radius, strength) ?? false;
   }
 
@@ -1614,7 +1638,11 @@ export class WebGLRendererBackend implements RendererBackend {
       return;
     }
     if (this.supportsGpuKuramoto(mode, kernel)) {
-      this.drawGpuKuramoto(frame);
+      if (this.kuramoto) this.drawGpuField(this.kuramoto, frame);
+      return;
+    }
+    if (this.supportsGpuGrayScott(mode, kernel)) {
+      if (this.grayScott) this.drawGpuField(this.grayScott, frame);
       return;
     }
     if (this.supportsDirectRendering(mode, kernel, frame.params)) {
@@ -1686,7 +1714,7 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "boundaryDetail", 0) > 0
           ? "degraded"
           : "off";
-    } else if (isKuramotoState(kernel)) {
+    } else if (isKuramotoState(kernel) || isGrayScottState(kernel)) {
       canvas.dataset.simulationRenderer = "cpu-kernel";
       delete canvas.dataset.orbit3dSampler;
     } else {
@@ -2192,8 +2220,11 @@ export class WebGLRendererBackend implements RendererBackend {
     this.orbit3dInteriorDistanceTexture = texture;
   }
 
-  private drawGpuKuramoto(frame: RendererBackendFrame): void {
-    if (!this.kuramoto?.bindForPresentation()) return;
+  private drawGpuField(
+    simulation: { bindForPresentation(): boolean },
+    frame: RendererBackendFrame,
+  ): void {
+    if (!simulation.bindForPresentation()) return;
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
@@ -2263,6 +2294,32 @@ export class WebGLRendererBackend implements RendererBackend {
       mode === "field" &&
       isKuramotoState(kernel)
     );
+  }
+
+  private supportsGpuGrayScott(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.grayScott !== null &&
+      !this.grayScott.failed &&
+      !this.forceCpuSimulation &&
+      mode === "field" &&
+      isGrayScottState(kernel)
+    );
+  }
+
+  private attachGrayScottDiagnostics(): void {
+    const grayScott = this.grayScott;
+    if (!grayScott) return;
+    const canvas = this.gl.canvas as GrayScottDiagnosticCanvas;
+    canvas.grayScottReadState = (x, y, width, height) =>
+      grayScott.readState(x, y, width, height);
+    canvas.grayScottPassCount = () => grayScott.passCount;
+  }
+
+  private releaseGrayScott(): void {
+    this.grayScott?.releaseState();
+    const canvas = this.gl.canvas as GrayScottDiagnosticCanvas;
+    delete canvas.grayScottReadState;
+    delete canvas.grayScottPassCount;
   }
 
   private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
@@ -2713,6 +2770,8 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseSceneTarget();
     this.releaseBloomTargets();
     this.kuramoto?.destroy();
+    this.releaseGrayScott();
+    this.grayScott?.destroy();
     this.orbit3d?.destroy();
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
@@ -3150,6 +3209,15 @@ function isKuramotoState(kernel: SimKernel): boolean {
     kernel.name === "Kuramoto Oscillators" &&
     kernel.channelCount === 1 &&
     kernel.channelLabels[0] === "Phase"
+  );
+}
+
+function isGrayScottState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Gray-Scott" &&
+    kernel.channelCount === 2 &&
+    kernel.channelLabels[0] === "U" &&
+    kernel.channelLabels[1] === "V"
   );
 }
 
