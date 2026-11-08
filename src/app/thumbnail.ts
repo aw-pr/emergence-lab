@@ -33,6 +33,14 @@ function thumbnailParamOverrides(slug: string, cells: number): SimParams {
   return {};
 }
 
+/** Boids' count and neighbour radii are absolute, tuned for a full-window
+ * world. Simulating them in a 640x400 world packs every boid into a sixth of
+ * the area and the flocks never form, so they run at app scale and the still
+ * is downsampled into the card. */
+function thumbnailSimScale(slug: string): number {
+  return slug === "boids" ? 2.5 : 1;
+}
+
 let sharedCanvas: HTMLCanvasElement | null = null;
 let sharedBackend: RendererBackend | null = null;
 let sharedWidth = 0;
@@ -92,16 +100,23 @@ async function renderThumbnail(
   const kernel = await loadKernel(slug);
 
   try {
-    const backend = acquireBackend(width, height);
+    const simScale = thumbnailSimScale(slug);
+    const simWidth = Math.round(width * simScale);
+    const simHeight = Math.round(height * simScale);
+    const backend = acquireBackend(simWidth, simHeight);
     const renderMode = getRenderMode(slug);
-    const params = {
+    const params: SimParams = {
       ...defaultParamsFromSchema(kernel.paramSchema),
-      ...thumbnailParamOverrides(slug, width * height),
+      ...thumbnailParamOverrides(slug, simWidth * simHeight),
       ...(options.params ?? {}),
       seed: 1,
     };
-    backend.setGrid(width, height, kernel, renderMode, params);
-    kernel.init(width, height, params);
+    // Glyphs must survive the downsample at the size they read in the app.
+    if (simScale !== 1 && typeof params.pointSize === "number") {
+      params.pointSize *= simScale;
+    }
+    backend.setGrid(simWidth, simHeight, kernel, renderMode, params);
+    kernel.init(simWidth, simHeight, params);
 
     const dt = 1 / 30;
     if (renderMode === "particle") {
