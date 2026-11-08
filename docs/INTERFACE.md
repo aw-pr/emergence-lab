@@ -281,6 +281,10 @@ export interface SimKernel {
   canvas; the grid and simulation state are preserved.
 - Call `destroy()` when swapping kernels or unmounting.
 - Do not import from `src/sims/**` directly. Kernels load dynamically.
+  The one exception is a sim's pure, dependency-free `model.ts` (seeding,
+  param parsing), which a backend may import to run that sim GPU-resident
+  through the optional direct-rendering hooks in `rendererBackend.ts`
+  (Kuramoto, Gray-Scott, logistic-Mandelbrot). Never import a kernel class.
 
 ## Testing a pure `src/app` module
 
