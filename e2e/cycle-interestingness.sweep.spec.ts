@@ -219,8 +219,8 @@ async function parkDrawer(page: Page): Promise<void> {
   const sidebar = page.locator(".sim-view__sidebar");
   await expect(handle).toHaveAttribute("aria-expanded", "false");
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.mouse.move(20, VIEWPORT.height / 2);
-  await expect.poll(async () => (await sidebar.boundingBox())!.x, { timeout: 5000 }).toBeGreaterThan(VIEWPORT.width - 40);
+  await page.mouse.move(VIEWPORT.width - 20, VIEWPORT.height / 2);
+  await expect.poll(async () => { const b = (await sidebar.boundingBox())!; return b.x + b.width; }, { timeout: 5000 }).toBeLessThan(40);
 }
 
 async function applyPose(page: Page, canvas: Locator, candidate: Candidate, pose: PoseId): Promise<void> {
@@ -292,7 +292,7 @@ async function captureCandidate(
     const initial = await canvasDataset(canvas);
     expect(initial.orbit3dBuild).toBe("complete");
     expect(Number(initial.orbit3dPoints)).toBeGreaterThan(0);
-    expect((await page.locator(".sim-view__sidebar").boundingBox())!.x).toBeGreaterThan(VIEWPORT.width - 40);
+    { const b = (await page.locator(".sim-view__sidebar").boundingBox())!; expect(b.x + b.width).toBeLessThan(40); }
 
     const frames: DecodedImage[] = [];
     const records: FrameRecord[] = [];

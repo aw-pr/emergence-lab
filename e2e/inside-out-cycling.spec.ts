@@ -802,8 +802,8 @@ function directionEvidenceTests(VIEWS: readonly DirectionView[], SEQUENCE_DIR: s
       const parkDrawer = async () => {
         await expect(handle).toHaveAttribute("aria-expanded", "false");
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-        await page.mouse.move(20, VIEWPORT.height / 2);
-        await expect.poll(async () => (await sidebar.boundingBox())!.x, { timeout: 5000 }).toBeGreaterThan(VIEWPORT.width - 40);
+        await page.mouse.move(VIEWPORT.width - 20, VIEWPORT.height / 2);
+        await expect.poll(async () => { const b = (await sidebar.boundingBox())!; return b.x + b.width; }, { timeout: 5000 }).toBeLessThan(40);
       };
       // A pose change (the curtain preset's side view) and a dolly ease the
       // camera over several frames; the sequence starts once it has settled.
@@ -872,7 +872,7 @@ function directionEvidenceTests(VIEWS: readonly DirectionView[], SEQUENCE_DIR: s
       const distance = initial.orbit3dCameraDistance;
       expect(Number(points)).toBeGreaterThan(0);
       const parkedX = (await sidebar.boundingBox())!.x;
-      expect(parkedX).toBeGreaterThan(VIEWPORT.width - 40);
+      expect(parkedX + (await sidebar.boundingBox())!.width).toBeLessThan(40);
 
       const capture = async (direction: "forward" | "reverse") => {
         const frames: { path: string; phase: number; coordinate: number; motion: number }[] = [];

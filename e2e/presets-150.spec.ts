@@ -132,7 +132,7 @@ test("150 supplemental: full visual configuration, custom Boids field and sessio
   await control(page, "Invert colours").locator("input").check();
   await control(page, "Grid quality").locator("select").selectOption("balanced");
   const canvas = page.locator(".sim-view__canvas");
-  await canvas.click({ position: { x: 180, y: 180 } });
+  await canvas.click({ position: { x: 520, y: 180 } });
   await save(page, "Custom field");
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).presets[0], KEY);
   expect(JSON.parse(saved.snapshot.customObstacles).obstacles).toHaveLength(1);
@@ -146,7 +146,7 @@ test("150 supplemental: full visual configuration, custom Boids field and sessio
   await setParam(page, "boidCount", 2000);
   await setRange(page, "Bloom", 0.1);
   await control(page, "Grid quality").locator("select").selectOption("high");
-  await canvas.click({ position: { x: 250, y: 210 } });
+  await canvas.click({ position: { x: 590, y: 210 } });
   expect(await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /^el:(values|render|resolution|custom-obstacles):/.test(key))))).toEqual(ordinary);
   const reopenedDrawer = page.getByRole("button", { name: "Show settings", exact: true });
   if (await reopenedDrawer.isVisible()) await reopenedDrawer.click();

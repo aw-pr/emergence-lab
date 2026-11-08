@@ -314,6 +314,9 @@ export async function renderSimView(
       window.innerHeight === window.screen.height;
     const immersive = immersiveForced || native || windowFullscreen;
     layout.page.classList.toggle("sim-view--immersive", immersive);
+    // The pills and bar that own About are gone in immersive, and the body's
+    // own top-layer promotion would bury an open panel out of reach.
+    if (immersive) layout.aboutPanel?.close();
     if (!immersive) {
       // Reset the drawer so re-entering immersive always starts parked,
       // rather than reopening however it was left last time.
@@ -863,7 +866,6 @@ export async function renderSimView(
         buildAboutSection("Try it", about.interaction),
         layout.about.querySelector(`.${MATHS_SECTION_CLASS}`),
       );
-      syncAboutColumns(layout.about);
     }
   }
   if (fractal) {
@@ -966,7 +968,6 @@ export async function renderSimView(
         buildAboutSection("Try it", about.interaction),
         layout.about.querySelector(".sim-view__about-section--maths"),
       );
-      syncAboutColumns(layout.about);
     }
     detachOrbit3dInteractions = attachLogisticMandelbrotCanvasInteractions({
       slug,
@@ -982,6 +983,15 @@ export async function renderSimView(
       resetCamera: () => renderer.resetOrbit3dCamera(),
       onMarkerChange: (marker) => orbitMarkerReadout?.set(marker),
     });
+  }
+
+  // The narrative greets each view beside the running sim at desktop widths;
+  // on a phone it would cover the stage, so it waits for the button there.
+  if (
+    !layout.page.classList.contains("sim-view--immersive") &&
+    window.matchMedia("(min-width: 721px)").matches
+  ) {
+    layout.aboutPanel?.open();
   }
 
   return {
@@ -1239,8 +1249,11 @@ interface SimLayout {
   fractalHud?: FractalHud;
 }
 
+const ABOUT_PANEL_WIDTH = 360;
+
 interface AboutPanel {
   isOpen(): boolean;
+  open(): void;
   toggle(): void;
   close(): void;
 }
@@ -1406,8 +1419,8 @@ function buildLayout(
   legend.className = "sim-view__legend";
   stage.appendChild(legend);
 
-  // Top-left, the corner the immersive exit pill uses; immersive hides these,
-  // so the two never share it.
+  // Top-right, clear of the parameters panel, the corner the immersive exit
+  // pill uses; immersive hides these, so the two never share it.
   if (siteChrome) {
     const pills = document.createElement("div");
     pills.className = "sim-view__pills";
@@ -1456,8 +1469,7 @@ function buildLayout(
   body.appendChild(sidebar);
 
   // Normal layout only (hidden in immersive and on phones, which have their
-  // own reveals). One device-wide choice: hiding the controls on one sim
-  // hides them on every sim.
+  // own reveals). Every view opens with the controls shown.
   const sidebarTab = document.createElement("button");
   sidebarTab.type = "button";
   sidebarTab.className = "sim-view__sidebar-tab";
@@ -1466,11 +1478,9 @@ function buildLayout(
     sidebarTab.setAttribute("aria-expanded", String(shown));
     sidebarTab.setAttribute("aria-label", shown ? "Hide controls" : "Show controls");
   };
-  showControls(!loadControlsHidden());
+  showControls(true);
   sidebarTab.addEventListener("click", () => {
-    const shown = page.classList.contains("sim-view--controls-hidden");
-    showControls(shown);
-    saveControlsHidden(!shown);
+    showControls(page.classList.contains("sim-view--controls-hidden"));
   });
   body.appendChild(sidebarTab);
 
@@ -1505,24 +1515,6 @@ function buildLayout(
     aboutPanel,
     fractalHud,
   };
-}
-
-const CONTROLS_HIDDEN_KEY = "el:controls-hidden";
-
-function loadControlsHidden(): boolean {
-  try {
-    return window.localStorage.getItem(CONTROLS_HIDDEN_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function saveControlsHidden(hidden: boolean): void {
-  try {
-    window.localStorage.setItem(CONTROLS_HIDDEN_KEY, String(hidden));
-  } catch {
-    // Storage blocked: the choice lasts until the page reloads.
-  }
 }
 
 /**
@@ -1572,24 +1564,23 @@ function attachAboutPanel(options: {
   const isOpen = () =>
     popover ? panel.matches(":popover-open") : !panel.hidden;
 
-  // Under the bar or pill, over the stage and clear of the sidebar while the
-  // stage is wide enough to read in; a narrow stage lends it the viewport.
-  // Phones override all of this with a full-width sheet (styles.css).
+  // Down the stage's right side, below the pills when the site owns the
+  // chrome, as tall as the stage allows and scrolling inside itself. Phones
+  // override this with a full-width sheet (styles.css).
   const place = () => {
     const anchor = button.getBoundingClientRect();
     const box = stage.getBoundingClientRect();
     const anchored = anchor.width > 0 && anchor.height > 0;
-    const top = Math.max(8, anchored ? anchor.bottom + 8 : box.top + 12);
-    const left = Math.max(8, box.left + 12);
-    const right =
-      box.width >= 480 ? box.right - 12 : document.documentElement.clientWidth - 8;
+    const top = Math.max(8, box.top + 12, anchored ? anchor.bottom + 8 : 0);
+    const right = Math.max(8, document.documentElement.clientWidth - box.right + 12);
+    const bottom = Math.min(window.innerHeight, box.bottom) - 12;
     panel.style.setProperty("--about-top", `${Math.round(top)}px`);
-    panel.style.setProperty("--about-left", `${Math.round(left)}px`);
-    panel.style.setProperty("--about-max-width", `${Math.round(Math.max(240, right - left))}px`);
+    panel.style.setProperty("--about-right", `${Math.round(right)}px`);
     panel.style.setProperty(
-      "--about-max-height",
-      `${Math.round(Math.max(160, window.innerHeight - top - 12))}px`,
+      "--about-width",
+      `${Math.round(Math.max(240, Math.min(ABOUT_PANEL_WIDTH, box.width - 24)))}px`,
     );
+    panel.style.setProperty("--about-max-height", `${Math.round(Math.max(160, bottom - top))}px`);
   };
 
   let openAbort: AbortController | undefined;
@@ -1683,6 +1674,7 @@ function attachAboutPanel(options: {
 
   return {
     isOpen,
+    open: show,
     toggle() {
       if (isOpen()) {
         hide();
@@ -1752,15 +1744,7 @@ function buildAbout(about: SimAbout, slug: string): HTMLElement {
   maths.insertBefore(formula, maths.querySelector(".sim-view__about-text"));
   root.appendChild(maths);
 
-  syncAboutColumns(root);
   return root;
-}
-
-/** The panel's width cap is per column, so it has to track the section count.
- *  Call after adding or removing a section. */
-function syncAboutColumns(root: HTMLElement): void {
-  const count = root.querySelectorAll(".sim-view__about-section").length;
-  root.style.setProperty("--about-columns", String(count));
 }
 
 const MATHS_SECTION_CLASS = "sim-view__about-section--maths";
