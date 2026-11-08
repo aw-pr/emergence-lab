@@ -14,7 +14,8 @@
 - **Verifier panel:** false
 - **Dispatch:** serial
 - **Pairing rationale:** interaction work (an in-sidebar preset list with mutations) plus a reading-order change judged in a browser. Opus 5.5 worker first; Astra as the cross-family UI verifier for the same reason as card 155.
-- **Open decisions:** none. Settled by the operator on 2026-11-08: the immersive drawer moves to the left with the sidebar, and `e2e/cycle-interestingness.sweep.spec.ts:295` is claimed and mirrored.
+- **Open decisions:** none
+- **Decided:** by the operator on 2026-11-08: the immersive drawer moves to the left with the sidebar, and `e2e/cycle-interestingness.sweep.spec.ts:295` is claimed and mirrored.
 - **Readiness:** HELD by the operator on 2026-11-08 while autometta is being updated; gated on card 155's operator look. See Readiness review.
 
 ## Surfacing concern
