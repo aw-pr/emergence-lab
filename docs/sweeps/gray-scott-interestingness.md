@@ -1002,3 +1002,337 @@ was touched; the four frames and this appendix are the whole of it.
 ```bash
 SWEEP=1 npx playwright test sweep.spec.ts -g "gray-scott"
 ```
+
+## 2026-10-30 — stage 143 partial attempt (stopped 2026-10-31 UTC)
+
+**Status: partial, no promotion.** The mandatory `scripts/check-contract-test-gate.sh --worktree` exits 1: `e2e/sweep.spec.ts: no AUTOMETTA-CONTRACT-BEGIN marker found, but docs/stages/111-gray-scott-nine-point-rebaseline.md names it as this stage's contract test`. HEAD and the working tree both have only the stage-70 marker at this path. No frozen assertion or digest was changed. The card says to stop on an unresolved evidence failure; the worker interrupted the full sweep (exit 130) and did not restart it. Repair or re-brief of that gate association belongs to the orchestrator, outside this worker's deliverables.
+
+Pre-measurement declaration: [manifest](data/2026-10-30/143/attempt1/manifest-gray-scott.json). [Pilot timings and first-candidate numeric readings](data/2026-10-30/143/attempt1/pilot-gray-scott.json). [Shared commands and scope evidence](data/2026-10-30/143/attempt1/checks.json). No canonical `143/gray-scott.json` is supplied because complete ranking/reference/finalist evidence does not exist.
+
+### Method and coverage
+
+Planned: 48 novel sets, no refinements; 6 current shipped references. Grid128×128, channel1, outer dt1, warmup samples[700, 850, 1000], flux gap12. The method `rd-persistence-v1` averages the unchanged `scoreFrames` readings via `summarizeMetrics`, preserving all historical scoring paths and configurations. The driver captures ordered times on one fresh trajectory per parameter/size/seed; the separate three-kernel browser regression proves exact frame equality against freshly initialised trajectories. The retained pre-measurement determinism wording “fresh kernel each sample” describes the intended deterministic comparison, not literal instance allocation after this optimisation.
+
+Search inclusion/exclusion and full fixed parameters are recorded in the manifest. Historical subtraction:
+
+- `docs/sweeps/gray-scott-interestingness.md`: Subtract 56 pairs: F=linspace(0.01,0.066,8), k=linspace(0.045,0.067,7); whole plane 651 pairs F=0.010..0.070 step0.002, k=0.040..0.070 step0.0015 at96sq. Both fixed Du0.2097,Dv0.105. Subtract 210-pair glider box F0.056..0.066 step0.0005,k0.0590..0.0635 step0.0005 under five/nine-point and dt1/0.5/0.25/0.125, all canonical and labyrinth controls, later Waves/Coral five/nine-point and app-scale follow-ups. New F values are odd half-thousandths below0.056, and k quarter-thousandths; no old pair repeated. No discretisation search.
+- `e2e/harness/sims.ts`: Historical GRAY_SCOTT entry and retired u-skate row preserved unchanged. New sets cross four transition neighbourhoods with Dv0.085/0.105/0.125 at fixed Du0.2097, nine-point, dt1,20 inner iterations. Dv-to-Du ratios0.40534/0.50072/0.59609. F/k transition locations are exploratory, not proven phase boundaries.
+- `src/app/presets.ts`: Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: global slider grids, production changes, palettes, timestep/iteration changes or an adaptive refinement pass. No glider discretisation search was revived. Pilot admission passed; its ranking-throughput estimate did not trigger a budget split. The stop was the frozen-gate failure, not slow throughput.
+
+### Measured evidence and ranking
+
+Full-run attempt: candidate46 was in progress when interrupted; **45/48 complete candidate trajectories**, three readings each, and **0/6 references** were retained. The three remaining sets and all reference/finalist validation remain unmeasured. The following ranks apply only to the retained prefix and must not be treated as the full-grid ranking.
+
+[Partial ranked prefix](data/2026-10-30/143/attempt1/gray-scott-partial.json), [exact compressed raw fields](data/2026-10-30/143/attempt1/gray-scott-raw.json). Raw fields are zlib-compressed little-endian Float32 arrays encoded as base64; each row stores both frames, step count, size, metrics and endpoint diagnostics.
+
+| prefix rank | candidate | full parameters | mean score |
+|---:|---|---|---:|
+| 1 | 143-gray-scott-c01 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0165,"k":0.04875}` | 0.823547168616 |
+| 2 | 143-gray-scott-c10 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04925}` | 0.821808256949 |
+| 3 | 143-gray-scott-c04 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0165,"k":0.04925}` | 0.815525792862 |
+| 4 | 143-gray-scott-c11 | `{"Du":0.2097,"Dv":0.105,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04925}` | 0.815467688709 |
+| 5 | 143-gray-scott-c07 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04875}` | 0.807899069464 |
+
+Diagnostics over all retained frame pairs (scored V channel only):
+- `nonFiniteFraction` range 0–0.
+- `lowerEndpointFraction` range 0–0.
+- `upperEndpointFraction` range 0–0.
+- `outOfRangeFraction` range 0–0.
+- `offFrameClippingFraction` range 0–0.
+
+The old five-point regression was diagnosed before editing: implicit nine-point Coral returned score0.7065245840037978 against the historical five-point literal0.7102674508287455. Adding explicit `stencil="five-point"` restores the old literals unchanged. A separate explicit-nine-point/default comparison pins the measured current reading. The selected browser suite passes six tests with one existing opt-in skip.
+
+### Current references and visual interpretation
+
+All current shipped references are declared separately from historical IDs; none was measured in the interrupted full run. These parameter rows come from current `src/app/presets.ts`, completed with explicit kernel defaults where needed:
+
+| current reference | full parameters |
+|---|---|
+| 143-current-coral | `{"Du":0.2097,"Dv":0.105,"F":0.0545,"k":0.062,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+| 143-current-mitosis | `{"Du":0.2097,"Dv":0.105,"F":0.0367,"k":0.0649,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+| 143-current-worms | `{"Du":0.2097,"Dv":0.105,"F":0.054,"k":0.063,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+| 143-current-maze | `{"Du":0.2097,"Dv":0.105,"F":0.029,"k":0.057,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+| 143-current-spots | `{"Du":0.2097,"Dv":0.105,"F":0.026,"k":0.0597,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+| 143-current-waves | `{"Du":0.2097,"Dv":0.105,"F":0.018,"k":0.0487,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` |
+
+![First-candidate pilot through actual app WebGL2 Renderer, not a finalist](../images/sweeps-2026-10-30/143-gray-scott-pilot-renderer.png)
+
+This is the real app Renderer at384×384 performance resolution, paused after the first declared sampling time, on the first candidate only. It is labelled **pilot**, not a finalist or a current-reference comparison. Grayscale field PNGs, equal-time reference comparisons, three separated finalist frames, longer horizons, two-resolution checks and supported three-seed robustness checks are missing. No aesthetic superiority, persistent morphology or promotion is inferred from this pilot. Off-frame clipping is0 by periodic-field geometry, not a count of features crossing a torus boundary.
+
+### Proposed promotions and reproduction
+
+**None proposed.** The research outcome is incomplete; absence of a promotion here is not evidence that the new region contains no useful regimes. Independent numerical replay and operator visual sign-off have not occurred. Production presets, kernels and defaults are unchanged.
+
+After the orchestrator resolves the freeze-gate blocker and authorises continuation, the complete declared command is:
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+```
+
+Do not present a pilot run as the full sweep. A complete later run must retain all48 candidate rows and all declared references, plus the missing validation and raw recomputation evidence.
+
+## 2026-10-30 — stage 143 completed retry
+
+Measured on 2026-10-31. This section supersedes the incomplete attempt above. **No production promotion proposed.** Independent verifier acceptance and operator visual sign-off remain separate.
+
+Complete [results](data/2026-10-30/143/gray-scott.json), [pre-measurement manifest](data/2026-10-30/143/manifest-gray-scott.json), [ranked census](data/2026-10-30/143/gray-scott-ranking.json), [raw float fields](data/2026-10-30/143/gray-scott-raw.json), [validation readings](data/2026-10-30/143/gray-scott-validation.json) and [pilot timing](data/2026-10-30/143/pilot-gray-scott.json). Earlier failed evidence remains under `143/attempt1/`.
+
+### Method and searched axes
+
+Full sweep plus validation elapsed 14.77 minutes. All 48/48 declared novel candidates and 6/6 current shipped references were measured, without refinements or truncation. Method `rd-persistence-v1`: arithmetic mean and population spread of unchanged scoreFrames readings at [700, 850, 1000], grid 128×128, primary channel 1, flux gap 12, outer dt 1. Full candidate parameters are retained in declaration order in the manifest; ranking order is stored separately.
+
+Closed-form deterministic seed geometry; no random source or seed parameter. Fresh kernel per parameter/size trajectory, ordered captures.
+
+Arithmetic mean of unchanged scoreFrames metrics at three separated times via summarizeMetrics; retain each reading and population spread. No new morphology class labels, weights, calibration orderings or aesthetic claims from scores.
+
+Historical subtraction and inclusion/exclusion:
+
+- [docs/sweeps/gray-scott-interestingness.md](../../docs/sweeps/gray-scott-interestingness.md): Subtract 56 pairs: F=linspace(0.01,0.066,8), k=linspace(0.045,0.067,7); whole plane 651 pairs F=0.010..0.070 step0.002, k=0.040..0.070 step0.0015 at96sq. Both fixed Du0.2097,Dv0.105. Subtract 210-pair glider box F0.056..0.066 step0.0005,k0.0590..0.0635 step0.0005 under five/nine-point and dt1/0.5/0.25/0.125, all canonical and labyrinth controls, later Waves/Coral five/nine-point and app-scale follow-ups. New F values are odd half-thousandths below0.056, and k quarter-thousandths; no old pair repeated. No discretisation search.
+- [e2e/harness/sims.ts](../../e2e/harness/sims.ts): Historical GRAY_SCOTT entry and retired u-skate row preserved unchanged. New sets cross four transition neighbourhoods with Dv0.085/0.105/0.125 at fixed Du0.2097, nine-point, dt1,20 inner iterations. Dv-to-Du ratios0.40534/0.50072/0.59609. F/k transition locations are exploratory, not proven phase boundaries.
+- [src/app/presets.ts](../../src/app/presets.ts): Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: timestep/iteration tuning, colour or display tuning, global slider Cartesian products, further refinements, production defaults or glider discretisation searches. No historical configuration or scoreFrames output was changed.
+
+### Ranked candidates
+
+| rank | candidate | full parameters | mean score | score min–max | flux | coverage |
+|---|---|---|---|---|---|---|
+| 1 | 143-gray-scott-c01 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0165,"k":0.04875}` | 0.823547168616 | 0.817513446–0.827440349 | 0.106961027 | 0.529256185 |
+| 2 | 143-gray-scott-c10 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04925}` | 0.821808256949 | 0.812875940–0.827683361 | 0.106382702 | 0.523681641 |
+| 3 | 143-gray-scott-c04 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0165,"k":0.04925}` | 0.815525792862 | 0.805819142–0.822521251 | 0.093371445 | 0.472615560 |
+| 4 | 143-gray-scott-c11 | `{"Du":0.2097,"Dv":0.105,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04925}` | 0.815467688709 | 0.812807940–0.817102075 | 0.122863114 | 0.468872070 |
+| 5 | 143-gray-scott-c07 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04875}` | 0.807899069464 | 0.786150492–0.819165380 | 0.076688390 | 0.529337565 |
+| 6 | 143-gray-scott-c02 | `{"Du":0.2097,"Dv":0.105,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0165,"k":0.04875}` | 0.799683141900 | 0.791494550–0.810929876 | 0.127399915 | 0.396362305 |
+| 7 | 143-gray-scott-c08 | `{"Du":0.2097,"Dv":0.105,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0175,"k":0.04875}` | 0.780520084779 | 0.750945924–0.829354332 | 0.134770799 | 0.386271159 |
+| 8 | 143-gray-scott-c16 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0245,"k":0.06025}` | 0.771264353002 | 0.759578403–0.791800685 | 0.029931446 | 0.406962077 |
+| 9 | 143-gray-scott-c22 | `{"Du":0.2097,"Dv":0.085,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0255,"k":0.06025}` | 0.766169201578 | 0.760717714–0.770709525 | 0.029101146 | 0.406412760 |
+| 10 | 143-gray-scott-c20 | `{"Du":0.2097,"Dv":0.105,"stencil":"nine-point","dt":1,"stepsPerFrame":20,"F":0.0255,"k":0.05975}` | 0.763452428473 | 0.730767372–0.803916854 | 0.037703369 | 0.351847331 |
+
+Fixture diagnosis: the historical non-phase Coral literals describe five-point scoring (score 0.7102674508287455), while an omitted stencil now selects the kernel's nine-point default (score 0.7065245840037978). The existing test now explicitly passes five-point and preserves every expected literal. A separate browser regression asserts explicit nine-point equals the implicit current default and records its independent exact readings. Both regressions pass; no frozen assertion changed. This is a single-time historical fixture, separate from this sweep's three-time means.
+
+Primary-output diagnostic ranges over the complete candidate/reference census: `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Every row's exact endpoint fractions and both raw fields are retained. Zero scores and empty outcomes are retained, not dropped from ranking.
+
+### Current references
+
+Source: current `src/app/presets.ts`, measured under new `143-current-*` IDs. Gray-Scott explicitly completes stencil=nine-point and dt=1; Lenia explicitly completes seed=0. Historical reference IDs/values remain reproducible.
+
+| reference | full parameters | mean score | flux | coverage |
+|---|---|---|---|---|
+| 143-current-coral | `{"Du":0.2097,"Dv":0.105,"F":0.0545,"k":0.062,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.705155914855 | 0.000240755 | 0.694580078 |
+| 143-current-mitosis | `{"Du":0.2097,"Dv":0.105,"F":0.0367,"k":0.0649,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.655029549529 | 0.000906568 | 0.319091797 |
+| 143-current-worms | `{"Du":0.2097,"Dv":0.105,"F":0.054,"k":0.063,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.705111750355 | 0.000454278 | 0.607706706 |
+| 143-current-maze | `{"Du":0.2097,"Dv":0.105,"F":0.029,"k":0.057,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.691193969784 | 0.001049268 | 0.637125651 |
+| 143-current-spots | `{"Du":0.2097,"Dv":0.105,"F":0.026,"k":0.0597,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.763966466662 | 0.032302745 | 0.354248047 |
+| 143-current-waves | `{"Du":0.2097,"Dv":0.105,"F":0.018,"k":0.0487,"stepsPerFrame":20,"stencil":"nine-point","dt":1}` | 0.821958664426 | 0.144604692 | 0.517578125 |
+
+### Temporal and app-scale evidence
+
+One highest mean-score candidate is an evidence selection, without implying aesthetic superiority. Every selection and current reference has four separated samples, including a longer horizon, at 128² and 384². Lenia repeats all readings at seeds 0, 1 and 2. Equal-size 384px images labelled renderer use the actual app WebGL2 Renderer, exact parameters and steps, and verify its primary field against the independent driver. Images labelled field are grayscale primary-channel PNGs. App-live screenshots show the full route after three seconds of playback. UI sliders quantise some inputs (for example Gray-Scott Du 0.2097 becomes 0.21 and k 0.04875 becomes 0.049); the actual control values are retained in validation JSON. Their timing and optional seed are uncontrolled, so they are qualitative route context only, not exact candidate comparisons. Exact candidate comparisons use the Renderer snapshots.
+
+Renderer capture method: explicit-seed-v2. 28 previously successful Renderer images were retained after fresh field replay matched the complete float field and full parameters exactly; reused image SHA256 values are in validation JSON. All numeric trajectories and grayscale images were freshly measured. Set SWEEP_143_RENDER_FRESH=1 to regenerate every Renderer image instead of reusing matching captures.
+
+The first combined run passed Gray-Scott and BZ but exposed Renderer-generated seed variation in Lenia. [Failure record](data/2026-10-30/143/renderer-failure.json), [failing seed diagnostic](data/2026-10-30/143/renderer-seed-regression-before.json) and [passing three-seed regression](data/2026-10-30/143/renderer-seed-regression.json) retain the diagnosis. The snapshot wrapper now honours an explicitly declared seed; production Renderer behaviour is unchanged. receivedParams records the Renderer-supplied seed before that explicit override. The exact primary field is compared to the deterministic driver before a new snapshot is accepted.
+
+#### 143-gray-scott-c01
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-gray-scott-c01-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-128-seednone-t700.png)
+- [143-gray-scott-c01-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-128-seednone-t850.png)
+- [143-gray-scott-c01-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-128-seednone-t1000.png)
+- [143-gray-scott-c01-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-128-seednone-t2000.png)
+- [143-gray-scott-c01-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-384-seednone-t700.png)
+- [143-gray-scott-c01-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t700.png)
+- [143-gray-scott-c01-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-384-seednone-t850.png)
+- [143-gray-scott-c01-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t850.png)
+- [143-gray-scott-c01-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-384-seednone-t1000.png)
+- [143-gray-scott-c01-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t1000.png)
+- [143-gray-scott-c01-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-field-384-seednone-t2000.png)
+- [143-gray-scott-c01-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-renderer-t2000.png)
+- [143-gray-scott-c01-app-live.png](../../docs/images/sweeps-2026-10-30/143-gray-scott-c01-app-live.png)
+
+#### 143-current-coral
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-coral-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-128-seednone-t700.png)
+- [143-current-coral-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-128-seednone-t850.png)
+- [143-current-coral-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-128-seednone-t1000.png)
+- [143-current-coral-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-128-seednone-t2000.png)
+- [143-current-coral-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-384-seednone-t700.png)
+- [143-current-coral-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t700.png)
+- [143-current-coral-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-384-seednone-t850.png)
+- [143-current-coral-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t850.png)
+- [143-current-coral-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-384-seednone-t1000.png)
+- [143-current-coral-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t1000.png)
+- [143-current-coral-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-field-384-seednone-t2000.png)
+- [143-current-coral-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-coral-renderer-t2000.png)
+- [143-current-coral-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-coral-app-live.png)
+
+#### 143-current-mitosis
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-mitosis-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-128-seednone-t700.png)
+- [143-current-mitosis-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-128-seednone-t850.png)
+- [143-current-mitosis-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-128-seednone-t1000.png)
+- [143-current-mitosis-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-128-seednone-t2000.png)
+- [143-current-mitosis-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-384-seednone-t700.png)
+- [143-current-mitosis-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t700.png)
+- [143-current-mitosis-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-384-seednone-t850.png)
+- [143-current-mitosis-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t850.png)
+- [143-current-mitosis-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-384-seednone-t1000.png)
+- [143-current-mitosis-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t1000.png)
+- [143-current-mitosis-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-field-384-seednone-t2000.png)
+- [143-current-mitosis-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-renderer-t2000.png)
+- [143-current-mitosis-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-mitosis-app-live.png)
+
+#### 143-current-worms
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-worms-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-128-seednone-t700.png)
+- [143-current-worms-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-128-seednone-t850.png)
+- [143-current-worms-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-128-seednone-t1000.png)
+- [143-current-worms-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-128-seednone-t2000.png)
+- [143-current-worms-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-384-seednone-t700.png)
+- [143-current-worms-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t700.png)
+- [143-current-worms-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-384-seednone-t850.png)
+- [143-current-worms-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t850.png)
+- [143-current-worms-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-384-seednone-t1000.png)
+- [143-current-worms-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t1000.png)
+- [143-current-worms-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-field-384-seednone-t2000.png)
+- [143-current-worms-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-worms-renderer-t2000.png)
+- [143-current-worms-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-worms-app-live.png)
+
+#### 143-current-maze
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-maze-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-128-seednone-t700.png)
+- [143-current-maze-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-128-seednone-t850.png)
+- [143-current-maze-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-128-seednone-t1000.png)
+- [143-current-maze-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-128-seednone-t2000.png)
+- [143-current-maze-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-384-seednone-t700.png)
+- [143-current-maze-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t700.png)
+- [143-current-maze-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-384-seednone-t850.png)
+- [143-current-maze-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t850.png)
+- [143-current-maze-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-384-seednone-t1000.png)
+- [143-current-maze-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t1000.png)
+- [143-current-maze-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-field-384-seednone-t2000.png)
+- [143-current-maze-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-maze-renderer-t2000.png)
+- [143-current-maze-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-maze-app-live.png)
+
+#### 143-current-spots
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-spots-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-128-seednone-t700.png)
+- [143-current-spots-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-128-seednone-t850.png)
+- [143-current-spots-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-128-seednone-t1000.png)
+- [143-current-spots-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-128-seednone-t2000.png)
+- [143-current-spots-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-384-seednone-t700.png)
+- [143-current-spots-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t700.png)
+- [143-current-spots-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-384-seednone-t850.png)
+- [143-current-spots-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t850.png)
+- [143-current-spots-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-384-seednone-t1000.png)
+- [143-current-spots-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t1000.png)
+- [143-current-spots-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-field-384-seednone-t2000.png)
+- [143-current-spots-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-spots-renderer-t2000.png)
+- [143-current-spots-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-spots-app-live.png)
+
+#### 143-current-waves
+
+| 700 | 850 | 1000 | 2000 |
+|---|---|---|---|
+| ![Renderer step 700](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t700.png) | ![Renderer step 850](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t850.png) | ![Renderer step 1000](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t1000.png) | ![Renderer step 2000](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t2000.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0,0],"upperEndpointFraction":[0,0],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-waves-field-128-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-128-seednone-t700.png)
+- [143-current-waves-field-128-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-128-seednone-t850.png)
+- [143-current-waves-field-128-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-128-seednone-t1000.png)
+- [143-current-waves-field-128-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-128-seednone-t2000.png)
+- [143-current-waves-field-384-seednone-t700.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-384-seednone-t700.png)
+- [143-current-waves-renderer-t700.png](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t700.png)
+- [143-current-waves-field-384-seednone-t850.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-384-seednone-t850.png)
+- [143-current-waves-renderer-t850.png](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t850.png)
+- [143-current-waves-field-384-seednone-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-384-seednone-t1000.png)
+- [143-current-waves-renderer-t1000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t1000.png)
+- [143-current-waves-field-384-seednone-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-field-384-seednone-t2000.png)
+- [143-current-waves-renderer-t2000.png](../../docs/images/sweeps-2026-10-30/143-current-waves-renderer-t2000.png)
+- [143-current-waves-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-waves-app-live.png)
+
+[Full 48-candidate grayscale census](../images/sweeps-2026-10-30/143-gray-scott-census.png), in manifest order, eight columns; first declared sample only.
+
+### Reproduction and interpretation
+
+Worker fresh numerical repeat of the selection and every current reference: absolute tolerance 1e-9; maximum absolute delta 0 across 7 rows (full per-row readings in the results JSON). These worker checks do not substitute for independent verification. Full raw-data recomputation, ordering and current-preset provenance are checked by the separate replay command. Different resolutions are visual robustness checks, not exact numeric replays.
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_REPLAY=143 npx playwright test e2e/sweep.spec.ts -g "143 retained|143 multi-time"
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+Standalone numerical replay is also available with SWEEP_REPLAY=143 and selector "143 fresh". It covers the full grid plus validation readings without regenerating images; the verifier can use the main sweep for its single required full-grid replay, with the retained-raw check for recomputation.
+
+No promotions proposed. Manual findings are recorded below after visual inspection; scores only shortlist evidence.
+
+### Manual visual finding and promotion decision
+
+The 48-cell census contains bead-like fronts, spot lattices, labyrinths, sparse remnants and empty outcomes. Selected c01 retains reorganising bead/curl fronts at steps 700, 850, 1000 and 2000 at 384²; the field remains active at both sizes. Coral has a dense, nearly stationary labyrinth over the first three times. Mitosis at 384² is a sparse set of isolated dots, so its small-grid ranking should not be extrapolated to a space-filling app display. The selected mean score 0.823547168616 differs from current Waves 0.821958664426 by only 0.001588504191; no aesthetic superiority or promotion follows from that small numerical lead. Current Waves shows broader connected fronts and curls across all four 384² samples, including 2000; c01 is finer and more bead-like, without establishing a compelling new visual regime. Current Spots remains a dense, slowly rearranging dot field. Coral, Worms and Maze retain continuous labyrinth-like fields. Eleven census candidates have zero mean score and are retained. At step 2000 Mitosis coverage is 0.025655 at 384² versus 0.320557 at 128²; c01 coverage is 0.489393 and 0.441040 respectively. These are observed resolution differences, not production repair proposals.
+
+**Proposed promotions: none.** Research acceptance belongs to the independent verifier; any production promotion requires separate operator visual sign-off.
+
+### Final worker validation
+
+[Commands, exits and limitations](data/2026-10-30/143/checks.json), [retained-field recomputation](data/2026-10-30/143/raw-recomputation.json), [fresh trajectory replay](data/2026-10-30/143/fresh-replay.json), [image/link audit](data/2026-10-30/143/artifact-audit.json) and [contract-gate before/after reproduction](data/2026-10-30/143/gate-reproduction.json) are retained.
+
+`npm run verify` exited 0: 397 passed, 38 skipped, typecheck/build green. The precise historical browser regression command exited 0: 6 passed, 1 opt-in recorder skipped. The named three-kernel sweep exited 0 with 3 passed and no skips; all 144 candidates and 13 current references completed. The frozen contract exited 0 with 4 passed and no skips; the worktree contract gate exited 0. The standalone retained/raw/fresh replay command exited 0 with 3 passed and no skips (46.5 minutes). Fresh replay covered every candidate, reference and all 208 validation readings, including metric spreads and explicit Lenia seeds, with maximum absolute delta 0 and identical ordering in Chromium 148.0.7778.96. Skips are not passes. These are worker checks, not independent-verifier acceptance.
+
+All 294 retained stage PNGs are linked and have valid headers/dimensions; each selected candidate has four distinct Renderer-frame hashes. Production files, protected scripts, frozen assertions/digests, historical configurations and orchestration state are unchanged. No git mutation was performed. The owned Vite server was stopped. Full live-route context reported unavailable KaTeX fonts; exact simulation Renderer captures and field-equality checks passed. Promotion remains a separate operator decision.

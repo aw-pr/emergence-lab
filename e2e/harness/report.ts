@@ -99,6 +99,7 @@ export interface ScoredCandidate {
   label: string;
   params: Record<string, number | boolean | string>;
   metrics: InterestingnessMetrics;
+  methodVersion?: string;
   /** Optional relative path to a rendered thumbnail. */
   thumb?: string;
 }
@@ -116,6 +117,27 @@ function paramSummary(params: Record<string, number | boolean | string>, keys: s
 
 /** Markdown table of scored candidates, highest score first. */
 export function metricsTable(rows: ScoredCandidate[], paramKeys: string[]): string {
+  if (rows.length && rows.every(r => r.metrics.rowEntropy !== undefined)) {
+    return [
+      "| # | label | params | legacy score | row entropy | row change | repeated rows |",
+      "|---|---|---|---:|---:|---:|---:|",
+      ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.rowEntropy!, 6)} | ${fmt(r.metrics.rowChange!, 6)} | ${fmt(r.metrics.repeatedRowFraction!, 6)} |`),
+    ].join("\n");
+  }
+  if (rows.length && rows.every(r => r.metrics.interiorFraction !== undefined)) {
+    return [
+      "| # | label | params | score | interior | edge | coarse edge (lag 2) | binary entropy |",
+      "|---|---|---|---:|---:|---:|---:|---:|",
+      ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.interiorFraction!, 6)} | ${fmt(r.metrics.edgeDensity!, 6)} | ${fmt(r.metrics.coarseEdgeDensity!, 6)} | ${fmt(r.metrics.entropy, 6)} |`),
+    ].join("\n");
+  }
+  if (rows.length && rows.every(r => r.metrics.signMix !== undefined)) {
+    return [
+      "| # | label | params | score | stable | chaotic | zero | sign mix | boundary |",
+      "|---|---|---|---:|---:|---:|---:|---:|---:|",
+      ...rows.map((r, i) => `| ${i + 1} | ${r.label} | \`${paramSummary(r.params, paramKeys)}\` | **${fmt(r.metrics.score, 6)}** | ${fmt(r.metrics.stableFraction!, 6)} | ${fmt(r.metrics.chaoticFraction!, 6)} | ${fmt(r.metrics.zeroFraction!, 6)} | ${fmt(r.metrics.signMix!, 6)} | ${fmt(r.metrics.boundaryDensity!, 6)} |`),
+    ].join("\n");
+  }
   const header =
     "| # | label | params | score | entropy | autocorr | flux | coverage |\n" +
     "|---|---|---|---|---|---|---|---|";

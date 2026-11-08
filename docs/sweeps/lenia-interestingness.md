@@ -162,3 +162,424 @@ Live visual verification and frame-rate measurement were not completed in this
 worker run because no browser surface was available. No screenshot path is
 recorded. The preset's visual state, default-profile frame rate and reset cycle
 therefore remain for the GUI verifier to assess before acceptance.
+
+## 2026-10-30 — stage 143 partial attempt (stopped 2026-10-31 UTC)
+
+**Status: partial, no promotion.** The mandatory `scripts/check-contract-test-gate.sh --worktree` exits 1: `e2e/sweep.spec.ts: no AUTOMETTA-CONTRACT-BEGIN marker found, but docs/stages/111-gray-scott-nine-point-rebaseline.md names it as this stage's contract test`. HEAD and the working tree both have only the stage-70 marker at this path. No frozen assertion or digest was changed. The card says to stop on an unresolved evidence failure; the worker interrupted the full sweep (exit 130) and did not restart it. Repair or re-brief of that gate association belongs to the orchestrator, outside this worker's deliverables.
+
+Pre-measurement declaration: [manifest](data/2026-10-30/143/attempt1/manifest-lenia.json). [Pilot timings and first-candidate numeric readings](data/2026-10-30/143/attempt1/pilot-lenia.json). [Shared commands and scope evidence](data/2026-10-30/143/attempt1/checks.json). No canonical `143/lenia.json` is supplied because complete ranking/reference/finalist evidence does not exist.
+
+### Method and coverage
+
+Planned: 48 novel sets, no refinements; 4 current shipped references. Grid128×128, channel0, outer dt1, warmup samples[260, 510, 760], flux gap8. The method `rd-persistence-v1` averages the unchanged `scoreFrames` readings via `summarizeMetrics`, preserving all historical scoring paths and configurations. The driver captures ordered times on one fresh trajectory per parameter/size/seed; the separate three-kernel browser regression proves exact frame equality against freshly initialised trajectories. The retained pre-measurement determinism wording “fresh kernel each sample” describes the intended deterministic comparison, not literal instance allocation after this optimisation.
+
+Search inclusion/exclusion and full fixed parameters are recorded in the manifest. Historical subtraction:
+
+- `docs/sweeps/lenia-interestingness.md`: Subtract24 mu[0.10,0.128,0.156,0.184,0.212,0.24] x sigma[0.010,0.016,0.022,0.028],radius8,muDrift0.015; subtract15 radius[6,8,10,12,14] x(mu,sigma)[(0.24,0.028),(0.212,0.028),(0.15,0.017)],muDrift0.015,dt0.1. Living labyrinth radius14/mu0.24/sigma0.028/drift0.015 is now a reference only. All new radii7/11/15 and growth pairs differ; drift[0,0.008,0.024,0.03] crosses previously unsearched drift with radius/growth.
+- `src/sims/lenia/kernel.ts`: 750 internal-step drift period, seed0 deterministic radius/grid-dependent blobs; optional seeds1/2 used only for validation. Outer dt argument ignored: actual dt0.1 in params. No dt or stepsPerFrame search. Include drift0 as static-growth control, high drift0.03 as fragility probe, not a promotion assumption.
+- `src/app/presets.ts`: Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: global slider grids, production changes, palettes, timestep/iteration changes or an adaptive refinement pass. No glider discretisation search was revived. Pilot admission passed; its ranking-throughput estimate did not trigger a budget split. The stop was the frozen-gate failure, not slow throughput.
+
+### Measured evidence and ranking
+
+**Full-grid attempt: 0/48 candidates, 0/4 references**. Only the separate first-candidate throughput pilot ran. No ranking or claimed negative scientific result is available. Pilot score0.221814837926 is a single late-time reading, not the declared three-time mean. Exact pilot parameters: `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":7,"muDrift":0,"mu":0.135,"sigma":0.018}`.
+
+### Current references and visual interpretation
+
+All current shipped references are declared separately from historical IDs; none was measured in the interrupted full run. These parameter rows come from current `src/app/presets.ts`, completed with explicit kernel defaults where needed:
+
+| current reference | full parameters |
+|---|---|
+| 143-current-orbium-soup | `{"mu":0.15,"sigma":0.017,"muDrift":0.015,"dt":0.1,"radius":8,"stepsPerFrame":1,"seed":0}` |
+| 143-current-coral-growth | `{"mu":0.15,"sigma":0.017,"muDrift":0,"dt":0.1,"radius":8,"stepsPerFrame":1,"seed":0}` |
+| 143-current-geminium-storm | `{"mu":0.15,"sigma":0.017,"muDrift":0.02,"dt":0.1,"radius":10,"stepsPerFrame":1,"seed":0}` |
+| 143-current-living-labyrinth | `{"mu":0.24,"sigma":0.028,"muDrift":0.015,"dt":0.1,"radius":14,"stepsPerFrame":1,"seed":0}` |
+
+![First-candidate pilot through actual app WebGL2 Renderer, not a finalist](../images/sweeps-2026-10-30/143-lenia-pilot-renderer.png)
+
+This is the real app Renderer at384×384 performance resolution, paused after the first declared sampling time, on the first candidate only. It is labelled **pilot**, not a finalist or a current-reference comparison. Grayscale field PNGs, equal-time reference comparisons, three separated finalist frames, longer horizons, two-resolution checks and supported three-seed robustness checks are missing. No aesthetic superiority, persistent morphology or promotion is inferred from this pilot. Off-frame clipping is0 by periodic-field geometry, not a count of features crossing a torus boundary.
+
+### Proposed promotions and reproduction
+
+**None proposed.** The research outcome is incomplete; absence of a promotion here is not evidence that the new region contains no useful regimes. Independent numerical replay and operator visual sign-off have not occurred. Production presets, kernels and defaults are unchanged.
+
+After the orchestrator resolves the freeze-gate blocker and authorises continuation, the complete declared command is:
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+```
+
+Do not present a pilot run as the full sweep. A complete later run must retain all48 candidate rows and all declared references, plus the missing validation and raw recomputation evidence.
+
+## 2026-10-30 — stage 143 completed retry
+
+Measured on 2026-10-31. This section supersedes the incomplete attempt above. **No production promotion proposed.** Independent verifier acceptance and operator visual sign-off remain separate.
+
+Complete [results](data/2026-10-30/143/lenia.json), [pre-measurement manifest](data/2026-10-30/143/manifest-lenia.json), [ranked census](data/2026-10-30/143/lenia-ranking.json), [raw float fields](data/2026-10-30/143/lenia-raw.json), [validation readings](data/2026-10-30/143/lenia-validation.json) and [pilot timing](data/2026-10-30/143/pilot-lenia.json). Earlier failed evidence remains under `143/attempt1/`.
+
+### Method and searched axes
+
+Full sweep plus validation elapsed 56.18 minutes. All 48/48 declared novel candidates and 4/4 current shipped references were measured, without refinements or truncation. Method `rd-persistence-v1`: arithmetic mean and population spread of unchanged scoreFrames readings at [260, 510, 760], grid 128×128, primary channel 0, flux gap 8, outer dt 1. Full candidate parameters are retained in declaration order in the manifest; ranking order is stored separately.
+
+Explicit seed0 for ranking; seeds0,1,2 for finalists and all current references. Fresh deterministic kernel per parameter/size/seed trajectory, ordered captures.
+
+Arithmetic mean of unchanged scoreFrames metrics at three separated times via summarizeMetrics; retain each reading and population spread. No new morphology class labels, weights, calibration orderings or aesthetic claims from scores.
+
+Historical subtraction and inclusion/exclusion:
+
+- [docs/sweeps/lenia-interestingness.md](../../docs/sweeps/lenia-interestingness.md): Subtract24 mu[0.10,0.128,0.156,0.184,0.212,0.24] x sigma[0.010,0.016,0.022,0.028],radius8,muDrift0.015; subtract15 radius[6,8,10,12,14] x(mu,sigma)[(0.24,0.028),(0.212,0.028),(0.15,0.017)],muDrift0.015,dt0.1. Living labyrinth radius14/mu0.24/sigma0.028/drift0.015 is now a reference only. All new radii7/11/15 and growth pairs differ; drift[0,0.008,0.024,0.03] crosses previously unsearched drift with radius/growth.
+- [src/sims/lenia/kernel.ts](../../src/sims/lenia/kernel.ts): 750 internal-step drift period, seed0 deterministic radius/grid-dependent blobs; optional seeds1/2 used only for validation. Outer dt argument ignored: actual dt0.1 in params. No dt or stepsPerFrame search. Include drift0 as static-growth control, high drift0.03 as fragility probe, not a promotion assumption.
+- [src/app/presets.ts](../../src/app/presets.ts): Current shipped presets are all distinct new 143-current-* rows. Explicit current Gray-Scott nine-point/dt1 and Lenia seed0 complete implicit kernel defaults. Historical rows and IDs stay unchanged.
+
+Not searched: timestep/iteration tuning, colour or display tuning, global slider Cartesian products, further refinements, production defaults or glider discretisation searches. No historical configuration or scoreFrames output was changed.
+
+### Ranked candidates
+
+| rank | candidate | full parameters | mean score | score min–max | flux | coverage |
+|---|---|---|---|---|---|---|
+| 1 | 143-lenia-c48 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.03,"mu":0.245,"sigma":0.03}` | 0.476216597019 | 0.458352755–0.504214064 | 0.007949743 | 0.341898600 |
+| 2 | 143-lenia-c44 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.024,"mu":0.245,"sigma":0.03}` | 0.463780661429 | 0.452818421–0.475511606 | 0.004518031 | 0.342834473 |
+| 3 | 143-lenia-c40 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.008,"mu":0.245,"sigma":0.03}` | 0.453284071586 | 0.444030203–0.469504823 | 0.002235388 | 0.342529297 |
+| 4 | 143-lenia-c36 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0,"mu":0.245,"sigma":0.03}` | 0.446341327659 | 0.440267584–0.454683969 | 0.001726977 | 0.340555827 |
+| 5 | 143-lenia-c47 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.03,"mu":0.205,"sigma":0.026}` | 0.442419706969 | 0.431368910–0.449316936 | 0.005428995 | 0.297566732 |
+| 6 | 143-lenia-c43 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.024,"mu":0.205,"sigma":0.026}` | 0.435444623798 | 0.424408644–0.449980524 | 0.004630927 | 0.297058105 |
+| 7 | 143-lenia-c32 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":11,"muDrift":0.03,"mu":0.245,"sigma":0.03}` | 0.423898983687 | 0.412702038–0.439703427 | 0.006427959 | 0.342407227 |
+| 8 | 143-lenia-c46 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.03,"mu":0.165,"sigma":0.022}` | 0.423196731616 | 0.419556204–0.426961523 | 0.007415533 | 0.249247233 |
+| 9 | 143-lenia-c39 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":15,"muDrift":0.008,"mu":0.205,"sigma":0.026}` | 0.422268314545 | 0.415462660–0.433123901 | 0.002431723 | 0.293538411 |
+| 10 | 143-lenia-c28 | `{"dt":0.1,"stepsPerFrame":1,"seed":0,"radius":11,"muDrift":0.024,"mu":0.245,"sigma":0.03}` | 0.416195878391 | 0.408722301–0.430590821 | 0.005511616 | 0.340657552 |
+
+Primary-output diagnostic ranges over the complete candidate/reference census: `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.62091064453125,0.817138671875],"upperEndpointFraction":[0.12799072265625,0.32440185546875],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Every row's exact endpoint fractions and both raw fields are retained. Zero scores and empty outcomes are retained, not dropped from ranking.
+
+### Current references
+
+Source: current `src/app/presets.ts`, measured under new `143-current-*` IDs. Gray-Scott explicitly completes stencil=nine-point and dt=1; Lenia explicitly completes seed=0. Historical reference IDs/values remain reproducible.
+
+| reference | full parameters | mean score | flux | coverage |
+|---|---|---|---|---|
+| 143-current-orbium-soup | `{"mu":0.15,"sigma":0.017,"muDrift":0.015,"dt":0.1,"radius":8,"stepsPerFrame":1,"seed":0}` | 0.274272225985 | 0.015283870 | 0.233215332 |
+| 143-current-coral-growth | `{"mu":0.15,"sigma":0.017,"muDrift":0,"dt":0.1,"radius":8,"stepsPerFrame":1,"seed":0}` | 0.256762269068 | 0.012462924 | 0.230183919 |
+| 143-current-geminium-storm | `{"mu":0.15,"sigma":0.017,"muDrift":0.02,"dt":0.1,"radius":10,"stepsPerFrame":1,"seed":0}` | 0.337582374219 | 0.016747261 | 0.236429850 |
+| 143-current-living-labyrinth | `{"mu":0.24,"sigma":0.028,"muDrift":0.015,"dt":0.1,"radius":14,"stepsPerFrame":1,"seed":0}` | 0.457881285572 | 0.007406792 | 0.333557129 |
+
+### Temporal and app-scale evidence
+
+One highest mean-score candidate is an evidence selection, without implying aesthetic superiority. Every selection and current reference has four separated samples, including a longer horizon, at 128² and 384². Lenia repeats all readings at seeds 0, 1 and 2. Equal-size 384px images labelled renderer use the actual app WebGL2 Renderer, exact parameters and steps, and verify its primary field against the independent driver. Images labelled field are grayscale primary-channel PNGs. App-live screenshots show the full route after three seconds of playback. UI sliders quantise some inputs (for example Gray-Scott Du 0.2097 becomes 0.21 and k 0.04875 becomes 0.049); the actual control values are retained in validation JSON. Their timing and optional seed are uncontrolled, so they are qualitative route context only, not exact candidate comparisons. Exact candidate comparisons use the Renderer snapshots.
+
+Renderer capture method: explicit-seed-v2. 0 previously successful Renderer images were retained after fresh field replay matched the complete float field and full parameters exactly; reused image SHA256 values are in validation JSON. All numeric trajectories and grayscale images were freshly measured. Set SWEEP_143_RENDER_FRESH=1 to regenerate every Renderer image instead of reusing matching captures.
+
+The first combined run passed Gray-Scott and BZ but exposed Renderer-generated seed variation in Lenia. [Failure record](data/2026-10-30/143/renderer-failure.json), [failing seed diagnostic](data/2026-10-30/143/renderer-seed-regression-before.json) and [passing three-seed regression](data/2026-10-30/143/renderer-seed-regression.json) retain the diagnosis. The snapshot wrapper now honours an explicitly declared seed; production Renderer behaviour is unchanged. receivedParams records the Renderer-supplied seed before that explicit override. The exact primary field is compared to the deterministic driver before a new snapshot is accepted.
+
+The retained first-attempt Lenia pilot image predates the seed repair and has an uncontrolled Renderer-generated seed. It is historical context, not a seed0 comparison. The [numeric equivalence check](data/2026-10-30/143/lenia-seed-fix-numeric-equivalence.json) confirms the complete 48-candidate/four-reference ranking and raw-field file are unchanged by the presentation repair; the [pre-fix ranking](data/2026-10-30/143/lenia-before-seed-fix-ranking.json) is retained.
+
+#### 143-lenia-c48
+
+| 260 | 510 | 760 | 1510 |
+|---|---|---|---|
+| ![Renderer step 260](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t260.png) | ![Renderer step 510](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t510.png) | ![Renderer step 760](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t760.png) | ![Renderer step 1510](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t1510.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.6263970269097222,0.6789618598090278],"upperEndpointFraction":[0.2901611328125,0.3181084526909722],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+| size | step | seed 0 score | seed 1 score | seed 2 score | spread (max–min) |
+|---|---|---|---|---|---|
+| 128 | 260 | 0.504214063578 | 0.502982414141 | 0.495436633795 | 0.008777429783 |
+| 128 | 510 | 0.458352755076 | 0.457512908047 | 0.451484675599 | 0.006868079477 |
+| 128 | 760 | 0.466082972404 | 0.466817351843 | 0.459586257035 | 0.007231094808 |
+| 128 | 1510 | 0.470248092423 | 0.464998664800 | 0.458126290195 | 0.012121802229 |
+| 384 | 260 | 0.506080292134 | 0.495628431725 | 0.494200114263 | 0.011880177871 |
+| 384 | 510 | 0.450680084264 | 0.454610359020 | 0.449467007142 | 0.005143351878 |
+| 384 | 760 | 0.463339937725 | 0.465479807454 | 0.459720116323 | 0.005759691131 |
+| 384 | 1510 | 0.460866565649 | 0.462320304246 | 0.459389328299 | 0.002930975947 |
+
+Three explicit seeds are robustness evidence, not a distributional guarantee.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-lenia-c48-field-128-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed0-t260.png)
+- [143-lenia-c48-field-128-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed0-t510.png)
+- [143-lenia-c48-field-128-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed0-t760.png)
+- [143-lenia-c48-field-128-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed0-t1510.png)
+- [143-lenia-c48-field-128-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed1-t260.png)
+- [143-lenia-c48-field-128-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed1-t510.png)
+- [143-lenia-c48-field-128-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed1-t760.png)
+- [143-lenia-c48-field-128-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed1-t1510.png)
+- [143-lenia-c48-field-128-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed2-t260.png)
+- [143-lenia-c48-field-128-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed2-t510.png)
+- [143-lenia-c48-field-128-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed2-t760.png)
+- [143-lenia-c48-field-128-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-128-seed2-t1510.png)
+- [143-lenia-c48-field-384-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed0-t260.png)
+- [143-lenia-c48-renderer-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t260.png)
+- [143-lenia-c48-field-384-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed0-t510.png)
+- [143-lenia-c48-renderer-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t510.png)
+- [143-lenia-c48-field-384-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed0-t760.png)
+- [143-lenia-c48-renderer-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t760.png)
+- [143-lenia-c48-field-384-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed0-t1510.png)
+- [143-lenia-c48-renderer-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-renderer-t1510.png)
+- [143-lenia-c48-field-384-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed1-t260.png)
+- [143-lenia-c48-field-384-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed1-t510.png)
+- [143-lenia-c48-field-384-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed1-t760.png)
+- [143-lenia-c48-field-384-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed1-t1510.png)
+- [143-lenia-c48-field-384-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed2-t260.png)
+- [143-lenia-c48-field-384-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed2-t510.png)
+- [143-lenia-c48-field-384-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed2-t760.png)
+- [143-lenia-c48-field-384-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-field-384-seed2-t1510.png)
+- [143-lenia-c48-app-live.png](../../docs/images/sweeps-2026-10-30/143-lenia-c48-app-live.png)
+
+#### 143-current-orbium-soup
+
+| 260 | 510 | 760 | 1510 |
+|---|---|---|---|
+| ![Renderer step 260](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t260.png) | ![Renderer step 510](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t510.png) | ![Renderer step 760](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t760.png) | ![Renderer step 1510](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t1510.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.731689453125,0.771728515625],"upperEndpointFraction":[0.15679931640625,0.18609619140625],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+| size | step | seed 0 score | seed 1 score | seed 2 score | spread (max–min) |
+|---|---|---|---|---|---|
+| 128 | 260 | 0.288814444312 | 0.296175410068 | 0.294210633523 | 0.007360965756 |
+| 128 | 510 | 0.267475132672 | 0.257502951259 | 0.267621127339 | 0.010118176080 |
+| 128 | 760 | 0.266527100971 | 0.259845755203 | 0.265083429350 | 0.006681345768 |
+| 128 | 1510 | 0.270758262677 | 0.257750041893 | 0.261889909423 | 0.013008220784 |
+| 384 | 260 | 0.324447671663 | 0.311595335666 | 0.317061900876 | 0.012852335997 |
+| 384 | 510 | 0.261112334374 | 0.260768960735 | 0.263593376975 | 0.002824416240 |
+| 384 | 760 | 0.268131287870 | 0.264289854796 | 0.271860190926 | 0.007570336130 |
+| 384 | 1510 | 0.268984012338 | 0.266026151292 | 0.271098514576 | 0.005072363284 |
+
+Three explicit seeds are robustness evidence, not a distributional guarantee.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-orbium-soup-field-128-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed0-t260.png)
+- [143-current-orbium-soup-field-128-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed0-t510.png)
+- [143-current-orbium-soup-field-128-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed0-t760.png)
+- [143-current-orbium-soup-field-128-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed0-t1510.png)
+- [143-current-orbium-soup-field-128-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed1-t260.png)
+- [143-current-orbium-soup-field-128-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed1-t510.png)
+- [143-current-orbium-soup-field-128-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed1-t760.png)
+- [143-current-orbium-soup-field-128-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed1-t1510.png)
+- [143-current-orbium-soup-field-128-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed2-t260.png)
+- [143-current-orbium-soup-field-128-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed2-t510.png)
+- [143-current-orbium-soup-field-128-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed2-t760.png)
+- [143-current-orbium-soup-field-128-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-128-seed2-t1510.png)
+- [143-current-orbium-soup-field-384-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed0-t260.png)
+- [143-current-orbium-soup-renderer-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t260.png)
+- [143-current-orbium-soup-field-384-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed0-t510.png)
+- [143-current-orbium-soup-renderer-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t510.png)
+- [143-current-orbium-soup-field-384-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed0-t760.png)
+- [143-current-orbium-soup-renderer-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t760.png)
+- [143-current-orbium-soup-field-384-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed0-t1510.png)
+- [143-current-orbium-soup-renderer-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-renderer-t1510.png)
+- [143-current-orbium-soup-field-384-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed1-t260.png)
+- [143-current-orbium-soup-field-384-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed1-t510.png)
+- [143-current-orbium-soup-field-384-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed1-t760.png)
+- [143-current-orbium-soup-field-384-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed1-t1510.png)
+- [143-current-orbium-soup-field-384-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed2-t260.png)
+- [143-current-orbium-soup-field-384-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed2-t510.png)
+- [143-current-orbium-soup-field-384-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed2-t760.png)
+- [143-current-orbium-soup-field-384-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-field-384-seed2-t1510.png)
+- [143-current-orbium-soup-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-orbium-soup-app-live.png)
+
+#### 143-current-coral-growth
+
+| 260 | 510 | 760 | 1510 |
+|---|---|---|---|
+| ![Renderer step 260](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t260.png) | ![Renderer step 510](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t510.png) | ![Renderer step 760](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t760.png) | ![Renderer step 1510](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t1510.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.7564765082465278,0.76470947265625],"upperEndpointFraction":[0.1639946831597222,0.173828125],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+| size | step | seed 0 score | seed 1 score | seed 2 score | spread (max–min) |
+|---|---|---|---|---|---|
+| 128 | 260 | 0.260153016816 | 0.255478612022 | 0.270905343047 | 0.015426731025 |
+| 128 | 510 | 0.255959769914 | 0.250434998710 | 0.260595373040 | 0.010160374330 |
+| 128 | 760 | 0.254174020473 | 0.245454974736 | 0.260148771963 | 0.014693797227 |
+| 128 | 1510 | 0.260404746177 | 0.249817818152 | 0.260077064285 | 0.010586928025 |
+| 384 | 260 | 0.262071416403 | 0.264195822762 | 0.267023817332 | 0.004952400929 |
+| 384 | 510 | 0.255075369898 | 0.254377090515 | 0.256499415462 | 0.002122324947 |
+| 384 | 760 | 0.253208448329 | 0.254599987940 | 0.252552029026 | 0.002047958914 |
+| 384 | 1510 | 0.252884777470 | 0.251765788739 | 0.254028625521 | 0.002262836782 |
+
+Three explicit seeds are robustness evidence, not a distributional guarantee.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-coral-growth-field-128-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed0-t260.png)
+- [143-current-coral-growth-field-128-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed0-t510.png)
+- [143-current-coral-growth-field-128-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed0-t760.png)
+- [143-current-coral-growth-field-128-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed0-t1510.png)
+- [143-current-coral-growth-field-128-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed1-t260.png)
+- [143-current-coral-growth-field-128-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed1-t510.png)
+- [143-current-coral-growth-field-128-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed1-t760.png)
+- [143-current-coral-growth-field-128-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed1-t1510.png)
+- [143-current-coral-growth-field-128-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed2-t260.png)
+- [143-current-coral-growth-field-128-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed2-t510.png)
+- [143-current-coral-growth-field-128-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed2-t760.png)
+- [143-current-coral-growth-field-128-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-128-seed2-t1510.png)
+- [143-current-coral-growth-field-384-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed0-t260.png)
+- [143-current-coral-growth-renderer-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t260.png)
+- [143-current-coral-growth-field-384-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed0-t510.png)
+- [143-current-coral-growth-renderer-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t510.png)
+- [143-current-coral-growth-field-384-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed0-t760.png)
+- [143-current-coral-growth-renderer-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t760.png)
+- [143-current-coral-growth-field-384-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed0-t1510.png)
+- [143-current-coral-growth-renderer-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-renderer-t1510.png)
+- [143-current-coral-growth-field-384-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed1-t260.png)
+- [143-current-coral-growth-field-384-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed1-t510.png)
+- [143-current-coral-growth-field-384-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed1-t760.png)
+- [143-current-coral-growth-field-384-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed1-t1510.png)
+- [143-current-coral-growth-field-384-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed2-t260.png)
+- [143-current-coral-growth-field-384-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed2-t510.png)
+- [143-current-coral-growth-field-384-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed2-t760.png)
+- [143-current-coral-growth-field-384-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-field-384-seed2-t1510.png)
+- [143-current-coral-growth-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-coral-growth-app-live.png)
+
+#### 143-current-geminium-storm
+
+| 260 | 510 | 760 | 1510 |
+|---|---|---|---|
+| ![Renderer step 260](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t260.png) | ![Renderer step 510](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t510.png) | ![Renderer step 760](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t760.png) | ![Renderer step 1510](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t1510.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.71099853515625,0.78240966796875],"upperEndpointFraction":[0.1610107421875,0.1962890625],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+| size | step | seed 0 score | seed 1 score | seed 2 score | spread (max–min) |
+|---|---|---|---|---|---|
+| 128 | 260 | 0.413517787062 | 0.408079822997 | 0.351173926632 | 0.062343860430 |
+| 128 | 510 | 0.295252114941 | 0.300490769004 | 0.303946278500 | 0.008694163559 |
+| 128 | 760 | 0.303977220654 | 0.308701384696 | 0.296462646562 | 0.012238738134 |
+| 128 | 1510 | 0.305571650922 | 0.314344715224 | 0.302409337001 | 0.011935378223 |
+| 384 | 260 | 0.370012756860 | 0.383285181999 | 0.385861337673 | 0.015848580813 |
+| 384 | 510 | 0.301279418089 | 0.303208018255 | 0.301307482551 | 0.001928600166 |
+| 384 | 760 | 0.305556984128 | 0.303440018339 | 0.304977446403 | 0.002116965790 |
+| 384 | 1510 | 0.304167396964 | 0.305155905549 | 0.306330003060 | 0.002162606096 |
+
+Three explicit seeds are robustness evidence, not a distributional guarantee.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-geminium-storm-field-128-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed0-t260.png)
+- [143-current-geminium-storm-field-128-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed0-t510.png)
+- [143-current-geminium-storm-field-128-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed0-t760.png)
+- [143-current-geminium-storm-field-128-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed0-t1510.png)
+- [143-current-geminium-storm-field-128-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed1-t260.png)
+- [143-current-geminium-storm-field-128-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed1-t510.png)
+- [143-current-geminium-storm-field-128-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed1-t760.png)
+- [143-current-geminium-storm-field-128-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed1-t1510.png)
+- [143-current-geminium-storm-field-128-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed2-t260.png)
+- [143-current-geminium-storm-field-128-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed2-t510.png)
+- [143-current-geminium-storm-field-128-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed2-t760.png)
+- [143-current-geminium-storm-field-128-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-128-seed2-t1510.png)
+- [143-current-geminium-storm-field-384-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed0-t260.png)
+- [143-current-geminium-storm-renderer-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t260.png)
+- [143-current-geminium-storm-field-384-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed0-t510.png)
+- [143-current-geminium-storm-renderer-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t510.png)
+- [143-current-geminium-storm-field-384-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed0-t760.png)
+- [143-current-geminium-storm-renderer-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t760.png)
+- [143-current-geminium-storm-field-384-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed0-t1510.png)
+- [143-current-geminium-storm-renderer-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-renderer-t1510.png)
+- [143-current-geminium-storm-field-384-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed1-t260.png)
+- [143-current-geminium-storm-field-384-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed1-t510.png)
+- [143-current-geminium-storm-field-384-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed1-t760.png)
+- [143-current-geminium-storm-field-384-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed1-t1510.png)
+- [143-current-geminium-storm-field-384-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed2-t260.png)
+- [143-current-geminium-storm-field-384-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed2-t510.png)
+- [143-current-geminium-storm-field-384-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed2-t760.png)
+- [143-current-geminium-storm-field-384-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-field-384-seed2-t1510.png)
+- [143-current-geminium-storm-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-geminium-storm-app-live.png)
+
+#### 143-current-living-labyrinth
+
+| 260 | 510 | 760 | 1510 |
+|---|---|---|---|
+| ![Renderer step 260](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t260.png) | ![Renderer step 510](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t510.png) | ![Renderer step 760](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t760.png) | ![Renderer step 1510](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t1510.png) |
+
+Primary-output diagnostic ranges over all resolution/seed/time samples (including frame B): `{"nonFiniteFraction":[0,0],"lowerEndpointFraction":[0.64117431640625,0.6741943359375],"upperEndpointFraction":[0.2794189453125,0.3120863172743056],"outOfRangeFraction":[0,0],"offFrameClippingFraction":[0,0]}`. Off-frame clipping is geometrically zero for these periodic fields; this does not count features crossing the torus boundary.
+
+| size | step | seed 0 score | seed 1 score | seed 2 score | spread (max–min) |
+|---|---|---|---|---|---|
+| 128 | 260 | 0.463022397137 | 0.484469530034 | 0.471530477523 | 0.021447132898 |
+| 128 | 510 | 0.442859779220 | 0.433867149640 | 0.441099007135 | 0.008992629579 |
+| 128 | 760 | 0.467761680359 | 0.440368110604 | 0.449776131711 | 0.027393569755 |
+| 128 | 1510 | 0.452855088666 | 0.441392671553 | 0.439666882653 | 0.013188206013 |
+| 384 | 260 | 0.499308949580 | 0.476842076077 | 0.468472204417 | 0.030836745163 |
+| 384 | 510 | 0.438708032534 | 0.436809879847 | 0.437723718705 | 0.001898152687 |
+| 384 | 760 | 0.441677057881 | 0.440384623591 | 0.440790406192 | 0.001292434290 |
+| 384 | 1510 | 0.439908926880 | 0.439015015752 | 0.437551793730 | 0.002357133150 |
+
+Three explicit seeds are robustness evidence, not a distributional guarantee.
+
+Retained images (including all grayscale resolution/seed/time comparisons and the full app route):
+
+- [143-current-living-labyrinth-field-128-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed0-t260.png)
+- [143-current-living-labyrinth-field-128-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed0-t510.png)
+- [143-current-living-labyrinth-field-128-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed0-t760.png)
+- [143-current-living-labyrinth-field-128-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed0-t1510.png)
+- [143-current-living-labyrinth-field-128-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed1-t260.png)
+- [143-current-living-labyrinth-field-128-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed1-t510.png)
+- [143-current-living-labyrinth-field-128-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed1-t760.png)
+- [143-current-living-labyrinth-field-128-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed1-t1510.png)
+- [143-current-living-labyrinth-field-128-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed2-t260.png)
+- [143-current-living-labyrinth-field-128-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed2-t510.png)
+- [143-current-living-labyrinth-field-128-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed2-t760.png)
+- [143-current-living-labyrinth-field-128-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-128-seed2-t1510.png)
+- [143-current-living-labyrinth-field-384-seed0-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed0-t260.png)
+- [143-current-living-labyrinth-renderer-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t260.png)
+- [143-current-living-labyrinth-field-384-seed0-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed0-t510.png)
+- [143-current-living-labyrinth-renderer-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t510.png)
+- [143-current-living-labyrinth-field-384-seed0-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed0-t760.png)
+- [143-current-living-labyrinth-renderer-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t760.png)
+- [143-current-living-labyrinth-field-384-seed0-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed0-t1510.png)
+- [143-current-living-labyrinth-renderer-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-renderer-t1510.png)
+- [143-current-living-labyrinth-field-384-seed1-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed1-t260.png)
+- [143-current-living-labyrinth-field-384-seed1-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed1-t510.png)
+- [143-current-living-labyrinth-field-384-seed1-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed1-t760.png)
+- [143-current-living-labyrinth-field-384-seed1-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed1-t1510.png)
+- [143-current-living-labyrinth-field-384-seed2-t260.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed2-t260.png)
+- [143-current-living-labyrinth-field-384-seed2-t510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed2-t510.png)
+- [143-current-living-labyrinth-field-384-seed2-t760.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed2-t760.png)
+- [143-current-living-labyrinth-field-384-seed2-t1510.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-field-384-seed2-t1510.png)
+- [143-current-living-labyrinth-app-live.png](../../docs/images/sweeps-2026-10-30/143-current-living-labyrinth-app-live.png)
+
+[Full 48-candidate grayscale census](../images/sweeps-2026-10-30/143-lenia-census.png), in manifest order, eight columns; first declared sample only.
+
+### Reproduction and interpretation
+
+Worker fresh numerical repeat of the selection and every current reference: absolute tolerance 1e-9; maximum absolute delta 0 across 5 rows (full per-row readings in the results JSON). These worker checks do not substitute for independent verification. Full raw-data recomputation, ordering and current-preset provenance are checked by the separate replay command. Different resolutions are visual robustness checks, not exact numeric replays.
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 143 " --workers=1
+SWEEP_REPLAY=143 npx playwright test e2e/sweep.spec.ts -g "143 retained|143 multi-time"
+SWEEP_CONTRACT=143 npx playwright test e2e/sweep-143.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+Standalone numerical replay is also available with SWEEP_REPLAY=143 and selector "143 fresh". It covers the full grid plus validation readings without regenerating images; the verifier can use the main sweep for its single required full-grid replay, with the retained-raw check for recomputation.
+
+No promotions proposed. Manual findings are recorded below after visual inspection; scores only shortlist evidence.
+
+### Manual visual finding and promotion decision
+
+The census ranges from small isolated loops/dots to broader labyrinth bands. No candidate has zero mean score. The three highest-ranked sets all use radius 15, consistent with the metric rewarding larger coherent structures; this is not evidence of aesthetic superiority. Selected c48 (radius 15, muDrift 0.03, mu 0.245, sigma 0.03) scores 0.476216597019 versus current Living labyrinth 0.457881285572, a lead 0.018335311447 under the declared seed 0 / 128² three-time method. At 384² the exact Renderer frames at steps 260, 510, 760 and 1510 retain essentially the same large labyrinth geometry, with changes in line thickness, local details and the initial central feature. Persistent occupancy is not proof of a new moving form. No promotion is proposed from this small-grid metric lead. The current Living labyrinth reference has comparable broad connected bands at all four app-scale times; the selection does not establish a distinct visual class. Drifting soup and Geminium storm show finer loops with phase-dependent line width, while Still spots remains nearly stationary. The selected candidate survives all tested seeds/resolutions/times with coverage about 0.319–0.363; across its validation fields about 63–68% of cells are at the lower endpoint and 29–32% at the upper endpoint. This strong binary appearance is reported explicitly; finite bounded output and stable occupancy do not establish aesthetic superiority or a distributional robustness guarantee.
+
+**Proposed promotions: none.** Research acceptance belongs to the independent verifier; any production promotion requires separate operator visual sign-off.
+
+### Selection versus current Living labyrinth across seeds
+
+The selection remains numerically above this reference in all six tested resolution/seed combinations. This is a bounded three-seed observation; the exact-time images still show a closely related broad-band appearance.
+
+| size | seed | selection three-time mean | current three-time mean | selection at step 1510 | current at step 1510 |
+|---|---|---|---|---|---|
+| 128 | 0 | 0.476216597019 | 0.457881285572 | 0.470248092423 | 0.452855088666 |
+| 128 | 1 | 0.475770891343 | 0.452901596760 | 0.464998664800 | 0.441392671553 |
+| 128 | 2 | 0.468835855476 | 0.454135205456 | 0.458126290195 | 0.439666882653 |
+| 384 | 0 | 0.473366771374 | 0.459898013332 | 0.460866565649 | 0.439908926880 |
+| 384 | 1 | 0.471906199399 | 0.451345526505 | 0.462320304246 | 0.439015015752 |
+| 384 | 2 | 0.467795745909 | 0.448995443104 | 0.459389328299 | 0.437551793730 |
+
+### Final worker validation
+
+[Commands, exits and limitations](data/2026-10-30/143/checks.json), [retained-field recomputation](data/2026-10-30/143/raw-recomputation.json), [fresh trajectory replay](data/2026-10-30/143/fresh-replay.json), [image/link audit](data/2026-10-30/143/artifact-audit.json) and [contract-gate before/after reproduction](data/2026-10-30/143/gate-reproduction.json) are retained.
+
+`npm run verify` exited 0: 397 passed, 38 skipped, typecheck/build green. The precise historical browser regression command exited 0: 6 passed, 1 opt-in recorder skipped. The named three-kernel sweep exited 0 with 3 passed and no skips; all 144 candidates and 13 current references completed. The frozen contract exited 0 with 4 passed and no skips; the worktree contract gate exited 0. The standalone retained/raw/fresh replay command exited 0 with 3 passed and no skips (46.5 minutes). Fresh replay covered every candidate, reference and all 208 validation readings, including metric spreads and explicit Lenia seeds, with maximum absolute delta 0 and identical ordering in Chromium 148.0.7778.96. Skips are not passes. These are worker checks, not independent-verifier acceptance.
+
+All 294 retained stage PNGs are linked and have valid headers/dimensions; each selected candidate has four distinct Renderer-frame hashes. Production files, protected scripts, frozen assertions/digests, historical configurations and orchestration state are unchanged. No git mutation was performed. The owned Vite server was stopped. Full live-route context reported unavailable KaTeX fonts; exact simulation Renderer captures and field-equality checks passed. Promotion remains a separate operator decision.

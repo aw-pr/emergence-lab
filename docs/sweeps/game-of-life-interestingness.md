@@ -129,3 +129,104 @@ This card makes no promotion and no composite change (`git diff
 src/app/presets.ts` is empty) — it characterises a new instrument, it does not
 adopt it. Whether the composite should incorporate a multi-lag term is a
 follow-up decision with its own re-scoring plan.
+
+## Missed regimes — 2026-10-30 (stage 147)
+
+### Method and retained evidence
+
+48/48 novel candidates and 3/3 current references completed, with zero skipped sweep tests. No refinement allowance used. Full parameters, ranked results, method version, runtime and exact commands are in [retained results](data/2026-10-30/147/game-of-life.json). The [pre-measurement manifest](data/2026-10-30/147/manifest-game-of-life.json) declares historical exclusions and citations; [pilot throughput](data/2026-10-30/147/pilot-game-of-life.json) admitted the complete grid before measurement. Historical text and configs above remain unchanged.
+
+All scoring uses a 128×128 periodic lattice, channel 0, dt 1, flux gap 4 and captures at 200/500/1000 kernel.step calls. The unchanged scoreFrames composite is averaged using summarizeMetrics. Existing multi-lag structure (lags 1/2/3/4/6/8) is reported separately and never alters the composite. Method version: `cellular-persistence-v1`. Coverage threshold is 0.1 (includes age shading/ghost trails; not an alive-only fraction).
+
+[Losslessly compressed raw field pairs](data/2026-10-30/147/game-of-life-raw.json) preserve every candidate/reference reading, including dead and jammed results. [Finalist/reference validation](data/2026-10-30/147/game-of-life-validation.json) retains raw pairs, endpoints, renderer settings and all supported seeds at 128² and 384², at 200/500/1000 and the longer horizon 2000. All four sets use equal 384 px actual app WebGL2 Renderer snapshots with default colours, primary channel and bloom 0. Each screenshot field is checked exactly against the independent driver field. Field PNGs are grayscale kernel output, not app screenshots.
+
+### Searched and not searched
+
+48 = birth ranges{[1,1],[2,2],[2,3],[4,4]} × survival ranges{[1,3],[2,3],[3,5]} × sparkRate{0,0.025,0.075,0.2}. seedDensity 0.28 and ageShading true fixed. Birth ranges are inclusive: [2,3] is B23. Every birth rule differs from the old fixed-B3 grid. No new seed, density or shading search.
+
+August: B3 fixed, surviveMin[1,2,3] x surviveMax[3,4,5] x seedDensity[0.05,0.12,0.2,0.28,0.4]; spark 0.1, ageShading true. August30 appendix calibrated existing multi-lag on Maze-like and noise, no new rule search. Every new rule B1/B2/B23/B4 differs from B3. Cross three survival windows and spark[0,0.025,0.075,0.2], seedDensity 0.28 fixed; no old full tuple repeated. Birth ranges are inclusive (B23), not B2/S3 notation.
+
+### Ranked candidates and current references
+
+Top eight by mean composite; every other candidate is retained in JSON. Full params are shown to make rule interactions explicit.
+
+| rank/id | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| 1: 147-game-of-life-c19 | `{"seedDensity":0.28,"ageShading":true,"birthMin":2,"birthMax":2,"surviveMin":2,"surviveMax":3,"sparkRate":0.075}` | 0.273980 | 0.106588 | 0.204242 | 0.730367 |
+| 2: 147-game-of-life-c18 | `{"seedDensity":0.28,"ageShading":true,"birthMin":2,"birthMax":2,"surviveMin":2,"surviveMax":3,"sparkRate":0.025}` | 0.273272 | 0.099936 | 0.205228 | 0.731567 |
+| 3: 147-game-of-life-c17 | `{"seedDensity":0.28,"ageShading":true,"birthMin":2,"birthMax":2,"surviveMin":2,"surviveMax":3,"sparkRate":0}` | 0.273247 | 0.105893 | 0.204261 | 0.731384 |
+| 4: 147-game-of-life-c20 | `{"seedDensity":0.28,"ageShading":true,"birthMin":2,"birthMax":2,"surviveMin":2,"surviveMax":3,"sparkRate":0.2}` | 0.273056 | 0.095688 | 0.206060 | 0.729757 |
+| 5: 147-game-of-life-c12 | `{"seedDensity":0.28,"ageShading":true,"birthMin":1,"birthMax":1,"surviveMin":3,"surviveMax":5,"sparkRate":0.2}` | 0.187160 | 0.086634 | 0.013157 | 0.470174 |
+| 6: 147-game-of-life-c11 | `{"seedDensity":0.28,"ageShading":true,"birthMin":1,"birthMax":1,"surviveMin":3,"surviveMax":5,"sparkRate":0.075}` | 0.174543 | 0.090694 | 0.010615 | 0.463298 |
+| 7: 147-game-of-life-c08 | `{"seedDensity":0.28,"ageShading":true,"birthMin":1,"birthMax":1,"surviveMin":2,"surviveMax":3,"sparkRate":0.2}` | 0.170011 | 0.032988 | 0.019689 | 0.432902 |
+| 8: 147-game-of-life-c10 | `{"seedDensity":0.28,"ageShading":true,"birthMin":1,"birthMax":1,"surviveMin":3,"surviveMax":5,"sparkRate":0.025}` | 0.167981 | 0.087217 | 0.010126 | 0.463908 |
+
+Current references match all three shipped presets in `src/app/presets.ts`; implicit defaults are explicit in the new configs. Brian Sparse/Storm use dyingValue 0.9, Crystal uses threshold 1, Life uses sparkRate0.1/ageShading true. Stale historical rows retain their old IDs and values.
+
+| current reference | full params | mean score | multi-lag | flux | coverage |
+|---|---|---:|---:|---:|---:|
+| Conway (147-current-conway) | `{"birthMin":3,"birthMax":3,"surviveMin":2,"surviveMax":3,"seedDensity":0.28,"sparkRate":0.1,"ageShading":true}` | 0.340172 | 0.463569 | 0.040135 | 0.136536 |
+| Maze-like (147-current-maze) | `{"birthMin":3,"birthMax":3,"surviveMin":1,"surviveMax":5,"seedDensity":0.05,"sparkRate":0.1,"ageShading":true}` | 0.080270 | 0.392898 | 0.000335 | 0.538472 |
+| Dense ash (promoted: denser seed) (147-current-dense-ash) | `{"birthMin":3,"birthMax":3,"surviveMin":2,"surviveMax":3,"seedDensity":0.4,"sparkRate":0.1,"ageShading":true}` | 0.394044 | 0.490201 | 0.055318 | 0.169088 |
+
+### Persistence, seeds and diagnostics
+
+Each row below lists scores at 200/500/1000, their arithmetic mean and the2000-step flux. All three seed readings are reported where supported. Seed spread is max−min across those three means at the same size, not uncertainty or a distributional guarantee. Different-resolution readings are separate experiments, not exact numeric replays.
+
+| set | size | seed | score200 /500 /1000 | mean | flux2000 |
+|---|---:|---:|---|---:|---:|
+| 147-game-of-life-c19 | 128 | unsupported | 0.274064 / 0.273410 / 0.274466 | 0.273980 | 0.210066 |
+| 147-game-of-life-c19 | 384 | unsupported | 0.273246 / 0.273011 / 0.273266 | 0.273174 | 0.204749 |
+| 147-current-conway | 128 | unsupported | 0.373805 / 0.266516 / 0.380196 | 0.340172 | 0.029511 |
+| 147-current-conway | 384 | unsupported | 0.384882 / 0.347483 / 0.367878 | 0.366748 | 0.044221 |
+| 147-current-maze | 128 | unsupported | 0.081735 / 0.079949 / 0.079125 | 0.080270 | 0.000303 |
+| 147-current-maze | 384 | unsupported | 0.080750 / 0.080104 / 0.080669 | 0.080507 | 0.000396 |
+| 147-current-dense-ash | 128 | unsupported | 0.410728 / 0.390490 / 0.380915 | 0.394044 | 0.050493 |
+| 147-current-dense-ash | 384 | unsupported | 0.400047 / 0.349151 / 0.356912 | 0.368703 | 0.037424 |
+
+Across every retained ranking and validation pair: non-finite fraction0, out-of-range fraction0, and off-frame clipping0. The last is a geometric statement for a periodic lattice, not a measurement of motif crossings at the border. Endpoint fractions span lowerEndpointFraction: 0.000000–0.969910, upperEndpointFraction: 0.000000–0.565491. Endpoints are legal discrete states; empty fields remain in the ranking and are not promoted. Exact per-frame diagnostics are retained.
+
+### Interpretation and proposals
+
+The highest new candidate is B2/S23 at sparkRate0.075, seedDensity 0.28, ageShading true. The384² Renderer frames show dense fine-grained agitation with changing local clusters and little large-scale organisation. This is a rejected evidence selection, not a proposed replacement for Conway or Dense ash. Its high flux does not establish richer dynamics: its multi-lag structure is only about0.107 on the128² mean. The same B2/S23 rule at spark 0/0.025/0.2 occupies the next three ranks, with mean scores within0.002 of the leader. This small deterministic score gap is no basis for declaring0.075 an aesthetic optimum.
+
+Conway and Dense ash keep sparse separated colonies and local activity; the new candidate is visually much busier but loses that separation. Maze-like remains a fine corridor pattern with very low temporal flux. Its positive multi-lag structure survives the legacy lag1 penalty; a low composite is not a reason to discard it. The census preserves other rule motifs, but these unvalidated rows support no app-scale promotion claim. Life's age shading and ghosts affect scalar coverage/entropy; the reported coverage is not the fraction of live cells. Neither the initial soup nor the spark hash exposes a seed parameter, so no independent-seed claim is made.
+
+**Proposed promotions: none.** Keep all three shipped references. This bounded birth/survival/spark grid did not establish an app-scale improvement; it does not rule out other birth rules, seed densities or user-preferred patterns. Production presets, the composite and the existing multi-lag calibration remain unchanged.
+
+### Visual evidence
+
+[All48 candidates: grayscale census at 200](../images/sweeps-2026-10-30/147-game-of-life-census.png). Cells are128², eight columns × six rows in manifest order (left-to-right, top-to-bottom); this is a shortlist aid, not temporal evidence.
+
+Four separated frames follow for each finalist/reference. Renderer rows are actual app-renderer screenshots; field rows are grayscale. All links are retained, including seed controls.
+
+| set / representation |200 |500 |1000 |2000 |
+|---|---|---|---|---|
+| 147-game-of-life-c19-field-128-seednone | [200](../images/sweeps-2026-10-30/147-game-of-life-c19-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-game-of-life-c19-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-game-of-life-c19-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-game-of-life-c19-field-128-seednone-t2000.png) |
+| 147-game-of-life-c19-field-384-seednone | [200](../images/sweeps-2026-10-30/147-game-of-life-c19-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-game-of-life-c19-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-game-of-life-c19-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-game-of-life-c19-field-384-seednone-t2000.png) |
+| 147-game-of-life-c19-renderer | [200](../images/sweeps-2026-10-30/147-game-of-life-c19-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-game-of-life-c19-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-game-of-life-c19-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-game-of-life-c19-renderer-t2000.png) |
+| 147-current-conway-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-conway-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-conway-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-conway-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-conway-field-128-seednone-t2000.png) |
+| 147-current-conway-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-conway-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-conway-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-conway-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-conway-field-384-seednone-t2000.png) |
+| 147-current-conway-renderer | [200](../images/sweeps-2026-10-30/147-current-conway-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-conway-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-conway-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-conway-renderer-t2000.png) |
+| 147-current-maze-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-maze-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-maze-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-maze-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-maze-field-128-seednone-t2000.png) |
+| 147-current-maze-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-maze-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-maze-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-maze-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-maze-field-384-seednone-t2000.png) |
+| 147-current-maze-renderer | [200](../images/sweeps-2026-10-30/147-current-maze-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-maze-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-maze-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-maze-renderer-t2000.png) |
+| 147-current-dense-ash-field-128-seednone | [200](../images/sweeps-2026-10-30/147-current-dense-ash-field-128-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-dense-ash-field-128-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-dense-ash-field-128-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-dense-ash-field-128-seednone-t2000.png) |
+| 147-current-dense-ash-field-384-seednone | [200](../images/sweeps-2026-10-30/147-current-dense-ash-field-384-seednone-t200.png) | [500](../images/sweeps-2026-10-30/147-current-dense-ash-field-384-seednone-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-dense-ash-field-384-seednone-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-dense-ash-field-384-seednone-t2000.png) |
+| 147-current-dense-ash-renderer | [200](../images/sweeps-2026-10-30/147-current-dense-ash-renderer-t200.png) | [500](../images/sweeps-2026-10-30/147-current-dense-ash-renderer-t500.png) | [1000](../images/sweeps-2026-10-30/147-current-dense-ash-renderer-t1000.png) | [2000](../images/sweeps-2026-10-30/147-current-dense-ash-renderer-t2000.png) |
+
+### Reproduction and validation
+
+Start Vite from this worktree on vacant port 5173 (`npm run dev -- --host localhost --port 5173 --strictPort`), then run:
+
+```sh
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 147 game-of-life " --workers=1
+SWEEP_REPLAY=147 npx playwright test e2e/sweep.spec.ts -g "147 retained"
+SWEEP_CONTRACT=147 npx playwright test e2e/sweep-147.contract.spec.ts
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+For all three kernels, use `-g "sweep 147 "`. The full command reruns the entire declared grid, then the finalist/references, requiring identical ordering and metric deltas≤1e-9 against retained results (including spreads and every validation seed/time). Raw replay independently decodes retained floats and recomputes every reading/rank, and checks current-reference provenance. Images are regenerated. Pilot-only mode `SWEEP_147_PILOT=1` is admission evidence only and must never be counted as a completed grid.
+
+Worker check commands, exits and counts are recorded in [checks](data/2026-10-30/147/checks.json); exact numeric replay summary is [raw recomputation](data/2026-10-30/147/raw-recomputation.json). Independent verifier replay and operator visual sign-off remain separate gates. Research acceptance does not change any production preset.

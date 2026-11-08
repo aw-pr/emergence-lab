@@ -18,6 +18,9 @@
     "src/app/orbitHierarchy.ts",
     "src/app/orbitRefineLevels.ts",
     "src/app/paramPersistence.ts",
-    "src/app/resolutionPreset.ts"
+    "src/app/resolutionPreset.ts",
+    "src/app/orbitPointBudgets.ts",
+    "src/app/savedPresets.ts",
+    "src/app/presets.ts"
   ]
 }

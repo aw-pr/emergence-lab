@@ -144,7 +144,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "exposure",
       label: "Exposure",
       type: "number",
-      default: 0.5,
+      default: 1.3,
       min: 0.4,
       max: 3,
       step: 0.05,
@@ -155,7 +155,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       key: "edgeGlow",
       label: "Edge glow",
       type: "number",
-      default: 0.25,
+      default: 0,
       min: 0,
       max: 2,
       step: 0.05,
@@ -164,8 +164,8 @@ export class LogisticMandelbrotKernel implements SimKernel {
     // Share of the point budget spent re-sampling cascade tails at two
     // levels of detail (3 by 3, then 3 by 3 again where a sub-cell is still a
     // tail). The base grid stores each cell's distinct points once and does
-    // not change with the setting. The CPU fallback caps the setting at its
-    // automatic share because it has no boundary tier.
+    // not change with the setting. The CPU fallback follows the setting too,
+    // but treats 0 as its automatic share because it has no boundary tier.
     {
       key: "tailRefinement",
       label: "Tail refinement",
@@ -174,7 +174,7 @@ export class LogisticMandelbrotKernel implements SimKernel {
       min: 0,
       max: 0.6,
       step: 0.05,
-      info: "Share of the point budget spent re-sampling cascade tails at two levels of detail: each tail cell on a 3 by 3 sub-grid, then each sub-cell that is still a tail on a 3 by 3 sub-grid of its own. The default is the maximum, 0.6, and the base grid does not change with it. Changing it rebuilds the point cloud; 0 turns refinement off on the GPU path, while the CPU fallback spends the automatic share (0.3) at any setting above 0.",
+      info: "Share of the point budget spent re-sampling cascade tails at two levels of detail: each tail cell on a 3 by 3 sub-grid, then each sub-cell that is still a tail on a 3 by 3 sub-grid of its own. The default is the maximum, 0.6, and the base grid does not change with it. Changing it rebuilds the point cloud; 0 turns refinement off on the GPU path, while the CPU fallback treats 0 as its automatic share (0.3).",
     },
     // GPU-only live-build detail. The CPU fallback ignores this control and
     // retains the tail-refinement plan above rather than attempting 16M points.

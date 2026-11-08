@@ -1,3 +1,7 @@
+import { presetButton, presetHref, presetNameDialog, resolveSavedPreset, savedPresetStore } from "./presetLibrary.ts";
+import type { PresetSnapshot, SavedPreset } from "./savedPresets.ts";
+import { trialPresets } from "./trialPresets.ts";
+import { defaultDisplayOptionsFor, speedProfileFor } from "./savedPresets.ts";
 import katex from "katex";
 import { aboutFor, type SimAbout } from "./about.ts";
 import { bakesFor, type BakedEntry } from "./bakedManifest.ts";
@@ -18,7 +22,6 @@ import {
   ControlsPanel,
   defaultParamsFromSchema,
   restorePersistedParams,
-  type StepsControlOptions,
 } from "./controls.ts";
 import {
   deleteCustomObstacleLayout,
@@ -183,17 +186,24 @@ const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
 export interface SimViewHandle {
   dispose(): void;
   /**
-   * Toggle immersive mode (the top-layer overlay that hides the description
-   * header and parameter sidebar). Optional because the early-error paths
-   * (unknown sim, kernel load failure) return before the toggle exists.
+   * Toggle immersive mode (the top-layer overlay that hides the lab bar and
+   * parameter sidebar). Optional because the early-error paths (unknown sim,
+   * kernel load failure) return before the toggle exists.
    */
   toggleImmersive?(): void;
+  /**
+   * Open or close the About panel (the sim's narrative, over the running
+   * stage). Optional for the same reason as toggleImmersive, and a no-op for
+   * a sim with no narrative.
+   */
+  toggleAbout?(): void;
 }
 
 export async function renderSimView(
   container: HTMLElement,
   slug: string,
   variant?: string,
+  options: { presetId?: string; presetsEnabled?: boolean; signal?: AbortSignal } = {},
 ): Promise<SimViewHandle> {
   container.innerHTML = "";
 
@@ -203,6 +213,36 @@ export async function renderSimView(
     renderUnknownSim(container, slug);
     return { dispose() {} };
   }
+
+  let loadedPreset: Awaited<ReturnType<typeof resolveSavedPreset>>;
+  if (options.presetId !== undefined) {
+    try {
+      loadedPreset = await resolveSavedPreset(options.presetId);
+      if (!loadedPreset || loadedPreset.snapshot.slug !== slug || loadedPreset.snapshot.variant !== variant) {
+        throw new Error("This preset is missing or does not match this route. Choose another preset or save a new configuration.");
+      }
+    } catch (error) {
+      if (!options.signal?.aborted) {
+        setSimDocumentTitle("Preset unavailable");
+        container.innerHTML = "";
+        const errorView = document.createElement("section");
+        errorView.className = "preset-library";
+        const title = document.createElement("h1");
+        title.textContent = "Preset unavailable";
+        const message = document.createElement("p");
+        message.setAttribute("role", "alert");
+        message.textContent = error instanceof Error ? error.message : String(error);
+        const back = document.createElement("a");
+        back.href = "#/presets";
+        back.textContent = "Presets";
+        errorView.append(title, message, back);
+        container.append(errorView);
+      }
+      return { dispose() {} };
+    }
+  }
+  if (options.signal?.aborted) return { dispose() {} };
+  const snapshot = loadedPreset?.snapshot;
 
   // A variant selects a named configuration within the same kernel (e.g. which
   // strange attractor). Falls back to the base entry when absent or unknown.
@@ -214,6 +254,9 @@ export async function renderSimView(
   setSimDocumentTitle(name);
 
   const about = aboutFor(slug, variantDef?.variant);
+  // Lives as long as the view: aborted by dispose() and by every early return
+  // below, so window listeners never outlive the layout they serve.
+  const immersiveAbort = new AbortController();
   const layout = buildLayout(
     container,
     {
@@ -223,13 +266,14 @@ export async function renderSimView(
       about,
     },
     slug,
+    immersiveAbort.signal,
   );
   const renderMode = getRenderMode(slug);
   if (shouldUseSmoothCanvasPresentation(renderMode)) {
     layout.canvas.classList.add("sim-view__canvas--smooth");
   }
 
-  // Immersive mode (header gone, settings as an auto-hiding edge drawer) is a
+  // Immersive mode (lab bar gone, settings as an auto-hiding edge drawer) is a
   // CSS overlay first and native fullscreen second: requestFullscreen is
   // denied in some contexts (no transient activation, embedded pages, iOS has
   // no API at all), so the Maximise button never depends on it. The class
@@ -263,7 +307,6 @@ export async function renderSimView(
     body.removeAttribute("popover");
   };
   let immersiveForced = false;
-  const immersiveAbort = new AbortController();
   const updateImmersive = () => {
     const native = document.fullscreenElement === layout.body;
     const windowFullscreen =
@@ -272,6 +315,9 @@ export async function renderSimView(
       window.innerHeight === window.screen.height;
     const immersive = immersiveForced || native || windowFullscreen;
     layout.page.classList.toggle("sim-view--immersive", immersive);
+    // The pills and bar that own About are gone in immersive, and the body's
+    // own top-layer promotion would bury an open panel out of reach.
+    if (immersive) layout.aboutPanel?.close();
     if (!immersive) {
       // Reset the drawer so re-entering immersive always starts parked,
       // rather than reopening however it was left last time.
@@ -339,8 +385,11 @@ export async function renderSimView(
       // swallows the first Esc to leave fullscreen (immersiveForced stays set,
       // so the overlay persists); this handler then catches the next Esc, once
       // no fullscreen element remains, and drops the overlay too.
+      // An Esc the About panel already claimed to close itself leaves the
+      // overlay in place.
       if (
         event.key === "Escape" &&
+        !event.defaultPrevented &&
         immersiveForced &&
         !document.fullscreenElement
       ) {
@@ -383,16 +432,19 @@ export async function renderSimView(
   try {
     kernel = await loadKernel(slug);
   } catch (error) {
-    renderLoadError(layout.body, slug, error);
+    immersiveAbort.abort();
+    if (!options.signal?.aborted) renderLoadError(layout.body, slug, error);
     return { dispose() {} };
   }
+
+  if (options.signal?.aborted) { immersiveAbort.abort(); kernel.destroy(); return { dispose() {} }; }
 
   const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
     ...(variantDef?.params ?? {}),
   };
-  const restored: SimParams = restorePersistedParams(
+  const restored: SimParams = snapshot ? { ...snapshot.params } : restorePersistedParams(
     slug,
     kernel.paramSchema,
     factoryParams,
@@ -400,7 +452,7 @@ export async function renderSimView(
   // Variants share one persistence key (the slug), so the variant's selector
   // param must win over any restored value—otherwise picking Rössler could
   // reopen as a previously-saved Lorenz.
-  const params: SimParams = variantDef
+  const params: SimParams = variantDef && !snapshot
     ? { ...restored, ...variantDef.params }
     : restored;
   // Prebaked clouds are machine-local, so the option list is only known once
@@ -411,6 +463,7 @@ export async function renderSimView(
     kernel.paramSchema,
     await bakesFor(slug),
   );
+  if (options.signal?.aborted) { immersiveAbort.abort(); kernel.destroy(); return { dispose() {} }; }
   const modelSource = controlsSchema.find((p) => p.key === "modelSource");
   if (
     typeof params.modelSource === "string" &&
@@ -422,30 +475,39 @@ export async function renderSimView(
     slug,
     kernel.channelCount,
   );
-  let colourOptions: ColourMapOptions = restoreRenderOptions(
+  let colourOptions: ColourMapOptions = snapshot ? { ...snapshot.colourOptions } : restoreRenderOptions(
     slug,
     factoryColourOptions,
   );
   const factoryDisplayOptions: DisplayOptions = defaultDisplayOptionsFor(slug);
-  let displayOptions: DisplayOptions = restoreDisplayOptions(
+  let displayOptions: DisplayOptions = snapshot ? { ...snapshot.displayOptions } : restoreDisplayOptions(
     slug,
     factoryDisplayOptions,
   );
   const speedProfile = speedProfileFor(slug);
-  let stepsPerFrame = speedProfile.initial;
+  let stepsPerFrame = snapshot?.stepsPerFrame ?? speedProfile.initial;
   const fractal = isFractalSlug(slug);
   const qualityProfile = qualityProfileFor(slug, renderMode);
   const defaultResolution = qualityProfile.defaultPreset;
-  const resolution = resolveResolution(slug, defaultResolution);
+  const resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
 
   // Sims whose kernel reports run completion (currently DLA) can auto-cycle
   // into a fresh randomised run when they finish. On by default when supported.
   const autoCycleSupported =
     typeof (kernel as { isComplete?: unknown }).isComplete === "function";
   const defaultAutoCycle = true;
-  const initialAutoCycle = autoCycleSupported
+  const initialAutoCycle = snapshot ? snapshot.autoCycle : autoCycleSupported
     ? resolveAutoCycle(slug, defaultAutoCycle)
     : false;
+
+  // Renderer supplies a fresh random seed on init; an explicit portable seed
+  // belongs to this configuration and must reach the real kernel unchanged.
+  let explicitSeed = params.seed;
+  if (slug === "physarum" || slug === "particle-life") {
+    const init = kernel.init.bind(kernel);
+    kernel.init = (width, height, next) => init(width, height,
+      explicitSeed === undefined ? next : { ...next, seed: explicitSeed });
+  }
 
   const renderer = new Renderer({
     canvas: layout.canvas,
@@ -465,7 +527,7 @@ export async function renderSimView(
     : undefined;
   let initialObstacleMessage = "";
   if (obstacleEditor) {
-    const persisted = loadCustomObstacleField(slug);
+    const persisted = snapshot ? snapshot.customObstacles ?? null : loadCustomObstacleField(slug);
     if (typeof persisted === "string") {
       const restoredField = obstacleEditor.importCustomObstacleLayout(persisted);
       if (!restoredField.ok) {
@@ -482,7 +544,7 @@ export async function renderSimView(
 
   let obstacleTools: BoidsObstacleTools | undefined;
   const persistObstacleField = (): void => {
-    if (!obstacleEditor) return;
+    if (!obstacleEditor || snapshot) return;
     saveCustomObstacleField(slug, obstacleEditor.exportCustomObstacleLayout());
   };
   const finishObstacleEdit = (edited: boolean): boolean => {
@@ -543,13 +605,20 @@ export async function renderSimView(
 
   const controls = new ControlsPanel({
     slug,
+    presetSession: !!snapshot,
     container: layout.sidebar,
     simName: kernel.name,
-    paramSchema: controlsSchema,
+    paramSchema: snapshot ? controlsSchema.map((descriptor) => {
+      const portable = kernel.paramSchema.find((p) => p.key === descriptor.key);
+      return descriptor.type === "number" && portable
+        ? { ...descriptor, min: portable.min, max: portable.max }
+        : descriptor;
+    }) : controlsSchema,
     paramPresets: presetsFor(slug),
     initialParams: params,
     defaultParams: factoryParams,
     initialStepsPerFrame: stepsPerFrame,
+    defaultStepsPerFrame: speedProfile.initial,
     stepsControl: speedProfile.control,
     initialColourOptions: colourOptions,
     defaultColourOptions: factoryColourOptions,
@@ -558,7 +627,7 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
-    showExtremeResolution: slug === "logistic-mandelbrot",
+    showExtremeResolution: slug === "logistic-mandelbrot" || resolution === "extreme",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAutoCycleControl: autoCycleSupported,
@@ -598,6 +667,7 @@ export async function renderSimView(
         renderer.setDisplayOptions(displayOptions);
       },
       onParamChange: (next) => {
+        explicitSeed = next.seed;
         renderer.updateParams(next);
       },
       onResolutionChange: (preset) => {
@@ -609,6 +679,153 @@ export async function renderSimView(
     },
   });
 
+  let dismissPresetDialog: (() => void) | undefined;
+  if (options.presetsEnabled !== false) {
+    const section = collapsibleSection(slug, "Presets", "controls__presets");
+    const tools = document.createElement("div");
+    tools.className = "preset-tools";
+    const library = document.createElement("a");
+    library.href = "#/presets";
+    library.textContent = "Presets";
+    library.className = "preset-tools__link";
+    const status = document.createElement("p");
+    status.className = "preset-tools__status";
+    status.setAttribute("role", "status");
+    const error = document.createElement("p");
+    error.className = "preset-error";
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+    const live = presetButton("Return to live model", () => {
+      controls.syncParamsFromExternal({ modelSource: LIVE_MODEL_SOURCE });
+      renderer.updateParams(controls.getParams());
+      error.hidden = true;
+      live.hidden = true;
+      status.textContent = "Live model selected. You can now save its configuration.";
+    });
+    live.hidden = true;
+    const capture = (): PresetSnapshot => ({
+      slug,
+      ...(variant ? { variant } : {}),
+      ...controls.getConfiguration(),
+      params: renderer.currentParams(),
+      ...(obstacleEditor ? { customObstacles: obstacleEditor.exportCustomObstacleLayout() } : {}),
+    });
+    let undo: SavedPreset | undefined;
+    const showStatus = (text: string) => {
+      undo = undefined;
+      status.textContent = text + (savedPresetStore.warning ? ` ${savedPresetStore.warning}` : "");
+    };
+    const showError = (reason: unknown) => {
+      error.textContent = reason instanceof Error ? reason.message : String(reason);
+      error.hidden = false;
+    };
+
+    // This sim's presets, loaded by name and deleted by the cross with the
+    // library page's Undo; trials load but are not the visitor's to delete.
+    const list = document.createElement("ul");
+    list.className = "preset-tools__list";
+    list.setAttribute("aria-label", "Presets for this simulation");
+    const forThisSim = (preset: SavedPreset) =>
+      preset.snapshot.slug === slug && (preset.snapshot.variant ?? "") === (variant ?? "");
+    const undoButton = presetButton("Undo", () => {
+      const removed = undo;
+      if (!removed) return;
+      error.hidden = true;
+      void savedPresetStore.restore(removed).then(async () => {
+        showStatus(`Restored “${removed.name}”.`);
+        await refreshList();
+      }, showError);
+    });
+    const deletePreset = (preset: SavedPreset) => {
+      error.hidden = true;
+      void savedPresetStore.delete(preset.id).then(async (removed) => {
+        await refreshList();
+        showStatus(`Deleted “${preset.name}”.`);
+        undo = removed;
+        status.append(" ", undoButton);
+        undoButton.focus();
+      }, showError);
+    };
+    const presetRow = (preset: SavedPreset, source: "personal" | "trial") => {
+      const row = document.createElement("li");
+      row.className = "preset-row";
+      row.dataset.presetId = preset.id;
+      row.dataset.presetSource = source;
+      row.dataset.presetSlug = preset.snapshot.slug;
+      const open = document.createElement("a");
+      open.className = "preset-row__open";
+      open.href = presetHref(preset);
+      open.textContent = preset.name;
+      if (loadedPreset?.id === preset.id) open.setAttribute("aria-current", "true");
+      row.append(open);
+      if (source === "trial") {
+        const tag = document.createElement("span");
+        tag.className = "preset-row__tag";
+        tag.textContent = "Trial";
+        row.append(tag);
+      } else {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "preset-row__delete";
+        remove.setAttribute("aria-label", `Delete ${preset.name}`);
+        remove.textContent = "✕";
+        remove.addEventListener("click", () => deletePreset(preset));
+        row.append(remove);
+      }
+      return row;
+    };
+    const refreshList = async () => {
+      const [personal, trials] = await Promise.all([savedPresetStore.list(), trialPresets()]);
+      const rows = [
+        ...personal.filter(forThisSim).map((preset) => presetRow(preset, "personal")),
+        ...trials.filter(forThisSim).map((preset) => presetRow(preset, "trial")),
+      ];
+      if (!rows.length) {
+        const empty = document.createElement("li");
+        empty.className = "preset-row preset-row--empty";
+        empty.textContent = "No presets for this simulation yet.";
+        rows.push(empty);
+      }
+      list.replaceChildren(...rows);
+    };
+    void refreshList().catch(showError);
+
+    if (loadedPreset) showStatus(`${loadedPreset.source === "trial" ? "Trial" : "Personal preset"}: ${loadedPreset.name}. Changes stay in this session until you save${loadedPreset.source === "personal" ? " or update" : " a copy"}.`);
+    const save = presetButton("Save preset", () => {
+      const current = capture();
+      error.hidden = true;
+      if (current.params.modelSource !== undefined && current.params.modelSource !== LIVE_MODEL_SOURCE) {
+        error.textContent = "Local prebaked models cannot be saved. Return to the live model to save a portable configuration.";
+        error.hidden = false;
+        live.hidden = false;
+        return;
+      }
+      dismissPresetDialog = presetNameDialog({
+        parent: layout.body,
+        trigger: save,
+        title: "Save preset",
+        save: async (name) => {
+          const entry = await savedPresetStore.create(name, current);
+          showStatus(`Saved “${entry.name}”.`);
+          await refreshList();
+        },
+      });
+    }, true);
+    tools.append(library, save);
+    if (loadedPreset?.source === "personal") {
+      const id = loadedPreset.id;
+      tools.append(presetButton("Update preset", () => {
+        error.hidden = true;
+        void savedPresetStore.update(id, capture()).then(() => showStatus("Preset updated from the current configuration."), (reason) => {
+          showError(reason);
+          live.hidden = controls.getParams().modelSource === undefined || controls.getParams().modelSource === LIVE_MODEL_SOURCE;
+        });
+      }));
+    }
+    tools.append(list, status, error, live);
+    section.appendChild(tools);
+    controls.insertAfterTransport(section);
+  }
   layout.sidebar.prepend(layout.drawerHandle);
 
   const orbitMarkerReadout =
@@ -727,7 +944,6 @@ export async function renderSimView(
         buildAboutSection("Try it", about.interaction),
         layout.about.querySelector(`.${MATHS_SECTION_CLASS}`),
       );
-      syncAboutColumns(layout.about);
     }
   }
   if (fractal) {
@@ -830,7 +1046,6 @@ export async function renderSimView(
         buildAboutSection("Try it", about.interaction),
         layout.about.querySelector(".sim-view__about-section--maths"),
       );
-      syncAboutColumns(layout.about);
     }
     detachOrbit3dInteractions = attachLogisticMandelbrotCanvasInteractions({
       slug,
@@ -848,9 +1063,20 @@ export async function renderSimView(
     });
   }
 
+  // The narrative greets each view beside the running sim at desktop widths;
+  // on a phone it would cover the stage, so it waits for the button there.
+  if (
+    !layout.page.classList.contains("sim-view--immersive") &&
+    window.matchMedia("(min-width: 721px)").matches
+  ) {
+    layout.aboutPanel?.open();
+  }
+
   return {
     dispose() {
       immersiveAbort.abort();
+      dismissPresetDialog?.();
+      layout.aboutPanel?.close();
       exitTopLayer(layout.body);
       detachFractalInteractions?.();
       detachFractalPaletteKeys?.();
@@ -861,6 +1087,7 @@ export async function renderSimView(
       controls.dispose();
     },
     toggleImmersive,
+    toggleAbout: () => layout.aboutPanel?.toggle(),
   };
 }
 
@@ -1093,9 +1320,20 @@ interface SimLayout {
    *  attached in renderSimView, where toggleImmersive is in scope. */
   immersiveExit: HTMLButtonElement;
   legend: HTMLElement;
-  /** The narrative panel, so the pointer wiring can add its own note to it. */
+  /** The narrative's sections, so the pointer wiring can add its own note. */
   about?: HTMLElement;
+  /** The About popover that holds those sections. */
+  aboutPanel?: AboutPanel;
   fractalHud?: FractalHud;
+}
+
+const ABOUT_PANEL_WIDTH = 360;
+
+interface AboutPanel {
+  isOpen(): boolean;
+  open(): void;
+  toggle(): void;
+  close(): void;
 }
 
 interface FractalHud {
@@ -1171,19 +1409,19 @@ function buildLayout(
   container: HTMLElement,
   header: SimHeader,
   slug: string,
+  signal: AbortSignal,
 ): SimLayout {
   const page = document.createElement("section");
   page.className = "sim-view";
 
-  const top = document.createElement("header");
-  top.className = "sim-view__header";
+  const siteChrome = siteOwnsChrome();
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
   // Hosted by the site (framed or embedded inline), the app's internal gallery
   // is a redundant copy of the site's /labs page, so send visitors there
   // instead. Standalone (and direct /labs/app/ visits) keep the in-app gallery.
-  if (siteOwnsChrome()) {
+  if (siteChrome) {
     back.href = getChrome().siteGalleryHref;
     // Only the iframe shell needs to break out of its frame.
     if (isFramedBySite()) back.target = "_top";
@@ -1191,57 +1429,46 @@ function buildLayout(
     back.href = "#/";
   }
   back.textContent = "← Gallery";
-  top.appendChild(back);
 
-  // Hosted by the site, the bar directly above already names the sim, so a
-  // title block here is a second copy of it sitting in a column of its own
-  // with the narrative's full height beside it. Drop it and let the narrative
-  // have the width. Standalone there is no bar, so the title stays.
-  const titleBlock = document.createElement("div");
-  titleBlock.className = "sim-view__title-block";
-  titleBlock.hidden = siteOwnsChrome();
+  let aboutButton: HTMLButtonElement | undefined;
+  if (header.about) {
+    aboutButton = document.createElement("button");
+    aboutButton.type = "button";
+    aboutButton.className = "sim-view__about-button";
+    aboutButton.setAttribute("aria-expanded", "false");
+    aboutButton.textContent = "About";
+  }
 
-  const title = document.createElement("h1");
-  title.className = "sim-view__title";
-  title.textContent = header.name;
-  titleBlock.appendChild(title);
+  // Standalone, one slim bar names the sim and carries the way out and the
+  // narrative. Hosted by the site, the host's bar already names the sim, so
+  // the same two controls float as pills over the stage instead of costing
+  // the stage a row.
+  if (!siteChrome) {
+    const bar = document.createElement("header");
+    bar.className = "sim-view__bar";
 
-  if (header.family || header.subtitle) {
-    const subtitle = document.createElement("p");
-    subtitle.className = "sim-view__subtitle";
+    const title = document.createElement("h1");
+    title.className = "sim-view__title";
+    title.textContent = header.name;
+    bar.append(back, title);
+
     if (header.family) {
       const tag = document.createElement("span");
       tag.className = "sim-view__family";
       tag.textContent = header.family;
-      subtitle.appendChild(tag);
+      bar.appendChild(tag);
     }
+    if (aboutButton) bar.appendChild(aboutButton);
     if (header.subtitle) {
-      subtitle.appendChild(document.createTextNode(header.subtitle));
+      const subtitle = document.createElement("p");
+      subtitle.className = "sim-view__subtitle";
+      subtitle.textContent = header.subtitle;
+      // The bar truncates it to one line; the full line stays a hover away.
+      subtitle.title = header.subtitle;
+      bar.appendChild(subtitle);
     }
-    titleBlock.appendChild(subtitle);
+    page.appendChild(bar);
   }
-
-  top.appendChild(titleBlock);
-
-  const about = header.about ? buildAbout(header.about, slug) : undefined;
-  if (about) {
-    // Phone widths collapse the narrative behind this disclosure (the stage
-    // and controls need the room more than the prose); the button itself only
-    // exists visually below the stacked-layout breakpoint.
-    const aboutToggle = document.createElement("button");
-    aboutToggle.type = "button";
-    aboutToggle.className = "sim-view__about-toggle";
-    aboutToggle.setAttribute("aria-expanded", "false");
-    aboutToggle.textContent = "About this simulation";
-    aboutToggle.addEventListener("click", () => {
-      const open = about.classList.toggle("sim-view__about--open");
-      aboutToggle.setAttribute("aria-expanded", String(open));
-    });
-    top.appendChild(aboutToggle);
-    top.appendChild(about);
-  }
-
-  page.appendChild(top);
 
   const body = document.createElement("div");
   body.className = "sim-view__body";
@@ -1269,6 +1496,16 @@ function buildLayout(
   const legend = document.createElement("div");
   legend.className = "sim-view__legend";
   stage.appendChild(legend);
+
+  // Top-right, clear of the parameters panel, the corner the immersive exit
+  // pill uses; immersive hides these, so the two never share it.
+  if (siteChrome) {
+    const pills = document.createElement("div");
+    pills.className = "sim-view__pills";
+    pills.appendChild(back);
+    if (aboutButton) pills.appendChild(aboutButton);
+    stage.appendChild(pills);
+  }
 
   body.appendChild(stage);
 
@@ -1309,7 +1546,52 @@ function buildLayout(
 
   body.appendChild(sidebar);
 
+  // Normal layout only (hidden in immersive and on phones, which have their
+  // own reveals). Every view opens with the controls shown.
+  const sidebarTab = document.createElement("button");
+  sidebarTab.type = "button";
+  sidebarTab.className = "sim-view__sidebar-tab";
+  const showControls = (shown: boolean) => {
+    page.classList.toggle("sim-view--controls-hidden", !shown);
+    sidebarTab.setAttribute("aria-expanded", String(shown));
+    sidebarTab.setAttribute("aria-label", shown ? "Hide controls" : "Show controls");
+  };
+  showControls(true);
+  sidebarTab.addEventListener("click", () => {
+    const show = page.classList.contains("sim-view--controls-hidden");
+    showControls(show);
+    // Focus left on a control inside the panel would hold the hidden panel
+    // open through its :focus-within reveal.
+    const root = body.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement;
+    if (!show && focused instanceof HTMLElement && sidebar.contains(focused)) focused.blur();
+  });
+  body.appendChild(sidebarTab);
+
+  // With the controls hidden, resting a fine pointer on the stage's left edge
+  // slides them back in over the stage until it leaves (styles.css); the tab
+  // still pins them open.
+  const edgeZone = document.createElement("div");
+  edgeZone.className = "sim-view__edge-zone";
+  edgeZone.setAttribute("aria-hidden", "true");
+  body.appendChild(edgeZone);
+
   page.appendChild(body);
+
+  let about: HTMLElement | undefined;
+  let aboutPanel: AboutPanel | undefined;
+  if (header.about && aboutButton) {
+    about = buildAbout(header.about, slug);
+    aboutPanel = attachAboutPanel({
+      page,
+      button: aboutButton,
+      sections: about,
+      stage,
+      name: header.name,
+      signal,
+    });
+  }
+
   container.appendChild(page);
 
   return {
@@ -1322,8 +1604,167 @@ function buildLayout(
     immersiveExit,
     legend,
     about,
+    aboutPanel,
     fractalHud,
   };
+}
+
+/**
+ * The narrative in a top-layer popover over the running stage. Top layer
+ * because the embedded lab sits inside a host page whose ancestors can clip
+ * or out-stack anything positioned normally. A `manual` popover, so working
+ * the sim or its controls leaves it open: only its cross, the About button
+ * (its invoker, a toggle) or Escape close it.
+ */
+function attachAboutPanel(options: {
+  page: HTMLElement;
+  button: HTMLButtonElement;
+  sections: HTMLElement;
+  stage: HTMLElement;
+  name: string;
+  signal: AbortSignal;
+}): AboutPanel {
+  const { button, stage, signal } = options;
+  const panel = document.createElement("section");
+  panel.className = "sim-view__about-panel";
+  panel.setAttribute("aria-label", `About ${options.name}`);
+
+  const head = document.createElement("div");
+  head.className = "sim-view__about-head";
+  const kicker = document.createElement("p");
+  kicker.className = "sim-view__about-kicker";
+  kicker.textContent = options.name;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "sim-view__about-close";
+  close.setAttribute("aria-label", "Close About");
+  close.textContent = "✕";
+  head.append(kicker, close);
+  panel.append(head, options.sections);
+  options.page.appendChild(panel);
+
+  const popover = typeof panel.showPopover === "function";
+  if (popover) {
+    panel.popover = "manual";
+    button.popoverTargetElement = panel;
+    close.popoverTargetElement = panel;
+    close.popoverTargetAction = "hide";
+  } else {
+    panel.hidden = true;
+  }
+
+  const isOpen = () =>
+    popover ? panel.matches(":popover-open") : !panel.hidden;
+
+  // Down the stage's right side, below the pills when the site owns the
+  // chrome, as tall as the stage allows and scrolling inside itself. Phones
+  // override this with a full-width sheet (styles.css).
+  const place = () => {
+    const anchor = button.getBoundingClientRect();
+    const box = stage.getBoundingClientRect();
+    const anchored = anchor.width > 0 && anchor.height > 0;
+    const top = Math.max(8, box.top + 12, anchored ? anchor.bottom + 8 : 0);
+    const right = Math.max(8, document.documentElement.clientWidth - box.right + 12);
+    const bottom = Math.min(window.innerHeight, box.bottom) - 12;
+    panel.style.setProperty("--about-top", `${Math.round(top)}px`);
+    panel.style.setProperty("--about-right", `${Math.round(right)}px`);
+    panel.style.setProperty(
+      "--about-width",
+      `${Math.round(Math.max(240, Math.min(ABOUT_PANEL_WIDTH, box.width - 24)))}px`,
+    );
+    panel.style.setProperty("--about-max-height", `${Math.round(Math.max(160, bottom - top))}px`);
+  };
+
+  let openAbort: AbortController | undefined;
+  const opened = () => {
+    button.setAttribute("aria-expanded", "true");
+    openAbort?.abort();
+    openAbort = new AbortController();
+    window.addEventListener("resize", place, { signal: openAbort.signal });
+    // A host page that scrolls carries the anchor away from a fixed panel.
+    window.addEventListener("scroll", place, {
+      signal: openAbort.signal,
+      capture: true,
+      passive: true,
+    });
+  };
+  const closed = () => {
+    openAbort?.abort();
+    button.setAttribute("aria-expanded", "false");
+    if (focusWasLostFrom(panel)) button.focus({ preventScroll: true });
+  };
+
+  if (popover) {
+    panel.addEventListener(
+      "beforetoggle",
+      (event) => {
+        if ((event as ToggleEvent).newState === "open") place();
+      },
+      { signal },
+    );
+    panel.addEventListener(
+      "toggle",
+      (event) => {
+        if ((event as ToggleEvent).newState === "open") opened();
+        else closed();
+      },
+      { signal },
+    );
+  }
+
+  const show = () => {
+    if (isOpen()) return;
+    if (popover) {
+      panel.showPopover();
+      return;
+    }
+    panel.hidden = false;
+    place();
+    opened();
+  };
+  const hide = () => {
+    if (!isOpen()) return;
+    if (popover) {
+      panel.hidePopover();
+      return;
+    }
+    panel.hidden = true;
+    closed();
+  };
+
+  if (!popover) {
+    button.addEventListener("click", () => (isOpen() ? hide() : show()), { signal });
+    close.addEventListener("click", hide, { signal });
+  }
+  // A manual popover has no close request of its own. An Escape that belongs
+  // to an open dialog (the preset name dialog) is left to the dialog.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || !isOpen()) return;
+      if (event.composedPath().some((node) => node instanceof HTMLDialogElement)) return;
+      hide();
+      // Claimed, so the immersive overlay's own Escape handler leaves it be.
+      event.preventDefault();
+    },
+    { signal },
+  );
+
+  return {
+    isOpen,
+    open: show,
+    toggle: () => (isOpen() ? hide() : show()),
+    close: hide,
+  };
+}
+
+/** True when closing the panel left focus nowhere useful: inside the panel
+ * itself, or on the bare document. Focus the host page holds stays put. */
+function focusWasLostFrom(panel: HTMLElement): boolean {
+  const root = panel.getRootNode() as Document | ShadowRoot;
+  const active = root.activeElement;
+  if (active && active !== document.body) return panel.contains(active);
+  return document.activeElement === null || document.activeElement === document.body;
 }
 
 function buildFractalHud(): FractalHud {
@@ -1356,8 +1797,8 @@ function buildFractalHud(): FractalHud {
   return { root, zoomLabel, zoomIn, zoomOut, home };
 }
 
-/** The narrative panel filling the header space beside the title: where the
- * model came from, and what its equations say. */
+/** The narrative the About panel shows: where the model came from, and what
+ * its equations say. */
 function buildAbout(about: SimAbout, slug: string): HTMLElement {
   const root = document.createElement("div");
   root.className = "sim-view__about";
@@ -1373,15 +1814,7 @@ function buildAbout(about: SimAbout, slug: string): HTMLElement {
   maths.insertBefore(formula, maths.querySelector(".sim-view__about-text"));
   root.appendChild(maths);
 
-  syncAboutColumns(root);
   return root;
-}
-
-/** The panel's width cap is per column, so it has to track the section count.
- *  Call after adding or removing a section. */
-function syncAboutColumns(root: HTMLElement): void {
-  const count = root.querySelectorAll(".sim-view__about-section").length;
-  root.style.setProperty("--about-columns", String(count));
 }
 
 const MATHS_SECTION_CLASS = "sim-view__about-section--maths";
@@ -1428,88 +1861,6 @@ function renderFormula(container: HTMLElement, slug: string): void {
   }
 }
 
-interface SpeedProfile {
-  initial: number;
-  control: StepsControlOptions;
-}
-
-function speedProfileFor(slug: string): SpeedProfile {
-  const careful: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.1,
-    max: 4,
-    step: 0.05,
-  };
-  const balanced: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.25,
-    max: 8,
-    step: 0.25,
-  };
-  const growth: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.5,
-    max: 16,
-    step: 0.5,
-  };
-  const fractal: StepsControlOptions = {
-    label: "Colour cycle multiplier",
-    min: 0.5,
-    max: 2,
-    step: 0.05,
-  };
-  const swarm: StepsControlOptions = {
-    label: "Simulation speed",
-    min: 0.5,
-    max: 8,
-    step: 0.5,
-  };
-
-  switch (slug) {
-    case "gray-scott":
-      return { initial: 1, control: balanced };
-    case "belousov-zhabotinsky":
-      // Slower default so the spiral fronts read as they unfurl; the finer
-      // (high-resolution) medium carries the detail.
-      return { initial: 1, control: balanced };
-    case "abelian-sandpile":
-      return { initial: 1, control: growth };
-    case "diffusion-limited-aggregation":
-      return { initial: 6, control: growth };
-    case "game-of-life":
-      return { initial: 1, control: careful };
-    case "elementary-cellular-automata":
-      return { initial: 1.5, control: careful };
-    case "brians-brain":
-      return { initial: 1, control: careful };
-    case "lorenz-attractor":
-      // All five attractors share this slug, so they all open at 1x. The orbit
-      // speed people actually feel is the kernel's stepsPerFrame (integration
-      // substeps per frame); this slider multiplies on top of it, and starting
-      // it anywhere but 1 makes "reset to defaults" look like a speed change.
-      return { initial: 1, control: careful };
-    case "clifford-dejong":
-      // The felt speed is pointsPerFrame; the slider multiplies whole step()
-      // calls (fade sweeps included), so it stays at 1x like the attractors.
-      return { initial: 1, control: careful };
-    case "boids":
-      // 1x, not faster: the renderer samples positions once per rendered
-      // frame, so at Nx the trail accumulator sees every Nth position and the
-      // streaks bead into dotted chains. At 1x they draw as the continuous
-      // comet-tails the native viewer shows.
-      return { initial: 1, control: swarm };
-    case "particle-life":
-      return { initial: 1, control: swarm };
-    case "mandelbrot":
-    case "julia-set":
-      return { initial: 1.8, control: fractal };
-    case "burning-ship":
-      return { initial: 0.5, control: fractal };
-    default:
-      return { initial: 1, control: balanced };
-  }
-}
-
 function defaultParamOverridesFor(slug: string): SimParams {
   switch (slug) {
     case "belousov-zhabotinsky":
@@ -1547,38 +1898,6 @@ function restoreRenderOptions(
     next.steps = Math.max(0, Math.min(64, Math.floor(stored.steps)));
   }
   return next;
-}
-
-function defaultDisplayOptionsFor(slug: string): DisplayOptions {
-  if (slug === "boids") {
-    // Trails on by default: flocks read as flowing ribbons.
-    return { dotSize: 2, trailFade: 0.93, bloom: 0.3 };
-  }
-  if (slug === "particle-life") {
-    // Matched to the native viewer's starfield look: crisp grains on black,
-    // no trail smear, just enough bloom to let dense clusters glow.
-    // dotSize does not reach the glyph: the kernel's own pointSize param wins.
-    return { dotSize: 2, trailFade: 0, bloom: 0.15 };
-  }
-  if (slug === "lorenz-attractor") {
-    return { dotSize: 1, trailFade: 0, bloom: 0.4 };
-  }
-  if (slug === "clifford-dejong") {
-    // Fading is kernel-side (its fade param); renderer trails would smear the
-    // histogram. A touch of bloom lifts the saturated filament cores.
-    return { dotSize: 1, trailFade: 0, bloom: 0.35 };
-  }
-  switch (slug) {
-    // Modest glow on the bright-trace and fractal sims; off elsewhere.
-    case "mandelbrot":
-    case "julia-set":
-    case "burning-ship":
-      return { dotSize: 1, trailFade: 0, bloom: 0.3 };
-    case "logistic-mandelbrot":
-      return { dotSize: 1, trailFade: 0, bloom: 0.15 };
-    default:
-      return { dotSize: 1, trailFade: 0, bloom: 0 };
-  }
 }
 
 /** Factory display options overlaid with any persisted renderer visual options. */

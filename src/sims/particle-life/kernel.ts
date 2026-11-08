@@ -25,13 +25,15 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_PARTICLE_COUNT = 5901;
-const DEFAULT_SPECIES = 5;
-const DEFAULT_RMAX = 77;
-const DEFAULT_RMIN = 45;
-const DEFAULT_FORCE_SCALE = 108;
-const DEFAULT_FRICTION = 0.8;
-const DEFAULT_MATRIX_BIAS = 0.15;
+// Operator decision 2026-11-03: stage-144 row
+// friction0.97_species8_forceScale140_matrixBias0.35.
+const DEFAULT_PARTICLE_COUNT = 6000;
+const DEFAULT_SPECIES = 8;
+const DEFAULT_RMAX = 24;
+const DEFAULT_RMIN = 12;
+const DEFAULT_FORCE_SCALE = 140;
+const DEFAULT_FRICTION = 0.97;
+const DEFAULT_MATRIX_BIAS = 0.35;
 /**
  * Sphere diameter in cells. Purely presentational: the kernel declares it for
  * the panel but never reads it, and the renderer draws the glyph from it. 4 was

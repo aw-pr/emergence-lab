@@ -1,0 +1,99 @@
+--- src/sims/boids/kernel.ts	2026-09-13 17:59:24
++++ reference/kernel.ts	2026-11-04 19:05:33
+@@ -2,7 +2,7 @@
+   removeObstacleLayoutSlot,
+   upsertObstacleLayoutSlot,
+   type CustomObstacleLayoutSlot,
+-} from "./layoutStore.js";
++} from "./layoutStore.ts";
+ 
+ type ParamDescriptor = {
+   key: string;
+@@ -736,49 +736,38 @@
+ 
+     const visualRadiusSq = this.visualRadius * this.visualRadius;
+     const separationRadiusSq = this.separationRadius * this.separationRadius;
+-
++    const nBins = cols * rows;
++    const start = new Int32Array(nBins + 1);
++    for (let b = 0; b < nBins; b += 1) { let c = 0; let j = this.binHead[b]; while (j !== -1) { c += 1; j = binNext[j]; } start[b + 1] = start[b] + c; }
++    const items = new Int32Array(this.boidCount);
++    for (let b = 0; b < nBins; b += 1) { let k = start[b]; let j = this.binHead[b]; while (j !== -1) { items[k++] = j; j = binNext[j]; } }
++    const TRIES = Number(process.env.TRIES || 12);
+     for (let i = 0; i < this.boidCount; i += 1) {
+       const col = Math.min(cols - 1, Math.floor(this.x[i] / binWidth));
+       const row = Math.min(rows - 1, Math.floor(this.y[i] / binHeight));
+-
+-      let neighborCount = 0;
+-      let avgVx = 0;
+-      let avgVy = 0;
+-      let centerX = 0;
+-      let centerY = 0;
+-      let repelX = 0;
+-      let repelY = 0;
+-
+-      neighbours: for (let dr = -1; dr <= 1; dr += 1) {
++      let neighborCount = 0, avgVx = 0, avgVy = 0, centerX = 0, centerY = 0, repelX = 0, repelY = 0;
++      for (let dr = -1; dr <= 1; dr += 1) {
+         const nr = (row + dr + rows) % rows;
+         for (let dc = -1; dc <= 1; dc += 1) {
+           const nc = (col + dc + cols) % cols;
+-          let j = this.binHead[nr * cols + nc];
+-          while (j !== -1) {
+-            if (j !== i) {
+-              const dx = torusDelta(this.x[i], this.x[j], this.width);
+-              const dy = torusDelta(this.y[i], this.y[j], this.height);
+-              const distanceSq = dx * dx + dy * dy;
+-              if (distanceSq <= visualRadiusSq) {
+-                neighborCount += 1;
+-                avgVx += this.vx[j];
+-                avgVy += this.vy[j];
+-                centerX += dx;
+-                centerY += dy;
+-
+-                if (distanceSq < separationRadiusSq && distanceSq > 0) {
+-                  const distance = Math.sqrt(distanceSq);
+-                  const strength = (this.separationRadius - distance) / distance;
+-                  repelX -= dx * strength;
+-                  repelY -= dy * strength;
+-                }
+-
+-                if (neighborCount >= NEIGHBOUR_LIMIT) {
+-                  break neighbours;
+-                }
++          const b = nr * cols + nc; const s = start[b]; const n = start[b + 1] - s;
++          if (n === 0) continue;
++          const off = Math.floor(hashAngle(i * 9 + (dr + 1) * 3 + dc + 1, this.stepCounter) / TWO_PI * n);
++          const tries = Math.min(n, TRIES);
++          for (let t = 0; t < tries; t += 1) {
++            const j = items[s + (off + t) % n];
++            if (j === i) continue;
++            const dx = torusDelta(this.x[i], this.x[j], this.width);
++            const dy = torusDelta(this.y[i], this.y[j], this.height);
++            const distanceSq = dx * dx + dy * dy;
++            if (distanceSq <= visualRadiusSq) {
++              neighborCount += 1; avgVx += this.vx[j]; avgVy += this.vy[j]; centerX += dx; centerY += dy;
++              if (distanceSq < separationRadiusSq && distanceSq > 0) {
++                const distance = Math.sqrt(distanceSq);
++                const strength = (this.separationRadius - distance) / distance;
++                repelX -= dx * strength; repelY -= dy * strength;
+               }
+             }
+-            j = binNext[j];
+           }
+         }
+       }
+@@ -837,8 +826,11 @@
+     }
+ 
+     const limited = limitVector(velocityX, velocityY, this.maxSpeed);
+-    this.nextVx[i] = limited[0];
+-    this.nextVy[i] = limited[1];
++    const floor = this.maxSpeed * Number(process.env.MINS || 0);
++    const len = Math.hypot(limited[0], limited[1]);
++    const up = len > 0 && len < floor ? floor / len : 1;
++    this.nextVx[i] = limited[0] * up;
++    this.nextVy[i] = limited[1] * up;
+   }
+ 
+   readState(): Float32Array {

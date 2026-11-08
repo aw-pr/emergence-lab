@@ -86,7 +86,7 @@ test("metadata matches the renderer contract", () => {
   const boidCount = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "boidCount",
   );
-  assert.equal(boidCount.default, 17777);
+  assert.equal(boidCount.default, 28000);
   assert.equal(boidCount.max, 28000);
 
   const maxSpeed = kernel.paramSchema.find(
@@ -99,7 +99,7 @@ test("metadata matches the renderer contract", () => {
     (descriptor) => descriptor.key === "obstacleLayout",
   );
   assert.equal(obstacleLayout.type, "enum");
-  assert.equal(obstacleLayout.default, "reef");
+  assert.equal(obstacleLayout.default, "none");
   assert.deepEqual(obstacleLayout.options, [
     "none",
     "breakwaters",
@@ -130,9 +130,9 @@ test("metadata matches the renderer contract", () => {
   }
 });
 
-test("obstacle layout none is byte-identical to the released kernel fixture", () => {
-  const releasedFixture = Buffer.from(
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/sRZwPug2QL6P3A8+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD+ojUs+2xdLvvHeWrwAAAAAAAAAAAAAAAAAAAAAAACAP+f9ez4AC1C+ozAOPgAAAAAAAAAAAAAAAAAAAAAAAIA/cJe/PoBTv76YSqG8AAAAAAAAAAAAAAAAAAAAAAAAgD/VVIQ+sfp4vtGBsz0AAIA/fAcWPzlZ5b7DesE+AACAP5F+Xz63dV6+ONarPAAAgD/DqaY+cSCiviZ7mj0AAAAAAAAAAAAAAAAAAAAAAACAP9agjz4wVIW+kaLVPQAAAAAAAAAAAAAAAAAAAAAAAIA/F+7BPvubj77QU4I+AACAP7/OHT7h0gq+LBWWvQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD9vpZk+xOA3vs80dj4AAAAAAAAAAAAAAAAAAAAAAACAP+NLaD6jKVu+PQGaPQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8FaHw+RFgtvtR3Nz4AAIA/JKZNPqmlR75sSEW9AAAAAAAAAAAAAAAAAAAAAAAAgD/lQlg+EYhUvin3Hz0AAAAAAAAAAAAAAAAAAAAAAACAP9ygdz45iEy+/5cLPgAAgD9GRck92ImrvamQUj0AAIA/q2SiPtmSlr5NSPM9AACAP7TCST68wiu+g7bTPQAAAAAAAAAAAAAAAAAAAAAAAIA/fH53PnzpYL4sks49AAAAAAAAAAAAAAAAAAAAAAAAgD/qSZc+JJQ2vstIcT4AAAAAAAAAAAAAAAAAAAAAAACAP/UYcD4jYVa+fDnYPQAAgD/Yd0A+LJsevp0Q2j0AAAAAAAAAAAAAAAAAAAAA",
+test("obstacle layout none matches the pinned trajectory fixture", () => {
+  const pinnedFixture = Buffer.from(
+    "AAAAAAAAAAAAAAAAAAAAAAAAgD+av5A+JT3hvb1YhT4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAP8FAcD4ZIny9NdZnPgAAgD8lbFg+adXdvcjWOT4AAAAAAAAAAAAAAAAAAAAAAACAP8giiT6R5IC+H1C7PQAAAAAAAAAAAAAAAAAAAAAAAIA/IpPHPRhuu70mHQk9AACAP0otYT7jhzS+55UGPgAAgD8StEc+h4Uqvg3izz0AAAAAAAAAAAAAAAAAAAAAAACAPyc/Ez525Ai+c/ZYvQAAgD+aa4E+QGqBvvuIFTsAAAAAAAAAAAAAAAAAAAAAAACAP/8Guj14Sq+9nCL5PAAAAAAAAAAAAAAAAAAAAAAAAIA/46AxPnlysb0R4hk+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD+OGqs9r7ySvRsCMD0AAAAAAAAAAAAAAAAAAAAAAACAP+BDKj5r1gG+Z0vcPQAAAAAAAAAAAAAAAAAAAAAAAIA/ATFXPiCaSr5fDJE9AACAP/+L3D6Hyb6+j0ddPgAAAAAAAAAAAAAAAAAAAAAAAIA/zWLIPskkyL5Mmp28AACAP9ye4D2AUty9m+2uvAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAP8Jbij6pKT69Hk2IPgAAAAAAAAAAAAAAAAAAAAAAAIA/lfBLPlsg7bw3xkk+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/7jM/PdFhQ7zD2zg9AACAPwkQhT73m3e++w/DvQAAgD/rgU4+O7VJvssNMT0AAIA/24K2PbhQtr0LP4c7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/FONnPuh1Zb7+1AW9",
     "base64",
   );
   const kernel = new BoidsKernel();
@@ -156,7 +156,83 @@ test("obstacle layout none is byte-identical to the released kernel fixture", ()
   const state = kernel.readState();
   const actual = Buffer.from(state.buffer, state.byteOffset, state.byteLength);
   assert.equal(state.length, 192);
-  assert.equal(Buffer.compare(actual, releasedFixture), 0);
+  assert.equal(Buffer.compare(actual, pinnedFixture), 0);
+});
+
+test("the population immediately below binning retains the base trajectory", () => {
+  const { createHash } = require("node:crypto");
+  const kernel = new BoidsKernel();
+  kernel.init(320, 200, { boidCount: 255, seed: 17, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
+  for (let step = 0; step < 8; step += 1) kernel.step(1);
+  assert.equal(
+    createHash("sha256").update(Buffer.from(kernel.readState().buffer)).digest("hex"),
+    "e01053f62030afc6dcfd3753bb85aba290944be1508f2cf50ce039cf4f139c20",
+  );
+});
+
+test("binned sampling reaches both sides and weights cells by population", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 512, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
+  kernel.x.fill(82.5);
+  kernel.x.fill(42.5, 1, 128);
+  kernel.x[0] = 62.5;
+  kernel.y.fill(62.5);
+  kernel.vx.fill(0);
+  kernel.vy.fill(0);
+  const samples = [];
+  kernel.applySteer = (i, count, vx, vy, centerX) => {
+    if (i === 0) samples.push({ count, meanX: centerX / count });
+  };
+  for (let step = 1; step <= 32; step += 1) {
+    kernel.stepCounter = step;
+    kernel.computeForcesBinned(6, 6);
+  }
+  const expected = (384 - 127) * 20 / 511;
+  for (const sample of samples) {
+    assert.ok(sample.count >= 71 && sample.count <= 72, "candidate work stays bounded");
+    assert.ok(Math.abs(sample.meanX - expected) < 0.6, "neither cell order nor equal-cell weighting wins");
+  }
+});
+
+test("sparse binned neighbourhoods visit each candidate once across torus seams", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
+  kernel.x.fill(80);
+  kernel.y.fill(80);
+  kernel.x.set([2, 148, 6]);
+  kernel.y.set([2, 2, 148]);
+  kernel.vx.fill(0);
+  kernel.vy.fill(0);
+  let sample;
+  kernel.applySteer = (i, count, vx, vy, centerX, centerY) => {
+    if (i === 0) sample = { count, centerX, centerY };
+  };
+  kernel.computeForcesBinned(6, 6);
+  assert.deepEqual(sample, { count: 2, centerX: 0, centerY: -4 });
+});
+
+test("binned propulsion preserves direction and buffers and respects the speed bounds", () => {
+  const kernel = new BoidsKernel();
+  kernel.init(150, 150, { boidCount: 256, obstacleLayout: "none", maxSpeed: 10, visualRadius: 25, separationRadius: 8, initialFlocks: 6 });
+  const buffers = [kernel.binStarts, kernel.binCursor, kernel.binItems, kernel.boidBins];
+  kernel.applySteer = (i) => {
+    kernel.nextVx[i] = 3;
+    kernel.nextVy[i] = 4;
+  };
+  kernel.computeForcesBinned(6, 6);
+  assert.ok(Math.abs(kernel.nextVx[0] - 4.2) < 1e-6);
+  assert.ok(Math.abs(kernel.nextVy[0] - 5.6) < 1e-6);
+  delete kernel.applySteer;
+  for (let step = 0; step < 8; step += 1) {
+    kernel.step(1);
+    for (let i = 0; i < kernel.vx.length; i += 1) {
+      const speed = Math.hypot(kernel.vx[i], kernel.vy[i]);
+      assert.ok(speed >= 7 - 1e-6 && speed <= 10 + 1e-6);
+    }
+  }
+  for (const [index, name] of ["binStarts", "binCursor", "binItems", "boidBins"].entries()) {
+    assert.equal(kernel[name], buffers[index], `${name} is reused between steps`);
+  }
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {

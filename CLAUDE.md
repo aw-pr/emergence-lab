@@ -13,6 +13,8 @@ cross-checking (stage cards under `docs/stages/`, see
 
 ## Current direction
 
+As of 2026-10-27, the entire later deep-zoom arc is parked at the operator's request. Normal `dev` was recreated from pre-zoom `main` (`fc063bc51`); main is unchanged. The full arc including failed 130a is preserved on `parked/logistic-mandelbrot-zoom`, checked out in `../emergence-lab-zoom-parked` and backed up to origin. Autometta dispatch itself is not paused (budget not halted, queue empty). Do not resume or promote the zoom work without explicit operator instruction. Read `HANDOFF.md` for runtime state and evidence.
+
 The logistic-Mandelbrot bifurcation reveal is landed and validated, including
 free camera navigation and the machine-local prebaked point cloud (see
 "Baking a local point cloud" in `README.md`). The analytic surface arc
@@ -44,7 +46,8 @@ sheet reads pale; that is a tuning question for the interestingness run
 (stages 101-102, `docs/sweeps/logistic-mandelbrot-cycle-interestingness.md`),
 which hands the operator a shortlist and changes no default. Stages 103
 (packed cells for the orbit cloud) and 104 (a hierarchical Inside-out centre,
-gated on 103) were queued on 2026-10-06.
+gated on 103) were queued on 2026-10-06 and have since landed.
+Stages 105-107 (second refinement level, tail refinement default, wider extreme pool) landed and shipped 2026-10-08/09 with exposure 0.5 and edge glow 0.25 as the new defaults.
 
 Gray-Scott stays the priority kernel for future refinement.
 

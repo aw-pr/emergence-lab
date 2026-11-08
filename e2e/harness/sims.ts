@@ -56,7 +56,32 @@ export interface MultiSnapshotConfig {
   warmupSteps: number[];
 }
 
+/**
+ * Opt-in growth/criticality path (stage 146). Captures are taken at declared
+ * fixed steps (sandpile, Ising) or at declared occupied-cell milestones (DLA),
+ * so candidates are compared at equal simulated time or equal growth rather
+ * than after an arbitrary warmup. Diagnostics never feed the score.
+ */
+export interface GrowthCriticalityConfig {
+  methodVersion: "growth-criticality-v1";
+  sampleSteps?: number[];
+  milestones?: number[];
+  stepCap?: number;
+  /** Repeat horizon: absolute steps (fixed time) or a milestone (growth). */
+  longHorizon: number;
+  /** Second and larger resolutions for the finite-size check. */
+  validationSizes: number[];
+  seeds?: number[];
+}
+
 export interface SimSweepConfig {
+  growthCriticality?: GrowthCriticalityConfig;
+  reactionDiffusion?: { methodVersion: "rd-persistence-v1" };
+  eca?: { methodVersion: "eca-spacetime-v1" };
+  staticBoundary?: { methodVersion: "static-boundary-v1" };
+  /** Opt-in two-channel sign geometry for signed fields stored as separate
+   * magnitude channels (channel 0 stable, channel 1 chaotic). */
+  signMix?: { methodVersion: "lyapunov-sign-v1"; stableChannel: number; chaoticChannel: number };
   slug: string;
   /** Artifact directory / report id; defaults to the slug. Lets several sweeps
    * (e.g. one per map of a multi-map kernel) share a slug without colliding. */
@@ -214,6 +239,40 @@ const LORENZ: SimSweepConfig = {
   ],
 };
 
+
+const LORENZ_142_BETA = [0.6, 1.4, 4.5, 7];
+const LORENZ_142_RHO_BETA = [8, 16, 22, 26, 50, 54, 57, 60];
+const LORENZ_142_SIGMA = [1.5, 4, 20, 28];
+const LORENZ_142_RHO_SIGMA = [14, 20, 24, 30, 34, 48, 54, 60];
+/** Refinement sets (presentation only) appended after the 64 dynamic sets. */
+export const LORENZ_142_REFINEMENTS: Params[] = [
+  { sigma: 20, beta: 2.6667, rho: 34 }, { sigma: 10, beta: 1.4, rho: 26 }, { sigma: 28, beta: 2.6667, rho: 34 },
+].flatMap(base => [0.985, 0.997].flatMap(fade => [3, 12].map(stepsPerFrame => ({ ...base, stepsPerFrame, fade }))));
+const LORENZ_142_SETS: Params[] = [
+  ...LORENZ_142_BETA.flatMap(beta => LORENZ_142_RHO_BETA.map(rho => ({ sigma: 10, beta, rho }))),
+  ...LORENZ_142_SIGMA.flatMap(sigma => LORENZ_142_RHO_SIGMA.map(rho => ({ sigma, beta: 2.6667, rho }))),
+  ...LORENZ_142_REFINEMENTS,
+];
+
+const LORENZ_UNEXPLORED: SimSweepConfig = {
+  ...LORENZ,
+  artifactId: "sweep-142-lorenz-attractor",
+  baseParams: { sigma: 10, rho: 28, beta: 2.6667, stepsPerFrame: 6, fade: 0.992 },
+  axes: [
+    { key: "beta", values: [...LORENZ_142_BETA, 2.6667] },
+    { key: "sigma", values: [10, ...LORENZ_142_SIGMA] },
+    { key: "rho", values: [...new Set([...LORENZ_142_RHO_BETA, ...LORENZ_142_RHO_SIGMA])].sort((a, b) => a - b) },
+  ],
+  sets: LORENZ_142_SETS,
+  // Current shipped lorenz-attractor presets, copied from src/app/presets.ts.
+  references: [
+    { id: "142-current-classic", label: "Classic butterfly (shipped preset)", params: { sigma: 10, rho: 28, beta: 2.6667, stepsPerFrame: 8, fade: 0.985 } },
+    { id: "142-current-wide-wings", label: "Wide wings (shipped preset)", params: { sigma: 10, rho: 35, beta: 2.6667, stepsPerFrame: 12, fade: 0.99 } },
+    { id: "142-current-dense-wings", label: "Dense wings (shipped preset)", params: { beta: 2.6667, stepsPerFrame: 6, fade: 0.997, rho: 41.6, sigma: 14 } },
+    { id: "142-current-fast-trace", label: "Fast trace (shipped preset)", params: { sigma: 14, rho: 32, beta: 3.1, stepsPerFrame: 20, fade: 0.975 } },
+  ],
+};
+
 /**
  * Point-map attractor sweeps: one config per map, sharing the slug. The a/b
  * axes are the interesting knobs (they set the trig frequencies that fold the
@@ -295,6 +354,94 @@ const SVENSSON: SimSweepConfig = {
     { id: "moth", label: "Svensson moth", params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9, ...CLIFFORD_RENDER } },
   ],
 };
+
+/**
+ * Stage 148: c/d interactions around diverse a/b anchors. The historical
+ * Clifford and De Jong sweeps pinned c/d and swept a/b; Svensson swept d only.
+ * Each variant here visits 4 anchors x 4 c x 3 d = 48 explicit sets with the
+ * same fixed render knobs as the historical configs (drift 0), so morphology
+ * is screened apart from motion. Current shipped coefficients are re-measured
+ * under new "148-current-*" ids; the historical reference rows stay untouched.
+ */
+export const ATTRACTOR_148_METHOD = "attractor-cd-interaction-v1";
+export const CLIFFORD_RENDER_148 = CLIFFORD_RENDER;
+/** Shipped morph render knobs from src/app/presets.ts; Clifford morph drifts at 0.35, De Jong morph overrides to 0.3. */
+const MORPH_RENDER = { driftAmount: 0.35, driftSpeed: 0.5, fade: 0.985, exposure: 0.09, pointsPerFrame: 40000 };
+
+function attractorInteractionSets(
+  map: string,
+  anchors: readonly (readonly [number, number])[],
+  cValues: readonly number[],
+  dValues: readonly number[],
+): Params[] {
+  const sets: Params[] = [];
+  for (const [a, b] of anchors) {
+    for (const c of cValues) {
+      for (const d of dValues) sets.push({ map, a, b, c, d });
+    }
+  }
+  return sets;
+}
+
+function attractorInteractionConfig(
+  variant: "clifford" | "dejong" | "svensson",
+  anchors: readonly (readonly [number, number])[],
+  cValues: readonly number[],
+  dValues: readonly number[],
+  references: ReferenceSet[],
+): SimSweepConfig {
+  return {
+    slug: "clifford-dejong",
+    artifactId: `sweep-148-clifford-dejong-${variant}`,
+    ...CLIFFORD_DEJONG_BASE,
+    baseParams: { ...CLIFFORD_RENDER },
+    axes: [
+      { key: "a", values: anchors.map(([a]) => a) },
+      { key: "c", values: [...cValues] },
+      { key: "d", values: [...dValues] },
+    ],
+    sets: attractorInteractionSets(variant, anchors, cValues, dValues),
+    references,
+  };
+}
+
+const ATTRACTOR_148_CLIFFORD = attractorInteractionConfig(
+  "clifford",
+  [[-1.4, 1.6], [-1.8, -2.4], [1.7, 1.3], [-2.2, 2.0]],
+  [-1.6, -0.6, 0.6, 1.6],
+  [-1.4, 0.3, 1.4],
+  [
+    { id: "148-current-clifford-classic", label: "Clifford classic (shipped)", params: { map: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7, ...CLIFFORD_RENDER } },
+    { id: "148-current-clifford-veils", label: "Clifford veils (shipped)", params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0, ...CLIFFORD_RENDER } },
+    { id: "148-current-clifford-bloom", label: "Clifford bloom (shipped)", params: { map: "clifford", a: -1.8, b: -2.0, c: -0.5, d: -0.9, ...CLIFFORD_RENDER } },
+    // Shipped morph preset, measured with its own drift/exposure/fade/point count (not the screening knobs).
+    { id: "148-current-clifford-morph", label: "Clifford morph (shipped)", params: { map: "clifford", a: -1.8, b: -2.4, c: -1.0, d: 1.0, ...MORPH_RENDER } },
+  ],
+);
+
+const ATTRACTOR_148_DEJONG = attractorInteractionConfig(
+  "dejong",
+  [[1.4, -2.3], [1.4, -2.8], [-2.0, 1.2], [2.2, 2.5]],
+  [-2.8, -1.2, 1.2, 2.8],
+  [-2.6, -0.8, 1.4],
+  [
+    { id: "148-current-dejong-classic", label: "De Jong classic (shipped)", params: { map: "dejong", a: 1.4, b: -2.3, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-swan", label: "De Jong swan (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.8, d: -1.87, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-heart", label: "De Jong heart (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1, ...CLIFFORD_RENDER } },
+    { id: "148-current-dejong-morph", label: "De Jong morph (shipped)", params: { map: "dejong", a: 1.4, b: -2.8, c: 2.4, d: -2.1, ...MORPH_RENDER, driftAmount: 0.3 } },
+  ],
+);
+
+const ATTRACTOR_148_SVENSSON = attractorInteractionConfig(
+  "svensson",
+  [[1.4, 1.56], [1.5, -1.8], [-1.7, 1.9], [2.0, -0.9]],
+  [-2.0, -0.8, 0.7, 2.0],
+  [-3.5, -1.2, 1.8],
+  [
+    { id: "148-current-svensson-drape", label: "Svensson drape (shipped)", params: { map: "svensson", a: 1.4, b: 1.56, c: 1.4, d: -6.56, ...CLIFFORD_RENDER } },
+    { id: "148-current-svensson-moth", label: "Svensson moth (shipped)", params: { map: "svensson", a: 1.5, b: -1.8, c: 1.6, d: 0.9, ...CLIFFORD_RENDER } },
+  ],
+);
 
 /*
  * ---------------------------------------------------------------------------
@@ -703,13 +850,450 @@ const PARTICLE_LIFE: SimSweepConfig = {
   ],
 };
 
+export const MANDELBROT_ANCHORS = [
+  { id: "whole-set", centerX: -0.5, centerY: 0, zoom: 1 },
+  { id: "seahorse-valley", centerX: -0.75, centerY: 0.047, zoom: 18 },
+  { id: "spiral-hub", centerX: -0.761574, centerY: -0.0847596, zoom: 96 },
+];
+
+export const MANDELBROT_REFINEMENT_CENTRES = [
+  { centerX: -0.765324, centerY: -0.0885096, zoom: 288 },
+  { centerX: -0.14, centerY: -0.36, zoom: 2.2 },
+  { centerX: -0.77, centerY: 0.067, zoom: 54 },
+];
+
+const MANDELBROT_BOUNDARY: SimSweepConfig = {
+  slug: "mandelbrot", artifactId: "sweep-137-mandelbrot",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { maxIterations: 512, autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [...MANDELBROT_ANCHORS.flatMap(anchor => [1.2, 1.6, 2.2, 3].flatMap(factor =>
+    [-0.12, 0.12].flatMap(dx => [-0.12, 0.12].map(dy => ({
+      centerX: Number((anchor.centerX + dx * 3 / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * 3 / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  )), ...MANDELBROT_REFINEMENT_CENTRES.flatMap(anchor => [1.15, 1.45].flatMap(factor =>
+    [-0.06, 0.06].flatMap(dx => [-0.06, 0.06].map(dy => ({
+      centerX: Number((anchor.centerX + dx * 3 / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * 3 / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  ))],
+  references: [
+    { id: "137-current-default", label: "Kernel default (motion disabled)", params: { centerX: -0.5, centerY: 0, zoom: 1, maxIterations: 128, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    ...MANDELBROT_ANCHORS.map((anchor, i) => ({
+      id: `137-current-${anchor.id}`, label: `${anchor.id} (motion disabled)`,
+      params: { centerX: anchor.centerX, centerY: anchor.centerY, zoom: anchor.zoom, maxIterations: [128, 256, 384][i], autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+    })),
+  ],
+};
+
+const JULIA_REFINED_CONSTANTS = [
+  { cRe: -0.44, cIm: 0.56 },
+  { cRe: -0.36, cIm: 0.56 },
+  { cRe: -0.36, cIm: 0.64 },
+  { cRe: -0.83, cIm: 0.141 },
+  { cRe: -0.153, cIm: 0.715 },
+  { cRe: -0.82, cIm: 0.185 },
+];
+
+const JULIA_CONNECTIVITY: SimSweepConfig = {
+  slug: "julia-set", artifactId: "sweep-139-julia-set",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { centerX: 0, centerY: 0, zoom: 0.85, maxIterations: 512,
+    autoIterations: false, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["cRe", "cIm", "zoom"].map(key => ({ key, values: [] })),
+  sets: [
+    ...[
+      { re: [-0.44, -0.42, -0.38, -0.36], im: [0.56, 0.58, 0.62, 0.64] },
+      { re: [-0.83, -0.81, -0.79, -0.77], im: [0.141, 0.151, 0.161, 0.171] },
+      { re: [-0.153, -0.133, -0.113, -0.093], im: [0.715, 0.735, 0.755, 0.775] },
+      { re: [-0.82, -0.8, -0.78, -0.76], im: [0.185, 0.195, 0.205, 0.215] },
+    ].flatMap(region => region.re.flatMap(cRe => region.im.map(cIm => ({ cRe, cIm })))),
+    ...JULIA_REFINED_CONSTANTS.flatMap(c => [1, 1.3, 1.7, 2.2].map(zoom => ({ ...c, zoom }))),
+  ],
+  references: [
+    { id: "139-current-default", label: "Kernel default (phase/cycle disabled)", params: { cRe: -0.4, cIm: 0.6, centerX: 0, centerY: 0, zoom: 1.45, maxIterations: 180, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    { id: "139-current-dendrite", label: "Dendrite seed (phase/cycle disabled)", params: { cRe: -0.8, cIm: 0.156, centerX: 0, centerY: 0, zoom: 1, maxIterations: 128, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    { id: "139-current-rabbit", label: "Douady rabbit (phase/cycle disabled)", params: { cRe: -0.123, cIm: 0.745, centerX: 0, centerY: 0, zoom: 1.15, maxIterations: 220, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+  ],
+};
+
+/** Every finite sequence enum the kernel schema exposes, in schema order. */
+export const MARKUS_SEQUENCES = ["AB", "AABB", "AAB", "ABB", "AABAB", "AAAABBBBBB"] as const;
+
+/** Eight views per sequence around the two shipped views (Zircon Zity at
+ * 3,3 zoom 1; Woven boundary at 3.48,3.64 zoom 4.5). */
+export const MARKUS_COARSE_VIEWS = [
+  { centerX: 3, centerY: 3, zoom: 1 },
+  { centerX: 3, centerY: 3, zoom: 1.6 },
+  { centerX: 3.3, centerY: 3.3, zoom: 2.4 },
+  { centerX: 2.7, centerY: 3.3, zoom: 2.4 },
+  { centerX: 3.48, centerY: 3.64, zoom: 4.5 },
+  { centerX: 3.48, centerY: 3.64, zoom: 2.8 },
+  { centerX: 3.36, centerY: 3.52, zoom: 4.5 },
+  { centerX: 3.6, centerY: 3.76, zoom: 4.5 },
+] as const;
+
+/** Second-pass views, chosen from the coarse ranking and appended after it. */
+export const MARKUS_REFINEMENT_LEADERS = [
+  { sequence: "AB", centerX: 3.48, centerY: 3.64, zoom: 2.8 },
+  { sequence: "ABB", centerX: 3.36, centerY: 3.52, zoom: 4.5 },
+  { sequence: "AABB", centerX: 3.48, centerY: 3.64, zoom: 4.5 },
+] as const;
+
+/** Each leader (the three best distinct sequence/window pairs of the coarse
+ * ranking) gets zoom factors [1.4, 2] x diagonal offsets of 0.15 of its coarse
+ * window span (2/zoom), centre rounded to 12 decimals and zoom to 6. */
+export const MARKUS_REFINED_VIEWS: Params[] = MARKUS_REFINEMENT_LEADERS.flatMap(leader =>
+  [1.4, 2].flatMap(factor => [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([dx, dy]) => {
+    const offset = 0.15 * (2 / leader.zoom);
+    return {
+      sequence: leader.sequence,
+      centerX: Number((leader.centerX + dx * offset).toFixed(12)),
+      centerY: Number((leader.centerY + dy * offset).toFixed(12)),
+      zoom: Number((leader.zoom * factor).toFixed(6)),
+    };
+  })));
+
+/** Evidence finalists (candidate ids), fixed by hand after the ranking and
+ * its montage are inspected; empty means the score leader alone. */
+export const MARKUS_FINALISTS: string[] = ["140-c06", "140-c62", "140-c69"];
+
+const MARKUS_LYAPUNOV: SimSweepConfig = {
+  slug: "markus-lyapunov", artifactId: "sweep-140-markus-lyapunov",
+  signMix: { methodVersion: "lyapunov-sign-v1", stableChannel: 0, chaoticChannel: 1 },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { warmupIterations: 300, sampleIterations: 700, rotationSpeed: 0 },
+  axes: ["sequence", "centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [
+    ...MARKUS_SEQUENCES.flatMap(sequence => MARKUS_COARSE_VIEWS.map(view => ({ sequence, ...view }))),
+    ...MARKUS_REFINED_VIEWS,
+  ],
+  references: [
+    { id: "140-current-zircon-zity", label: "Zircon Zity (rotation disabled)", params: { centerX: 3, centerY: 3, zoom: 1, warmupIterations: 200, sampleIterations: 500, sequence: "AB", rotationSpeed: 0 } },
+    { id: "140-current-woven-boundary", label: "Woven boundary (rotation disabled)", params: { centerX: 3.48, centerY: 3.64, zoom: 4.5, warmupIterations: 300, sampleIterations: 700, sequence: "AABAB", rotationSpeed: 0 } },
+  ],
+};
+
+export const BURNING_SHIP_ANCHORS = [
+  { id: "harbour", centerX: -0.5, centerY: -0.5, zoom: 1 },
+  { id: "mast", centerX: -1.755, centerY: -0.03, zoom: 14 },
+  { id: "ridge-deep", centerX: -1.744, centerY: -0.017, zoom: 72 },
+];
+
+// Centres of the refinement pass, chosen from the retained coarse ranking.
+export const BURNING_SHIP_REFINEMENT_CENTRES: { centerX: number; centerY: number; zoom: number }[] = [
+  { centerX: -1.753444444444, centerY: -0.007555555556, zoom: 86.4 },
+  { centerX: 0.18, centerY: -1.18, zoom: 3 },
+  { centerX: -1.803571428571, centerY: 0.018571428571, zoom: 30.8 },
+];
+
+const BURNING_SHIP_SPAN = 3.4;
+
+const BURNING_SHIP_BOUNDARY: SimSweepConfig = {
+  slug: "burning-ship", artifactId: "sweep-138-burning-ship",
+  staticBoundary: { methodVersion: "static-boundary-v1" },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128,
+  warmupSteps: 0, fluxGap: 0, dt: 1, coverageThreshold: 0,
+  baseParams: { maxIterations: 512, autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+  axes: ["centerX", "centerY", "zoom"].map(key => ({ key, values: [] })),
+  sets: [...BURNING_SHIP_ANCHORS.flatMap(anchor => [1.2, 1.6, 2.2, 3].flatMap(factor =>
+    [-0.2, 0.2].flatMap(dx => [-0.2, 0.2].map(dy => ({
+      centerX: Number((anchor.centerX + dx * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  )), ...BURNING_SHIP_REFINEMENT_CENTRES.flatMap(anchor => [1.15, 1.45].flatMap(factor =>
+    [-0.1, 0.1].flatMap(dx => [-0.1, 0.1].map(dy => ({
+      centerX: Number((anchor.centerX + dx * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      centerY: Number((anchor.centerY + dy * BURNING_SHIP_SPAN / anchor.zoom).toFixed(12)),
+      zoom: Number((anchor.zoom * factor).toFixed(6)),
+    }))),
+  ))],
+  references: [
+    { id: "138-current-default", label: "Kernel default (motion disabled)", params: { centerX: -1.755, centerY: -0.03, zoom: 14, maxIterations: 260, autoIterations: true, palettePhase: 0, cycleSpeed: 0 } },
+    ...BURNING_SHIP_ANCHORS.map((anchor, i) => ({
+      id: `138-current-${anchor.id}`, label: `${anchor.id} (motion disabled)`,
+      params: { centerX: anchor.centerX, centerY: anchor.centerY, zoom: anchor.zoom, maxIterations: [128, 260, 384][i], autoIterations: true, palettePhase: 0, cycleSpeed: 0 },
+    })),
+  ],
+};
+
+const SANDPILE_146: SimSweepConfig = {
+  slug: "abelian-sandpile", artifactId: "sweep-146-abelian-sandpile",
+  growthCriticality: { methodVersion: "growth-criticality-v1", sampleSteps: [100, 250, 400], longHorizon: 1000, validationSizes: [128, 384] },
+  primaryChannel: 0, gridWidth: 256, gridHeight: 256, warmupSteps: 250, fluxGap: 4, dt: 1, coverageThreshold: 0.25,
+  baseParams: { initialPile: 30000, toppleThreshold: 4 },
+  axes: [
+    { key: "grainsPerStep", values: [3, 8, 20, 50, 120, 250] },
+    { key: "topplesPerStep", values: [600, 2000, 5000, 12000, 25000, 250000, 700000, 2000000] },
+  ],
+  references: ABELIAN_SANDPILE.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+
+// Metropolis acceptance depends on J/T and h/T only, so at h = 0 the physics is
+// a function of the ratio T/J; coupling and temperature are paired so every
+// candidate has a distinct ratio and a distinct (T, J) rather than a rescaled copy.
+const ISING_146_RATIOS = [1.4, 1.7, 1.9, 2.0, 2.1, 2.2, 2.25, 2.3, 2.35, 2.4, 2.5, 2.6, 2.7, 2.85, 3.0, 3.3];
+const ISING_146_COUPLINGS = [0.6, 1.4, 0.9, 1.5];
+const ISING_146: SimSweepConfig = {
+  slug: "ising-model", artifactId: "sweep-146-ising-model",
+  growthCriticality: { methodVersion: "growth-criticality-v1", sampleSteps: [100, 300, 900], longHorizon: 3000, validationSizes: [64, 256], seeds: [7, 11, 23] },
+  primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 300, fluxGap: 4, dt: 1, coverageThreshold: 0.5,
+  baseParams: { externalField: 0, sweepsPerStep: 0.5, seed: 7 },
+  axes: [
+    { key: "temperature", values: [] }, { key: "coupling", values: ISING_146_COUPLINGS }, { key: "initialState", values: ["random", "up", "checkerboard"] },
+  ],
+  sets: ISING_146_RATIOS.flatMap((ratio, i) => ["random", "up", "checkerboard"].map(initialState => {
+    const coupling = ISING_146_COUPLINGS[i % ISING_146_COUPLINGS.length];
+    return { temperature: Number((ratio * coupling).toFixed(3)), coupling, initialState };
+  })),
+  references: ISING_MODEL.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+ISING_146.axes[0].values = [...new Set((ISING_146.sets as Params[]).map(s => s.temperature as number))];
+
+const DLA_146: SimSweepConfig = {
+  slug: "diffusion-limited-aggregation", artifactId: "sweep-146-diffusion-limited-aggregation",
+  growthCriticality: { methodVersion: "growth-criticality-v1", milestones: [1000, 2500, 4500], stepCap: 6000, longHorizon: 20000, validationSizes: [192, 288], seeds: [7, 11, 23] },
+  primaryChannel: 0, gridWidth: 192, gridHeight: 192, warmupSteps: 6000, fluxGap: 6, dt: 1, coverageThreshold: 0.05,
+  baseParams: { walkersPerStep: 64, maxWalkSteps: 400, seed: 7 },
+  axes: [
+    { key: "stickiness", values: [0.04, 0.08, 0.22, 0.4, 0.62, 0.9] },
+    { key: "spawnRadius", values: [0.08, 0.16, 0.26, 0.5] },
+    { key: "seedCount", values: [2, 6] },
+  ],
+  references: DIFFUSION_LIMITED_AGGREGATION.references.map(r => ({ ...r, id: `146-current-${r.id}` })),
+};
+
+// Regimes the first boids/physarum/particle-life sweeps never visited. Each
+// config is additive (own artifactId) so the originals stay reproducible. Current
+// references carry new ids because the historical rows omit shipped presets
+// (Boids Scatter, Physarum Root mat) and pin different populations.
+const SWEEP_144_BOIDS: SimSweepConfig = {
+  ...BOIDS,
+  artifactId: "sweep-144-boids",
+  // Alignment/cohesion/initial-flock count; the 2026-09-01 grid held alignment
+  // 0.06 and cohesion 0.012 and never varied the seeding flock count.
+  baseParams: { boidCount: 2500, visualRadius: 36, separationRadius: 6, separation: 0.2, maxSpeed: 16, pointSize: 6, obstacleLayout: "none" },
+  axes: [
+    { key: "alignment", values: [0.01, 0.15, 0.2, 0.25] },
+    { key: "cohesion", values: [0, 0.03, 0.04, 0.05] },
+    { key: "initialFlocks", values: [1, 6, 12] },
+  ],
+  references: [
+    { id: "144-current-balanced-flock", label: "Balanced flock (shipped)", params: { boidCount: 2500, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+    { id: "144-current-tight-flock", label: "Tight flock (shipped)", params: { boidCount: 2500, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+    { id: "144-current-scatter", label: "Scatter (shipped)", params: { boidCount: 2500, visualRadius: 24, separationRadius: 10, maxSpeed: 26, alignment: 0.03, cohesion: 0.004, separation: 0.5, pointSize: 6, obstacleLayout: "none", initialFlocks: 6 } },
+  ],
+};
+
+// Stage 152: faster flocks in several clumps going different ways. Stage 144
+// pinned maxSpeed at 16 and cohesion at 0, so nothing could gather; this grid
+// raises both and varies the seeding flock count, at the shipped population.
+// The harness rewrites nothing here: pointSize stays the kernel default and the
+// kernel's capture-time seed is never part of a set.
+const SWEEP_152_BOIDS: SimSweepConfig = {
+  ...BOIDS,
+  artifactId: "sweep-152-boids",
+  baseParams: { boidCount: 17777, visualRadius: 36, separationRadius: 6, separation: 0.2, alignment: 0.15, obstacleLayout: "none" },
+  axes: [
+    { key: "maxSpeed", values: [24, 32, 40] },
+    { key: "cohesion", values: [0.01, 0.02, 0.035] },
+    { key: "initialFlocks", values: [3, 6, 12] },
+  ],
+  references: [
+    { id: "152-current-balanced-flock", label: "Balanced flock (shipped)", params: { boidCount: 17777, visualRadius: 36, separationRadius: 6, maxSpeed: 16, alignment: 0.06, cohesion: 0.012, separation: 0.2, initialFlocks: 6, obstacleLayout: "none" } },
+    { id: "152-current-tight-flock", label: "Tight flock (shipped)", params: { boidCount: 17777, visualRadius: 30, separationRadius: 5, maxSpeed: 20, alignment: 0.1, cohesion: 0.02, separation: 0.16, initialFlocks: 6, obstacleLayout: "none" } },
+    { id: "152-current-scatter", label: "Scatter (shipped)", params: { boidCount: 17777, visualRadius: 24, separationRadius: 10, maxSpeed: 26, alignment: 0.03, cohesion: 0.004, separation: 0.5, initialFlocks: 6, obstacleLayout: "none" } },
+  ],
+};
+
+// Agent counts: shipped counts are for the app's 384² compute grid; 256²
+// carries (256/384)² of them, rounded to the nearest 100.
+const SWEEP_144_PHYSARUM: SimSweepConfig = {
+  ...PHYSARUM,
+  artifactId: "sweep-144-physarum",
+  baseParams: { agentCount: 14000, turnSpeed: 22.5, stepsPerFrame: 1, seed: 144 },
+  axes: [
+    { key: "evaporation", values: [0.8, 0.975] },
+    { key: "depositAmount", values: [0.06, 0.6] },
+    { key: "moveSpeed", values: [0.5, 2.5] },
+    { key: "sensorDistance", values: [3, 14] },
+    { key: "sensorAngle", values: [8, 30, 80] },
+  ],
+  references: [
+    { id: "144-current-veins", label: "Veins (shipped)", params: { agentCount: 14200, sensorAngle: 22.5, sensorDistance: 9, turnSpeed: 22.5, moveSpeed: 1, depositAmount: 0.24, evaporation: 0.9, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-coral-fans", label: "Coral fans (shipped)", params: { agentCount: 11600, sensorAngle: 15, sensorDistance: 17, turnSpeed: 14, moveSpeed: 1.35, depositAmount: 0.2, evaporation: 0.94, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-filigree-web", label: "Filigree web (shipped)", params: { agentCount: 26700, sensorAngle: 38, sensorDistance: 5, turnSpeed: 34, moveSpeed: 0.8, depositAmount: 0.12, evaporation: 0.96, stepsPerFrame: 1, seed: 144 } },
+    { id: "144-current-root-mat", label: "Root mat (shipped)", params: { agentCount: 14000, sensorAngle: 60, sensorDistance: 5, turnSpeed: 12, moveSpeed: 1, depositAmount: 0.22, evaporation: 0.9, stepsPerFrame: 1, seed: 144 } },
+  ],
+};
+
+const SWEEP_144_PARTICLE_LIFE: SimSweepConfig = {
+  ...PARTICLE_LIFE,
+  artifactId: "sweep-144-particle-life",
+  baseParams: { particleCount: 3000, rmax: 24, rmin: 12, seed: 144 },
+  axes: [
+    { key: "friction", values: [0.1, 0.35, 0.9, 0.97] },
+    { key: "species", values: [3, 6, 8] },
+    { key: "forceScale", values: [10, 140] },
+    { key: "matrixBias", values: [-0.35, 0.35] },
+  ],
+  references: [
+    { id: "144-current-cells", label: "Cells (shipped)", params: { particleCount: 3000, species: 5, rmax: 40, rmin: 12, forceScale: 45, friction: 0.7, matrixBias: 0.08, seed: 144 } },
+    { id: "144-current-chasers", label: "Chasers (shipped)", params: { particleCount: 3000, species: 6, rmax: 48, rmin: 14, forceScale: 85, friction: 0.2, matrixBias: 0, seed: 144 } },
+    { id: "144-current-gas-clouds", label: "Gas clouds (shipped)", params: { particleCount: 3000, species: 4, rmax: 30, rmin: 8, forceScale: 22, friction: 0.45, matrixBias: -0.05, seed: 144 } },
+  ],
+};
+
+const PHASE_145_KURAMOTO: SimSweepConfig = {
+  slug: "kuramoto-oscillators", artifactId: "sweep-145-kuramoto-oscillators",
+  primaryChannel: 0, phase: { channel: 0 },
+  gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 6, dt: 1,
+  coverageThreshold: 0.5,
+  baseParams: { frequencySpread: 0.55, timestep: 0.045, seed: 1 },
+  axes: [
+    { key: "couplingMode", values: ["local", "global"] },
+    { key: "coupling", values: [0.7, 1, 1.4, 2.4] },
+    { key: "initialPattern", values: ["waves", "random"] },
+    { key: "noise", values: [0, 0.04, 0.16, 0.4] },
+  ],
+  references: [
+    { id: "145-current-default", label: "Kernel default", params: { coupling: 1.8, frequencySpread: 0.45, timestep: 0.045, couplingMode: "local", initialPattern: "vortices", noise: 0.015, seed: 1 } },
+    ...KURAMOTO_OSCILLATORS.references.map(r => ({ ...r, id: `145-current-${r.id}`, params: { ...r.params } })),
+  ],
+};
+
+const PHASE_145_SWARMALATORS: SimSweepConfig = {
+  slug: "swarmalators", artifactId: "sweep-145-swarmalators",
+  primaryChannel: 0, phase: { channel: 1, occupancy: { channel: 0, threshold: 0.05 } },
+  gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 6, dt: 1,
+  coverageThreshold: 0.05,
+  baseParams: { particleCount: 384, A: 1, B: 18, timestep: 0.05, seed: 1,
+    trailPersistence: 0.85, cameraDrift: 0.5 },
+  axes: [
+    { key: "J", values: [0.1, 1] },
+    { key: "K", values: [-0.8, -0.2, 0.2, 0.8] },
+    { key: "frequencySpread", values: [0.05, 0.2, 0.45, 0.8] },
+    { key: "noise", values: [0.08, 0.4] },
+  ],
+  references: [
+    { id: "145-current-default", label: "Kernel default (shelved)", params: { particleCount: 384, A: 1, B: 18, J: 1, K: -0.75, frequencySpread: 0, noise: 0, timestep: 0.05, seed: 1, trailPersistence: 0.85, cameraDrift: 0.5 } },
+    ...SWARMALATORS.references.map(r => ({ ...r, id: `145-current-${r.id}`, params: { ...r.params, trailPersistence: 0.85, cameraDrift: 0.5 } })),
+  ],
+};
+
 export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
+  "sweep-145-kuramoto-oscillators": PHASE_145_KURAMOTO,
+  "sweep-145-swarmalators": PHASE_145_SWARMALATORS,
+  "sweep-147-brians-brain": {
+    ...BRIANS_BRAIN, artifactId: "sweep-147-brians-brain",
+    warmupSteps: 200, multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { dyingValue: 0.5 },
+    axes: [{ key: "birthCount", values: [0, 1, 2, 3, 4, 5] },
+      { key: "seedDensity", values: [0.015, 0.035, 0.085, 0.155, 0.31, 0.52, 0.68, 0.85] }],
+    references: BRIANS_BRAIN.references.map(r => ({ ...r, id: `147-current-${r.id}`,
+      params: { ...r.params, dyingValue: r.id === "classic" ? 0.5 : 0.9 } })),
+  },
+  "sweep-147-cyclic-ca": {
+    ...CYCLIC_CA, artifactId: "sweep-147-cyclic-ca",
+    multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { stepsPerFrame: 1, seed: 0 },
+    axes: [{ key: "states", values: [3, 5, 7, 9, 17, 18, 21, 23] },
+      { key: "threshold", values: [1, 2, 3] }, { key: "neighbourhood", values: ["moore", "vonNeumann"] }],
+    references: CYCLIC_CA.references.map(r => ({ ...r, id: `147-current-${r.id}`,
+      params: { ...r.params, threshold: r.id === "crystal-lattice" ? 1 : r.params.threshold } })),
+  },
+  "sweep-147-game-of-life": {
+    ...GAME_OF_LIFE, artifactId: "sweep-147-game-of-life",
+    multiSnapshot: { warmupSteps: [200, 500, 1000] },
+    baseParams: { seedDensity: 0.28, ageShading: true },
+    axes: [{ key: "birthMin", values: [1, 2, 4] }, { key: "birthMax", values: [1, 2, 3, 4] },
+      { key: "surviveMin", values: [1, 2, 3] }, { key: "surviveMax", values: [3, 5] },
+      { key: "sparkRate", values: [0, 0.025, 0.075, 0.2] }],
+    sets: [[1, 1], [2, 2], [2, 3], [4, 4]].flatMap(([birthMin, birthMax]) =>
+      [[1, 3], [2, 3], [3, 5]].flatMap(([surviveMin, surviveMax]) =>
+        [0, 0.025, 0.075, 0.2].map(sparkRate => ({ birthMin, birthMax, surviveMin, surviveMax, sparkRate })))),
+    references: GAME_OF_LIFE.references.map(r => ({ ...r, id: `147-current-${r.id}` })),
+  },
+  "sweep-146-abelian-sandpile": SANDPILE_146,
+  "sweep-146-diffusion-limited-aggregation": DLA_146,
+  "sweep-146-ising-model": ISING_146,
+  "sweep-143-gray-scott": {
+    slug: "gray-scott", artifactId: "sweep-143-gray-scott",
+    reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 1, gridWidth: 128, gridHeight: 128, warmupSteps: 700, fluxGap: 12, dt: 1, coverageThreshold: 0.1,
+    multiSnapshot: { warmupSteps: [700, 850, 1000] },
+    baseParams: { Du: 0.2097, Dv: 0.105, stencil: "nine-point", dt: 1, stepsPerFrame: 20 },
+    axes: ["F", "k", "Dv"].map(key => ({ key, values: [] })),
+    sets: [[0.017, 0.049], [0.025, 0.060], [0.035, 0.065], [0.053, 0.0625]].flatMap(([f, k]) =>
+      [-0.0005, 0.0005].flatMap(df => [-0.00025, 0.00025].flatMap(dk => [0.085, 0.105, 0.125].map(Dv =>
+        ({ F: Number((f + df).toFixed(5)), k: Number((k + dk).toFixed(5)), Dv }))))),
+    references: GRAY_SCOTT.references.filter(r => r.id !== "u-skate").map(r => ({
+      ...r, id: `143-current-${r.id === "default-coral" ? "coral" : r.id}`, label: r.label.replace("Default (Coral)", "Coral"),
+      params: { ...r.params, stencil: "nine-point", dt: 1 },
+    })),
+  },
+  "sweep-143-belousov-zhabotinsky": {
+    slug: "belousov-zhabotinsky", artifactId: "sweep-143-belousov-zhabotinsky",
+    reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 400, fluxGap: 8, dt: 1, coverageThreshold: 0.5,
+    multiSnapshot: { warmupSteps: [400, 700, 1000] },
+    baseParams: { stepsPerFrame: 1 }, axes: ["feed", "kill", "diffusionA", "diffusionB", "diffusionC"].map(key => ({ key, values: [] })),
+    sets: [0.014, 0.026, 0.038, 0.05].flatMap(feed => [0.016, 0.028, 0.04].flatMap(kill =>
+      [[0.12, 0.12, 0.02], [0.18, 0.04, 0.08], [0.24, 0.16, 0.055], [0.3, 0.06, 0.12]].map(([diffusionA, diffusionB, diffusionC]) =>
+        ({ feed, kill, diffusionA, diffusionB, diffusionC })))),
+    references: [
+      ...BELOUSOV_ZHABOTINSKY.references.map(r => ({ ...r, id: `143-current-${r.id}` })),
+    ],
+  },
+  "sweep-143-lenia": {
+    slug: "lenia", artifactId: "sweep-143-lenia", reactionDiffusion: { methodVersion: "rd-persistence-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 260, fluxGap: 8, dt: 1, coverageThreshold: 0.1,
+    multiSnapshot: { warmupSteps: [260, 510, 760] },
+    baseParams: { dt: 0.1, stepsPerFrame: 1, seed: 0 }, axes: ["radius", "muDrift", "mu", "sigma"].map(key => ({ key, values: [] })),
+    sets: [7, 11, 15].flatMap(radius => [0, 0.008, 0.024, 0.03].flatMap(muDrift =>
+      [[0.135, 0.018], [0.165, 0.022], [0.205, 0.026], [0.245, 0.03]].map(([mu, sigma]) => ({ radius, muDrift, mu, sigma })))),
+    references: [
+      ...LENIA.references.map(r => ({ ...r, id: `143-current-${r.id}` })),
+      { id: "143-current-living-labyrinth", label: "Living labyrinth", params: { mu: 0.24, sigma: 0.028, muDrift: 0.015, dt: 0.1, radius: 14, stepsPerFrame: 1, seed: 0 } },
+    ],
+  },
+
+  "sweep-142-lorenz-attractor": LORENZ_UNEXPLORED,
+  "sweep-141-elementary-cellular-automata": {
+    slug: "elementary-cellular-automata", artifactId: "sweep-141-elementary-cellular-automata",
+    eca: { methodVersion: "eca-spacetime-v1" },
+    primaryChannel: 0, gridWidth: 128, gridHeight: 128, warmupSteps: 127, fluxGap: 1, dt: 1,
+    coverageThreshold: 0.5, baseParams: { stepsPerFrame: 1 },
+    axes: [{ key: "rule", values: Array.from({ length: 256 }, (_, i) => i) }, { key: "seedMode", values: [0, 1, 2] }],
+    references: [
+      { id: "141-current-rule-30", label: "Rule 30 chaos / kernel default", params: { rule: 30, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-90", label: "Rule 90 triangles", params: { rule: 90, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-110", label: "Rule 110 complexity", params: { rule: 110, seedMode: 0, stepsPerFrame: 1 } },
+      { id: "141-current-rule-184", label: "Rule 184 traffic", params: { rule: 184, seedMode: 1, stepsPerFrame: 2 } },
+    ],
+  },
+  "sweep-140-markus-lyapunov": MARKUS_LYAPUNOV,
+  "sweep-137-mandelbrot": MANDELBROT_BOUNDARY,
+  "sweep-139-julia-set": JULIA_CONNECTIVITY,
+  "sweep-138-burning-ship": BURNING_SHIP_BOUNDARY,
   "gray-scott": GRAY_SCOTT,
   boids: BOIDS,
   "lorenz-attractor": LORENZ,
   "clifford-dejong-clifford": CLIFFORD,
   "clifford-dejong-dejong": DEJONG,
   "clifford-dejong-svensson": SVENSSON,
+  "sweep-148-clifford-dejong-clifford": ATTRACTOR_148_CLIFFORD,
+  "sweep-148-clifford-dejong-dejong": ATTRACTOR_148_DEJONG,
+  "sweep-148-clifford-dejong-svensson": ATTRACTOR_148_SVENSSON,
   lenia: LENIA,
   "belousov-zhabotinsky": BELOUSOV_ZHABOTINSKY,
   "belousov-zhabotinsky-diffusion": BELOUSOV_ZHABOTINSKY_DIFFUSION,
@@ -723,4 +1307,8 @@ export const SWEEP_CONFIGS: Record<string, SimSweepConfig> = {
   "diffusion-limited-aggregation": DIFFUSION_LIMITED_AGGREGATION,
   "kuramoto-oscillators": KURAMOTO_OSCILLATORS,
   "particle-life": PARTICLE_LIFE,
+  "sweep-144-boids": SWEEP_144_BOIDS,
+  "sweep-144-physarum": SWEEP_144_PHYSARUM,
+  "sweep-144-particle-life": SWEEP_144_PARTICLE_LIFE,
+  "sweep-152-boids": SWEEP_152_BOIDS,
 };

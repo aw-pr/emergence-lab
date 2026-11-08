@@ -1,0 +1,182 @@
+# Stage card 144-particle-trail-missed-regimes: Missed particle and trail regimes
+
+## Metadata
+
+- **Authored:** 2026-10-30
+- **Orchestrator:** Codex planning session
+- **Worker:** Claude Sonnet 5.5
+- **Verifier:** GPT-6.1 Sol
+- **Base branch:** dev
+- **Run branch:** autometta/144-particle-trail-missed-regimes
+- **Worker effort:** medium
+- **Verifier effort:** high
+- **Requires GUI:** true
+- **Verifier panel:** false
+- **Dispatch:** serial
+- **Pairing rationale:** alternating GPT/Claude workers with independent cross-family verification. Coding tiers suffice for bounded measurement; no frontier-tier verifier or polling loop.
+- **Open decisions:** none
+- **Readiness:** Operator approved 2026-10-30; lead admission review complete. Core oracle/baseline and cross-family cold-read closure recorded below; real sweep and visual evidence remain execution deliverables.
+
+## Surfacing concern
+
+Live dev at 14029cefb4f5 has 19 sweep configs covering 16 kernels, not 18 distinct kernels. Five requested kernels lack configs; Lorenz is already covered and fractal is shared code. Historical sweep metrics can reward blur, brightness or snapshot timing. This card tests a bounded new region and retains visual evidence. See the batch report for the current Brian’s Brain resolution and Gray-Scott baseline failure.
+
+## Objective
+
+Boids: alignment/cohesion and obstacle effects outside the prior separation/visual-radius grid. Obstacle-bearing frames are a separate visually judged comparison with no numeric ranking against obstacle-free frames; fixed obstacle raster must not be called flock coherence. Physarum: evaporation/deposit and speed/sensing interaction outside the completed sensing and Root mat searches. Particle Life: friction/force and species/matrix interactions outside the prior rmax/force/bias grid. Use existing point-cloud/velocity/channel-mixing instruments with their documented limits; scale agent count by the ratio of grid cell counts for matched-density comparisons and compare full shipped population for finalists. Diversity and persistence outrank a marginal scalar score gain.
+
+Allocate up to 60 worker minutes and 30 verifier minutes per kernel/variant, with remaining time for shared checks and report integration. If measured pilot throughput cannot fit the full declared grid, stop before the full run and split/re-brief; do not silently truncate coverage. Validation budget: at most three finalists per kernel/variant, each at two resolutions and three time samples (and three seeds where supported); verifier replays the declared full grid once and these finalists, not an unlimited search.
+
+Search allowance: 48 novel sets per kernel + at most 16 refinements each. Instrument: existing density/coherence/mixing metrics plus time strips. Before measurement, the worker retains a manifest under docs/sweeps/data/2026-10-30/ with exact candidate values, all fixed parameters, the old grid/appendix ranges and source citations, inclusion/exclusion reasons, and reproduction settings. Verifier checks its ranges against the cited source, not just the worker’s novelty label. References and validation repeats are additional to these candidate counts. At most three proposed finalists per kernel/variant, plus explicit no-promotion outcomes where appropriate.
+
+## Inputs (read these in your own context)
+
+- `e2e/harness/sims.ts`
+- `e2e/harness/metrics.ts`
+- `e2e/harness/driver.ts`
+- `e2e/harness/report.ts`
+- `e2e/sweep.spec.ts`
+- `src/app/presets.ts`
+- `docs/sweeps/2026-10-30-interestingness-batch.md`
+- `src/sims/boids/kernel.ts`
+- `src/sims/physarum/kernel.ts`
+- `src/sims/particle-life/kernel.ts`
+- `docs/sweeps/boids-interestingness.md`
+- `docs/sweeps/physarum-interestingness.md`
+- `docs/sweeps/particle-life-interestingness.md`
+
+## Deliverables
+
+1. Add only the harness configuration, metric integration and supplemental implementation tests needed by this objective under `e2e/harness/` and `e2e/`; reuse existing paths.
+2. Write or append `docs/sweeps/boids-interestingness.md` in the Gray-Scott format: method, searched/not-searched axes, ranked candidates, current references, interpretation, proposed promotions and reproduction commands.
+3. Write or append `docs/sweeps/physarum-interestingness.md` in the Gray-Scott format: method, searched/not-searched axes, ranked candidates, current references, interpretation, proposed promotions and reproduction commands.
+4. Write or append `docs/sweeps/particle-life-interestingness.md` in the Gray-Scott format: method, searched/not-searched axes, ranked candidates, current references, interpretation, proposed promotions and reproduction commands.
+5. Retain complete compact result JSON under `docs/sweeps/data/2026-10-30/` and finalist/reference images under `docs/images/sweeps-2026-10-30/`, linked from the write-up.
+
+## Constraints
+
+- Work from dev; never push main or publish. No production preset/default/kernel or interface changes. Proposed presets live only in reports pending operator visual sign-off.
+- Logistic-mandelbrot is entirely out of scope, including parked branches, stages 129–136/130a and their evidence. Do not revive or alter them.
+- Do not edit scripts/git-hooks/pre-push or scripts/publish-sync.sh. Do not change queue, pause, caps, auth routes or orchestration infrastructure.
+- Preserve historical results and frozen assertions. New sweep configurations are additive, with unique artifact IDs; old configs remain reproducible with stale historical references preserved under their old IDs and corrected current-reference rows added separately.
+- New metrics are opt-in and carry a method version in results; existing scoreFrames outputs and historical configs must remain unchanged. Current shipped references get distinct new IDs when historical rows are stale.
+- Use existing driver, metrics and report helpers. No new generic sweep framework. Keep full candidate params, seed/determinism, grid, step count, metric version and iteration settings in retained evidence.
+- Metric scores shortlist candidates; they do not decide aesthetic superiority. Hull/filament/connectivity/diversity descriptions are manual visual findings with linked evidence, not new uncalibrated numerical class labels. Report non-finite output, fraction at channel endpoints and off-frame clipping explicitly; do not promote pathological output. Frozen calibration orderings are completed by the orchestrator before dispatch. Negative results are valid. No fabricated promotion quota.
+- Screenshot finalists alongside current shipped references at equal size and settings. Dynamic finalists require at least three separated frames plus a repeat at a longer horizon; stochastic finalists require three seeds where supported. Clearly distinguish grayscale field PNGs from actual app renderer screenshots.
+- Store compact ranked results and finalist screenshots under docs/sweeps/data/2026-10-30/ and docs/images/sweeps-2026-10-30/; bulky scratch output stays in e2e/artifacts/. Never rely only on git-ignored evidence for a promotion proposal.
+
+## Acceptance criteria
+
+1. Verifier: `npm run verify` passes. Planning base: PASS, 395 passed and 38 skipped kernel tests; typecheck/build green. Skips are not passes.
+2. Verifier: `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 "` completes the declared candidate list and every current reference, with no skipped sweep tests, duplicate/overwritten candidate IDs, missing metrics, non-finite scores or missing outputs. Planning base: `npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --list` exits 1, zero tests found: the new sweep entry point is intentionally absent, not a passing check. Do not use Playwright exit 0 with zero matching tests as evidence.
+3. Verifier: independently re-run the shortlisted candidates and current references, inspect screenshots/time strips at app-relevant resolution, and reproduce numeric readings from retained raw results. Use identical deterministic inputs in the same browser/runtime: require identical candidate ordering and metrics within absolute 1e-9, reporting any larger deviation as FAIL/inconclusive rather than widening tolerance. For stochastic kernels replay each explicit seed, report all three readings and their spread; three seeds are robustness evidence, not a distributional guarantee. Different-resolution visual checks are separate, not exact numeric replays. Missing evidence is FAIL; a visually weak but honestly measured negative finding may PASS.
+4. Verifier: `git diff --name-only` and `git diff -- src scripts state` demonstrate scope compliance; review the retained manifest against every reported claim. No production code/default, parked-arc, queue or budget changes are permitted.
+5. Verifier: run the new frozen contract and `scripts/check-contract-test-gate.sh --worktree`; digest violations fail. The baseline command is `npx playwright test e2e/sweep.spec.ts -g "metrics harness|non-phase|multi-snapshot summary|Lorenz multi-snapshot|circular autocorrelation"`. Planning result: 4 passed, 1 known Gray-Scott exact-literal failure, 1 opt-in skipped. Before card 143 lands, this precise known failure may remain only if independently reproduced unchanged; it is not a new acceptance failure or a whole-suite PASS. After 143 lands, its repaired explicit-five-point and added nine-point regressions must pass. Never silently change old expected literals or frozen assertions.
+6. Operator: promotion is a separate visual sign-off after reading the images and candidate parameters. Stage PASS accepts research/harness work on dev only, not a production preset change.
+
+## Contract test
+
+- **Test file:** e2e/sweep-144.contract.spec.ts
+- **Assertions digest:** sha256:938096dea7a0504c827e3fb4aa867fcab2014764977b5c4bf01dffcb6be3ba0b
+- **Oracle proof:** On dev source `14029cefb4f5`, the isolated node-side oracle run exits 1 with 2 intended failures (new config and retained results absent), 2 passing controls. No browser/server was started. Evidence validator positive fixture and negative mutations (missing candidate, non-finite score, mismatched params, empty references/images, duplicate IDs and invalid PNG) pass; source/historical-config/legacy-score invariants pass. This proves the evidence seam, not a reference sweep implementation. Full scientific/visual positive proof is deliberately left to the bounded worker attempt and independent verifier; no missing output earns PASS.
+
+Execute `SWEEP_CONTRACT=144 npx playwright test e2e/sweep-144.contract.spec.ts`. The stage selector is required; default skips prevent future-card contracts from failing unrelated e2e runs. Acceptance requires every selected oracle test to execute, with no skips. The frozen block contains all assertions and helper/fixture logic; workers may add separate supplemental tests, never edit it.
+
+### Retained evidence seam
+
+Each new config has slug matching its kernel and artifactId `sweep-144-<slug>`. Preserve all 19 original configs; put refreshed current references in the new config. Expand the config in declaration order. Store `docs/sweeps/data/2026-10-30/144/<slug>.json` with:
+
+- `manifest`: slug, nonempty methodVersion, grid {width,height}, warmupSteps, fluxGap, positive dt, exact reproduction command containing the stage sweep selector, candidates [{id,params}] in expanded-config order, and nonempty priorCoverage [{source,description}] pointing to existing repo-relative source/report files.
+- `ranked` and `references`: existing {id,label,params,metrics} rows. Ranked candidates match every manifest ID and full params once, with finite numeric readings and descending finite score. Reference IDs/params match the new config's references; each reference thumb is a retained repo-relative PNG path.
+- `finalists`: 1–3 evidence selections (not compulsory promotions), each {id,images} with three distinct frame PNG paths under `docs/images/sweeps-2026-10-30/`. Negative results may show the best rejected candidate. Images are at least 128×128. The report contains a 2026-10-30 section linking `144/<slug>.json`.
+
+The executable checks validate PNG signature/IHDR and provenance links, not aesthetic merit, actual distinct frame content, correctness of declared novelty, all current presets, or independent numerical reproduction. Criterion 3 assigns those checks to the independent verifier with the exact retained inputs and current app. Criterion 6 remains operator-owned visual sign-off. `npm run verify`, the named sweep, historical browser regressions, and `scripts/check-contract-test-gate.sh --worktree` are separate mandatory checks. Scope diff review additionally covers runtime/state changes that are not tracked source. Missing supplemental evidence is FAIL.
+
+Boids and Particle Life retain pointCloud opt-ins in their new configs. Physarum and Particle Life candidates include explicit finite seed values. Boids deterministic seed handling is inherited from its kernel; no nonexistent seed input is invented.
+
+## Out of scope
+
+Production presets, defaults, kernel repairs, new simulations, orchestration changes, release/deployment and logistic-mandelbrot. Do not add a fake fractal kernel or count its shared helper as a separate simulation. Do not repeat old grids except references/calibration needed for valid comparisons.
+
+## Budget
+
+- **Worker wall-clock:** 240 minutes
+- **Verifier wall-clock:** 180 minutes
+- **Spend basis:** historical stages 58–86: worker median 1.730M and verifier median 1.331M cached-inclusive tokens; plan 6.121M per pair for this multi-kernel/variant card (2× the historical pair median), no automatic retry. Batch prep allowance 4M; one 11.256M p95-pair reserve is not permission to spend or change runtime caps.
+
+## Dispatch envelope
+
+Return exact commands/exits, attempted/completed counts, candidate parameters, current-reference provenance, raw-data and image paths, numeric replay results and manual visual findings. State PASS/FAIL/partial honestly. Stop at wall-clock or unresolved evidence failure; preserve work and request an operator decision rather than requeueing. Use the repository dispatch-envelope schema.
+
+## Family-specific notes
+
+Both roles need browser access, including headless Chromium. Subscription CLI routes remain unchanged. Reserve port 5173 for the serial sweep worker/verifier only after checking no listener exists. Start Vite from that run worktree, run browser checks, and stop only that owned server. Do not reuse an existing server, change port plumbing or stop another preview. An occupied port blocks admission until the operator resolves it. Planning baseline ran with no prior 5173 listener.
+
+## Readiness review
+
+Seat check and scope review completed in planning. Serial dispatch prevents overlap; 138 and 139 additionally require 137 landed on dev, not merely a worker PASS. Other cards can record their own outcomes without a false dependency on an unrelated earlier success. Shared harness consumers read: scoreOne/runSweep, summarizeMetrics, metricsTable, driver extraction, configs and relevant kernels. Claims are deliberately serial because these paths overlap. Base verify and five selected browser checks executed on 14029cefb4f5. New command discovery was run and returned the intended absence. The frozen oracle has a validated positive/negative evidence fixture and intended-red new-outcome probes; see Contract test. Worker/verifier must supply the actual sweep evidence before PASS. Claude Sonnet 5.5 read this card in a fresh tool-disabled cold session. Findings and responses are in the batch report. Frozen core assertions and exact-manifest correspondence checks are present. The lead still owns final admission/cold-read closure, and independent visual/scientific replay remains mandatory.
+
+### Lead admission closure — 2026-10-30
+
+Operator scope and conditional-unpause approval is recorded in the batch report. The final Claude Sonnet 5.5 cold read found the card/core feasible, subject to live type/schema and dependency checks, now closed by the lead. Explicit new-sweep discovery returned exit1/no matching tests on the unchanged base: intended missing implementation, not a successful run. Oracles are opt-in and baseline failures identify missing new outcomes; positive checker controls and protected-source/historical-config regressions pass. Strict card lint and recorded digest verification pass. Runtime scientific replay, image content, current-reference completeness and novelty remain mandatory independent-verifier evidence; no core-only PASS is acceptable. The operator's preset promotion decision is after research acceptance and must not be mistaken for a prerequisite to recording an honest negative result.
+
+The project TypeScript gate passes; its existing scope excludes e2e. Playwright parsed all twelve new specs (46 tests, all dormant without selection), and explicit node-only oracle runs exercise the frozen checkers. An additional standalone TypeScript check was unavailable because the existing checkout has no @types/node; no dependency/tooling change is commissioned for this extra check. Names and shapes were checked against existing harness/kernel source. The Lorenz `spread.score` is `{min,max,standardDeviation}`, so an equilibrium spread of zero remains a truthy object; a live five-identical-snapshot probe confirms this. Brian's Brain's firing threshold is 0.99 and attractor map enums are clifford/dejong/svensson in current source.
+
+Only 138/139 consume a new dependency: native Depends on checks completed status plus landed commit ancestry and refuses awaiting integration. All other cards remain serial without false success dependencies. Keep production source and protected scripts unchanged throughout this batch; their frozen hashes intentionally detect concurrent edits too. Stop for a real conflict rather than changing a digest or widening scope.
+
+## Re-brief 1 — 2026-10-31 operator-authorised retry
+
+The operator authorised requeueing the four failed cards after repair preparation. Existing acceptance criteria, frozen blocks/digests, scope and promotion authority remain unchanged. Dispatch stays serial: these cards share harness/spec paths and browser port 5173. The existing queue order places these retries after the current active card and before the remaining pending batch; card 149 remains the final collation.
+
+Preserved attempt: `b311c87ff44fef2b99b26ced79c85737b10bcee2`. Original verifier, envelope and stage record are archived under `state/archive/2026-10-31-interestingness-retry/144-particle-trail-missed-regimes/` in the primary checkout. Read that verifier before editing. Restore only this attempt’s deliverable diff onto the fresh dev base, resolving shared harness additions additively; never replace entire shared files with the old snapshot or import old cards/scripts/state. Keep previously landed stages intact.
+
+Complete supplemental evidence while retaining the exact-reproduced sweeps (5168 numeric fields and 58 PNGs). Capture actual app-renderer screenshots, larger-grid time samples/images and full shipped-population comparisons: Boids 17777; Particle Life shipped presets 6000/5000/12000 as applicable. Measure Physarum at the actual recorded viewport-dependent grid. Correct sensorDistance=3 count to 24; explain Particle Life channel 0 as summed red contributions rather than species-0 density; distinguish historical Boids 2500 calibration from shipped count. Do not relabel grayscale field images as app screenshots.
+
+The orchestrator repairs the shared contract-gate SIGPIPE false negative before retry admission. Use the repaired gate from the new base; do not change card 111, markers, assertions or digests, and do not exempt the gate. Reproduce the reported defect before/after the targeted repair, run cheap verification and frozen contract once, and retain the earlier accepted artifacts. Every original acceptance criterion still needs evidence: the verifier may cite the archived passing evidence where the restored implementation and evidence are unchanged; changed scientific paths require fresh replay. Report missing evidence honestly. No automatic retry or cap increase is authorised.
+
+## Re-brief 2 — 2026-11-01 authorised repair
+
+Operator authorised the repair sequence146,148,144. Existing acceptance criteria, frozen blocks/digests and production scope remain unchanged. Cross-family pairing stays as declared;146 is a bounded repair at medium effort. Dispatch remains serial because the harness and browser resources overlap.
+
+Restore only the deliverable diff from preserved `3c44fa828300f56a13d1e68a2e6db80a44df2497` onto current dev, merging shared harness additions without overwriting landed work. Archived verdict/envelope/logs: `state/archive/2026-11-01-repairs/144-particle-trail-missed-regimes/` in the primary checkout. Read the archived verifier first. Preserve failed evidence and distinguish regenerated values from retained accepted evidence.
+
+Repair the new density and clock evidence, retaining the original accepted sweep artifacts. Record requested AND effective particle populations from the actual kernel; assert effective population before accepting density matches. Particle Life caps at20000, so105469 is invalid. Select supported comparison grids/populations that genuinely maintain density within the existing cap, alongside separate full shipped-population app comparisons. Record actual renderer grid and viewport; do not raise production caps or silently substitute a clamped population. Use a deterministic fixed-step kernel-to-Renderer snapshot path (reuse the landed143 harness facilities where suitable), with exact dt and actual kernel-call count. The interactive iteration counter is not a kernel-call count for particle renderers. Validate same-seed repeated capture equality and compare screenshot state against the measured state. Regenerate affected numeric/visual/time/seed evidence and correct the report's repeatability claims. Run the complete six-test sweep selector and independent supplemental replay, not just test discovery. If the existing density and app-resolution requirements cannot both be met with a supported grid, report the concrete conflict instead of weakening a criterion.
+
+Run cheap repository verification, the frozen oracle and contract gate once on the repaired tree. The verifier must independently check the corrected scientific path and every changed claim; matching the worker's own faulty calculation is not an independent correctness check. Unchanged previously accepted evidence may be cited only after proving its code/data are unchanged. Every original acceptance criterion remains mandatory; no tolerance, scope or promotion gate changes and no automatic retry.
+
+
+## Re-brief 3 — 2026-11-02 interrupted-attempt completion
+
+Operator authorised recommended escalation recovery without routine approval on 2026-11-01. Resume latest preserved `1bd0093e8426ccdaf41b077dd476e0d1535573cc` (attempt 3), not the superseded attempt-2 WIP in Re-brief 2. Restore only its deliverable diff onto current dev; preserve all landed 146/148 work and current stage metadata. The prior worker exited without an envelope and the stage was preserved as stalled. No verifier accepted this attempt, so worker assertions alone are not scientific acceptance.
+
+Primary-checkout archive `state/archive/2026-11-02-144-stalled/` retains stage/budget snapshots, worker log and surviving test logs. `app.log` records three supplemental tests PASS (Boids 1.7h, Physarum 7.6min, Particle Life 42min; total 2.5h). `main.log` records Boids and Physarum PASS but no final Particle Life result or suite exit. Treat that run as incomplete. Retain those outputs and their provenance; never label the interrupted suite PASS. The previous failed verifier is archived under `state/archive/2026-11-01-repairs/144-particle-trail-missed-regimes/`.
+
+The latest WIP already implements fixed-step kernel-to-Renderer capture, requested/effective populations, same-seed/state-hash assertions and supported Particle Life density matching (19820 on 329x329), and updates three reports. Inspect it before rewriting anything. Finish the missing execution/evidence and check reports against retained JSON. Do not blindly regenerate the completed supplemental images during development; preserve them for comparison. Cheap gates must pass on the final tree. The complete six-test selector and independent supplemental replay remain acceptance requirements; no prior worker-only result substitutes for verifier evidence.
+
+Plan execution inside unchanged 240-minute worker / 120-minute verifier limits. Independent test cases may use Playwright workers to avoid the known 2.5-hour serial supplemental run; keep each case's inputs, candidate list, seed, grid, steps, assertions and outputs unchanged, and verify no output collision. The existing four-page per-test parallelism can contend with extra workers: measure and choose a bounded schedule before launching. Use existing helpers, not a new sweep framework. No scientific thinning, production cap changes, tolerance changes or frozen edits. If throughput still prevents completion, preserve partial work and give exact completed/missing tests, timings and a fresh envelope before exiting; do not disappear into an unbounded background wait. Stop owned browsers/processes on exit. Record spent usage honestly; archived attempts are retained even if stage counters restart.
+
+
+## Re-brief 4 — 2026-11-02 viewport provenance and complete claim audit
+
+Continue under the operator's standing recommended-recovery approval. Restore latest preserved `0103e0d9a03e6bc7808fa0b88d2cde9ff80c5233` (attempt 4), retaining current dev and this card. Read the latest verifier in the primary checkout archive `state/archive/2026-11-02-144-viewport/` before making edits. The previous worker left report review and full-selector execution incomplete. Do not repeat that handoff without first exhausting this bounded repair's work. Criteria, frozen digest, production scope and time limits remain unchanged.
+
+Fix the concrete provenance defect: s144Snapshot changes viewport but the writer reports a constant 1280x800. Return and retain actual `page.viewportSize()` for each capture/row, alongside the separate canvas CSS dimensions, renderer grid and DPR. Shipped captures were probed at 960x600; matched-density Particle Life was 400x329 viewport with a 329x329 grid. Measure, do not assume those constants cover every row. Remove or accurately qualify the misleading top-level viewport. Correct all three report supplements from the actual retained metadata. Preserve old metadata and images in the prior WIP/archive; do not silently relabel an unproven past capture. Identical numerical/image outputs may be retained only with demonstrated unchanged inputs and actual-capture provenance.
+
+Before expensive reruns, audit ALL three reports against code and retained JSON, including Method sections that incorrectly call the broad selector three tests/about 27 minutes. Distinguish the three main tests from the three supplemental tests and record honest measured runtimes. Add the card-required explicit off-frame clipping assessment using the kernel/renderer boundary behaviour and inspected images; border-to-mean density is not a clipping measurement. Do not invent a new score, assert zero clipping without evidence, or substitute wrap behaviour for visual inspection. Link the retained Boids obstacle images directly to make the review complete. Check every population, viewport, clock, seed, step count and image/table claim before another verifier spends on the full run.
+
+First reproduce the viewport defect with a cheap representative live probe, then prove the fix for shipped and matched-density rows. Run cheap gates once on the final tree. Execute the full six-test selector with a bounded parallel schedule, no missing/skipped cases, and record its actual exit/counts. Retain prior successful evidence for comparison, not as a claim that this full execution already happened. The independent verifier must complete numeric/seed replay and temporal/visual inspection, including the supplemental path, within the unchanged 120-minute allowance. Prior one-step probes do not establish long-horizon acceptance. If a concrete throughput conflict prevents completion, return an explicit partial envelope with timings and missing checks before the deadline. No scope reductions, tolerance changes, production cap changes or frozen edits. The existing failure cap is not to be reset.
+
+
+## Re-brief 5 — 2026-11-02 approved timeout recovery
+
+Operator explicitly approved one recovery attempt, a 180-minute verifier allowance instead of 120 minutes, and clearing the current failure-cap halt. This supersedes the earlier 120-minute references and prohibition on clearing that existing halt for this admission only. Worker allowance stays 240 minutes. Token cap and recorded spend remain unchanged; no automatic repeat after another failure. Stage 145 remains deferred. Preparation allowance is 15 minutes; estimate 3M worker and 30–40M verifier cached-inclusive tokens from the latest 2.15M/29.88M attempt, within the existing run cap.
+
+Restore only the deliverable diff from preserved `616d6bd8b4fd332c62be94221a01ce95ed418463` (`wip/144-particle-trail-missed-regimes-attempt-5`) onto current dev. Preserve landed work and this card. The primary checkout archive `state/archive/2026-11-02-144-timeout/` retains the latest verdict, envelope, logs and state/budget snapshots. Read that verdict first. Scope of the repair against the preserved deliverables is the three existing sweep reports; retain scientific code, JSON and PNG evidence unchanged. If a code change appears necessary, stop and describe it rather than expanding this repair.
+
+Correct and audit these three report findings against retained data and images: (1) Boids prose must not group two finalists as scoring 0.88–0.89 when the first matched-density finalist has time scores 0.5242303905039241, 0.7733240547052155 and 0.4303053685049905. (2) Particle Life's blanket claim that no shipped-population finalist is distinguishable from references is too broad: the species-8 t600 image shows clumps against sparse Cells. Describe this difference without claiming superiority or removing seed/horizon fragility. (3) Qualify the earlier Physarum 384-square/31500-agent example with the measured 960x600 grid and 123047-agent density match. Check surrounding claims for consistency.
+
+Baseline evidence: repository verification, frozen contract (4 passed), digest gate, historical regressions and scope passed in the archived cross-family verdict. All 142 PNGs reproduced byte-for-byte; 5168 main-result numeric fields, 571 Physarum app fields and 533 Particle Life app fields matched exactly. Six representative rows independently reproduced 18 state hashes and 120 metrics. These results are retained evidence, not a complete six-test PASS. The previous verifier's 6000000 ms suite deadline produced five passed tests and one unfinished Boids app case. Two matched-density rows (alignment0.15/cohesion0/initialFlocks6 and alignment0.01/cohesion0/initialFlocks1, 36000 agents) did not finish their metrics; the complete Boids app JSON comparison is missing.
+
+Worker: reproduce the wording defects from the data, repair the reports, verify that code/data/images are unchanged against the preserved attempt, and run cheap repository verification, frozen contract and digest gate once. Cite prior execution accurately; do not regenerate accepted evidence merely for prose. Verifier: independently check every corrected claim, cheap gates and unchanged evidence; complete the full six-test selector and file-wide numeric replay, including all Boids supplemental rows. Use the existing three-worker fully-parallel schedule if resource checks support it; allow up to 9600000 ms (160 minutes) for the suite, reserving 20 minutes within the approved 180-minute total for checks and reporting. Keep inputs, seeds, populations, steps, assertions, tolerance and outputs unchanged. Preserve retained files during replay and compare generated results rather than overwriting provenance. Reuse prior complete visual inspection only after proving image bytes unchanged.
+
+The 180-minute total is the approved verifier allocation across the three kernels and shared checks, superseding the earlier per-kernel scheduling guidance for this retry. No scientific criterion or frozen assertion/digest changes. Missing execution remains FAIL; a timeout is not a tolerance failure or a PASS. Stop owned processes and report exact complete/missing evidence before the deadline. No further retry, cap increase, production promotion, deployment or publication is authorised.

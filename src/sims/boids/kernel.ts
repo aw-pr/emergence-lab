@@ -31,17 +31,19 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_BOID_COUNT = 17777;
-const DEFAULT_VISUAL_RADIUS = 25;
-const DEFAULT_SEPARATION_RADIUS = 8;
+const DEFAULT_BOID_COUNT = 28000;
+const DEFAULT_VISUAL_RADIUS = 14;
+const DEFAULT_SEPARATION_RADIUS = 27;
 const DEFAULT_MAX_SPEED = 36;
 const DEFAULT_ALIGNMENT = 0.09;
 const DEFAULT_COHESION = 0.011;
 const DEFAULT_SEPARATION = 0.22;
 const DEFAULT_POINT_SIZE = 4;
-/** Matches the native viewer's spec: six ring-arranged flocks at load, so the
- * first frames read as flocking rather than a uniform speckle. */
-const DEFAULT_INITIAL_FLOCKS = 6;
+/** Ring-arranged flocks at load, so the first frames read as flocking rather
+ * than a uniform speckle. */
+const DEFAULT_INITIAL_FLOCKS = 8;
+/** Radians each ring flock aims off the centre, all to the same side. */
+const FLOCK_AIM_SKEW = 0;
 const MAX_BOID_COUNT = 40000;
 /** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
  * from freezing into rigid crystalline order, but too much washes the flocking
@@ -49,8 +51,11 @@ const MAX_BOID_COUNT = 40000;
 const WANDER_STRENGTH = 0.05;
 /** Skip spatial binning below this count (brute force is cheaper for small flocks). */
 const BINNING_MIN_BOIDS = 256;
-/** Cap neighbours considered per boid so huge flocks stay O(N) and never freeze the tab. */
+/** Preserve the original small-world brute-force steering. */
 const NEIGHBOUR_LIMIT = 48;
+/** Bound distance checks, not accepted neighbours, across the whole neighbourhood. */
+const NEIGHBOUR_CANDIDATES = 72;
+const MIN_SPEED_FRACTION = 0.7;
 const CHANNEL_COUNT = 4;
 const TWO_PI = Math.PI * 2;
 export const OBSTACLE_RENDER_MARGIN = 3;
@@ -260,7 +265,7 @@ function obstacleLayoutParam(params: SimParams): ObstacleLayout {
   return typeof value === "string" &&
     (OBSTACLE_LAYOUTS as readonly string[]).includes(value)
     ? (value as ObstacleLayout)
-    : "reef";
+    : "none";
 }
 
 function mulberry32(seed: number): () => number {
@@ -384,7 +389,7 @@ export class BoidsKernel implements SimKernel {
       key: "obstacleLayout",
       label: "Obstacle layout",
       type: "enum",
-      default: "reef",
+      default: "none",
       options: OBSTACLE_LAYOUTS,
       group: "Obstacles",
       info: "Static breakwaters, rocks, or a broken reef split the flock into persistent streams and heading domains. Dropped boulders sit over every layout and survive layout changes. Custom provides an empty preset beneath them, while None leaves only the dropped boulders. Changing the layout resets the flock.",
@@ -509,8 +514,11 @@ export class BoidsKernel implements SimKernel {
   private vy = new Float32Array(0);
   private nextVx = new Float32Array(0);
   private nextVy = new Float32Array(0);
-  private binHead = new Int32Array(0);
-  private binNext = new Int32Array(0);
+  private binStarts = new Int32Array(0);
+  private binCursor = new Int32Array(0);
+  private binItems = new Int32Array(0);
+  private boidBins = new Int32Array(0);
+  private neighbourBins = new Int32Array(9);
   private stepCounter = 0;
   private seed = 0;
   private initialFlocks = DEFAULT_INITIAL_FLOCKS;
@@ -521,7 +529,7 @@ export class BoidsKernel implements SimKernel {
   private alignment = DEFAULT_ALIGNMENT;
   private cohesion = DEFAULT_COHESION;
   private separation = DEFAULT_SEPARATION;
-  private obstacleLayout: ObstacleLayout = "reef";
+  private obstacleLayout: ObstacleLayout = "none";
   private obstacleAmount = 0.5;
   private presetObstacles: Obstacle[] = [];
   private obstacles: Obstacle[] = [];
@@ -608,8 +616,14 @@ export class BoidsKernel implements SimKernel {
       this.vy = new Float32Array(this.boidCount);
       this.nextVx = new Float32Array(this.boidCount);
       this.nextVy = new Float32Array(this.boidCount);
-      this.binNext = new Int32Array(this.boidCount);
+      this.binItems = new Int32Array(this.boidCount);
+      this.boidBins = new Int32Array(this.boidCount);
     }
+
+    const binCount = Math.floor(this.width / this.visualRadius) *
+      Math.floor(this.height / this.visualRadius);
+    this.binStarts = new Int32Array(binCount + 1);
+    this.binCursor = new Int32Array(binCount);
 
     this.stepCounter = 0;
     this.seedBoids();
@@ -717,29 +731,47 @@ export class BoidsKernel implements SimKernel {
 
   private computeForcesBinned(cols: number, rows: number): void {
     const binCount = cols * rows;
-    if (this.binHead.length !== binCount) {
-      this.binHead = new Int32Array(binCount);
-    }
-    this.binHead.fill(-1);
+    const starts = this.binStarts;
+    const cursor = this.binCursor;
+    const items = this.binItems;
+    const bins = this.boidBins;
+    starts.fill(0);
 
     const binWidth = this.width / cols;
     const binHeight = this.height / rows;
-    const binNext = this.binNext;
 
     for (let i = 0; i < this.boidCount; i += 1) {
       const col = Math.min(cols - 1, Math.floor(this.x[i] / binWidth));
       const row = Math.min(rows - 1, Math.floor(this.y[i] / binHeight));
       const bin = row * cols + col;
-      binNext[i] = this.binHead[bin];
-      this.binHead[bin] = i;
+      bins[i] = bin;
+      starts[bin + 1] += 1;
+    }
+    for (let bin = 0; bin < binCount; bin += 1) {
+      starts[bin + 1] += starts[bin];
+      cursor[bin] = starts[bin];
+    }
+    for (let i = 0; i < this.boidCount; i += 1) {
+      items[cursor[bins[i]]++] = i;
     }
 
     const visualRadiusSq = this.visualRadius * this.visualRadius;
     const separationRadiusSq = this.separationRadius * this.separationRadius;
 
     for (let i = 0; i < this.boidCount; i += 1) {
-      const col = Math.min(cols - 1, Math.floor(this.x[i] / binWidth));
-      const row = Math.min(rows - 1, Math.floor(this.y[i] / binHeight));
+      const col = bins[i] % cols;
+      const row = Math.floor(bins[i] / cols);
+      let candidates = 0;
+      let cell = 0;
+      for (let dr = -1; dr <= 1; dr += 1) {
+        const nr = (row + dr + rows) % rows;
+        for (let dc = -1; dc <= 1; dc += 1) {
+          const nc = (col + dc + cols) % cols;
+          const bin = nr * cols + nc;
+          this.neighbourBins[cell++] = bin;
+          candidates += starts[bin + 1] - starts[bin];
+        }
+      }
 
       let neighborCount = 0;
       let avgVx = 0;
@@ -749,36 +781,40 @@ export class BoidsKernel implements SimKernel {
       let repelX = 0;
       let repelY = 0;
 
-      neighbours: for (let dr = -1; dr <= 1; dr += 1) {
-        const nr = (row + dr + rows) % rows;
-        for (let dc = -1; dc <= 1; dc += 1) {
-          const nc = (col + dc + cols) % cols;
-          let j = this.binHead[nr * cols + nc];
-          while (j !== -1) {
-            if (j !== i) {
-              const dx = torusDelta(this.x[i], this.x[j], this.width);
-              const dy = torusDelta(this.y[i], this.y[j], this.height);
-              const distanceSq = dx * dx + dy * dy;
-              if (distanceSq <= visualRadiusSq) {
-                neighborCount += 1;
-                avgVx += this.vx[j];
-                avgVy += this.vy[j];
-                centerX += dx;
-                centerY += dy;
+      // A random phase on an evenly spaced sample gives every candidate the
+      // same inclusion probability, including those in the last scanned cell.
+      const samples = Math.min(candidates, NEIGHBOUR_CANDIDATES);
+      const stride = candidates / samples;
+      const phase = hashAngle(i ^ this.seed, this.stepCounter) / TWO_PI;
+      cell = 0;
+      let bin = this.neighbourBins[cell];
+      let preceding = 0;
+      let end = starts[bin + 1] - starts[bin];
+      for (let sample = 0; sample < samples; sample += 1) {
+        const offset = Math.floor((sample + phase) * stride);
+        while (offset >= end) {
+          preceding = end;
+          bin = this.neighbourBins[++cell];
+          end += starts[bin + 1] - starts[bin];
+        }
+        const j = items[starts[bin] + offset - preceding];
+        if (j !== i) {
+          const dx = torusDelta(this.x[i], this.x[j], this.width);
+          const dy = torusDelta(this.y[i], this.y[j], this.height);
+          const distanceSq = dx * dx + dy * dy;
+          if (distanceSq <= visualRadiusSq) {
+            neighborCount += 1;
+            avgVx += this.vx[j];
+            avgVy += this.vy[j];
+            centerX += dx;
+            centerY += dy;
 
-                if (distanceSq < separationRadiusSq && distanceSq > 0) {
-                  const distance = Math.sqrt(distanceSq);
-                  const strength = (this.separationRadius - distance) / distance;
-                  repelX -= dx * strength;
-                  repelY -= dy * strength;
-                }
-
-                if (neighborCount >= NEIGHBOUR_LIMIT) {
-                  break neighbours;
-                }
-              }
+            if (distanceSq < separationRadiusSq && distanceSq > 0) {
+              const distance = Math.sqrt(distanceSq);
+              const strength = (this.separationRadius - distance) / distance;
+              repelX -= dx * strength;
+              repelY -= dy * strength;
             }
-            j = binNext[j];
           }
         }
       }
@@ -793,6 +829,15 @@ export class BoidsKernel implements SimKernel {
         repelX,
         repelY,
       );
+      // Alignment averages opposing velocities; restore propulsion without
+      // imposing a heading or changing the small-population steering path.
+      const speed = Math.hypot(this.nextVx[i], this.nextVy[i]);
+      const minimum = this.maxSpeed * MIN_SPEED_FRACTION;
+      if (speed > 0 && speed < minimum) {
+        const scale = minimum / speed;
+        this.nextVx[i] *= scale;
+        this.nextVy[i] *= scale;
+      }
     }
   }
 
@@ -1037,8 +1082,10 @@ export class BoidsKernel implements SimKernel {
     this.vy = new Float32Array(0);
     this.nextVx = new Float32Array(0);
     this.nextVy = new Float32Array(0);
-    this.binHead = new Int32Array(0);
-    this.binNext = new Int32Array(0);
+    this.binStarts = new Int32Array(0);
+    this.binCursor = new Int32Array(0);
+    this.binItems = new Int32Array(0);
+    this.boidBins = new Int32Array(0);
     this.presetObstacles = [];
     this.obstacles = [];
     this.obstacleRaster = new Uint8Array(0);
@@ -1635,8 +1682,8 @@ export class BoidsKernel implements SimKernel {
   }
 
   /** Ported from the native viewer's seedClusteredBoids: flocks start as
-   * tight discs on a ring about the centre, each already heading tangentially,
-   * so heading-hue colour reads as coherent lanes from the first frame. */
+   * tight discs on a ring about the centre, each already heading just off the
+   * centre, so the flocks converge and heading-hue colour reads from frame one. */
   private seedClusteredBoids(random: () => number): void {
     const count = this.initialFlocks;
     const centreX = this.width * 0.5;
@@ -1653,7 +1700,10 @@ export class BoidsKernel implements SimKernel {
         (TWO_PI * flock) / count + (random() - 0.5) * 0.16;
       centresX[flock] = centreX + Math.cos(ringAngle) * ringX;
       centresY[flock] = centreY + Math.sin(ringAngle) * ringY;
-      headings[flock] = ringAngle + Math.PI / 2 + (random() - 0.5) * 0.35;
+      headings[flock] =
+        Math.atan2(centreY - centresY[flock], centreX - centresX[flock]) +
+        FLOCK_AIM_SKEW +
+        (random() - 0.5) * 0.35;
     }
 
     for (let i = 0; i < this.boidCount; i += 1) {

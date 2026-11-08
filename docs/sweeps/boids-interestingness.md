@@ -144,3 +144,265 @@ settled fact; and boids has prior form — a stage-15 regime change passed
 numerically but stalled on its browser check for a full re-brief cycle, so any
 future boids recommendation must go through the visual/browser gate, not
 numbers alone.
+
+## 2026-10-30 — missed regimes sweep (stage 144)
+
+Retained evidence: [`144/boids.json`](data/2026-10-30/144/boids.json) (manifest, all 48 ranked rows, references, finalists, validation, diagnostics) and [`144/boids.manifest.json`](data/2026-10-30/144/boids.manifest.json) (written before measurement). Method version `particle-trail-regimes-v1`; composite unchanged (`scoreFrames`); diagnostics are pathology guards only.
+
+### Method
+
+Config `sweep-144-boids` in `e2e/harness/sims.ts` (additive; the historical config is unchanged). Reproduce with `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 boids"` (the stage selector `-g "sweep 144 "` runs six tests: three main sweeps and three app-evidence supplements, 6 passed in 1.1 h wall-clock with `--workers=3 --fully-parallel`; this kernel: main test 9.0 min, supplemental test 1.0 h). alignment {0.01, 0.15, 0.2, 0.25} × cohesion {0, 0.03, 0.04, 0.05} × initialFlocks {1, 6, 12} = 48 sets, all retained. Pinned: boidCount 2500, visualRadius 36, separationRadius 6, separation 0.2, maxSpeed 16, pointSize 6, obstacleLayout none (grid 200×200, 220 warmup steps, flux gap 6, smoothed point-cloud instrument, blur 6, threshold 0.25, velocity channels 2/3 — identical to the 2026-09-01 instrument). Scale rule for the second-resolution check: population × 2.25 for a 1.5× grid.
+
+### Searched / not searched
+
+Not searched: visualRadius, separation, separationRadius, maxSpeed (pinned at the shipped Balanced flock values) and boidCount (pinned at the historical 2500 calibration, not the shipped 17 777), obstacleAmount, and any alignment/cohesion value in the earlier grid (alignment 0.06 and cohesion 0.012 were the previous pinned values; none is repeated except as the Balanced reference). Obstacles were *not* ranked: they appear only as the visual comparison below.
+
+Prior coverage this was built against: 2026-09-01 grid: visualRadius {16,24,32,44,56} x separation {0.1,0.2,0.35,0.55} x separationRadius {5,8,12}; alignment 0.06, cohesion 0.012, maxSpeed 16, boidCount 2500 and obstacleLayout none pinned. Not searched: alignment, cohesion, initialFlocks.
+
+### Ranked candidates (top 10 of 48)
+
+| rank | set | score | entropy | autocorr | coverage | flux | velocityCoherence |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 | `alignment0.25_cohesion0_initialFlocks12` | 0.923 | 0.849 | 0.984 | 0.577 | 0.136 | 0.986 |
+| 2 | `alignment0.15_cohesion0_initialFlocks6` | 0.922 | 0.852 | 0.979 | 0.706 | 0.150 | 0.984 |
+| 3 | `alignment0.01_cohesion0_initialFlocks1` | 0.912 | 0.840 | 0.971 | 0.760 | 0.159 | 0.865 |
+| 4 | `alignment0.01_cohesion0_initialFlocks6` | 0.912 | 0.842 | 0.969 | 0.799 | 0.167 | 0.881 |
+| 5 | `alignment0.15_cohesion0_initialFlocks1` | 0.912 | 0.842 | 0.969 | 0.803 | 0.156 | 0.981 |
+| 6 | `alignment0.2_cohesion0_initialFlocks6` | 0.910 | 0.829 | 0.976 | 0.690 | 0.140 | 0.983 |
+| 7 | `alignment0.01_cohesion0_initialFlocks12` | 0.909 | 0.832 | 0.972 | 0.747 | 0.153 | 0.861 |
+| 8 | `alignment0.25_cohesion0_initialFlocks6` | 0.908 | 0.827 | 0.973 | 0.672 | 0.139 | 0.984 |
+| 9 | `alignment0.2_cohesion0_initialFlocks1` | 0.900 | 0.809 | 0.973 | 0.707 | 0.132 | 0.984 |
+| 10 | `alignment0.25_cohesion0_initialFlocks1` | 0.897 | 0.796 | 0.981 | 0.531 | 0.124 | 0.985 |
+
+Full 48-row ranking, metrics and exact parameters are in the retained JSON. Scores shortlist candidates; they do not decide aesthetic superiority.
+
+### Current references (corrected shipped presets, new ids)
+
+| rank | set | score | entropy | autocorr | coverage | flux | velocityCoherence |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| ref | `144-current-balanced-flock` | 0.918 | 0.837 | 0.984 | 0.519 | 0.198 | 0.994 |
+| ref | `144-current-tight-flock` | 0.429 | 0.361 | 1.002 | 0.072 | 0.099 | 0.997 |
+| ref | `144-current-scatter` | 0.908 | 0.825 | 0.976 | 0.502 | 0.115 | 0.952 |
+
+Reference field renders: [Balanced flock (shipped)](../images/sweeps-2026-10-30/144-current-balanced-flock-field.png) · [Tight flock (shipped)](../images/sweeps-2026-10-30/144-current-tight-flock-field.png) · [Scatter (shipped)](../images/sweeps-2026-10-30/144-current-scatter-field.png). The historical reference rows above in this file are preserved unchanged and not corrected here.
+
+### Finalists and validation
+
+- `alignment0.25_cohesion0_initialFlocks12` — time samples (t220: 0.923, t440: 0.917, t880: 0.912, t1760: 0.904); seeds (n/a (no seed input)); larger grid 300² with params scaled ×2.25 in population: 0.894. Images: [frame 1](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-t220-field.png) · [frame 2](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-t440-field.png) · [frame 3](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-t880-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-t1760-field.png).
+- `alignment0.15_cohesion0_initialFlocks6` — time samples (t220: 0.922, t440: 0.901, t880: 0.899, t1760: 0.912); seeds (n/a (no seed input)); larger grid 300² with params scaled ×2.25 in population: 0.925. Images: [frame 1](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-t220-field.png) · [frame 2](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-t440-field.png) · [frame 3](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-t880-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-t1760-field.png).
+- `alignment0.01_cohesion0_initialFlocks1` — time samples (t220: 0.912, t440: 0.911, t880: 0.921, t1760: 0.906); seeds (n/a (no seed input)); larger grid 300² with params scaled ×2.25 in population: 0.900. Images: [frame 1](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-t220-field.png) · [frame 2](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-t440-field.png) · [frame 3](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-t880-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-t1760-field.png).
+
+Each finalist has three separated frames (1×, 2× and 4× warmup), a repeat at 8× warmup, two neighbouring seeds where the kernel takes one, and a second resolution. These are grayscale kernel-field PNGs, not app renderer screenshots.
+
+### Interpretation
+
+**No numeric winner is a promotion.** The top score (0.923, alignment 0.25 / cohesion 0 / 12 flocks) beats the shipped Balanced flock (0.918) by 0.005, inside the spread the validation shows for the same preset across times (0.873–0.918) and resolutions (0.882). Diversity was applied to the finalists: all three have cohesion 0 and differ in alignment and initialFlocks, because cohesion 0 dominates the top of the ranking — **zero cohesion ranks first in the retained top five**, and any non-zero cohesion is far more variable: cohesion 0 scores 0.886–0.923 (mean 0.907), while 0.03/0.04/0.05 span 0.17–0.87 (means 0.550/0.465/0.379), the lowest sets (0.170–0.178) being collapsed flocks the instrument penalises through coverage.
+
+Velocity coherence separates alignment cleanly (0.865–0.881 at alignment 0.01 vs 0.98+ at ≥ 0.15) while the composite barely moves, so the composite is not what distinguishes these regimes — the retained `velocityCoherence` column is.
+
+Manual visual finding (grayscale kernel-field PNGs only, 2500 boids on 200² (the historical calibration, not the shipped 17 777), `../images/sweeps-2026-10-30/`): at all three finalists and at the Balanced reference the raw field reads as a sparse speckle with no visible flock hull, filament or stream; the three separated frames of each finalist are not visually distinguishable from each other or from Balanced flock by eye. The metric differences are therefore not visible in these renders. This is the same dot-raster limit the 2026-09-01 write-up recorded; app renderer screenshots are in the supplement below.
+
+Tight flock (shipped) scores 0.429 at 220 steps (coverage 0.072, the collapsed-flock floor), falls to 0.315–0.350 at longer horizons and recovers to 0.637 on the 300² grid: its score is a function of grid and horizon, which the earlier 2026-09-01 reading had already flagged as the instrument's penalty for concentration, not a defect finding.
+
+Obstacle-bearing frames (visual comparison, not ranked against the obstacle-free scores): breakwaters, rocks and reef, at the default obstacleAmount 0.5, 440 steps, for each finalist and for Balanced flock. In the reef frames the obstacles are painted as large constant-grey strips and discs, and the flock in the retained frame is piled against the top edge of the grid. Fixed obstacle raster is not flock coherence and no coherence number is claimed for these frames. Frames: [finalist 1 reef](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-reef-field.png), [Balanced reef](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-reef-field.png); all layouts are listed in the retained JSON (`finalists[].obstacleVisual`, `referenceValidation`). Whether the top-edge pile-up is an obstacle interaction or boundary behaviour was not isolated here.
+
+### Proposed promotions
+
+**No promotion proposed.** The best candidate is within noise of the shipped Balanced flock and the renders cannot be told apart. An operator may want a cohesion-0 variant for its high coherence, but that is a visual call this stage cannot support; there is no evidence for a new preset.
+
+Negative and null results above are retained deliberately. Promotion is a separate operator visual sign-off; no production preset, default or kernel was changed.
+
+### Supplement: app-renderer screenshots and shipped-population evidence (re-brief 2, 2026-11-01)
+
+Retained: [`144/boids.app-evidence.json`](data/2026-10-30/144/boids.app-evidence.json) (method `particle-trail-regimes-v1-app-evidence-v2-fixed-step`; replaces the re-brief 1 supplement, whose populations and clocks were invalid). Reproduce with `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 boids app"` (also covered by `-g "sweep 144 "`). The `*-app.png` images are canvas screenshots of the real `Renderer` (WebGL2, shipped quality profile and default resolution preset, default colour options) at device pixel ratio 1 in a page viewport that `s144Snapshot` sets per capture (max of canvas CSS size and 400×300; recorded from `page.viewportSize()` in every row and sample of the retained JSON): 960×600 for every row (shipped and matched-density); the earlier `*-field.png` images remain grayscale kernel-field renders and are not app screenshots. Recorded renderer grid: 960×600 (0.0309 boids/cell shipped).
+
+Clock and state: no wall-clock or interactive iteration counter is used (the counter advances ten per kernel call in the particle renderers and cannot identify a kernel-call count). Each capture builds a fresh kernel, issues exactly the listed number of `step(1)` calls (dt = 1, call count asserted, and asserted unchanged after the Renderer draws; `stepsPerFrame` 0, paused), and the Renderer draws that state. Per capture the harness asserts the screenshot state SHA-256 equals a plain fresh kernel run on the same grid, seed (sweep seed; Boids has none, i.e. 0), call count and dt, and the first sample of every row is captured twice with equal state hashes (same-seed repeat). Numeric readings come from `scoreOne` at the same recorded grid and population (the same fixed-dt call sequence; not a pixel replay). The repeatability claim is limited to this fixed-step path; the interactive app's live trajectory is wall-clock driven and not claimed repeatable. Hashes, requested and effective populations, density and grid per row are in the JSON. Populations are shipped (full shipped count on 960×600, not density-matched) or matched-density (sweep agents per cell on the recorded renderer grid). Boids rows are obstacle-free (the app's schema default is `reef`). Shipped finalist population: 17 777; references use their shipped presets and counts.
+
+| kind | id | population | grid | score at 3 samples | images (app renderer) |
+|---|---|---|---|---|---|
+| reference | `144-current-balanced-flock` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.285 / t440: 0.339 / t880: 0.454 | [220](../images/sweeps-2026-10-30/144-app-boids-144-current-balanced-flock-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-current-balanced-flock-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-current-balanced-flock-shipped-17777-t880-app.png) |
+| reference | `144-current-tight-flock` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.146 / t440: 0.136 / t880: 0.110 | [220](../images/sweeps-2026-10-30/144-app-boids-144-current-tight-flock-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-current-tight-flock-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-current-tight-flock-shipped-17777-t880-app.png) |
+| reference | `144-current-scatter` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.204 / t440: 0.121 / t880: 0.077 | [220](../images/sweeps-2026-10-30/144-app-boids-144-current-scatter-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-current-scatter-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-current-scatter-shipped-17777-t880-app.png) |
+| finalist | `alignment0.25_cohesion0_initialFlocks12` | matched-density 36000 (effective 36000, 0.0625/cell) | 960×600 | t220: 0.524 / t440: 0.773 / t880: 0.430 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-matched-density-36000-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-matched-density-36000-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-matched-density-36000-t880-app.png) |
+| finalist | `alignment0.25_cohesion0_initialFlocks12` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.571 / t440: 0.586 / t880: 0.864 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-shipped-17777-t880-app.png) |
+| finalist | `alignment0.15_cohesion0_initialFlocks6` | matched-density 36000 (effective 36000, 0.0625/cell) | 960×600 | t220: 0.807 / t440: 0.521 / t880: 0.861 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-matched-density-36000-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-matched-density-36000-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-matched-density-36000-t880-app.png) |
+| finalist | `alignment0.15_cohesion0_initialFlocks6` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.868 / t440: 0.868 / t880: 0.879 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.15_cohesion0_initialFlocks6-shipped-17777-t880-app.png) |
+| finalist | `alignment0.01_cohesion0_initialFlocks1` | matched-density 36000 (effective 36000, 0.0625/cell) | 960×600 | t220: 0.895 / t440: 0.893 / t880: 0.885 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-matched-density-36000-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-matched-density-36000-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-matched-density-36000-t880-app.png) |
+| finalist | `alignment0.01_cohesion0_initialFlocks1` | shipped 17777 (effective 17777, 0.0309/cell) | 960×600 | t220: 0.886 / t440: 0.891 / t880: 0.880 | [220](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-shipped-17777-t220-app.png) · [440](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-shipped-17777-t440-app.png) · [880](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-shipped-17777-t880-app.png) |
+
+Findings (manual; screenshots viewed: Balanced flock, finalist 0.25/12 and finalist 0.01/1 at 880 steps; other rows rest on their scores and the earlier contact-strip review):
+- The earlier "boidCount 2500" was the 2026-09-01 calibration density on 200², not the shipped population. Shipped presets run 17 777 boids; on the real 960×600 grid that is 0.0309 boids per cell against the sweep's 0.0625. Density-matched rows use 36 000 boids (kernel cap 40 000, not reached; effective population asserted equal to the request).
+- Shipped Balanced flock at 880 steps is three or four dense, elongated, coherent bands with clear hulls ([screenshot](../images/sweeps-2026-10-30/144-app-boids-144-current-balanced-flock-shipped-17777-t880-app.png)).
+- Finalist `alignment0.25_cohesion0_initialFlocks12` at matched density is a near-uniform violet speckle with a few faint denser swells ([screenshot](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.25_cohesion0_initialFlocks12-matched-density-36000-t880-app.png)); `alignment0.01_cohesion0_initialFlocks1` is uniform scatter with no flock ([screenshot](../images/sweeps-2026-10-30/144-app-boids-144-boids-alignment0.01_cohesion0_initialFlocks1-matched-density-36000-t880-app.png)). The metric rewards even spread, but the two finalists do not score alike at matched density: `alignment0.01_cohesion0_initialFlocks1` reads 0.895 / 0.893 / 0.885 at t220 / t440 / t880, whereas `alignment0.25_cohesion0_initialFlocks12` reads 0.524 / 0.773 / 0.430 (0.5242303905039241, 0.7733240547052155, 0.4303053685049905 in the retained JSON), so only the first holds a high score and the second is time-fragile. Neither reading is evidence of interesting behaviour.
+- Ordering is population-dependent (0.25/12 ranges 0.430 to 0.773 at matched density and 0.571 to 0.864 at shipped), and the shipped Balanced flock scores 0.285 at 220 steps against 0.918 in the 200² sweep. App-grid scores are not comparable with the earlier tables.
+- Conclusion: **no boids promotion.** Obstacle-bearing frames remain a separate visual comparison and no coherence number is claimed for them.
+
+#### Re-brief 4 provenance, runtime and clipping audit (2026-11-02)
+
+- Viewport: the previous write-up and JSON gave a constant 1280×800; the actual per-capture viewport was different. It is now recorded per row and per sample (960×600 for every row (shipped and matched-density)). The supplemental numeric rows and state SHA-256 values from the re-run are identical to the attempt-4 evidence apart from this added field.
+- Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 9.0 min, supplemental test 1.0 h. The main-sweep JSON is byte-identical to the attempt-4 retained file.
+- Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the boids kernel `wrap()` torus (`src/sims/boids/kernel.ts:646-654`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: Balanced flock shipped t880 (bands run off one edge and re-enter on the opposite one, nothing is cut). Not every image was inspected, and this is a visual finding, not a score.
+- Obstacle frames (direct links, grayscale kernel-field renders, not app screenshots, not ranked): Balanced flock [breakwaters](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-144-current-balanced-flock-obstacle-reef-field.png). Finalist `alignment0.25_cohesion0_initialFlocks12`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.25_cohesion0_initialFlocks12-obstacle-reef-field.png). Finalist `alignment0.15_cohesion0_initialFlocks6`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.15_cohesion0_initialFlocks6-obstacle-reef-field.png). Finalist `alignment0.01_cohesion0_initialFlocks1`: [breakwaters](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-breakwaters-field.png), [rocks](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-rocks-field.png), [reef](../images/sweeps-2026-10-30/144-boids-alignment0.01_cohesion0_initialFlocks1-obstacle-reef-field.png).
+
+## 2026-11-03 — clump sweep (stage 152)
+
+The operator rejected the three stage-144 Boids trials on 2026-11-03 and asked for "faster with multiple clumps going in different directions". Stage 144 could not find that regime: it pinned `maxSpeed` at 16, every finalist had cohesion 0, and its composite rewards even coverage. This sweep uses a new instrument at the shipped population and hands over a shortlist as an importable presets file. No default, preset or kernel changes.
+
+### Method and instrument
+
+- Capture: stage-144 fixed-step method. Fresh kernel per capture, exactly `steps` calls of `step(1)`, real WebGL2 `Renderer` paused at `stepsPerFrame` 0 on a 960×600 CSS canvas, effective population asserted equal to 17777, viewport recorded per sample (960×600 throughout), `stateSha256` of the state drawn. Steps 300, 600 and 1200. Main captures use kernel seed 0; finalist repeats use seeds 1, 2 and 3 at 600 steps.
+- Reading: `e2e/harness/clumps.ts`, imported into the page through the Vite origin and applied to the same `readState` that is hashed. Density is blurred (radius 6, wrapping on the torus), thresholded at 0.25 of the blurred maximum, labelled into 4-connected components (wrapping on both axes), and components under 3% of total raw mass are dropped. Each kept component's heading is the direction of its density-weighted velocity sum; heading spread is 1 minus the mass-weighted resultant of the unit headings (0 for one clump, 1 for balanced opposition). Mean speed is the density-weighted Speed channel (a fraction of `maxSpeed`) scaled by the row's `maxSpeed`. `velocityCoherence` is kept as an extra column.
+- Ranking rule (frozen): per sample `clamp((clumps − 1)/4, 0, 1) × headingSpread × clamp(meanSpeed/40, 0, 1)`; the row score is the minimum over its three samples.
+- Note on mass: the Boids kernel clamps the Density channel to [0, 1] (occupancy, not a boid count), so "mass" here is occupied-cell count and the 3% cut is a share of occupied cells. The frozen fixtures are unaffected.
+
+### Searched and not searched
+
+Searched (27 sets): `maxSpeed` {24, 32, 40} × `cohesion` {0.01, 0.02, 0.035} × `initialFlocks` {3, 6, 12}, at 17777 boids, visual radius 36, separation radius 6, separation 0.2, alignment 0.15, no obstacles, default point size. Not searched: alignment, visual radius, separation, separation radius, obstacles, population, other canvas sizes, seeds beyond the finalist repeats.
+
+### Ranking (top 10 of 27)
+
+Columns are at 300 / 600 / 1200 steps.
+
+| id | score | clumps | heading spread | mean speed |
+|---|---|---|---|---|
+| `maxSpeed32_cohesion0.035_initialFlocks6` | 3.2e-5 | 4 / 4 / 3 | 0.000 / 0.000 / 0.000 | 31.2 / 30.9 / 30.9 |
+| `maxSpeed24_cohesion0.035_initialFlocks6` | 2.7e-5 | 4 / 4 / 4 | 0.000 / 0.000 / 0.000 | 22.8 / 23.0 / 23.0 |
+| `maxSpeed24_cohesion0.02_initialFlocks12` | 1.1e-5 | 5 / 4 / 3 | 0.001 / 0.000 / 0.000 | 23.1 / 22.9 / 22.9 |
+| `maxSpeed32_cohesion0.035_initialFlocks12` | 9.0e-6 | 3 / 4 / 3 | 0.000 / 0.000 / 0.000 | 31.2 / 31.0 / 30.9 |
+| `maxSpeed40_cohesion0.035_initialFlocks12` | 5.7e-6 | 4 / 4 / 3 | 0.001 / 0.000 / 0.000 | 39.2 / 38.8 / 38.8 |
+| `maxSpeed24_cohesion0.035_initialFlocks3` | 3.4e-6 | 3 / 3 / 3 | 0.000 / 0.000 / 0.000 | 22.8 / 23.0 / 22.9 |
+| `maxSpeed24_cohesion0.035_initialFlocks12` | 1.9e-6 | 4 / 2 / 2 | 0.000 / 0.000 / 0.000 | 23.2 / 23.1 / 23.0 |
+| `maxSpeed32_cohesion0.01_initialFlocks12` | 2.8e-7 | 2 / 3 / 2 | 0.000 / 0.000 / 0.000 | 30.0 / 30.0 / 30.0 |
+| `maxSpeed24_cohesion0.02_initialFlocks6` | 1.0e-8 | 4 / 3 / 2 | 0.000 / 0.000 / 0.000 | 23.2 / 23.0 / 22.9 |
+| `maxSpeed24_cohesion0.01_initialFlocks3` | 0.0e+0 | 2 / 2 / 1 | 0.001 / 0.000 / 0.000 | 22.7 / 22.7 / 22.7 |
+
+All 27 sets scored below 4e-5. The order among them is set by a handful of near-zero heading-spread readings and should not be read as a preference.
+
+### References
+
+| id | score | clumps | heading spread | mean speed |
+|---|---|---|---|---|
+| `152-current-balanced-flock` | 0.0e+0 | 2 / 3 / 1 | 0.000 / 0.000 / 0.000 | 15.0 / 15.0 / 15.1 |
+| `152-current-tight-flock` | 4.1e-5 | 4 / 4 / 4 | 0.001 / 0.000 / 0.000 | 19.2 / 19.2 / 19.1 |
+| `152-current-scatter` | 0.0e+0 | 0 / 0 / 0 | 0.000 / 0.000 / 0.000 | 20.5 / 20.5 / 20.0 |
+
+### Finalists and repeats
+
+The finalists are the top three ranked ids. Frames: `docs/images/sweeps-2026-11-03/152-boids-<id>-t<steps>.png`; repeats `152-boids-<id>-seed<k>-t600.png`; references `152-current-*-t<steps>.png`.
+
+| id | repeats at 600 steps |
+|---|---|
+| `maxSpeed32_cohesion0.035_initialFlocks6` | seed 1: 1 clumps, spread 0.000, speed 30.9<br>seed 2: 3 clumps, spread 0.000, speed 30.8<br>seed 3: 3 clumps, spread 0.000, speed 30.8 |
+| `maxSpeed24_cohesion0.035_initialFlocks6` | seed 1: 4 clumps, spread 0.000, speed 22.9<br>seed 2: 3 clumps, spread 0.002, speed 23.0<br>seed 3: 3 clumps, spread 0.000, speed 22.8 |
+| `maxSpeed24_cohesion0.02_initialFlocks12` | seed 1: 2 clumps, spread 0.000, speed 23.1<br>seed 2: 2 clumps, spread 0.000, speed 23.0<br>seed 3: 3 clumps, spread 0.000, speed 22.9 |
+
+### Interpretation
+
+- **The grid did not reach the regime.** Across all 30 rows and 90 samples the largest heading spread read 0.0009 and the lowest `velocityCoherence` was 0.9955. Every clump in every frame moves the same way: at 17777 boids on this torus, alignment 0.15 with visual radius 36 locks the whole population to one heading before 300 steps, whatever the seeding flock count. Clumps do form (up to 6 at one sample, 3 or 4 for most cohesion 0.035 rows) and persist, and speed is high (about 0.94 to 0.98 of `maxSpeed`), but they travel in parallel. Per the card this is a finding, not a failure; no sets were added.
+- Frames viewed: finalist `maxSpeed24_cohesion0.035_initialFlocks6` at 600 steps is six compact, similarly oriented ellipses (closer to "several clumps" than the shipped Balanced flock's bands, but with one shared heading); `maxSpeed40_cohesion0.035_initialFlocks12` at 600 steps is two long fast streaming bands and a few fragments, again parallel; `maxSpeed32_cohesion0.02_initialFlocks12` at 300 steps is broad curving streams. None reads as the cohesion-zero speckle failure reference, and none shows different headings.
+- Faster: every candidate is above the shipped Balanced flock's mean speed of 15.0 (candidates read 22.7 to 39.2).
+- The instrument sees clump count, clump headings and speed from one rendered state. It cannot see motion over time, trails, or whether clumps are about to merge. A heading spread near zero here means parallel travel, not stasis.
+- Hypothesis for a later card, not tested here: different headings probably need alignment low enough, or visual radius small enough, that flocks do not couple on a torus this size; both were pinned in this grid.
+- Presets file: the three finalists plus `maxSpeed40_cohesion0.035_initialFlocks12`, added after viewing its frames as the fastest sustained clumped regime (three or four clumps at all steps at about 39 mean speed). It is on the shortlist for its look, not its score.
+
+### Reproduction
+
+`CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids" --global-timeout=14400000` exited 0 in 45.5 minutes (1 passed; the presets and replay tests are opt-in and skipped), four pages in parallel. Per-row wall-clock ran from 71 s to 773 s (recorded per row as `wallClockMs`). Presets file with extras: `CI=1 SWEEP=1 SWEEP_152_PRESET_IDS=<id>[,<id>] npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids presets"`. Replay for the verifier: `CI=1 SWEEP=1 SWEEP_152_REPLAY=1 npx playwright test e2e/sweep.spec.ts -g "sweep 152 boids replay"` re-captures the three finalists and three references (seed 0 at all steps, seeds 11 to 13 at 600) into `e2e/artifacts/152-boids-clump-sweep/replay/replay.json`.
+
+Evidence: [`152/boids.json`](data/2026-11-03/152/boids.json), [`152/boids.presets.json`](data/2026-11-03/152/boids.presets.json), images in [`docs/images/sweeps-2026-11-03/`](../images/sweeps-2026-11-03/).
+
+No promotion is proposed; the shortlist awaits the operator's import and look.
+
+
+## 2026-11-04 — unbiased neighbour sampling (stage 153)
+
+The binned kernel now counts and flattens its cells into reusable buffers, then takes at most 72 evenly spaced candidates across the combined nine-cell neighbourhood. A seed-, boid- and step-dependent hash chooses the sample phase. Every candidate has the same inclusion probability; cells contribute in proportion to their population, and reaching an accepted-neighbour count no longer ends the scan on one side. All candidates are tested against the existing toroidal visual and separation radii. Sparse neighbourhoods visit every candidate once.
+
+After the existing steering and upper speed bound, the binned path raises nonzero velocities below 0.7 × maxSpeed to that speed without changing their heading. These are the only new tuning constants: `NEIGHBOUR_CANDIDATES = 72` and `MIN_SPEED_FRACTION = 0.7`. The brute-force path, wander, parameter schema, defaults, presets, initial flock assignment, obstacles and renderer interface are unchanged. New buffers are allocated in init, reused during steps and released in destroy. The nine-entry neighbourhood scratch buffer is reused for the lifetime of the kernel.
+
+**The stage-144 and stage-152 Boids readings predate this change and remain historical evidence.** Their frames, scores and presets have not been regenerated or re-scored.
+
+### Fixed-step readings
+
+Base: `b133231e843cb65938a4e40f48e79229642d8fc7`. Each row uses a fresh 960×600 kernel, 17777 boids, schema defaults except `obstacleLayout: "none"`, the listed seed, and calls to `step(1)`. Agreement is the length of the mean unit velocity; heading is its atan2 in radians; speed is the mean individual velocity magnitude. Occupied share counts distinct `(floor(x/8), floor(y/8))` cells over 120×75. Values are descriptive, not extra acceptance thresholds.
+
+| Seed | Steps | Heading agreement | Heading (rad) | Mean speed | Occupied share |
+|---|---|---|---|---|---|
+| 0 | 100 | 0.617024 | -2.214952 | 25.837755 | 0.731556 |
+| 0 | 300 | 0.993119 | -2.245534 | 30.616658 | 0.856222 |
+| 0 | 600 | 0.993303 | -2.248280 | 30.642089 | 0.874889 |
+| 1 | 100 | 0.531952 | 2.414603 | 25.563880 | 0.779889 |
+| 1 | 300 | 0.993153 | 2.386672 | 30.556046 | 0.871889 |
+| 1 | 600 | 0.993171 | 2.398542 | 30.595114 | 0.872000 |
+| 2 | 100 | 0.161984 | 1.601013 | 25.432098 | 0.791444 |
+| 2 | 300 | 0.992945 | 1.944255 | 30.516640 | 0.873222 |
+| 2 | 600 | 0.993163 | 1.952721 | 30.548799 | 0.875222 |
+
+These large fixed steps produce nearly global alignment by step 300 and broad coverage; the settled heading varies with seed. This does not establish spatial clumping. The live app advances by elapsed-time steps, much smaller than 1, and its appearance is assessed separately below. Keeping different headings beyond step 100 is not claimed.
+
+### Step cost
+
+One Node process per kernel/run, seed unset, 960×600, defaults with no obstacles, 100 warm-up steps, then the mean over steps 101–200 with `step(1)`. Base and new were alternated on this machine. All six processes exited 0.
+
+| Kernel | Run 1 (ms/step) | Run 2 | Run 3 | Median |
+|---|---|---|---|---|
+| Base | 28.108439 | 28.241695 | 25.503898 | 28.108439 |
+| New | 25.015748 | 41.649358 | 20.911257 | 25.015748 |
+
+The median is **11.0027% lower** than the base, within the allowed 15% increase. The slow second new run is retained; no outlier was discarded. The bounded candidate pass also avoids the old unbounded traversal through out-of-radius members of crowded cells.
+
+### Alternatives examined
+
+The card's equal-per-cell reference was read but not applied. The implementation uses one population-weighted sample rather than giving each cell an equal candidate allowance. Exploratory scratch variants tested dividing separation by the visual neighbour count, its square root, or the number of separating neighbours, and lowering the binned wander amplitude. These were examined at seed 0 with the same fixed-step measurement procedure; they did not change the delivered source.
+
+| Scratch variant | Occupied share at 100 / 300 / 600 | Mean speed at 600 |
+|---|---|---|
+| mean-separation | 0.6609 / 0.8370 / 0.8553 | 30.7115 |
+| sqrt-separation | 0.6681 / 0.8444 / 0.8591 | 30.7147 |
+| quiet | 0.6402 / 0.9031 / 0.9126 | 29.2093 |
+| mean-quiet | 0.2911 / 0.2201 / 0.1171 | 25.6712 |
+| sqrt-quiet | 0.4277 / 0.5950 / 0.2031 | 26.7431 |
+| mean-soft | 0.4680 / 0.6369 / 0.5168 | 27.9169 |
+| contact-quiet | 0.5218 / 0.5310 / 0.8094 | 27.4426 |
+
+Here `quiet` means 0.2 × existing wander, `soft` means 0.4 × existing wander, `mean` divides separation by visual neighbour count, `sqrt` by its square root, and `contact` by separating neighbour count. Reducing separation alone still spread broadly. Combining mean separation with quiet wander passed the six-test oracle in scratch but its diagnostic point plots contracted into many tiny blobs by step 600. It was rejected. The live app showed coherent hulls with the original sum and unchanged wander, so none of those extra steering changes was retained. Diagnostic point plots are not app-renderer acceptance evidence.
+
+
+### Live app review (worker evidence; verifier must repeat)
+
+Headless Chromium with `--use-angle=metal --enable-gpu`, isolated port 17783, fresh browser storage per load, 1280×800 viewport, `#/boids`, default speed 1.0×, layout set to none and Clear boulders pressed. The app selected a 1280×735 compute grid and 17777 boids. Read-only observation hooks exposed the kernel inputs and last dt; a requestAnimationFrame counter measured frame rate. The code under test was otherwise unchanged. Each load retained frames at approximately 5, 15, 30 and 60 seconds. The observations confirm schema defaults, zero obstacles and distinct random seeds.
+
+| Load | Seed | 60-second average fps | Console / page errors |
+|---|---|---|---|
+| New 1 | -1032595816 | 41.37 | 0 |
+| New 2 | 749760136 | 41.34 | 0 |
+
+Both opening frames show six separate, differently oriented flocks. At 15 seconds the flocks are bending and crossing; at 30 seconds they form broad curved streams; by 60 seconds they have merged into elongated bands with substantial empty areas and visible hulls. In kind, all eight frames are closest to the stage-144 Balanced flock shape reference. None reads as the near-uniform speckle reference or the stage-152 tiny hard-edged balls. The dark geometric wakes belong to the unchanged trail rendering; the bright flock bodies have curved hulls. This is a worker visual assessment, not operator acceptance. Independent verifier judgement is still required.
+
+Frames (untracked evidence):
+
+| Load | 5 seconds | 15 seconds | 30 seconds | 60 seconds |
+|---|---|---|---|---|
+| 1 | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-5s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-15s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-30s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load1-60s.png) |
+| 2 | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-5s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-15s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-30s.png) | [frame](../../e2e/artifacts/153-boids-unbiased-neighbours/new-load2-60s.png) |
+
+The fixed-step numeric table and the live view answer different questions: `step(1)` displaces boids much farther per steering update than the app's measured dt (roughly 0.024–0.027 seconds in the retained new-kernel frames). Broad fixed-step coverage is reported openly rather than presented as evidence of the app's flock hulls.
+
+The base kernel, served from commit `b133231e843cb65938a4e40f48e79229642d8fc7` into the otherwise identical app at the same viewport and settings, averaged **33.11 fps** over its 60-second load (seed -1951832022, 0 console/page errors). New loads averaged **41.37 and 41.34 fps**. The frame counter covered approximately 60.2–60.3 seconds including screenshot overhead; browser runs were serial. These are descriptive frame-rate readings, not a substitute for the controlled Node step-cost comparison. Base frames and exact observations are in `e2e/artifacts/153-boids-unbiased-neighbours/base-browser.json` and `base-load1-*.png`.
+
+
+### Validation and verifier handoff
+
+| Command | Exit | Result |
+|---|---|---|
+| `npm run verify` | 0 | Both TypeScript checks, 419 passing tests, 51 opt-in skips, zero failures, and production build. Existing large-bundle advisory only. |
+| `node --test src/sims/boids/kernel.test.cjs` | 0 | 40 passed, no skips. New tests cover population weighting, both sides of a dense neighbourhood, sparse toroidal census, bounded sampling, speed bounds, buffer reuse, and a byte-exact base trajectory at 255 boids. |
+| `npm run build:test && env -u BOIDS_153_KERNEL BOIDS_153=1 node --test src/sims/boids/neighbourSampling.contract.test.cjs` | 0 | Six passed, no skips, on the final implementation. |
+| `scripts/check-contract-test-gate.sh print src/sims/boids/neighbourSampling.contract.test.cjs` | 0 | `sha256:9a2f256bb06255524d57498306881f47ad8499013f628b0f5fb71373aa28edb5`, unchanged. |
+| `git diff --check` | 0 | No whitespace errors. |
+| `git diff --name-only b133231e843cb65938a4e40f48e79229642d8fc7` | 0 | Only `src/sims/boids/kernel.ts`, `src/sims/boids/kernel.test.cjs` and this report. |
+| `git diff --name-only b133231e843cb65938a4e40f48e79229642d8fc7..HEAD` | 0 | Empty: the worker made no commits. Use the dirty-tree comparison above before orchestration commits. |
+
+Exact scripts, commands/exits, raw readings, all six timing runs, rejected-variant readings, source hashes, browser setup observations and frames are retained under `e2e/artifacts/153-boids-unbiased-neighbours/` (untracked). Entry points are `commands.json`, `measure.cjs`, `browser-check.cjs`, `readings-v1.json`, `benchmarks.json`, `alternatives.json`, `new-browser.json`, `base-browser.json`, `verify.log` and `oracle.log`. Node was v26.5.0. Two preliminary UI captures failed because of the button's accessible name, and one observer capture missed Vite's cache-busting query; the harnesses were corrected and those failures are recorded in `commands.json`. None was a kernel or WebGL2 failure. The isolated worker server has been stopped.
+
+Worker criteria 1–4 are satisfied; the worker's supplementary evidence supports 5–6. Independent verifier reruns and the verifier's scope/visual judgement remain due. The operator's criterion-8 look on dev remains due. No work was committed, merged, published or promoted; main, labs and the public mirror are untouched.

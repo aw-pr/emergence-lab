@@ -21,6 +21,7 @@ op-refs.local.sh
 .claude/scheduled_tasks.lock
 logs/
 runs/*.log
+docs/UAT/
 
 state/**
 !state/handoffs/

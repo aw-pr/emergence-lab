@@ -107,3 +107,90 @@ is the terminal state described above: the cluster has met the spawn ring's grid
 limit and stopped. Reaching 0.25 on this grid would need a larger `spawnRadius`
 or a bigger grid, not more steps. Recorded rather than tuned — the assertion the
 test actually makes (grows, ends above 0.02, stays below 0.7) passes.
+
+
+## Appendix: missed growth/criticality regimes — 2026-10-30 (stage 146)
+
+Method `growth-criticality-v1`. Full results: [diffusion-limited-aggregation.json](data/2026-10-30/146/diffusion-limited-aggregation.json) (manifest, all 48 ranked sets, all references, finalist evidence, per-capture readings and diagnostics); per-finalist validation readings: [diffusion-limited-aggregation-validation.json](data/2026-10-30/146/diffusion-limited-aggregation-validation.json); pre-measurement manifest: [manifest-diffusion-limited-aggregation.json](data/2026-10-30/146/manifest-diffusion-limited-aggregation.json). The historical results above are untouched; the references below are re-measured under new `146-current-*` IDs.
+
+### Method
+
+Growth milestones, not warmup: the kernel is stepped until 1000, 2500 and 4500 cells are occupied, then flux gap 6 more steps. Every candidate has a finished cluster above 5000 cells, so every milestone is reached (`milestoneReached` 1.00 on all 51 rows) and the finished-cluster flux trap of 2026-08 does not apply. Coverage threshold 0.05, 192². Fixed for every set: walkersPerStep 64, maxWalkSteps 400, seed 7. The ranked score is the unchanged `scoreFrames` composite averaged over the captures (`summarizeMetrics`); no new metric or weight was introduced. Diagnostics are retained beside the score and never feed it: nonFiniteFraction (0 on every row) and endpointFraction are retained in the JSON; `clusterSize` and `radiusFraction` (cluster radius over the usable grid radius) are at capture time; `milestoneReached` is the share of milestones hit within the 6000-step cap. Kernel steps are fully deterministic given the explicit seed (7 for ranking; 7, 11 and 23 for finalists and references).
+
+### Searched and not searched
+
+- **Searched:** stickiness {0.04, 0.08, 0.22, 0.4, 0.62, 0.9} × spawnRadius {0.08, 0.16, 0.26, 0.5} × seedCount {2, 6} = 48 sets, all novel values on every axis. spawnRadius only sets the ring gap (4, 8, 12, 16 cells on this grid).
+- **Not searched:** walkersPerStep and maxWalkSteps (one value each), colourByAge, and clusters past the edge stop other than the single longer-horizon repeat. The 16-refinement allowance was not used.
+- **Prior coverage:** see the earlier sections of this file and the cited sources in the manifest: docs/sweeps/diffusion-limited-aggregation-interestingness.md, e2e/harness/sims.ts, src/sims/diffusion-limited-aggregation/kernel.ts, src/app/presets.ts.
+
+### Ranked candidates (top 10 and bottom 4 of 48; all 48 are in the JSON)
+
+| rank | id | stickiness / spawnRadius / seedCount | score | autocorr | flux | coverage | radiusFraction | clusterSize | milestoneReached |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `146-dla-c03` | 0.04 / 0.16 / 2 | **0.290** | 0.830 | 0.0064 | 0.073 | 0.36 | 2689.67 | 1.00 |
+| 2 | `146-dla-c01` | 0.04 / 0.08 / 2 | **0.290** | 0.833 | 0.0063 | 0.073 | 0.37 | 2682.67 | 1.00 |
+| 3 | `146-dla-c04` | 0.04 / 0.16 / 6 | **0.290** | 0.829 | 0.0067 | 0.073 | 0.36 | 2688.33 | 1.00 |
+| 4 | `146-dla-c08` | 0.04 / 0.5 / 6 | **0.289** | 0.824 | 0.0067 | 0.073 | 0.36 | 2688.33 | 1.00 |
+| 5 | `146-dla-c07` | 0.04 / 0.5 / 2 | **0.289** | 0.831 | 0.0063 | 0.073 | 0.35 | 2686.00 | 1.00 |
+| 6 | `146-dla-c06` | 0.04 / 0.26 / 6 | **0.288** | 0.828 | 0.0065 | 0.072 | 0.36 | 2670.33 | 1.00 |
+| 7 | `146-dla-c05` | 0.04 / 0.26 / 2 | **0.288** | 0.821 | 0.0066 | 0.073 | 0.36 | 2683.67 | 1.00 |
+| 8 | `146-dla-c12` | 0.08 / 0.16 / 6 | **0.288** | 0.802 | 0.0105 | 0.073 | 0.37 | 2680.33 | 1.00 |
+| 9 | `146-dla-c11` | 0.08 / 0.16 / 2 | **0.288** | 0.797 | 0.0102 | 0.073 | 0.37 | 2686.67 | 1.00 |
+| 10 | `146-dla-c09` | 0.08 / 0.08 / 2 | **0.287** | 0.793 | 0.0100 | 0.073 | 0.36 | 2697.67 | 1.00 |
+| 45 | `146-dla-c43` | 0.9 / 0.16 / 2 | **0.197** | 0.505 | 0.0131 | 0.073 | 0.60 | 2692.67 | 1.00 |
+| 46 | `146-dla-c45` | 0.9 / 0.26 / 2 | **0.196** | 0.507 | 0.0128 | 0.073 | 0.61 | 2682.33 | 1.00 |
+| 47 | `146-dla-c48` | 0.9 / 0.5 / 6 | **0.196** | 0.508 | 0.0118 | 0.074 | 0.61 | 2713.33 | 1.00 |
+| 48 | `146-dla-c41` | 0.9 / 0.08 / 2 | **0.196** | 0.505 | 0.0131 | 0.073 | 0.60 | 2684.00 | 1.00 |
+
+### Current references (re-measured, equal settings)
+
+| ref | id | stickiness / spawnRadius / seedCount | score | autocorr | flux | coverage | radiusFraction | clusterSize | milestoneReached |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|
+| ref | `146-current-branching` | 1 / 0.06 / 1 | **0.196** | 0.501 | 0.0130 | 0.073 | 0.61 | 2709.33 | 1.00 |
+| ref | `146-current-dense-coral` | 0.15 / 0.06 / 4 | **0.270** | 0.735 | 0.0127 | 0.074 | 0.40 | 2714.00 | 1.00 |
+| ref | `146-current-multi-seed` | 0.8 / 0.06 / 8 | **0.200** | 0.515 | 0.0131 | 0.073 | 0.63 | 2694.33 | 1.00 |
+
+### Interpretation
+
+Scores shortlist; they do not decide which cluster looks better. What the evidence shows:
+
+- **Stickiness is the only axis that moves the score.** Per stickiness the score range over all 8 (spawnRadius, seedCount) cells is 0.286 to 0.290 at 0.04, 0.284 to 0.288 at 0.08, 0.245 to 0.254 at 0.22, 0.220 to 0.227 at 0.4, 0.208 to 0.211 at 0.62 and 0.196 to 0.201 at 0.9. Mean score per spawnRadius is 0.241 to 0.243 for all four values, and in the top rows seedCount 2 against 6 changes the score by at most 0.001. Spawn geometry (ring gap 4 to 16 cells) and the number of starting seeds do not interact with stickiness in any way the instrument can see at equal growth; this is an honest negative for the stickiness/spawn interaction.
+- **Equal-growth comparison reverses the finished-cluster story only partly.** At the final 4500-cell milestone alone the stickiness 0.04 sets sit at radius 0.460 to 0.488 of the usable grid while the stickiness 0.9 sets reach 0.758 to 0.830, so low stickiness packs the same cells into a smaller, rounder cluster. Final-milestone coverage is about 0.122 to 0.124 for every row by construction. The 0.073 coverage in the ranked tables is different: it is the mean over the three milestones (1000, 2500 and 4500 cells), and radius figures quoted elsewhere as means are likewise three-milestone means, not 4500-cell values. The score advantage of low stickiness is mostly autocorrelation (0.82 to 0.83 against 0.50 to 0.51, also three-milestone means).
+- **Seed replication.** The three finalists score c03 0.290/0.288/0.289, c01 0.290/0.289/0.287 and c04 0.290/0.288/0.286 at seeds 7/11/23; the references vary by at most 0.0048 across seeds (dense coral 0.265 to 0.270, spread 0.004764001868966139; branching 0.0032, multi-seed 0.0013). The ranking is not a one-seed accident. Three seeds are robustness evidence, not a distributional guarantee.
+- **Current references.** Dense coral (stickiness 0.15) scores 0.270, within 0.02 of the best, and branching and multi-seed score 0.196 and 0.200, level with the stickiness 0.9 sets. Nothing in this grid beats dense coral by a margin that the images support.
+- **Visual finding.** The best set c03 at step 145 and at the longer horizon is a dense, rough-edged round blob with a dark core and short barbs: compact, close to a surface-growth cluster, with almost no open branching. The dense-coral reference at equal milestones is a similar blob with visibly longer barbs and more open interior; the branching reference at stickiness 1 is the classic thin dendrite. So the scores rank the compact blob top but the blob is less DLA-like than the incumbent; a visual preference is for the operator (`146-dla-c03-field-192-seednone-strip-t145.png`, `146-current-dense-coral-field-192-seednone-strip-t77.png`, `146-current-branching-field-192-seednone-strip-t73.png`).
+- **Finite size.** On 288² the same milestones fill a smaller fraction of the frame, so scores fall (c03: 0.095, 0.265, 0.510 at 192² against 0.039, 0.108, 0.208 at 288²). The coverage and structure terms are frame-relative; scores are comparable within a grid size only.
+- **Longer horizon.** Running past every milestone to the edge stop gives finished clusters of 16758 to 18685 cells for the low-stickiness finalists and 5955 for branching (edge stop at 0.92 of the radius), reproducing the 2026-08 terminal state. The finished-cluster scores (0.645 to 0.667 against 0.328 for branching) are the old regime; the milestone scores above are the new one.
+- **Pathological output.** No non-finite values; every candidate reached every milestone.
+
+### Proposed promotions
+
+**None.** The best candidates (stickiness 0.04 to 0.08, any spawn radius, 2 or 6 seeds) beat the dense-coral reference by 0.02 on score (0.290 against 0.270), but the images show a compact blob that is less branching than the incumbent, and no spawn-geometry or seed-count combination changed the reading. This is an explicit no-promotion outcome; the existing presets stay.
+
+### Finalist and reference images
+
+Grayscale field PNGs are kernel-field dumps from the sweep driver (time strip at the three captures, a finite-size repeat at two other sizes, a longer-horizon repeat, and two extra seeds). The `renderer` PNGs are screenshots from the app's WebGL2 renderer at performance resolution at the middle step count; the renderer grid differs from the sweep grid, so those are app-scale views at equal step count, not numeric replays. Names carry the grid size, seed, kind and step.
+
+Finalists (top three by score among distinct measurements; evidence selections, not promotion recommendations):
+
+- `146-dla-c03`: [146-dla-c03-field-192-seednone-strip-t33.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seednone-strip-t33.png), [146-dla-c03-field-192-seednone-strip-t81.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seednone-strip-t81.png), [146-dla-c03-field-192-seednone-strip-t145.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seednone-strip-t145.png), [146-dla-c03-field-192-seednone-size-t81.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seednone-size-t81.png), [146-dla-c03-field-288-seednone-size-t84.png](../images/sweeps-2026-10-30/146-dla-c03-field-288-seednone-size-t84.png), [146-dla-c03-field-192-seednone-long-t530.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seednone-long-t530.png), [146-dla-c03-field-192-seed11-seed-t86.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seed11-seed-t86.png), [146-dla-c03-field-192-seed23-seed-t85.png](../images/sweeps-2026-10-30/146-dla-c03-field-192-seed23-seed-t85.png), [146-dla-c03-renderer-t81.png](../images/sweeps-2026-10-30/146-dla-c03-renderer-t81.png)
+- `146-dla-c01`: [146-dla-c01-field-192-seednone-strip-t32.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seednone-strip-t32.png), [146-dla-c01-field-192-seednone-strip-t87.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seednone-strip-t87.png), [146-dla-c01-field-192-seednone-strip-t153.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seednone-strip-t153.png), [146-dla-c01-field-192-seednone-size-t87.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seednone-size-t87.png), [146-dla-c01-field-288-seednone-size-t86.png](../images/sweeps-2026-10-30/146-dla-c01-field-288-seednone-size-t86.png), [146-dla-c01-field-192-seednone-long-t610.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seednone-long-t610.png), [146-dla-c01-field-192-seed11-seed-t85.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seed11-seed-t85.png), [146-dla-c01-field-192-seed23-seed-t83.png](../images/sweeps-2026-10-30/146-dla-c01-field-192-seed23-seed-t83.png), [146-dla-c01-renderer-t87.png](../images/sweeps-2026-10-30/146-dla-c01-renderer-t87.png)
+- `146-dla-c04`: [146-dla-c04-field-192-seednone-strip-t31.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seednone-strip-t31.png), [146-dla-c04-field-192-seednone-strip-t85.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seednone-strip-t85.png), [146-dla-c04-field-192-seednone-strip-t150.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seednone-strip-t150.png), [146-dla-c04-field-192-seednone-size-t85.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seednone-size-t85.png), [146-dla-c04-field-288-seednone-size-t81.png](../images/sweeps-2026-10-30/146-dla-c04-field-288-seednone-size-t81.png), [146-dla-c04-field-192-seednone-long-t563.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seednone-long-t563.png), [146-dla-c04-field-192-seed11-seed-t80.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seed11-seed-t80.png), [146-dla-c04-field-192-seed23-seed-t83.png](../images/sweeps-2026-10-30/146-dla-c04-field-192-seed23-seed-t83.png), [146-dla-c04-renderer-t85.png](../images/sweeps-2026-10-30/146-dla-c04-renderer-t85.png)
+
+References:
+
+- `146-current-branching`: [146-current-branching-field-192-seednone-strip-t17.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seednone-strip-t17.png), [146-current-branching-field-192-seednone-strip-t41.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seednone-strip-t41.png), [146-current-branching-field-192-seednone-strip-t73.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seednone-strip-t73.png), [146-current-branching-field-192-seednone-size-t41.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seednone-size-t41.png), [146-current-branching-field-288-seednone-size-t40.png](../images/sweeps-2026-10-30/146-current-branching-field-288-seednone-size-t40.png), [146-current-branching-field-192-seednone-long-t96.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seednone-long-t96.png), [146-current-branching-field-192-seed11-seed-t41.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seed11-seed-t41.png), [146-current-branching-field-192-seed23-seed-t41.png](../images/sweeps-2026-10-30/146-current-branching-field-192-seed23-seed-t41.png), [146-current-branching-renderer-t41.png](../images/sweeps-2026-10-30/146-current-branching-renderer-t41.png)
+- `146-current-dense-coral`: [146-current-dense-coral-field-192-seednone-strip-t18.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seednone-strip-t18.png), [146-current-dense-coral-field-192-seednone-strip-t44.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seednone-strip-t44.png), [146-current-dense-coral-field-192-seednone-strip-t77.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seednone-strip-t77.png), [146-current-dense-coral-field-192-seednone-size-t44.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seednone-size-t44.png), [146-current-dense-coral-field-288-seednone-size-t44.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-288-seednone-size-t44.png), [146-current-dense-coral-field-192-seednone-long-t260.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seednone-long-t260.png), [146-current-dense-coral-field-192-seed11-seed-t42.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seed11-seed-t42.png), [146-current-dense-coral-field-192-seed23-seed-t43.png](../images/sweeps-2026-10-30/146-current-dense-coral-field-192-seed23-seed-t43.png), [146-current-dense-coral-renderer-t44.png](../images/sweeps-2026-10-30/146-current-dense-coral-renderer-t44.png)
+- `146-current-multi-seed`: [146-current-multi-seed-field-192-seednone-strip-t16.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seednone-strip-t16.png), [146-current-multi-seed-field-192-seednone-strip-t41.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seednone-strip-t41.png), [146-current-multi-seed-field-192-seednone-strip-t73.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seednone-strip-t73.png), [146-current-multi-seed-field-192-seednone-size-t41.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seednone-size-t41.png), [146-current-multi-seed-field-288-seednone-size-t41.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-288-seednone-size-t41.png), [146-current-multi-seed-field-192-seednone-long-t98.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seednone-long-t98.png), [146-current-multi-seed-field-192-seed11-seed-t40.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seed11-seed-t40.png), [146-current-multi-seed-field-192-seed23-seed-t40.png](../images/sweeps-2026-10-30/146-current-multi-seed-field-192-seed23-seed-t40.png), [146-current-multi-seed-renderer-t41.png](../images/sweeps-2026-10-30/146-current-multi-seed-renderer-t41.png)
+
+### Reproduction
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 diffusion-limited-aggregation" --workers=1
+```
+
+The full three-kernel command is `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 " --workers=1` (about 7 minutes). Setting `SWEEP_146_RANKING_ONLY=1` stops after the ranking. Replay on the same browser and runtime reproduced every finalist and reference reading to a maximum absolute deviation of 0 (tolerance 1e-9).
+
+### Repair note (2026-11-01)
+
+The retained data in this report was measured with `e2e/harness/driver.ts` at sha256 `6e8890ca5a2f7b4867145f7bffad2408d931000a` (recorded in the manifest `sourceHashes`). The later sandpile conservation repair changed only the `abelian-sandpile` branch of the diagnostic driver, so this kernel's search was deliberately not re-run and its manifest keeps the original driver hash. Regenerated evidence is limited to the sandpile files; everything for this kernel is retained unchanged.

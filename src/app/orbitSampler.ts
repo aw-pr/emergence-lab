@@ -12,6 +12,7 @@ import {
   periodDetectionWindow,
 } from "../sims/logistic-mandelbrot/model.ts";
 import { SlotPacker, admissionOrder, distinctPointCount } from "./orbitPacking.ts";
+import { raisedTierPointCap } from "./orbitPointBudgets.ts";
 import {
   isRefineCandidate,
   refinePointWeight,
@@ -494,6 +495,18 @@ export interface OrbitCloudBuffers {
   refinedL2Rows: number;
   /** Sub-cells of the raised boundary-detail tier (0 when it is inactive). */
   refinedDetailSubCells: number;
+  /** Escape-edge ring used by the raised tier (0 when it is inactive). */
+  detailRing: number;
+  /** Tail and ring-1 candidates seen before the raised-tier candidate cap. */
+  detailCoreCandidates: number;
+  /** Eligible ring-2-to-R candidates seen before the raised-tier candidate cap. */
+  detailRingCandidates: number;
+  /** Candidates admitted to raised-tier subdivision. */
+  detailCandidatesAdmitted: number;
+  /** Cells in escape-edge rings 1 to 6 (later entries may be zero off extreme). */
+  detailRingCells: Uint32Array;
+  /** Bounded cells in escape-edge rings 1 to 6. */
+  detailRingBoundedCells: Uint32Array;
   /** The jobs each tail level sampled, read back by the diagnostic hook. */
   refineJobs: {
     level1: OrbitRefineJobRecord | null;
@@ -515,6 +528,8 @@ export interface GpuOrbitCloudOptions {
   realSliceOnly: boolean;
   /** Slots the whole cloud may occupy (the raised budget when detail is active). */
   maxSlots: number;
+  /** Total point budget after applying the boundary-detail level. */
+  gpuPointBudget: number;
   /** Slots the base tier may occupy: the planner's base row budget over sampleCount. */
   baseSlotCap: number;
   /** Tail refinement, levels 1 and 2: the detail-0 refinement. */
@@ -529,6 +544,7 @@ export interface GpuOrbitCloudOptions {
   refineSubdivision: number;
   /** The raised boundary-detail tier, stored after level 2. */
   boundaryDetailActive: boolean;
+  boundaryDetailRing: number;
   boundaryDetailCandidateCap: number;
   boundaryDetailWarmup: number;
   boundaryDetailSubdivision: number;
@@ -1173,6 +1189,7 @@ export function buildGpuOrbitCloud(
     warmupIterations,
     realSliceOnly,
     maxSlots,
+    gpuPointBudget,
     baseSlotCap,
     refineActive,
     refineRowBudget,
@@ -1181,6 +1198,7 @@ export function buildGpuOrbitCloud(
     refineWarmup,
     refineSubdivision,
     boundaryDetailActive,
+    boundaryDetailRing,
     boundaryDetailCandidateCap,
     boundaryDetailWarmup,
     boundaryDetailSubdivision,
@@ -1236,20 +1254,36 @@ export function buildGpuOrbitCloud(
 
   // Refinement candidates: cascade tails (deep or undetected period) for
   // level 1 and, with boundary detail, tails plus both sides of the escape
-  // edge for the raised tier. Reservoir-capped; the level-1 cap derives from
-  // the refinement row budget, the raised tier's from the rows the base tier
-  // was planned to leave under the raised budget.
+  // edge for the raised tier. The core keeps its existing reservoir order;
+  // outer rings may only use slots left by that core.
   const tailCandidates = new Int32Array(refineActive ? refineCandidateCap : 0);
   const detailCandidates = new Int32Array(
     boundaryDetailActive ? boundaryDetailCandidateCap : 0,
   );
+  const effectiveDetailRing = boundaryDetailActive
+    ? Math.max(1, Math.min(6, Math.floor(boundaryDetailRing)))
+    : 0;
+  const widenedDetailRing = effectiveDetailRing > 1;
+  const boundaryRings = widenedDetailRing
+    ? escapeBoundaryRings(escapeMask, sampleWidth, sampleHeight, 6)
+    : new Uint8Array(0);
+  const detailRingCells = new Uint32Array(widenedDetailRing ? 6 : 0);
+  const detailRingBoundedCells = new Uint32Array(widenedDetailRing ? 6 : 0);
+  for (let cell = 0; cell < boundaryRings.length; cell += 1) {
+    const ring = boundaryRings[cell];
+    if (ring === 0 || ring > 6) continue;
+    detailRingCells[ring - 1] += 1;
+    if (escapeMask[cell] === 0) detailRingBoundedCells[ring - 1] += 1;
+  }
   let tailSeen = 0;
-  let detailSeen = 0;
+  let detailCoreSeen = 0;
   for (let cell = 0; cell < baseCellCount; cell += 1) {
     const escaped = escapeMask[cell] === 1;
-    const boundaryBand =
-      boundaryDetailActive &&
-      isEscapeEdgeCell(escapeMask, sampleWidth, sampleHeight, cell);
+    const boundaryBand = boundaryDetailActive && (
+      widenedDetailRing
+        ? boundaryRings[cell] === 1
+        : isEscapeEdgeCell(escapeMask, sampleWidth, sampleHeight, cell)
+    );
     if (escaped && !boundaryBand) continue;
     const tailCandidate = !escaped && tailMask[cell] === 1;
     if (refineActive && tailCandidate) {
@@ -1258,10 +1292,33 @@ export function buildGpuOrbitCloud(
       if (candidateSlot >= 0) tailCandidates[candidateSlot] = cell;
     }
     if (boundaryDetailActive && (tailCandidate || boundaryBand)) {
-      const candidateSlot = reservoirSlot(detailSeen, boundaryDetailCandidateCap);
-      detailSeen += 1;
+      const candidateSlot = reservoirSlot(detailCoreSeen, boundaryDetailCandidateCap);
+      detailCoreSeen += 1;
       if (candidateSlot >= 0) detailCandidates[candidateSlot] = cell;
     }
+  }
+  let detailCandidatesAdmitted = Math.min(
+    detailCoreSeen,
+    boundaryDetailCandidateCap,
+  );
+  let detailRingSeen = 0;
+  for (let ring = 2; ring <= effectiveDetailRing; ring += 1) {
+    const firstSlot = detailCandidatesAdmitted;
+    const ringCapacity = boundaryDetailCandidateCap - firstSlot;
+    let ringSeen = 0;
+    for (let cell = 0; cell < baseCellCount; cell += 1) {
+      if (boundaryRings[cell] !== ring) continue;
+      if (escapeMask[cell] === 0 && tailMask[cell] === 1) continue;
+      if (ringCapacity > 0) {
+        const candidateSlot = reservoirSlot(ringSeen, ringCapacity);
+        if (candidateSlot >= 0) {
+          detailCandidates[firstSlot + candidateSlot] = cell;
+        }
+      }
+      ringSeen += 1;
+    }
+    detailRingSeen += ringSeen;
+    detailCandidatesAdmitted += Math.min(ringSeen, ringCapacity);
   }
 
   const cellWidth = (RE_MAX - RE_MIN) / sampleWidth;
@@ -1413,12 +1470,19 @@ export function buildGpuOrbitCloud(
   const boundaryDetailBaseSlots = baseSlots + level1Slots + level2Slots;
   let detail = emptyTier(sampleCount);
   if (boundaryDetailActive) {
+    const lowerTierPoints = boundaryDetailBaseSlots * sampleCount;
+    const detailSlotCap = Math.floor(
+      raisedTierPointCap(gpuPointBudget, lowerTierPoints) / sampleCount,
+    );
     const built = refineTier(
       baseCoordinates,
       null,
       detailCandidates,
-      detailSeen,
-      Math.max(0, maxSlots - boundaryDetailBaseSlots),
+      detailCandidatesAdmitted,
+      Math.min(
+        Math.max(0, maxSlots - boundaryDetailBaseSlots),
+        detailSlotCap,
+      ),
       boundaryDetailWarmup,
       boundaryDetailSubdivision,
       cellWidth,
@@ -1525,6 +1589,9 @@ export function buildGpuOrbitCloud(
     + distances.byteLength
     + tailCandidates.byteLength
     + detailCandidates.byteLength
+    + boundaryRings.byteLength
+    + detailRingCells.byteLength
+    + detailRingBoundedCells.byteLength
     + level1.layoutBytes
     + level2Candidates.byteLength
     + level2.layoutBytes
@@ -1568,6 +1635,12 @@ export function buildGpuOrbitCloud(
     refinedL2SubCells: level2.subCells,
     refinedL2Rows: level2.rows,
     refinedDetailSubCells: detail.subCells,
+    detailRing: effectiveDetailRing,
+    detailCoreCandidates: detailCoreSeen,
+    detailRingCandidates: detailRingSeen,
+    detailCandidatesAdmitted,
+    detailRingCells,
+    detailRingBoundedCells,
     refineJobs: {
       level1: jobRecord(level1, baseCoordinates, cellWidth, cellHeight),
       level2: jobRecord(
@@ -1581,6 +1654,60 @@ export function buildGpuOrbitCloud(
     buildBytes,
     samplerBytes,
   };
+}
+
+/**
+ * Chebyshev distance to the nearest cell with the other escape state, capped
+ * at `maxRing`. Ring 1 is exactly `isEscapeEdgeCell` on both sides.
+ */
+export function escapeBoundaryRings(
+  escapeMask: Uint8Array,
+  width: number,
+  height: number,
+  maxRing: number,
+): Uint8Array {
+  const ringLimit = Math.max(0, Math.min(254, Math.floor(maxRing)));
+  const rings = new Uint8Array(escapeMask.length);
+  if (ringLimit === 0) return rings;
+  const far = ringLimit + 1;
+  rings.fill(far);
+  for (let cell = 0; cell < escapeMask.length; cell += 1) {
+    if (isEscapeEdgeCell(escapeMask, width, height, cell)) rings[cell] = 1;
+  }
+  const relax = (cell: number, neighbour: number, best: number): number =>
+    escapeMask[cell] === escapeMask[neighbour]
+      ? Math.min(best, rings[neighbour] + 1)
+      : best;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const cell = y * width + x;
+      let best = rings[cell];
+      if (x > 0) best = relax(cell, cell - 1, best);
+      if (y > 0) {
+        best = relax(cell, cell - width, best);
+        if (x > 0) best = relax(cell, cell - width - 1, best);
+        if (x + 1 < width) best = relax(cell, cell - width + 1, best);
+      }
+      rings[cell] = Math.min(best, far);
+    }
+  }
+  for (let y = height - 1; y >= 0; y -= 1) {
+    for (let x = width - 1; x >= 0; x -= 1) {
+      const cell = y * width + x;
+      let best = rings[cell];
+      if (x + 1 < width) best = relax(cell, cell + 1, best);
+      if (y + 1 < height) {
+        best = relax(cell, cell + width, best);
+        if (x > 0) best = relax(cell, cell + width - 1, best);
+        if (x + 1 < width) best = relax(cell, cell + width + 1, best);
+      }
+      rings[cell] = Math.min(best, far);
+    }
+  }
+  for (let cell = 0; cell < rings.length; cell += 1) {
+    if (rings[cell] > ringLimit) rings[cell] = 0;
+  }
+  return rings;
 }
 
 /**

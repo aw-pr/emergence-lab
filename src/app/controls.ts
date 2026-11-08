@@ -1,4 +1,5 @@
 import type { ParamDescriptor, SimParams } from "./types.ts";
+import { siteOwnsChrome } from "./chrome.ts";
 import {
   COLOUR_PRESETS,
   type ColourMapOptions,
@@ -90,6 +91,7 @@ export interface StepsControlOptions {
 
 export interface ControlsOptions {
   slug: string;
+  presetSession?: boolean;
   container: HTMLElement;
   simName: string;
   paramSchema: readonly ParamDescriptor[];
@@ -98,6 +100,7 @@ export interface ControlsOptions {
   /** Factory-default params (schema defaults + per-sim overrides), ignoring persistence. Used by "Reset to defaults". */
   defaultParams: SimParams;
   initialStepsPerFrame: number;
+  defaultStepsPerFrame?: number;
   stepsControl: StepsControlOptions;
   initialColourOptions: ColourMapOptions;
   /** Factory-default colour options, ignoring persistence. Used by "Reset to defaults". */
@@ -149,6 +152,8 @@ export interface ControlsOptions {
  */
 export class ControlsPanel {
   private readonly slug: string;
+  private readonly presetSession: boolean;
+  private stepsPerFrame: number;
   private readonly container: HTMLElement;
   private readonly callbacks: ControlsCallbacks;
   private readonly paramSchema: readonly ParamDescriptor[];
@@ -188,6 +193,7 @@ export class ControlsPanel {
     }
   >();
   private playPauseBtn!: HTMLButtonElement;
+  private transport!: HTMLElement;
   private fpsLabel!: HTMLSpanElement;
   private iterationLabel!: HTMLSpanElement;
   private stepsInput?: HTMLInputElement;
@@ -209,10 +215,12 @@ export class ControlsPanel {
 
   constructor(options: ControlsOptions) {
     this.slug = options.slug;
+    this.presetSession = options.presetSession ?? false;
+    this.stepsPerFrame = options.initialStepsPerFrame;
     this.container = options.container;
     this.callbacks = options.callbacks;
     this.paramSchema = options.paramSchema;
-    this.initialStepsPerFrame = options.initialStepsPerFrame;
+    this.initialStepsPerFrame = options.defaultStepsPerFrame ?? options.initialStepsPerFrame;
     this.stepsControl = options.stepsControl;
     this.defaultColourOptions = { ...options.defaultColourOptions };
     this.defaultDisplayOptions = { ...options.defaultDisplayOptions };
@@ -225,7 +233,7 @@ export class ControlsPanel {
     this.showAutoCycleControl = options.showAutoCycleControl ?? false;
     this.defaultAutoCycle = options.defaultAutoCycle ?? false;
     this.autoCycle = options.initialAutoCycle ?? this.defaultAutoCycle;
-    this.params = restorePersistedParams(
+    this.params = this.presetSession ? { ...options.initialParams } : restorePersistedParams(
       options.slug,
       options.paramSchema,
       options.initialParams,
@@ -271,6 +279,12 @@ export class ControlsPanel {
     );
   }
 
+  /** Places a section owned by the view (the preset tools) directly under the
+   *  transport row, above the generated sections. */
+  insertAfterTransport(section: HTMLElement): void {
+    this.transport.after(section);
+  }
+
   /** Detaches document-level listeners backing the info popovers. */
   dispose(): void {
     this.infoDismissAbort.abort();
@@ -305,7 +319,18 @@ export class ControlsPanel {
       if (value === undefined) continue;
       this.syncParamControl(descriptor, value);
     }
-    if (persist) saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
+    if (persist && !this.presetSession) saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
+  }
+
+  getConfiguration() {
+    return {
+      params: this.getParams(),
+      colourOptions: { ...this.colourOptions },
+      displayOptions: { ...this.displayOptions },
+      resolution: this.resolution,
+      stepsPerFrame: this.stepsPerFrame,
+      autoCycle: this.autoCycle,
+    };
   }
 
   private render(options: ControlsOptions): void {
@@ -322,6 +347,8 @@ export class ControlsPanel {
     const title = document.createElement("h2");
     title.className = "controls__title";
     title.textContent = options.simName;
+    // The host's bar names the sim when the site owns the chrome.
+    title.hidden = siteOwnsChrome();
     header.appendChild(title);
 
     const metrics = document.createElement("div");
@@ -343,30 +370,40 @@ export class ControlsPanel {
 
     const transport = document.createElement("div");
     transport.className = "controls__transport";
+    this.transport = transport;
+
+    const transportButtons = document.createElement("div");
+    transportButtons.className = "controls__transport-buttons";
 
     this.playPauseBtn = button("Pause", () => this.callbacks.onPlayPause());
     this.playPauseBtn.setAttribute("aria-pressed", "true");
-    transport.appendChild(this.playPauseBtn);
+    transportButtons.appendChild(this.playPauseBtn);
 
-    transport.appendChild(button("Reset", () => this.callbacks.onReset()));
-    transport.appendChild(
+    transportButtons.appendChild(button("Reset", () => this.callbacks.onReset()));
+    transportButtons.appendChild(
       button("Reset to defaults", () => this.resetToDefaults()),
     );
-    transport.appendChild(
-      button("Maximise", () => this.callbacks.onToggleFullscreen()),
+    transportButtons.appendChild(
+      button("Fullscreen", () => this.callbacks.onToggleFullscreen()),
     );
+    transport.appendChild(transportButtons);
+    this.container.appendChild(transport);
 
-    transport.appendChild(
+    // A block of its own so a section inserted after the transport buttons
+    // (the Presets list) sits directly under them.
+    const pace = document.createElement("div");
+    pace.className = "controls__pace";
+    pace.appendChild(
       this.buildStepsControl(options.initialStepsPerFrame, options.stepsControl, (value) =>
         this.callbacks.onStepsPerFrameChange(value),
       ),
     );
 
     if (this.showAutoCycleControl) {
-      transport.appendChild(this.buildAutoCycleControl());
+      pace.appendChild(this.buildAutoCycleControl());
     }
 
-    this.container.appendChild(transport);
+    this.container.appendChild(pace);
 
     const viewParamKeys = new Set(options.viewParamKeys ?? []);
     const viewSection = collapsibleSection(this.slug, "View", "controls__view");
@@ -460,7 +497,7 @@ export class ControlsPanel {
     input.type = "range";
     input.min = String(control.min);
     input.max = String(control.max);
-    input.step = String(control.step);
+    input.step = sliderStep(control.min, control.step, initial);
     input.value = String(initial);
     wrap.appendChild(input);
 
@@ -472,6 +509,7 @@ export class ControlsPanel {
     input.addEventListener("input", () => {
       const next = Number(input.value);
       value.textContent = formatSpeed(next, control.step);
+      this.stepsPerFrame = next;
       onChange(next);
     });
 
@@ -557,7 +595,9 @@ export class ControlsPanel {
     const wrap = document.createElement("label");
     wrap.className = "control control--number";
 
-    const bounds = boundsForDescriptor(this.slug, descriptor, initial);
+    const bounds = this.presetSession
+      ? schemaBoundsForDescriptor(descriptor, initial)
+      : boundsForDescriptor(this.slug, descriptor, initial);
     const clampedInitial = clampToBounds(initial, bounds);
 
     const label = document.createElement("span");
@@ -607,7 +647,7 @@ export class ControlsPanel {
     input.dataset.paramKey = descriptor.key;
     input.min = String(bounds.min);
     input.max = String(bounds.max);
-    if (descriptor.step !== undefined) input.step = String(descriptor.step);
+    if (descriptor.step !== undefined) input.step = exactSliderStep(descriptor, clampedInitial);
     input.value = String(clampedInitial);
     this.paramInputs.set(descriptor.key, input);
     wrap.appendChild(input);
@@ -640,7 +680,7 @@ export class ControlsPanel {
         return;
       }
 
-      saveBounds(this.slug, descriptor.key, { min: nextMin, max: nextMax });
+      if (!this.presetSession) saveBounds(this.slug, descriptor.key, { min: nextMin, max: nextMax });
       this.applyNumberBounds(descriptor, input, value, nextMin, nextMax);
       popover.hidden = true;
     });
@@ -742,7 +782,7 @@ export class ControlsPanel {
     select.addEventListener("change", () => {
       const preset = select.value as ResolutionPreset;
       this.resolution = preset;
-      saveResolution(this.slug, preset);
+      if (!this.presetSession) saveResolution(this.slug, preset);
       this.callbacks.onResolutionChange(preset);
     });
     this.resolutionSelect = select;
@@ -979,8 +1019,8 @@ export class ControlsPanel {
     const input = document.createElement("input");
     input.type = "range";
     input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
+    input.max = String(Math.max(max, initial));
+    input.step = sliderStep(min, step, initial);
     input.value = String(initial);
     wrap.appendChild(input);
 
@@ -1060,7 +1100,7 @@ export class ControlsPanel {
 
   private updateParams(next: SimParams): void {
     this.params = next;
-    saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
+    if (!this.presetSession) saveValues(this.slug, encodeStoredValues(this.params, this.paramSchema));
     this.callbacks.onParamChange(this.params);
   }
 
@@ -1084,11 +1124,14 @@ export class ControlsPanel {
   }
 
   private resetToDefaults(): void {
-    clearValues(this.slug);
-    clearBounds(this.slug);
-    clearResolution(this.slug);
-    clearRenderOptions(this.slug);
+    if (!this.presetSession) {
+      clearValues(this.slug);
+      clearBounds(this.slug);
+      clearResolution(this.slug);
+      clearRenderOptions(this.slug);
+    }
 
+    this.stepsPerFrame = this.initialStepsPerFrame;
     this.syncStepsControl(this.initialStepsPerFrame);
     this.colourOptions = { ...this.defaultColourOptions };
     this.displayOptions = { ...this.defaultDisplayOptions };
@@ -1176,6 +1219,7 @@ export class ControlsPanel {
     if (!controls) {
       return;
     }
+    controls.input.step = sliderStep(Number(controls.input.min), controls.step, value);
     controls.input.value = String(value);
     controls.valueLabel.textContent = formatNumber(value, controls.step);
   }
@@ -1187,6 +1231,7 @@ export class ControlsPanel {
   }
 
   private persistRenderOptions(): void {
+    if (this.presetSession) return;
     saveRenderOptions(this.slug, {
       steps: this.colourOptions.steps,
       trailFade: this.displayOptions.trailFade,
@@ -1227,6 +1272,7 @@ export class ControlsPanel {
 
     switch (descriptor.type) {
       case "number": {
+        if (input instanceof HTMLInputElement) input.step = exactSliderStep(descriptor, Number(value));
         input.value = String(value);
         const valueLabel = this.paramValueLabels.get(descriptor.key);
         if (valueLabel) {
@@ -1353,7 +1399,7 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
 function formatNumber(value: number, step?: number): string {
   if (step === undefined) return String(value);
   const decimals = Math.max(0, Math.min(6, -Math.floor(Math.log10(step || 1))));
-  return value.toFixed(decimals);
+  return Math.abs(Number(value.toFixed(decimals)) - value) < 1e-10 ? value.toFixed(decimals) : String(value);
 }
 
 function formatSpeed(value: number, step: number): string {
@@ -1369,4 +1415,14 @@ export function defaultParamsFromSchema(
     out[descriptor.key] = descriptor.default;
   }
   return out;
+}
+
+function exactSliderStep(descriptor: ParamDescriptor, value: number): string {
+  if (descriptor.step === undefined) return "any";
+  return sliderStep(descriptor.min ?? 0, descriptor.step, value);
+}
+
+function sliderStep(min: number, step: number, value: number): string {
+  const offset = (value - min) / step;
+  return Math.abs(offset - Math.round(offset)) < 1e-7 ? String(step) : "any";
 }

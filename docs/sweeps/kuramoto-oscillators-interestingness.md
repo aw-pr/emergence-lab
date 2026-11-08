@@ -122,3 +122,256 @@ replacement composite, so no preset was changed.
 The synthetic wrap check used a constant eight-step phase gradient across both
 grid axes. It scored 0.333333 under the linear autocorrelation and 0.707107
 circularly, recording that the circular reading sees through the 1-to-0 wrap.
+
+## Missed synchronisation regimes — 2026-10-30 batch, completed by worker 2026-11-04
+
+**No promotion proposed.** All 64 declared Kuramoto candidates and five current references were measured. Three evidence selections and all references have 192 validation readings in total: seeds 1, 7 and 23 × 128² and 256² × 400, 600, 800 and 1600 kernel calls. Independent verifier acceptance and any operator visual sign-off remain separate. Swarmalators was deferred by the operator on 2026-11-03; it was not searched in this execution.
+
+### Method and retained evidence
+
+[Pre-measurement manifest](data/2026-10-30/145/kuramoto-oscillators-manifest.json), [complete ranked results and validation](data/2026-10-30/145/kuramoto-oscillators.json), [lossless base phase fields](data/2026-10-30/145/kuramoto-oscillators-raw.json), [worker replay](data/2026-10-30/145/kuramoto-oscillators-worker-replay.json), and [check record](data/2026-10-30/145/worker-checks.json). The raw fields contain every candidate/reference A/B pair, zlib-compressed, base64-encoded little-endian Float32 values, in row-major order. Recompute metrics without rerunning the simulation using the retained-field test below. Full parameter values, field hashes and all unrounded numeric readings are retained.
+
+The additive `sweep-145-kuramoto-oscillators` configuration uses the existing `scoreOne` → `driveKernel` → `scoreFrames` path at 128×128, channel 0, warmup 400, gap 6, driver dt 1 and coverage threshold 0.5. The kernel ignores driver dt and uses its declared timestep 0.045. Every base row starts afresh at seed 1. There are no inner iteration multipliers. The original manifest is preserved and repeated in the result; its broader `sweep 145 ` command still selects the single Kuramoto sweep.
+
+`phase-observations-v1` records existing mean resultant length R (global order), existing lag-1 circular coherence C (mean cosine over interior right/down pairs), phase balance 1−R, and short-gap persistence P=mean cos(2π(B−A)). Kuramoto defines phase at every cell, so occupancy is the full grid. The masked-occupancy regression remains for the shared phase diagnostic; no Swarmalators run is implied. These diagnostics never alter the legacy texture score. C omits cross-border pairs although the kernel itself is toroidal. P spans only six calls: values near 1 cannot distinguish stationary structure from slow drift or deformation.
+
+App PNGs use the actual app `Renderer`, default phase palette (gamma 1, contrast 1.12), default desktop quality `ultra`, field mode, WebGL2 and the shipped GPU Kuramoto simulation. Every comparison has a 640×480 CSS canvas and viewport, DPR 1 and actual GPU grid 768×576. A fresh GPU state is explicitly seeded, advanced by exactly 400/600/800/1600 GPU steps and presented while paused. Each row records a readback hash of its GPU phase texture; the 400-step capture is repeated with an identical hash. GPU computation and its noise implementation are distinct from the CPU metric instrument: no CPU/GPU equality or shared state hash is claimed. Different-resolution/GPU views are visual checks, not exact CPU numeric replays.
+
+Historical throughput evidence remains in the [2026-10-31 Kuramoto pilot](data/2026-10-30/145/kuramoto-oscillators-pilot.json), [Swarmalators pilot](data/2026-10-30/145/swarmalators-pilot.json) and [preflight checks](data/2026-10-30/145/preflight-checks.json). That grouped attempt stopped before the full grid because Swarmalators projected about 185 minutes against its 60-minute allowance. The operator split the card to Kuramoto only. In this worker session, the initial full numerical run completed its 69 base and 192 validation measurements, then failed at app capture: the stage-144 CPU snapshot helper saw Kuramoto’s 1×1 CPU placeholder against a 768×576 GPU grid. No app evidence or complete result was claimed from that failed capture. A focused GPU test proved the correct shipped path and deterministic readback; the corrected complete sweep passed in 737.669 seconds. The diagnosis is retained in the check record.
+
+### Searched and not-searched axes
+
+Exactly 64 candidates, zero refinements: couplingMode ∈ {local, global} × coupling ∈ {0.7, 1, 1.4, 2.4} × initialPattern ∈ {waves, random} × noise ∈ {0, 0.04, 0.16, 0.4}. Fixed frequencySpread 0.55, timestep 0.045, seed 1. Nothing was capped, skipped, deduplicated away or silently truncated.
+
+The historical 40-point grid used coupling {0.6, 1.2, 1.8, 3.2, 4.6}, spread {0.1, 0.3, 0.45, 0.8}, both modes, noise 0.015 and vortices. Its circular-statistics appendix reused that grid. Every new full parameter set differs; historical configurations and artifact IDs remain unchanged. Source ranges and inclusion/exclusion reasons are cited in the manifest against this report and [harness configuration](../../e2e/harness/sims.ts). No new spread, timestep, vortices or whole-slider search was performed. Three seeds, longer times and the second grid are validation repeats only.
+
+### Complete candidate ranking
+
+Fixed values are given above; the exact full parameter object for every ID is in the manifest and result. Ranking is descending legacy texture score at seed 1, 128², 400 calls. R and C are complementary diagnostics, not ranking terms.
+
+| Rank | ID | Mode | Coupling | Start | Noise | Score | R | C | P |
+|---:|---|---|---:|---|---:|---:|---:|---:|---:|
+| 1 | `c28` | local | 2.4 | waves | 0.4 | 0.783126 | 0.033599 | 0.962972 | 0.999718 |
+| 2 | `c27` | local | 2.4 | waves | 0.16 | 0.767144 | 0.033326 | 0.963466 | 0.999940 |
+| 3 | `c25` | local | 2.4 | waves | 0 | 0.760938 | 0.033131 | 0.963572 | 0.999983 |
+| 4 | `c26` | local | 2.4 | waves | 0.04 | 0.760603 | 0.033181 | 0.963562 | 0.999980 |
+| 5 | `c32` | local | 2.4 | random | 0.4 | 0.748488 | 0.076680 | 0.905495 | 0.999470 |
+| 6 | `c30` | local | 2.4 | random | 0.04 | 0.737986 | 0.062966 | 0.906665 | 0.999755 |
+| 7 | `c31` | local | 2.4 | random | 0.16 | 0.735759 | 0.055479 | 0.906332 | 0.999677 |
+| 8 | `c29` | local | 2.4 | random | 0 | 0.735416 | 0.065542 | 0.906371 | 0.999753 |
+| 9 | `c20` | local | 1.4 | waves | 0.4 | 0.732246 | 0.023551 | 0.898643 | 0.999681 |
+| 10 | `c19` | local | 1.4 | waves | 0.16 | 0.716621 | 0.023359 | 0.899639 | 0.999924 |
+| 11 | `c18` | local | 1.4 | waves | 0.04 | 0.708594 | 0.023249 | 0.899838 | 0.999967 |
+| 12 | `c17` | local | 1.4 | waves | 0 | 0.707213 | 0.023210 | 0.899860 | 0.999970 |
+| 13 | `c24` | local | 1.4 | random | 0.4 | 0.702214 | 0.087368 | 0.825208 | 0.999388 |
+| 14 | `c23` | local | 1.4 | random | 0.16 | 0.692243 | 0.083040 | 0.824360 | 0.999633 |
+| 15 | `c22` | local | 1.4 | random | 0.04 | 0.690831 | 0.079614 | 0.824594 | 0.999669 |
+| 16 | `c21` | local | 1.4 | random | 0 | 0.689480 | 0.074364 | 0.825261 | 0.999664 |
+| 17 | `c12` | local | 1 | waves | 0.4 | 0.666325 | 0.010697 | 0.774320 | 0.999458 |
+| 18 | `c11` | local | 1 | waves | 0.16 | 0.660167 | 0.010942 | 0.776436 | 0.999716 |
+| 19 | `c16` | local | 1 | random | 0.4 | 0.658166 | 0.036684 | 0.701230 | 0.998999 |
+| 20 | `c09` | local | 1 | waves | 0 | 0.655719 | 0.011070 | 0.776958 | 0.999765 |
+| 21 | `c10` | local | 1 | waves | 0.04 | 0.653946 | 0.011044 | 0.776898 | 0.999762 |
+| 22 | `c15` | local | 1 | random | 0.16 | 0.650125 | 0.032373 | 0.702384 | 0.999240 |
+| 23 | `c13` | local | 1 | random | 0 | 0.645430 | 0.035064 | 0.705000 | 0.999272 |
+| 24 | `c14` | local | 1 | random | 0.04 | 0.644173 | 0.033640 | 0.703992 | 0.999290 |
+| 25 | `c04` | local | 0.7 | waves | 0.4 | 0.589778 | 0.012598 | 0.513838 | 0.998170 |
+| 26 | `c08` | local | 0.7 | random | 0.4 | 0.587632 | 0.010207 | 0.497473 | 0.998012 |
+| 27 | `c03` | local | 0.7 | waves | 0.16 | 0.587457 | 0.013235 | 0.516433 | 0.998453 |
+| 28 | `c01` | local | 0.7 | waves | 0 | 0.586848 | 0.013476 | 0.517183 | 0.998522 |
+| 29 | `c05` | local | 0.7 | random | 0 | 0.585613 | 0.003976 | 0.499674 | 0.998346 |
+| 30 | `c02` | local | 0.7 | waves | 0.04 | 0.585336 | 0.013430 | 0.517032 | 0.998515 |
+| 31 | `c06` | local | 0.7 | random | 0.04 | 0.585151 | 0.003686 | 0.499806 | 0.998338 |
+| 32 | `c07` | local | 0.7 | random | 0.16 | 0.582388 | 0.004942 | 0.500347 | 0.998300 |
+| 33 | `c39` | global | 0.7 | random | 0.16 | 0.431489 | 0.099460 | 0.016184 | 0.996397 |
+| 34 | `c36` | global | 0.7 | waves | 0.4 | 0.430819 | 0.089995 | 0.007716 | 0.996148 |
+| 35 | `c40` | global | 0.7 | random | 0.4 | 0.429636 | 0.097743 | 0.015284 | 0.996130 |
+| 36 | `c34` | global | 0.7 | waves | 0.04 | 0.429593 | 0.094600 | 0.009373 | 0.996477 |
+| 37 | `c35` | global | 0.7 | waves | 0.16 | 0.429455 | 0.093289 | 0.008819 | 0.996426 |
+| 38 | `c33` | global | 0.7 | waves | 0 | 0.429117 | 0.095006 | 0.009564 | 0.996481 |
+| 39 | `c37` | global | 0.7 | random | 0 | 0.427917 | 0.099524 | 0.016301 | 0.996444 |
+| 40 | `c38` | global | 0.7 | random | 0.04 | 0.427347 | 0.099589 | 0.016305 | 0.996442 |
+| 41 | `c48` | global | 1 | random | 0.4 | 0.248328 | 0.913543 | 0.836231 | 0.999312 |
+| 42 | `c47` | global | 1 | random | 0.16 | 0.243936 | 0.918584 | 0.845433 | 0.999637 |
+| 43 | `c46` | global | 1 | random | 0.04 | 0.242887 | 0.917998 | 0.844498 | 0.999647 |
+| 44 | `c45` | global | 1 | random | 0 | 0.240898 | 0.918210 | 0.844604 | 0.999674 |
+| 45 | `c56` | global | 1.4 | random | 0.4 | 0.182367 | 0.971877 | 0.945113 | 0.999713 |
+| 46 | `c55` | global | 1.4 | random | 0.16 | 0.178271 | 0.972301 | 0.945906 | 0.999954 |
+| 47 | `c54` | global | 1.4 | random | 0.04 | 0.176167 | 0.972377 | 0.946037 | 0.999997 |
+| 48 | `c53` | global | 1.4 | random | 0 | 0.175868 | 0.972381 | 0.946039 | 1.000000 |
+| 49 | `c64` | global | 2.4 | random | 0.4 | 0.126525 | 0.990834 | 0.981939 | 0.999738 |
+| 50 | `c63` | global | 2.4 | random | 0.16 | 0.124612 | 0.991066 | 0.982388 | 0.999958 |
+| 51 | `c62` | global | 2.4 | random | 0.04 | 0.123976 | 0.991108 | 0.982465 | 0.999997 |
+| 52 | `c61` | global | 2.4 | random | 0 | 0.123761 | 0.991111 | 0.982469 | 1.000000 |
+| 53 | `c43` | global | 1 | waves | 0.16 | 0.000548 | 0.938094 | 0.881145 | 0.999937 |
+| 54 | `c44` | global | 1 | waves | 0.4 | 0.000185 | 0.937731 | 0.880523 | 0.999684 |
+| 55 | `c42` | global | 1 | waves | 0.04 | 0.000179 | 0.938712 | 0.882218 | 0.999984 |
+| 56 | `c41` | global | 1 | waves | 0 | 0.000178 | 0.938814 | 0.882535 | 0.999989 |
+| 57 | `c49` | global | 1.4 | waves | 0 | 0.000000 | 0.972382 | 0.946041 | 1.000000 |
+| 58 | `c50` | global | 1.4 | waves | 0.04 | 0.000000 | 0.972377 | 0.946038 | 0.999997 |
+| 59 | `c51` | global | 1.4 | waves | 0.16 | 0.000000 | 0.972302 | 0.945908 | 0.999954 |
+| 60 | `c52` | global | 1.4 | waves | 0.4 | 0.000000 | 0.971878 | 0.945114 | 0.999713 |
+| 61 | `c57` | global | 2.4 | waves | 0 | 0.000000 | 0.991111 | 0.982469 | 1.000000 |
+| 62 | `c58` | global | 2.4 | waves | 0.04 | 0.000000 | 0.991108 | 0.982465 | 0.999997 |
+| 63 | `c59` | global | 2.4 | waves | 0.16 | 0.000000 | 0.991066 | 0.982388 | 0.999958 |
+| 64 | `c60` | global | 2.4 | waves | 0.4 | 0.000000 | 0.990834 | 0.981939 | 0.999738 |
+
+Local candidates span score 0.582388–0.783126, R 0.003686–0.087368 and C 0.497473–0.963572. Global candidates span score 0–0.431489, R 0.089995–0.991111 and C 0.007716–0.982469. These bounds include all 64 candidates and exclude reference rows.
+
+### Current references and provenance
+
+The additional kernel-default row comes from [kernel defaults](../../src/sims/kuramoto-oscillators/kernel.ts). The other four rows exactly match all current [app presets](../../src/app/presets.ts), with seed 1 added explicitly. All seven kernel settings, including the supported seed, are present in each reference object. These rows have new `145-current-*` IDs; historical scores above remain historical.
+
+| Reference | Score | R | C | P |
+|---|---:|---:|---:|---:|
+| Kernel default | 0.733170 | 0.370879 | 0.961016 | 0.999985 |
+| Local phase waves | 0.755477 | 0.030887 | 0.958991 | 0.999985 |
+| Vortex field | 0.787109 | 0.458589 | 0.996733 | 0.999998 |
+| Global threshold | 0.201494 | 0.952423 | 0.907974 | 0.999999 |
+| Global lock | 0.077015 | 0.999156 | 0.998330 | 1.000000 |
+
+- `145-current-default`: `{"coupling":1.8,"frequencySpread":0.45,"timestep":0.045,"couplingMode":"local","initialPattern":"vortices","noise":0.015,"seed":1}`.
+- `145-current-local-waves`: `{"coupling":1.8,"frequencySpread":0.45,"timestep":0.045,"couplingMode":"local","initialPattern":"waves","noise":0.015,"seed":1}`.
+- `145-current-vortex-field`: `{"coupling":3.2,"frequencySpread":0.18,"timestep":0.04,"couplingMode":"local","initialPattern":"vortices","noise":0.005,"seed":1}`.
+- `145-current-global-threshold`: `{"coupling":1.1,"frequencySpread":0.55,"timestep":0.055,"couplingMode":"global","initialPattern":"random","noise":0.01,"seed":1}`.
+- `145-current-global-lock`: `{"coupling":4.2,"frequencySpread":0.3,"timestep":0.05,"couplingMode":"global","initialPattern":"random","noise":0,"seed":1}`.
+
+### Evidence selections, validation and interpretation
+
+The manifest’s fixed selection rule chooses c28 (highest local texture score), c38 (global R closest to 0.5), and c61 (highest global R). They are evidence selections, not three promotion recommendations. c38 has R=0.099589 at the selection time, still 0.400411 away from 0.5: its selection is not evidence of a middle-order regime.
+
+At seed 1, c28 scores 0.783126 against Vortex field’s 0.787109 and Local phase waves’ 0.755477. Across seeds, that small ordering is not stable: c28 scores 0.783126/0.788844/0.784732 while Vortex field scores 0.787109/0.785136/0.782219. Three seeds are robustness observations, not a distributional guarantee.
+
+Manual visual findings from the linked time strips: c28 retains broad diagonal phase bands at 400–800, then breaks into more irregular patches at 1600. The app views resemble the existing Local phase waves reference; there is no convincing new visual regime to promote. The motion evidence supports evolving/deforming wave structure, not a measured rigid travelling speed. c38 is a fine red/blue speckle field at all four app times, consistent with low global order and low neighbour coherence. c61 is a nearly uniform locked field with faint residual variation, visually similar to Global lock; this is a valid synchronisation outcome despite its low texture score. Vortex field retains a clearer broad red/blue vortex-like arrangement. These descriptions are visual readings, not numerical class labels.
+
+No robust new partially synchronised state is established by this grid. At 128², c38 R at 1600 is 0.131322/0.016491/0.058674 for seeds 1/7/23, while c61 remains 0.991111/0.991015/0.990999. Locked fields can look stationary while their common phase drifts. Short-gap P≈1 does not prove zero motion. All three behaviours remain in the evidence, including rejected examples.
+
+The unchanged composite is unreliable as a cross-regime phase preference: c61 at seed 7 has score 0 even though R≈0.991, and Global lock has score 0 for seeds 7 and 23 with R≈0.999. Its linear threshold/coverage, histogram and wrap-sensitive covariance change with absolute phase. High R describes synchronisation, not aesthetic interest; low R can describe either coherent balanced waves or unrelated speckle, so C and visual comparison are necessary. The grayscale black/white seam is a phase-coordinate wrap, not a physical edge.
+
+All 261 CPU readings (69 base + 192 validation) have non-finite, out-of-range and exact lower/upper endpoint fractions 0. The 32 GPU captures have non-finite/out-of-range fractions 0, upper endpoint fraction 0 and lower endpoint fractions from 0 to 0.0000022605613425925925 (one cell in the largest observed case). A wrapped phase endpoint is not density saturation. Kuramoto occupies the whole periodic domain: occupied-border fraction is 1 and off-frame particle clipping is N/A. No object is being fitted/cropped; full-field edge crossings are periodic continuation. Manual views show no blank, blown-out or clipped-support pathology. The old pilot’s zero masked-border proxy is historical; the full-field border interpretation here is explicit.
+
+### All seed readings and spreads
+
+Each triple is seeds **1 / 7 / 23**. Δ is max−min across those three values. Every time and both resolutions are included; unrounded C, P, entropy, flux, coverage, endpoint fractions and field hashes are in the result JSON.
+
+| Row | Grid | Calls | Scores (1 / 7 / 23) | Δ score | R (1 / 7 / 23) | Δ R |
+|---|---:|---:|---|---:|---|---:|
+| `c28` | 128² | 400 | 0.783126 / 0.788844 / 0.784732 | 0.005718 | 0.033599 / 0.033921 / 0.037746 | 0.004147 |
+| `c28` | 128² | 600 | 0.785802 / 0.784264 / 0.775443 | 0.010359 | 0.039948 / 0.038804 / 0.052150 | 0.013346 |
+| `c28` | 128² | 800 | 0.777563 / 0.786563 / 0.780604 | 0.009000 | 0.047567 / 0.044726 / 0.064920 | 0.020194 |
+| `c28` | 128² | 1600 | 0.775673 / 0.783460 / 0.768041 | 0.015418 | 0.074575 / 0.070623 / 0.096426 | 0.025803 |
+| `c28` | 256² | 400 | 0.799484 / 0.791113 / 0.789607 | 0.009878 | 0.022055 / 0.014881 / 0.018190 | 0.007174 |
+| `c28` | 256² | 600 | 0.792652 / 0.785371 / 0.785599 | 0.007282 | 0.031301 / 0.010921 / 0.013879 | 0.020379 |
+| `c28` | 256² | 800 | 0.787031 / 0.785145 / 0.785625 | 0.001886 | 0.041346 / 0.006335 / 0.011108 | 0.035011 |
+| `c28` | 256² | 1600 | 0.774947 / 0.780444 / 0.779549 | 0.005497 | 0.065521 / 0.011262 / 0.006788 | 0.058733 |
+| `c38` | 128² | 400 | 0.427347 / 0.432179 / 0.431507 | 0.004833 | 0.099589 / 0.018145 / 0.065168 | 0.081444 |
+| `c38` | 128² | 600 | 0.430151 / 0.434601 / 0.431636 | 0.004450 | 0.103051 / 0.016168 / 0.071162 | 0.086883 |
+| `c38` | 128² | 800 | 0.430712 / 0.433360 / 0.429813 | 0.003546 | 0.085735 / 0.023161 / 0.063341 | 0.062574 |
+| `c38` | 128² | 1600 | 0.433167 / 0.433198 / 0.437974 | 0.004807 | 0.131322 / 0.016491 / 0.058674 | 0.114831 |
+| `c38` | 256² | 400 | 0.433387 / 0.434374 / 0.433968 | 0.000987 | 0.037900 / 0.037735 / 0.046379 | 0.008644 |
+| `c38` | 256² | 600 | 0.431240 / 0.432008 / 0.431780 | 0.000768 | 0.048280 / 0.032814 / 0.052570 | 0.019756 |
+| `c38` | 256² | 800 | 0.431657 / 0.431271 / 0.430882 | 0.000775 | 0.063618 / 0.037797 / 0.081445 | 0.043648 |
+| `c38` | 256² | 1600 | 0.431085 / 0.433750 / 0.429044 | 0.004706 | 0.078537 / 0.022479 / 0.084541 | 0.062063 |
+| `c61` | 128² | 400 | 0.123761 / 0.000000 / 0.116366 | 0.123761 | 0.991111 / 0.991015 / 0.990999 | 0.000111 |
+| `c61` | 128² | 600 | 0.123067 / 0.000000 / 0.120929 | 0.123067 | 0.991111 / 0.991015 / 0.990999 | 0.000111 |
+| `c61` | 128² | 800 | 0.120486 / 0.000000 / 0.040956 | 0.120486 | 0.991111 / 0.991015 / 0.990999 | 0.000111 |
+| `c61` | 128² | 1600 | 0.000864 / 0.000000 / 0.000000 | 0.000864 | 0.991111 / 0.991015 / 0.990999 | 0.000111 |
+| `c61` | 256² | 400 | 0.114221 / 0.090177 / 0.000000 | 0.114221 | 0.991001 / 0.991084 / 0.991013 | 0.000083 |
+| `c61` | 256² | 600 | 0.113023 / 0.089238 / 0.000000 | 0.113023 | 0.991001 / 0.991084 / 0.991013 | 0.000083 |
+| `c61` | 256² | 800 | 0.118548 / 0.088210 / 0.000000 | 0.118548 | 0.991001 / 0.991084 / 0.991013 | 0.000083 |
+| `c61` | 256² | 1600 | 0.068175 / 0.084003 / 0.000000 | 0.084003 | 0.991001 / 0.991084 / 0.991013 | 0.000083 |
+| `current-default` | 128² | 400 | 0.733170 / 0.737947 / 0.728306 | 0.009640 | 0.370879 / 0.369320 / 0.388010 | 0.018689 |
+| `current-default` | 128² | 600 | 0.729108 / 0.732874 / 0.724961 | 0.007913 | 0.332619 / 0.330131 / 0.358918 | 0.028787 |
+| `current-default` | 128² | 800 | 0.724103 / 0.733885 / 0.723672 | 0.010213 | 0.297515 / 0.293726 / 0.333265 | 0.039539 |
+| `current-default` | 128² | 1600 | 0.731149 / 0.726970 / 0.716494 | 0.014655 | 0.195464 / 0.177052 / 0.260960 | 0.083908 |
+| `current-default` | 256² | 400 | 0.737373 / 0.730942 / 0.735769 | 0.006431 | 0.376729 / 0.410693 / 0.395937 | 0.033964 |
+| `current-default` | 256² | 600 | 0.730996 / 0.725465 / 0.729192 | 0.005531 | 0.344643 / 0.390469 / 0.371122 | 0.045826 |
+| `current-default` | 256² | 800 | 0.726820 / 0.720209 / 0.723993 | 0.006611 | 0.315581 / 0.370272 / 0.348126 | 0.054691 |
+| `current-default` | 256² | 1600 | 0.729802 / 0.719116 / 0.723148 | 0.010686 | 0.224776 / 0.294624 / 0.272941 | 0.069848 |
+| `current-local-waves` | 128² | 400 | 0.755477 / 0.761166 / 0.756228 | 0.005689 | 0.030887 / 0.030748 / 0.032899 | 0.002151 |
+| `current-local-waves` | 128² | 600 | 0.749973 / 0.762022 / 0.750115 | 0.012049 | 0.033762 / 0.035146 / 0.044621 | 0.010859 |
+| `current-local-waves` | 128² | 800 | 0.742960 / 0.756234 / 0.744171 | 0.013274 | 0.038179 / 0.039911 / 0.056323 | 0.018143 |
+| `current-local-waves` | 128² | 1600 | 0.742268 / 0.748651 / 0.733739 | 0.014912 | 0.062677 / 0.058711 / 0.088303 | 0.029592 |
+| `current-local-waves` | 256² | 400 | 0.771546 / 0.765513 / 0.762361 | 0.009186 | 0.020089 / 0.016005 / 0.019019 | 0.004084 |
+| `current-local-waves` | 256² | 600 | 0.761247 / 0.757584 / 0.755943 | 0.005304 | 0.025744 / 0.012143 / 0.015441 | 0.013601 |
+| `current-local-waves` | 256² | 800 | 0.756780 / 0.752594 / 0.752054 | 0.004726 | 0.033946 / 0.008486 / 0.012516 | 0.025460 |
+| `current-local-waves` | 256² | 1600 | 0.742666 / 0.747997 / 0.746161 | 0.005331 | 0.058368 / 0.007166 / 0.006551 | 0.051817 |
+| `current-vortex-field` | 128² | 400 | 0.787109 / 0.785136 / 0.782219 | 0.004889 | 0.458589 / 0.458936 / 0.466564 | 0.007975 |
+| `current-vortex-field` | 128² | 600 | 0.789894 / 0.782595 / 0.780856 | 0.009039 | 0.455824 / 0.457706 / 0.468989 | 0.013165 |
+| `current-vortex-field` | 128² | 800 | 0.793242 / 0.781501 / 0.781264 | 0.011978 | 0.451899 / 0.455624 / 0.470892 | 0.018994 |
+| `current-vortex-field` | 128² | 1600 | 0.794915 / 0.787402 / 0.774736 | 0.020179 | 0.430708 / 0.443888 / 0.475306 | 0.044598 |
+| `current-vortex-field` | 256² | 400 | 0.793559 / 0.791634 / 0.788186 | 0.005374 | 0.449798 / 0.465544 / 0.458013 | 0.015745 |
+| `current-vortex-field` | 256² | 600 | 0.793109 / 0.791984 / 0.784561 | 0.008547 | 0.446969 / 0.470588 / 0.459031 | 0.023619 |
+| `current-vortex-field` | 256² | 800 | 0.793400 / 0.791193 / 0.784972 | 0.008428 | 0.443725 / 0.474964 / 0.459714 | 0.031239 |
+| `current-vortex-field` | 256² | 1600 | 0.791316 / 0.788272 / 0.787692 | 0.003624 | 0.429297 / 0.488381 / 0.460612 | 0.059084 |
+| `current-global-threshold` | 128² | 400 | 0.201494 / 0.000000 / 0.196970 | 0.201494 | 0.952423 / 0.951821 / 0.951760 | 0.000662 |
+| `current-global-threshold` | 128² | 600 | 0.201182 / 0.000000 / 0.201598 | 0.201598 | 0.952472 / 0.951900 / 0.951791 | 0.000682 |
+| `current-global-threshold` | 128² | 800 | 0.204299 / 0.000000 / 0.204359 | 0.204359 | 0.952468 / 0.951906 / 0.951794 | 0.000674 |
+| `current-global-threshold` | 128² | 1600 | 0.200854 / 0.000000 / 0.204314 | 0.204314 | 0.952469 / 0.951900 / 0.951791 | 0.000679 |
+| `current-global-threshold` | 256² | 400 | 0.196987 / 0.001538 / 0.058409 | 0.195449 | 0.951734 / 0.948175 / 0.951473 | 0.003558 |
+| `current-global-threshold` | 256² | 600 | 0.196876 / 0.000000 / 0.045867 | 0.196876 | 0.951812 / 0.952311 / 0.951878 | 0.000499 |
+| `current-global-threshold` | 256² | 800 | 0.196673 / 0.000000 / 0.034870 | 0.196673 | 0.951811 / 0.952313 / 0.951877 | 0.000502 |
+| `current-global-threshold` | 256² | 1600 | 0.201379 / 0.000000 / 0.000000 | 0.201379 | 0.951813 / 0.952310 / 0.951876 | 0.000498 |
+| `current-global-lock` | 128² | 400 | 0.077015 / 0.000000 / 0.000000 | 0.077015 | 0.999156 / 0.999148 / 0.999146 | 0.000010 |
+| `current-global-lock` | 128² | 600 | 0.080836 / 0.000000 / 0.000000 | 0.080836 | 0.999156 / 0.999148 / 0.999146 | 0.000010 |
+| `current-global-lock` | 128² | 800 | 0.080424 / 0.000000 / 0.000000 | 0.080424 | 0.999156 / 0.999148 / 0.999146 | 0.000010 |
+| `current-global-lock` | 128² | 1600 | 0.010983 / 0.000000 / 0.000000 | 0.010983 | 0.999156 / 0.999148 / 0.999146 | 0.000010 |
+| `current-global-lock` | 256² | 400 | 0.000000 / 0.000000 / 0.000000 | 0.000000 | 0.999146 / 0.999154 / 0.999147 | 0.000008 |
+| `current-global-lock` | 256² | 600 | 0.000000 / 0.000000 / 0.000000 | 0.000000 | 0.999146 / 0.999154 / 0.999147 | 0.000008 |
+| `current-global-lock` | 256² | 800 | 0.000000 / 0.000000 / 0.000000 | 0.000000 | 0.999146 / 0.999154 / 0.999147 | 0.000008 |
+| `current-global-lock` | 256² | 1600 | 0.000000 / 0.000000 / 0.000000 | 0.000000 | 0.999146 / 0.999154 / 0.999147 | 0.000008 |
+
+### Matched app screenshots and field time strips
+
+Every row links all four separated times, including the longer 1600-step horizon. App screenshots are real Renderer/GPU captures at equal settings; field PNGs are grayscale CPU phase arrays and are labelled separately. The live route image is qualitative UI context with app-random seed/wall time; it is not part of a numeric comparison.
+
+| Row | App 400 | App 600 | App 800 | App 1600 |
+|---|---|---|---|---|
+| `c28` | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-t400-app.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-t600-app.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-t1600-app.png) |
+| `c38` | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-t400-app.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-t600-app.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-t1600-app.png) |
+| `c61` | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-t400-app.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-t600-app.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-t1600-app.png) |
+| `current-default` | [400](../images/sweeps-2026-10-30/145-current-default-t400-app.png) | [600](../images/sweeps-2026-10-30/145-current-default-t600-app.png) | [800](../images/sweeps-2026-10-30/145-current-default-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-current-default-t1600-app.png) |
+| `current-local-waves` | [400](../images/sweeps-2026-10-30/145-current-local-waves-t400-app.png) | [600](../images/sweeps-2026-10-30/145-current-local-waves-t600-app.png) | [800](../images/sweeps-2026-10-30/145-current-local-waves-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-current-local-waves-t1600-app.png) |
+| `current-vortex-field` | [400](../images/sweeps-2026-10-30/145-current-vortex-field-t400-app.png) | [600](../images/sweeps-2026-10-30/145-current-vortex-field-t600-app.png) | [800](../images/sweeps-2026-10-30/145-current-vortex-field-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-current-vortex-field-t1600-app.png) |
+| `current-global-threshold` | [400](../images/sweeps-2026-10-30/145-current-global-threshold-t400-app.png) | [600](../images/sweeps-2026-10-30/145-current-global-threshold-t600-app.png) | [800](../images/sweeps-2026-10-30/145-current-global-threshold-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-current-global-threshold-t1600-app.png) |
+| `current-global-lock` | [400](../images/sweeps-2026-10-30/145-current-global-lock-t400-app.png) | [600](../images/sweeps-2026-10-30/145-current-global-lock-t600-app.png) | [800](../images/sweeps-2026-10-30/145-current-global-lock-t800-app.png) | [1600](../images/sweeps-2026-10-30/145-current-global-lock-t1600-app.png) |
+
+[Live Kuramoto route context (unscored)](../images/sweeps-2026-10-30/145-kuramoto-live-route-context.png)
+
+| Row | CPU grid | Field 400 | Field 600 | Field 800 | Field 1600 |
+|---|---:|---|---|---|---|
+| `c28` | 128² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s128-seed1-t1600-field.png) |
+| `c28` | 256² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c28-s256-seed1-t1600-field.png) |
+| `c38` | 128² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s128-seed1-t1600-field.png) |
+| `c38` | 256² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c38-s256-seed1-t1600-field.png) |
+| `c61` | 128² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s128-seed1-t1600-field.png) |
+| `c61` | 256² | [400](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-kuramoto-oscillators-c61-s256-seed1-t1600-field.png) |
+| `current-default` | 128² | [400](../images/sweeps-2026-10-30/145-current-default-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-default-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-default-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-default-s128-seed1-t1600-field.png) |
+| `current-default` | 256² | [400](../images/sweeps-2026-10-30/145-current-default-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-default-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-default-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-default-s256-seed1-t1600-field.png) |
+| `current-local-waves` | 128² | [400](../images/sweeps-2026-10-30/145-current-local-waves-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-local-waves-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-local-waves-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-local-waves-s128-seed1-t1600-field.png) |
+| `current-local-waves` | 256² | [400](../images/sweeps-2026-10-30/145-current-local-waves-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-local-waves-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-local-waves-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-local-waves-s256-seed1-t1600-field.png) |
+| `current-vortex-field` | 128² | [400](../images/sweeps-2026-10-30/145-current-vortex-field-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-vortex-field-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-vortex-field-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-vortex-field-s128-seed1-t1600-field.png) |
+| `current-vortex-field` | 256² | [400](../images/sweeps-2026-10-30/145-current-vortex-field-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-vortex-field-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-vortex-field-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-vortex-field-s256-seed1-t1600-field.png) |
+| `current-global-threshold` | 128² | [400](../images/sweeps-2026-10-30/145-current-global-threshold-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-global-threshold-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-global-threshold-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-global-threshold-s128-seed1-t1600-field.png) |
+| `current-global-threshold` | 256² | [400](../images/sweeps-2026-10-30/145-current-global-threshold-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-global-threshold-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-global-threshold-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-global-threshold-s256-seed1-t1600-field.png) |
+| `current-global-lock` | 128² | [400](../images/sweeps-2026-10-30/145-current-global-lock-s128-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-global-lock-s128-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-global-lock-s128-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-global-lock-s128-seed1-t1600-field.png) |
+| `current-global-lock` | 256² | [400](../images/sweeps-2026-10-30/145-current-global-lock-s256-seed1-t400-field.png) | [600](../images/sweeps-2026-10-30/145-current-global-lock-s256-seed1-t600-field.png) | [800](../images/sweeps-2026-10-30/145-current-global-lock-s256-seed1-t800-field.png) | [1600](../images/sweeps-2026-10-30/145-current-global-lock-s256-seed1-t1600-field.png) |
+
+### Proposed promotions and reproduction
+
+**None.** The candidate closest to the existing waves has no clear visual advantage, locked states are already represented, and the low-order global selection remains speckled and seed-sensitive. This accepts an honest negative research outcome only if independent verification passes. Production kernels, defaults, presets, interface, shelving, queue and budget are unchanged. Any future promotion remains an operator visual decision.
+
+```bash
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 145 kuramoto"
+PHASE145_REPLAY=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 145 kuramoto"
+SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "phase 145 app renderer evidence|phase 145 live route context"
+npx playwright test e2e/sweep.spec.ts -g "phase 145 retained fields|phase 145 circular persistence"
+SWEEP_CONTRACT=145 npx playwright test e2e/sweep-145.contract.spec.ts
+npx playwright test e2e/sweep.spec.ts -g "metrics harness|non-phase|multi-snapshot summary|Lorenz multi-snapshot|circular autocorrelation"
+scripts/check-contract-test-gate.sh --worktree
+npm run verify
+```
+
+The full sweep command executes one test, all 64 candidates and all five references with zero skips. The replay command compares the entire ranking and all 192 validation readings against the retained result, requiring identical order and field hashes and an absolute metric delta ≤1e−9; it writes a separate worker replay file and preserves the measured result. The optional app command recaptures visual evidence without repeating the scientific grid. Independent verifier replay/inspection is still required; the worker replay is not cross-family acceptance. The raw-field test recomputes every base metric from lossless retained values.
+
+Worker checks complete: `npm run verify` exits 0 (415 passed, 45 skipped, 0 failed; typecheck/build pass). The corrected full sweep exits 0 (1 executed, 0 skipped; 64 candidates, 5 references, 192 validation readings). Worker replay exits 0 with identical ordering and field hashes and maximum absolute metric delta **0** at tolerance 1e−9 across all 261 readings. Frozen stage-145 oracle: 3 passed, 0 skipped, exit 0. Legacy baseline: 6 passed, 1 opt-in skipped, exit 0; the five-point and nine-point Gray-Scott regressions pass. Retained-field and wrap/occupancy regressions: 2 passed, exit 0. Corrected live route capture, worktree contract gate and diff whitespace check all exit 0. Independent cross-family verification remains pending; skipped tests are not passes. Exact commands, counts, diagnostics, resolved failures and image hashes are in [worker-checks.json](data/2026-10-30/145/worker-checks.json).

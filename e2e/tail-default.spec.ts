@@ -265,7 +265,7 @@ test("legacy: returning visitors receive the moved default while explicit choice
   saveJson("legacy.json", { legacyRaw, migratedTailRefinement: 0.6, preservedCycleBands: 1.5 });
 });
 
-test("cpu: the fallback caps Tail refinement at its automatic share", async ({ browser, page }) => {
+test("cpu: the fallback follows Tail refinement up to 0.6", async ({ browser, page }) => {
   test.setTimeout(1_800_000);
   await requireBaseline(page);
   const settings: Array<number | undefined> = [undefined, 0.3, 0.6, 0.1];
@@ -276,7 +276,7 @@ test("cpu: the fallback caps Tail refinement at its automatic share", async ({ b
     const opened = await openCase(browser, { stored: marked(params), preset: "balanced", cpu: true });
     try {
       const stats = await cloudStats(opened.canvas);
-      const share = setting === 0.1 ? 0.1 : 0.3;
+      const share = setting ?? 0.6;
       expect(stats.refineRowBudget).toBe(Math.floor(stats.pointBudget * share));
       expect(stats.points).toBeLessThanOrEqual(stats.pointBudget);
       rows.push({ setting: setting ?? "default", buildMs: opened.buildMs, stats });

@@ -41,7 +41,7 @@ export function renderGallery(container: HTMLElement): void {
   }
 
   const title = document.createElement("h1");
-  title.textContent = "emergence-lab";
+  title.textContent = "Emergence Lab";
   header.appendChild(title);
 
   const subtitle = document.createElement("p");
@@ -49,6 +49,12 @@ export function renderGallery(container: HTMLElement): void {
   subtitle.textContent =
     "A collection of emergent-behaviour simulations. Pick one to watch it run.";
   header.appendChild(subtitle);
+
+  const presets = document.createElement("a");
+  presets.className = "preset-button gallery__presets";
+  presets.href = "#/presets";
+  presets.textContent = "Presets";
+  header.appendChild(presets);
 
   page.appendChild(header);
 

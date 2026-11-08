@@ -104,6 +104,139 @@ the unsearched parameters: `moveSpeed: 1`, `depositAmount: 0.22`,
 `evaporation: 0.90`, and `stepsPerFrame: 1`.
 
 The sweep's 14,000 agents at 256² are rescaled to preserve agents per cell at
-the app's 384² compute grid: 14,000 × (384 / 256)² = **31,500 agents**.
+the app's 384² compute grid: 14,000 × (384 / 256)² = **31,500 agents**. (Historical 2026-09 reasoning for an assumed 384² grid. The 2026-11 supplement measured the recorded app renderer grid as 960×600, where 31,500 agents is 0.0547/cell, sparser than the sweep's 0.2136/cell; a density match there is 123,047 agents.)
 The promoted preset was verified live at the app's default Physarum quality
 profile; no screenshot artifact was retained.
+
+## 2026-10-30 — missed regimes sweep (stage 144)
+
+Retained evidence: [`144/physarum.json`](data/2026-10-30/144/physarum.json) (manifest, all 48 ranked rows, references, finalists, validation, diagnostics) and [`144/physarum.manifest.json`](data/2026-10-30/144/physarum.manifest.json) (written before measurement). Method version `particle-trail-regimes-v1`; composite unchanged (`scoreFrames`); diagnostics are pathology guards only.
+
+### Method
+
+Config `sweep-144-physarum` in `e2e/harness/sims.ts` (additive; the historical config is unchanged). Reproduce with `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 physarum"` (the stage selector `-g "sweep 144 "` runs six tests: three main sweeps and three app-evidence supplements, 6 passed in 1.1 h wall-clock with `--workers=3 --fully-parallel`; this kernel: main test 3.4 min, supplemental test 5.3 min). evaporation {0.8, 0.975} × depositAmount {0.06, 0.6} × moveSpeed {0.5, 2.5} × sensorDistance {3, 14} × sensorAngle {8, 30, 80} = 48 sets (the 2⁴ corners × three angles), all retained. Pinned: agentCount 14000, turnSpeed 22.5, stepsPerFrame 1, explicit seed 144 (grid 256×256, 300 warmup steps, flux gap 6, unchanged composite). Scale rule for the second-resolution check: population × 2.25 for a 1.5× grid.
+
+### Searched / not searched
+
+Not searched: interior values of evaporation/deposit/speed (a corner design, so interactions are sampled coarsely and a smooth optimum could sit between corners), turnSpeed, agentCount, stepsPerFrame, and any earlier-grid value (sensorAngle 12/22.5/38/60, sensorDistance 5/9/17, evaporation 0.9, deposit 0.22, moveSpeed 1). The 16-refinement allowance was not used.
+
+Prior coverage this was built against: 2026-08-23 grid: sensorAngle {12,22.5,38,60} x sensorDistance {5,9,17} x turnSpeed {12,22.5,40}; moveSpeed 1, depositAmount 0.22, evaporation 0.9 pinned. Root mat shipped 2026-08-30 from that grid.
+
+### Ranked candidates (top 10 of 48)
+
+| rank | set | score | entropy | autocorr | coverage | flux |
+|---:|---|---:|---:|---:|---:|---:|
+| 1 | `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8` | 0.938 | 0.950 | 0.992 | 0.837 | 0.025 |
+| 2 | `evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80` | 0.926 | 0.859 | 0.985 | 0.626 | 0.057 |
+| 3 | `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle80` | 0.925 | 0.945 | 0.992 | 0.800 | 0.021 |
+| 4 | `evaporation0.975_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle8` | 0.923 | 0.945 | 0.992 | 0.805 | 0.020 |
+| 5 | `evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30` | 0.907 | 0.943 | 0.986 | 0.724 | 0.017 |
+| 6 | `evaporation0.8_depositAmount0.6_moveSpeed0.5_sensorDistance3_sensorAngle8` | 0.900 | 0.888 | 0.914 | 0.794 | 0.060 |
+| 7 | `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle30` | 0.898 | 0.924 | 0.990 | 0.686 | 0.016 |
+| 8 | `evaporation0.8_depositAmount0.6_moveSpeed0.5_sensorDistance3_sensorAngle80` | 0.881 | 0.806 | 0.952 | 0.548 | 0.050 |
+| 9 | `evaporation0.975_depositAmount0.06_moveSpeed0.5_sensorDistance14_sensorAngle80` | 0.868 | 0.881 | 0.992 | 0.592 | 0.013 |
+| 10 | `evaporation0.975_depositAmount0.06_moveSpeed0.5_sensorDistance3_sensorAngle80` | 0.866 | 0.902 | 0.980 | 0.719 | 0.012 |
+
+Full 48-row ranking, metrics and exact parameters are in the retained JSON. Scores shortlist candidates; they do not decide aesthetic superiority.
+
+### Current references (corrected shipped presets, new ids)
+
+| rank | set | score | entropy | autocorr | coverage | flux |
+|---:|---|---:|---:|---:|---:|---:|
+| ref | `144-current-veins` | 0.725 | 0.539 | 0.974 | 0.284 | 0.015 |
+| ref | `144-current-coral-fans` | 0.762 | 0.606 | 0.984 | 0.326 | 0.016 |
+| ref | `144-current-filigree-web` | 0.838 | 0.854 | 0.980 | 0.570 | 0.010 |
+| ref | `144-current-root-mat` | 0.910 | 0.852 | 0.973 | 0.582 | 0.042 |
+
+Reference field renders: [Veins (shipped)](../images/sweeps-2026-10-30/144-current-veins-field.png) · [Coral fans (shipped)](../images/sweeps-2026-10-30/144-current-coral-fans-field.png) · [Filigree web (shipped)](../images/sweeps-2026-10-30/144-current-filigree-web-field.png) · [Root mat (shipped)](../images/sweeps-2026-10-30/144-current-root-mat-field.png). The historical reference rows above in this file are preserved unchanged and not corrected here.
+
+### Finalists and validation
+
+- `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8` — time samples (t300: 0.938, t600: 0.856, t1200: 0.785, t2400: 0.729); seeds (seed145: 0.933, seed146: 0.931); larger grid 384² with params scaled ×2.25 in population: 0.934. Images: [frame 1](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-t300-field.png) · [frame 2](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-t600-field.png) · [frame 3](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-t1200-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-t2400-field.png).
+- `evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80` — time samples (t300: 0.926, t600: 0.929, t1200: 0.915, t2400: 0.917); seeds (seed145: 0.923, seed146: 0.923); larger grid 384² with params scaled ×2.25 in population: 0.922. Images: [frame 1](../images/sweeps-2026-10-30/144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-t300-field.png) · [frame 2](../images/sweeps-2026-10-30/144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-t600-field.png) · [frame 3](../images/sweeps-2026-10-30/144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-t1200-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-t2400-field.png).
+- `evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30` — time samples (t300: 0.907, t600: 0.879, t1200: 0.836, t2400: 0.863); seeds (seed145: 0.903, seed146: 0.890); larger grid 384² with params scaled ×2.25 in population: 0.897. Images: [frame 1](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-t300-field.png) · [frame 2](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-t600-field.png) · [frame 3](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-t1200-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-t2400-field.png).
+
+Each finalist has three separated frames (1×, 2× and 4× warmup), a repeat at 8× warmup, two neighbouring seeds where the kernel takes one, and a second resolution. These are grayscale kernel-field PNGs, not app renderer screenshots.
+
+### Interpretation
+
+The top-ranked set (evaporation 0.975, deposit 0.6, speed 0.5, distance 14, angle 8; 0.938) **does not persist**: its score falls 0.938 → 0.856 → 0.785 → 0.729 across 300/600/1200/2400 steps, below Root mat's 0.875 at the longest horizon. Visually (frame at 2400 steps) it has coarsened into a few thick, saturated cell walls around large empty cells — a smooth honeycomb rather than a fine network. It is rejected as a promotion on persistence despite the best scalar.
+
+The second finalist (evaporation 0.8, deposit 0.6, speed 2.5, distance 14, angle 80; 0.926) is stable: 0.926/0.929/0.915/0.917 across the same horizons, seed readings 0.923/0.923 at seeds 145/146 and 0.922 on 384². At 2400 steps it renders as a soft, grainy mesh of broad veins around irregular cells — a different texture from Root mat's thinner, more sinuous wall-and-loop pattern (Root mat 0.910 → 0.875 at the longest horizon). This is the only physarum candidate this stage would put in front of the operator.
+
+The third finalist (evaporation 0.975, deposit 0.06, speed 2.5, distance 3, angle 30; 0.907) decays 0.907 → 0.863 and its seed readings span 0.890–0.907; it is a lesser variant of the first finding. Eight of the 24 sensorDistance 3 sets score below 0.05 (five at sensorAngle 8 and three at angles 30/80; the two lowest, deposit 0.6 / speed 2.5 / evaporation 0.975 at angles 30 and 80, read 0.000); the retained JSON lists them. Short sensing is the failure axis in this corner design. They are retained negatives, not harness pathologies: no non-finite output, and the fractions at the channel endpoints are 0 for every finalist and reference (the cause of the zero reading was not isolated).
+
+Shipped references (corrected to the shipped counts, scaled by (256/384)², plus the previously missing Root mat): Veins 0.725, Coral fans 0.762, Filigree web 0.838, Root mat 0.910. All four *decay* with horizon (Veins 0.725 → 0.594), so decay itself is not disqualifying; a persistence comparison needs the finalist to hold up better than Root mat (0.875 at 8×), which only finalist 2 does.
+
+### Proposed promotions
+
+**Candidate for operator visual sign-off, not a promotion:** `evaporation 0.8, depositAmount 0.6, moveSpeed 2.5, sensorDistance 14, sensorAngle 80, turnSpeed 22.5` (256² / 14,000 agents; ×2.25 for a 384² grid = 31,500 agents, the earlier assumption, which the supplement below supersedes: the measured app renderer grid is 960×600, where the shipped Root mat count is 31,500 agents at 0.0547/cell and a density match to the sweep's 14,000/256² needs 123,047 agents). Score is 0.926 vs Root mat's 0.910 — a small gain; the case rests on persistence and seed stability, and on a visibly different texture, which needs the operator's look at app-renderer frames. App-renderer screenshots and shipped-population readings are in the supplement below.
+
+Negative and null results above are retained deliberately. Promotion is a separate operator visual sign-off; no production preset, default or kernel was changed.
+
+### Supplement: app-renderer screenshots and shipped-population evidence (re-brief 2, 2026-11-01)
+
+Retained: [`144/physarum.app-evidence.json`](data/2026-10-30/144/physarum.app-evidence.json) (method `particle-trail-regimes-v1-app-evidence-v2-fixed-step`; replaces the re-brief 1 supplement, whose populations and clocks were invalid). Reproduce with `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 physarum app"` (also covered by `-g "sweep 144 "`). The `*-app.png` images are canvas screenshots of the real `Renderer` (WebGL2, shipped quality profile and default resolution preset, default colour options) at device pixel ratio 1 in a page viewport that `s144Snapshot` sets per capture (max of canvas CSS size and 400×300; recorded from `page.viewportSize()` in every row and sample of the retained JSON): 960×600 for every row (shipped and matched-density); the earlier `*-field.png` images remain grayscale kernel-field renders and are not app screenshots. Recorded renderer grid: 960×600 (`high` preset), not the 384² the first pass assumed.
+
+Clock and state: no wall-clock or interactive iteration counter is used (the counter advances ten per kernel call in the particle renderers and cannot identify a kernel-call count). Each capture builds a fresh kernel, issues exactly the listed number of `step(1)` calls (dt = 1, call count asserted, and asserted unchanged after the Renderer draws; `stepsPerFrame` 0, paused), and the Renderer draws that state. Per capture the harness asserts the screenshot state SHA-256 equals a plain fresh kernel run on the same grid, seed (sweep seed; Boids has none, i.e. 0), call count and dt, and the first sample of every row is captured twice with equal state hashes (same-seed repeat). Numeric readings come from `scoreOne` at the same recorded grid and population (the same fixed-dt call sequence; not a pixel replay). The repeatability claim is limited to this fixed-step path; the interactive app's live trajectory is wall-clock driven and not claimed repeatable. Hashes, requested and effective populations, density and grid per row are in the JSON. Populations are shipped (full shipped count on 960×600, not density-matched) or matched-density (sweep agents per cell on the recorded renderer grid). Boids rows are obstacle-free (the app's schema default is `reef`). Shipped finalist population: 32 000 (Veins); references use their shipped presets and counts.
+
+| kind | id | population | grid | score at 3 samples | images (app renderer) |
+|---|---|---|---|---|---|
+| reference | `144-current-veins` | shipped 32000 (effective 32000, 0.0556/cell) | 960×600 | t300: 0.624 / t600: 0.485 / t1200: 0.339 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-current-veins-shipped-32000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-current-veins-shipped-32000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-current-veins-shipped-32000-t1200-app.png) |
+| reference | `144-current-coral-fans` | shipped 26000 (effective 26000, 0.0451/cell) | 960×600 | t300: 0.635 / t600: 0.492 / t1200: 0.300 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-current-coral-fans-shipped-26000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-current-coral-fans-shipped-26000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-current-coral-fans-shipped-26000-t1200-app.png) |
+| reference | `144-current-filigree-web` | shipped 60000 (effective 60000, 0.1042/cell) | 960×600 | t300: 0.744 / t600: 0.679 / t1200: 0.641 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-current-filigree-web-shipped-60000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-current-filigree-web-shipped-60000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-current-filigree-web-shipped-60000-t1200-app.png) |
+| reference | `144-current-root-mat` | shipped 31500 (effective 31500, 0.0547/cell) | 960×600 | t300: 0.746 / t600: 0.720 / t1200: 0.704 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-current-root-mat-shipped-31500-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-current-root-mat-shipped-31500-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-current-root-mat-shipped-31500-t1200-app.png) |
+| finalist | `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8` | matched-density 123047 (effective 123047, 0.2136/cell) | 960×600 | t300: 0.933 / t600: 0.870 / t1200: 0.774 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-matched-density-123047-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-matched-density-123047-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-matched-density-123047-t1200-app.png) |
+| finalist | `evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8` | shipped 32000 (effective 32000, 0.0556/cell) | 960×600 | t300: 0.914 / t600: 0.794 / t1200: 0.710 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-shipped-32000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-shipped-32000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-shipped-32000-t1200-app.png) |
+| finalist | `evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80` | matched-density 123047 (effective 123047, 0.2136/cell) | 960×600 | t300: 0.923 / t600: 0.920 / t1200: 0.919 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-matched-density-123047-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-matched-density-123047-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-matched-density-123047-t1200-app.png) |
+| finalist | `evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80` | shipped 32000 (effective 32000, 0.0556/cell) | 960×600 | t300: 0.802 / t600: 0.799 / t1200: 0.800 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-shipped-32000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-shipped-32000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.8_depositAmount0.6_moveSpeed2.5_sensorDistance14_sensorAngle80-shipped-32000-t1200-app.png) |
+| finalist | `evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30` | matched-density 123047 (effective 123047, 0.2136/cell) | 960×600 | t300: 0.894 / t600: 0.879 / t1200: 0.862 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-matched-density-123047-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-matched-density-123047-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-matched-density-123047-t1200-app.png) |
+| finalist | `evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30` | shipped 32000 (effective 32000, 0.0556/cell) | 960×600 | t300: 0.717 / t600: 0.683 / t1200: 0.646 | [300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t600-app.png) · [1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t1200-app.png) |
+
+Findings (manual; screenshots viewed: first-ranked honeycomb finalist at matched density and shipped Root mat, both at 1200 steps; other rows rest on their scores):
+- The recorded grid is 960×600 (576 000 cells), so shipped agent counts are sparser per cell than the 256² sweep assumed (Root mat 0.746 / 0.720 / 0.704 here against 0.910 in the 256² sweep; Veins 0.624 / 0.485 / 0.339). Density-matched rows use 123 047 agents (kernel cap 300 000), relative density error 1e-6.
+- The first-ranked set (`evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8`) at matched density is a regular honeycomb of thick yellow walls around round empty cells ([screenshot](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.6_moveSpeed0.5_sensorDistance14_sensorAngle8-matched-density-123047-t1200-app.png)), clearly unlike Root mat's thin sinuous strands ([screenshot](../images/sweeps-2026-10-30/144-app-physarum-144-current-root-mat-shipped-31500-t1200-app.png)). It coarsens (0.933 → 0.870 → 0.774) and is weaker at the shipped 32 000 agents (0.914 → 0.710), so its look depends on about four times the shipped count.
+- `evaporation0.8_..._sensorAngle80` holds its score at matched density (0.923 / 0.920 / 0.919) and falls to about 0.80 at shipped; `evaporation0.975_depositAmount0.06_..._sensorDistance3` scores 0.894 / 0.879 / 0.862 matched. Their images were not re-inspected after this regeneration, so no new visual claim is made for them (links in the table).
+- Operator decision, not a promotion: the honeycomb set merits a look; it would need a population/viewport policy. No production preset changed.
+
+#### Re-brief 4 provenance, runtime and clipping audit (2026-11-02)
+
+- Viewport: the previous write-up and JSON gave a constant 1280×800; the actual per-capture viewport was different. It is now recorded per row and per sample (960×600 for every row (shipped and matched-density)). The supplemental numeric rows and state SHA-256 values from the re-run are identical to the attempt-4 evidence apart from this added field.
+- Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 3.4 min, supplemental test 5.3 min. The main-sweep JSON is byte-identical to the attempt-4 retained file.
+- Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the physarum kernel `wrap()` torus (`src/sims/physarum/kernel.ts:350-351`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: Veins shipped t1200 (trails cross the frame edge and continue on the opposite side). Not every image was inspected, and this is a visual finding, not a score.
+
+
+## Promotion appendix — 2026-11-03
+
+The operator selected **Restless threads** (trial label “Fine restless threads”)
+on visual review, calling it “best so far” and the favourite in
+[`uat-preset-review.md`](../UAT/uat-preset-review.md). It ships as the fifth
+Physarum preset, with `agentCount: 32000`, `sensorAngle: 30`,
+`sensorDistance: 3`, `turnSpeed: 22.5`, `moveSpeed: 2.5`,
+`depositAmount: 0.06`, `evaporation: 0.975`, and `stepsPerFrame: 1`.
+The four existing presets are unchanged.
+
+The source is the `kind: finalist`, `population: shipped 32000` row
+`evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30`
+in [`144/physarum.app-evidence.json`](data/2026-10-30/144/physarum.app-evidence.json).
+Its retained app-renderer screenshots are
+[t300](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t300-app.png),
+[t600](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t600-app.png), and
+[t1200](../images/sweeps-2026-10-30/144-app-physarum-144-physarum-evaporation0.975_depositAmount0.06_moveSpeed2.5_sensorDistance3_sensorAngle30-shipped-32000-t1200-app.png).
+The trial ran at seed 144. The shipped preset carries no seed and uses a fresh
+renderer seed each load, as accepted by the operator on 2026-11-03.
+
+Sweep 144 proposed no promotion of this row; its shipped-population scores
+fall from 0.717 to 0.683 to 0.646 over those three horizons. The operator's
+visual decision is the basis for promotion; the scores are not. The historical
+sweep conclusions and negative results above remain evidence of the
+instrument's limitations.
+
+
+Verified live by the worker at the default High quality profile on three fresh
+loads, with all eight control values matching the shipped preset. At side-panel
+iteration counters 610, 610 and 610 the frames showed fine, curling threads
+and loops rather than honeycomb walls or a blank field. Worker screenshots
+are retained at
+`e2e/artifacts/151-promote-144-trials/physarum-load-{1,2,3}.png`.
+The independent verifier's live check and retained screenshots remain pending.

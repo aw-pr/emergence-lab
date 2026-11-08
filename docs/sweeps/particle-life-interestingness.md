@@ -285,3 +285,150 @@ separate these three presets, and the sentence this write-up has carried since
 2026-08-23 — that the species-mixing statistic "remains the sharper follow-up
 instrument" — is now measured and does not hold at the channel-proxy level. It
 may still hold for a true per-species statistic; that has not been built.
+
+## 2026-10-30 — missed regimes sweep (stage 144)
+
+Retained evidence: [`144/particle-life.json`](data/2026-10-30/144/particle-life.json) (manifest, all 48 ranked rows, references, finalists, validation, diagnostics) and [`144/particle-life.manifest.json`](data/2026-10-30/144/particle-life.manifest.json) (written before measurement). Method version `particle-trail-regimes-v1`; composite unchanged (`scoreFrames`); diagnostics are pathology guards only.
+
+### Method
+
+Config `sweep-144-particle-life` in `e2e/harness/sims.ts` (additive; the historical config is unchanged). Reproduce with `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 particle-life"` (the stage selector `-g "sweep 144 "` runs six tests: three main sweeps and three app-evidence supplements, 6 passed in 1.1 h wall-clock with `--workers=3 --fully-parallel`; this kernel: main test 12.9 min, supplemental test 26.6 min). friction {0.1, 0.35, 0.9, 0.97} × species {3, 6, 8} × forceScale {10, 140} × matrixBias {−0.35, 0.35} = 48 sets, all retained. Pinned: particleCount 3000, rmax 24, rmin 12, explicit seed 144 (grid 128×128, 150 warmup steps, flux gap 6, smoothed point-cloud instrument blur 8, threshold 0.5, channel-mixing read as before). Scale rule for the second-resolution check: population × 2.25 for a 1.5× grid.
+
+### Searched / not searched
+
+Not searched: rmax, rmin, particleCount (held at the earlier calibrated 3000), and any earlier-grid value (friction 0.7, species 5, forceScale 25/60/110, matrixBias −0.15/0.05/0.25). The seed fixes one random attraction matrix per (species, bias), so "species/matrix interaction" here is sampled at one matrix draw each; the seed readings below are the only evidence on matrix-draw sensitivity. The 16-refinement allowance was not used.
+
+Prior coverage this was built against: 2026-08-23 grid: rmax {16,24,32} x forceScale {25,60,110} x matrixBias {-0.15,0.05,0.25}; friction 0.7, species 5, rmin 12, particleCount 3000 pinned.
+
+### Ranked candidates (top 10 of 48)
+
+| rank | set | score | entropy | autocorr | coverage | flux | channelMixing |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 | `friction0.97_species8_forceScale140_matrixBias0.35` | 0.960 | 0.910 | 1.000 | 0.239 | 0.321 | 0.630 |
+| 2 | `friction0.97_species6_forceScale140_matrixBias-0.35` | 0.945 | 0.885 | 0.994 | 0.291 | 0.124 | 0.575 |
+| 3 | `friction0.97_species3_forceScale140_matrixBias0.35` | 0.940 | 0.872 | 0.995 | 0.156 | 0.233 | 0.544 |
+| 4 | `friction0.97_species3_forceScale140_matrixBias-0.35` | 0.938 | 0.874 | 0.990 | 0.366 | 0.172 | 0.580 |
+| 5 | `friction0.1_species3_forceScale10_matrixBias-0.35` | 0.929 | 0.859 | 0.986 | 0.365 | 0.156 | 0.629 |
+| 6 | `friction0.35_species6_forceScale10_matrixBias0.35` | 0.926 | 0.846 | 0.992 | 0.408 | 0.208 | 0.620 |
+| 7 | `friction0.97_species8_forceScale140_matrixBias-0.35` | 0.922 | 0.830 | 0.996 | 0.171 | 0.157 | 0.612 |
+| 8 | `friction0.1_species3_forceScale10_matrixBias0.35` | 0.920 | 0.840 | 0.987 | 0.329 | 0.144 | 0.554 |
+| 9 | `friction0.35_species3_forceScale140_matrixBias-0.35` | 0.916 | 0.829 | 0.988 | 0.319 | 0.139 | 0.623 |
+| 10 | `friction0.1_species6_forceScale10_matrixBias0.35` | 0.915 | 0.825 | 0.989 | 0.456 | 0.143 | 0.637 |
+
+Full 48-row ranking, metrics and exact parameters are in the retained JSON. Scores shortlist candidates; they do not decide aesthetic superiority.
+
+### Current references (corrected shipped presets, new ids)
+
+| rank | set | score | entropy | autocorr | coverage | flux | channelMixing |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| ref | `144-current-cells` | 0.910 | 0.814 | 0.988 | 0.455 | 0.122 | 0.625 |
+| ref | `144-current-chasers` | 0.890 | 0.778 | 0.983 | 0.695 | 0.129 | 0.632 |
+| ref | `144-current-gas-clouds` | 0.900 | 0.794 | 0.987 | 0.586 | 0.135 | 0.628 |
+
+Reference field renders: [Cells (shipped)](../images/sweeps-2026-10-30/144-current-cells-field.png) · [Chasers (shipped)](../images/sweeps-2026-10-30/144-current-chasers-field.png) · [Gas clouds (shipped)](../images/sweeps-2026-10-30/144-current-gas-clouds-field.png). The historical reference rows above in this file are preserved unchanged and not corrected here.
+
+### Finalists and validation
+
+- `friction0.97_species8_forceScale140_matrixBias0.35` — time samples (t150: 0.960, t300: 0.964, t600: 0.938, t1200: 0.534); seeds (seed145: 0.910, seed146: 0.923); larger grid 192² with params scaled ×2.25 in population: 0.860. Images: [frame 1](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-t150-field.png) · [frame 2](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-t300-field.png) · [frame 3](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-t600-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-t1200-field.png).
+- `friction0.97_species6_forceScale140_matrixBias-0.35` — time samples (t150: 0.945, t300: 0.932, t600: 0.946, t1200: 0.944); seeds (seed145: 0.911, seed146: 0.223); larger grid 192² with params scaled ×2.25 in population: 0.636. Images: [frame 1](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-t150-field.png) · [frame 2](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-t300-field.png) · [frame 3](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-t600-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-t1200-field.png).
+- `friction0.1_species3_forceScale10_matrixBias-0.35` — time samples (t150: 0.929, t300: 0.882, t600: 0.906, t1200: 0.928); seeds (seed145: 0.908, seed146: 0.910); larger grid 192² with params scaled ×2.25 in population: 0.923. Images: [frame 1](../images/sweeps-2026-10-30/144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-t150-field.png) · [frame 2](../images/sweeps-2026-10-30/144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-t300-field.png) · [frame 3](../images/sweeps-2026-10-30/144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-t600-field.png) · [longer horizon](../images/sweeps-2026-10-30/144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-t1200-field.png).
+
+Each finalist has three separated frames (1×, 2× and 4× warmup), a repeat at 8× warmup, two neighbouring seeds where the kernel takes one, and a second resolution. These are grayscale kernel-field PNGs, not app renderer screenshots.
+
+### Interpretation
+
+The earlier headline still applies: **this metric set cannot reliably rank Particle Life**, and the retained evidence shows it here directly. The top set (friction 0.97, species 8, forceScale 140, bias +0.35; 0.960) holds for 600 steps (0.964, 0.938) but reads **0.534 at 1200 steps**; its seed readings are 0.910 and 0.923. The second (friction 0.97, species 6, forceScale 140, bias −0.35; 0.945) reads 0.944 at 1200 steps but **0.223 at seed 146** and 0.636 on the 192² grid — a single seed or resolution flips it. Both are rejected on persistence/robustness.
+
+The third finalist (friction 0.1, species 3, forceScale 10, bias −0.35; 0.929) is the only robust one: 0.929/0.882/0.906/0.928 across horizons, 0.908/0.910 across seeds, 0.923 on 192². But it ranks no higher than the shipped references on a robust scale (Cells 0.910, Gas clouds 0.900, Chasers 0.890) and, in the grayscale kernel-field frames only, **no finalist or reference can be told apart**: every retained grayscale frame is a uniform speckle of single-cell dots with at most faint banding, e.g. [robust finalist](../images/sweeps-2026-10-30/144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-t300-field.png) vs [Cells](../images/sweeps-2026-10-30/144-current-cells-field.png). Frames of the top set at 1200 steps show visible left-right density banding ([frame](../images/sweeps-2026-10-30/144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-t1200-field.png)), consistent with a drifting cluster that the score sees as a collapse. Channel 0 is the summed red colour contribution from several species rather than species-0 density, so the field PNGs do not show species structure; app-renderer screenshots are in the supplement below.
+
+Channel mixing (the retained `channelMixing` column) is 0.544–0.630 for the top five and 0.625–0.632 for the three references, i.e. it does not separate regimes — the same finding as the 2026-09-06 appendix. Pathology guards: no non-finite output; 0.8–0.85 of cells are empty (expected for dots) and 1.0–1.7 % sit at the channel maximum.
+
+### Proposed promotions
+
+**No promotion proposed.** The only robust finalist is indistinguishable from shipped presets by the instrument and, in the grayscale field frames, by eye (the later app-renderer screenshots are discussed in the supplement, where one shipped-population finalist does look different from Cells); the two high-scoring finalists are seed- or horizon-fragile. A decision on Particle Life would need an instrument that sees species structure, which is outside this card.
+
+Negative and null results above are retained deliberately. Promotion is a separate operator visual sign-off; no production preset, default or kernel was changed.
+
+### Supplement: app-renderer screenshots and shipped-population evidence (re-brief 2, 2026-11-01)
+
+Retained: [`144/particle-life.app-evidence.json`](data/2026-10-30/144/particle-life.app-evidence.json) (method `particle-trail-regimes-v1-app-evidence-v2-fixed-step`; replaces the re-brief 1 supplement, whose populations and clocks were invalid). Reproduce with `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 particle-life app"` (also covered by `-g "sweep 144 "`). The `*-app.png` images are canvas screenshots of the real `Renderer` (WebGL2, shipped quality profile and default resolution preset, default colour options) at device pixel ratio 1 in a page viewport that `s144Snapshot` sets per capture (max of canvas CSS size and 400×300; recorded from `page.viewportSize()` in every row and sample of the retained JSON): 960×600 for the shipped rows and 400×329 (canvas 329×329) for the three matched-density rows; the earlier `*-field.png` images remain grayscale kernel-field renders and are not app screenshots. Recorded renderer grid: 960×600 for shipped rows and 329×329 for density-matched finalists (see below).
+
+Clock and state: no wall-clock or interactive iteration counter is used (the counter advances ten per kernel call in the particle renderers and cannot identify a kernel-call count). Each capture builds a fresh kernel, issues exactly the listed number of `step(1)` calls (dt = 1, call count asserted, and asserted unchanged after the Renderer draws; `stepsPerFrame` 0, paused), and the Renderer draws that state. Per capture the harness asserts the screenshot state SHA-256 equals a plain fresh kernel run on the same grid, seed (sweep seed; Boids has none, i.e. 0), call count and dt, and the first sample of every row is captured twice with equal state hashes (same-seed repeat). Numeric readings come from `scoreOne` at the same recorded grid and population (the same fixed-dt call sequence; not a pixel replay). The repeatability claim is limited to this fixed-step path; the interactive app's live trajectory is wall-clock driven and not claimed repeatable. Hashes, requested and effective populations, density and grid per row are in the JSON. Populations are shipped (full shipped count on 960×600, not density-matched) or matched-density (sweep agents per cell on the recorded renderer grid). Boids rows are obstacle-free (the app's schema default is `reef`). Shipped finalist population: 6 000 (Cells); references use their shipped presets and counts.
+
+| kind | id | population | grid | score at 3 samples | images (app renderer) |
+|---|---|---|---|---|---|
+| reference | `144-current-cells` | shipped 6000 (effective 6000, 0.0104/cell) | 960×600 | t150: 0.104 / t300: 0.078 / t600: 0.100 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-current-cells-shipped-6000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-current-cells-shipped-6000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-current-cells-shipped-6000-t600-app.png) |
+| reference | `144-current-chasers` | shipped 5000 (effective 5000, 0.0087/cell) | 960×600 | t150: 0.032 / t300: 0.057 / t600: 0.045 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-current-chasers-shipped-5000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-current-chasers-shipped-5000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-current-chasers-shipped-5000-t600-app.png) |
+| reference | `144-current-gas-clouds` | shipped 12000 (effective 12000, 0.0208/cell) | 960×600 | t150: 0.147 / t300: 0.084 / t600: 0.139 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-current-gas-clouds-shipped-12000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-current-gas-clouds-shipped-12000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-current-gas-clouds-shipped-12000-t600-app.png) |
+| finalist | `friction0.97_species8_forceScale140_matrixBias0.35` | matched-density 19820 (effective 19820, 0.1831/cell) | 329×329 | t150: 0.168 / t300: 0.211 / t600: 0.212 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-matched-density-19820-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-matched-density-19820-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-matched-density-19820-t600-app.png) |
+| finalist | `friction0.97_species8_forceScale140_matrixBias0.35` | shipped 6000 (effective 6000, 0.0104/cell) | 960×600 | t150: 0.020 / t300: 0.014 / t600: 0.012 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t600-app.png) |
+| finalist | `friction0.97_species6_forceScale140_matrixBias-0.35` | matched-density 19820 (effective 19820, 0.1831/cell) | 329×329 | t150: 0.360 / t300: 0.195 / t600: 0.313 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-matched-density-19820-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-matched-density-19820-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-matched-density-19820-t600-app.png) |
+| finalist | `friction0.97_species6_forceScale140_matrixBias-0.35` | shipped 6000 (effective 6000, 0.0104/cell) | 960×600 | t150: 0.125 / t300: 0.005 / t600: 0.025 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-shipped-6000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-shipped-6000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species6_forceScale140_matrixBias-0.35-shipped-6000-t600-app.png) |
+| finalist | `friction0.1_species3_forceScale10_matrixBias-0.35` | matched-density 19820 (effective 19820, 0.1831/cell) | 329×329 | t150: 0.903 / t300: 0.890 / t600: 0.893 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-matched-density-19820-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-matched-density-19820-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-matched-density-19820-t600-app.png) |
+| finalist | `friction0.1_species3_forceScale10_matrixBias-0.35` | shipped 6000 (effective 6000, 0.0104/cell) | 960×600 | t150: 0.056 / t300: 0.084 / t600: 0.038 | [150](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-shipped-6000-t150-app.png) · [300](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-shipped-6000-t300-app.png) · [600](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-shipped-6000-t600-app.png) |
+
+Findings (manual; screenshots viewed: finalists `species8` and `species3` at matched density and shipped Cells, all at 600 steps; other rows rest on their scores):
+- Population correction: the previous supplement requested 105 469 particles and the kernel silently clamped to its 20 000 cap, so that comparison was not density-matched. Matched-density rows now keep the sweep's 0.1831 particles per cell by shrinking the canvas instead: a 329×329 renderer grid (108 241 cells) with 19 820 particles (effective population asserted equal to the request; relative density error 2.4e-5), alongside separate shipped-population rows on 960×600 (not density-matched). The matched rows are therefore at a smaller app viewport than 960×600; that is the concrete conflict between the cap and the 960×600 grid.
+- Channel 0 in the retained field PNGs and metrics is the summed red colour contribution from several species, not species-0 density.
+- Shipped Cells at 600 steps is a sparse, nearly uniform scatter of single particles with faint small clumps ([screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-current-cells-shipped-6000-t600-app.png)).
+- `friction0.97_species8_forceScale140_matrixBias0.35` at matched density shows large, soft multi-colour clouds with bright cores and a dark void ([screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-matched-density-19820-t600-app.png)); it is the structured result but only at this density, and at the shipped 6 000 on 960×600 it scores 0.02 / 0.01 / 0.01.
+- `friction0.1_species3_forceScale10_matrixBias-0.35` at matched density is a dense uniform dot field with faint diagonal streaking ([screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.1_species3_forceScale10_matrixBias-0.35-matched-density-19820-t600-app.png)); its high score reflects even spread, not structure.
+- At the shipped 6 000 particles the `friction0.97_species8_forceScale140_matrixBias0.35` t600 image ([screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t600-app.png)) shows discrete clumps of several hundred particles, two or three of them dense, separated by sparse scatter, whereas shipped Cells at t600 is a near-uniform scatter with only faint small clumps. This is a visible difference in clumping, not evidence the finalist is better: its score at that population is 0.02 / 0.01 / 0.01, it is seed- and horizon-fragile (0.534 at 1200 steps in the main sweep), and the one-seed single-frame look has not been checked at other seeds.
+- `friction0.97_species6_forceScale140_matrixBias-0.35` was not re-inspected; its seed spread (0.223 to 0.945) already showed instability.
+- Conclusion: **no Particle Life promotion.** At shipped populations no finalist is shown to be better than the shipped references; the species-8 finalist looks visibly clumpier than Cells at t600 (see the finding above), but that is fragile across seed and horizon and is not a superiority claim. The other inspected finalists (species 3) read as uniform dot fields like the references.
+
+#### Re-brief 4 provenance, runtime and clipping audit (2026-11-02)
+
+- Viewport: the previous write-up and JSON gave a constant 1280×800; the actual per-capture viewport was different. It is now recorded per row and per sample (960×600 for the shipped rows and 400×329 (canvas 329×329) for the three matched-density rows). The supplemental numeric rows and state SHA-256 values from the re-run are identical to the attempt-4 evidence apart from this added field.
+- Runtime: `CI=1 SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 144 " --workers=3 --fully-parallel --global-timeout=6600000` exited 0, 6 passed, none skipped, 1.1 h; this kernel: main test 12.9 min, supplemental test 26.6 min. The main-sweep JSON is byte-identical to the attempt-4 retained file.
+- Off-frame clipping: not measured numerically (border-to-mean density is not a clipping measure). Assessment from kernel boundary behaviour and inspected images: the particle-life kernel `wrap()` torus (`src/sims/particle-life/kernel.ts:83-90`) wraps positions, so no agent leaves the frame and nothing is clipped by the kernel; each renderer draws the full grid onto a canvas of the same size. Inspected: finalist friction0.97/species6/forceScale140/bias-0.35 matched-density t300 (329×329: speckle fills the frame, no cut-off). Not every image was inspected, and this is a visual finding, not a score.
+
+
+## Default appendix — 2026-11-03
+
+The operator selected the **Eight-species attraction** trial as the new kernel
+default after visual review, describing “atom / molecule like structures”
+and preferring it to the previous default in
+[`uat-preset-review.md`](../UAT/uat-preset-review.md). The old default was
+`particleCount: 5901`, `species: 5`, `rmax: 77`, `rmin: 45`,
+`forceScale: 108`, `friction: 0.8`, `matrixBias: 0.15`.
+The new default is `particleCount: 6000`, `species: 8`, `rmax: 24`,
+`rmin: 12`, `forceScale: 140`, `friction: 0.97`, `matrixBias: 0.35`.
+Point size remains 3; **Cells, Chasers and Gas clouds are unchanged**.
+
+The source is the `kind: finalist`, `population: shipped 6000` row
+`friction0.97_species8_forceScale140_matrixBias0.35` in
+[`144/particle-life.app-evidence.json`](data/2026-10-30/144/particle-life.app-evidence.json),
+with the retained [t600 app-renderer screenshot](../images/sweeps-2026-10-30/144-app-particle-life-144-particle-life-friction0.97_species8_forceScale140_matrixBias0.35-shipped-6000-t600-app.png).
+The trial used seed 144; the shipped default has no pinned seed and uses a
+fresh renderer seed each load, as accepted by the operator on 2026-11-03.
+
+Sweep 144 proposed no promotion. Its metric set could not reliably rank
+species structure: this row dropped to **0.534 at 1200 steps in the 128²
+sweep**, scored **0.910 / 0.923 at seeds 145 / 146**, and scored only
+**0.02** at shipped population (0.020 / 0.014 / 0.012 at t150 / t300 / t600).
+Seed and horizon sensitivity remain known limitations. The operator accepted
+these caveats on looks on 2026-11-03; the scores do not justify this default
+change or establish superiority over the retained presets.
+
+
+`public/thumbnails/particle-life.png` was regenerated with
+`node scripts/generate-thumbnails.mjs` after repairing the thumbnail painter
+to make repeated `step(1 / 30)` calls for particle sims instead of a single
+scaled call (which the Particle Life kernel clamped). With the
+`"particle-life": 600` entry in `STEPS_BY_SLUG`, the first repaired render
+shows discrete multi-colour clumps against sparse scatter; no higher step
+count was needed. The earlier attempt's 48-, 600- and 6,000-step images
+remained scatter because of that painter defect. No thumbnail was hand-edited
+or copied. Ten unrelated thumbnails rewritten by generation were restored
+from `dev`; all other 25 thumbnails retain their base bytes. The Boids
+thumbnail also changes under the repaired painter, but is deliberately kept
+at its committed bytes for regeneration in a later card.
+
+Worker live checks at the default Ultra quality profile showed discrete
+multi-colour clumps against sparse scatter on three fresh loads at iteration
+counters 610, 610 and 610. The eight controls matched the new defaults;
+Cells → Kernel default and Reset to defaults restored them. A custom rmax
+of 40 survived reload; clearing storage restored 24. Retained screenshots:
+`e2e/artifacts/151-promote-144-trials/particle-life-load-{1,2,3}.png`.
+Independent verifier checks and the operator's final look remain pending.
