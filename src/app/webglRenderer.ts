@@ -1301,6 +1301,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly program: WebGLProgram;
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
+  private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
   private orbit3dGroundTexture: WebGLTexture | null = null;
@@ -2258,6 +2259,7 @@ export class WebGLRendererBackend implements RendererBackend {
   ): boolean {
     return (
       this.kuramoto !== null &&
+      !this.forceCpuSimulation &&
       mode === "field" &&
       isKuramotoState(kernel)
     );
@@ -3232,6 +3234,19 @@ function orbit3dGroundDiagnosticModeFromUrl(): Orbit3DGroundDiagnosticMode {
 function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("orbit3dSampler") === "cpu"
+    ? "cpu"
+    : null;
+}
+
+/**
+ * `?simulationRenderer=cpu` keeps GPU-capable field simulations on their CPU
+ * kernel (reported as `data-simulation-renderer="cpu-kernel"`), for A/B timing
+ * and for evidence runs that read the kernel's own state. Read once when the
+ * backend is built; inert when absent, and any other value is ignored.
+ */
+function simulationRendererOverrideFromUrl(): "cpu" | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("simulationRenderer") === "cpu"
     ? "cpu"
     : null;
 }

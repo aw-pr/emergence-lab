@@ -1916,8 +1916,14 @@ async function rdRender(page: Page, config: SimSweepConfig, params: Params, step
     const kernel = new SnapshotKernel(), mode = getRenderMode(slug);
     const profile = qualityProfileFor(slug, mode, "desktop");
     const colourOptions = { ...defaultColourOptionsFor(slug, kernel.channelCount), channel };
+    // The evidence reads the kernel's own field, so keep GPU-capable kernels on the CPU.
+    // The backend reads the override only while it is being built.
+    const pageUrl = location.href, cpuUrl = new URL(pageUrl);
+    cpuUrl.searchParams.set("simulationRenderer", "cpu");
+    history.replaceState(history.state, "", cpuUrl);
     const renderer = new Renderer({ canvas, kernel, params, stepsPerFrame: 1, colourOptions,
       displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: "performance", qualityProfile: profile });
+    history.replaceState(history.state, "", pageUrl);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const state = kernel.readState(), cc = kernel.channelCount;
     const field = Array.from({ length: grid[0] * grid[1] }, (_, i) => Number(state[i * cc + channel]));
