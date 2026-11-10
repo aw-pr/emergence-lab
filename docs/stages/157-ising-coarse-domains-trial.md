@@ -4,18 +4,18 @@
 
 - **Authored:** 2026-11-09
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
-- **Worker:** Claude Opus 5.5 <claude-opus-5-5@local>
+- **Worker:** Claude Sonnet 5.5 <claude-sonnet-5-5@local>
 - **Verifier:** GPT-6.1 Sol <gpt-6-1-sol@local>
 - **Base branch:** dev
 - **Run branch:** autometta/157-ising-coarse-domains-trial
-- **Worker effort:** high
-- **Verifier effort:** high
+- **Worker effort:** medium
+- **Verifier effort:** medium
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Recovery attempts:** 3
-- **Recovery attempt:** 1
+- **Recovery attempt:** 2
 - **Dispatch:** serial
-- **Pairing rationale:** the trial catalogue change is small but touches the library's data contract (stage-aware ids, badges and the deep link) and the evidence needs the 146 harness driven correctly; an Opus 5.5 worker lands that in one attempt. Checking the criteria is reading plus one browser session, so the cross-family verifier is the Codex coding tier, as on cards 154 and 155. No frontier seat: the operator gives the final look.
+- **Pairing rationale:** the trial catalogue change is small but touches the library's data contract (stage-aware ids, badges and the deep link) and the evidence needs the 146 harness driven correctly; an Opus 5.5 worker lands that in one attempt. Checking the criteria is reading plus one browser session, so the cross-family verifier is the Codex coding tier, as on cards 154 and 155. No frontier seat: the operator gives the final look. Attempt 2 is a repair (Re-brief 1): attempt 1 built every deliverable and the Opus worker's output is restored unchanged, so the worker drops to Sonnet 5.5 at medium; the verifier stays cross-family on Sol at medium, scoped to the criteria attempt 1 could not pass.
 - **Open decisions:** none
 - **Decided:** by the operator on 2026-11-09 (`docs/UAT/uat.md` note 5 and the follow-up chat): re-run the Ising candidate that scored well on card 146 so it can be seen. The orchestrator chose the trial-preset vehicle so the look is live in the app, and named it "Coarse domains" after its appearance; the operator may rename it at the look.
 
@@ -111,3 +111,56 @@ Both roles need a browser, headless Chromium included. The sweep harness (`e2e/s
 ## Readiness review
 
 Baselines ran on `b318892d6` on 2026-11-09: `npm run verify` (figures above, from the 2026-11-08 run on the same tree), the frozen contract (3 of 3 red for the reasons stated), `npm run build:test` green. The operator's decision is in `docs/UAT/uat.md` note 5 and the 2026-11-09 chat. No cross-family cold read was done before queueing; the next orchestration session may add one and record it here. Serial dispatch: this card shares `e2e/sweep.spec.ts` and `e2e/harness/sims.ts` with cards 158 and 160, and `src/app/trialPresets.ts` with card 160, which is gated on this card.
+
+## Re-brief 1 (2026-11-10, attempt 2)
+
+Attempt 1 is preserved at `a689091dc5f0b4f4b1a4c4db4ee2fd20b02ac980` on
+`wip/157-ising-coarse-domains-trial-attempt-1`, including the git-ignored sweep
+data, images and report. Its Sol verifier independently passed criteria 1, 2, 4,
+5 and 6: verify 492/429/0/63, the oracle 3 of 3, the live look at 1440x856 ultra
+(Coarse domains reads coarser than Critical domains and still moves at 3000),
+and its own sweep run matching the retained JSON within 1e-9. It failed two
+criteria, neither on the worker's diff:
+
+- **Criterion 3** failed on a defect in `scripts/check-contract-test-gate.sh`:
+  under `pipefail`, `cat | grep -q` returned 141 (SIGPIPE) on the 272 KB
+  `e2e/sweep.spec.ts`, so the gate read the file as carrying no frozen block.
+  Fixed on `dev` at `8f7f418b8`; the printed digests are unchanged (card 70's
+  block `sha256:d423a745...`, this card's oracle `sha256:f2637cab...`).
+- **Criterion 7** was judged FAIL because the operator's after-landing look was
+  not evidenced. The criterion now reads as judged by neither seat (`41b6a4bd4`),
+  the wording cards 154 and 155 used.
+
+The deliverables stand; do not rebuild, re-tune or re-sweep anything.
+
+Attempt 2 instructions, replacing the Deliverables steps above:
+
+1. Restore the tracked deliverables, then unstage them so the tree looks like
+   attempt 1's did: `git checkout a689091dc5f0b4f4b1a4c4db4ee2fd20b02ac980 --
+   src/app/trialPresets.ts src/app/presetLibrary.ts e2e/sweep.spec.ts
+   docs/sweeps/2026-11-10-ising-coarse-domains.md
+   docs/sweeps/ising-model-interestingness.md && git reset -q`.
+2. Restore the git-ignored evidence without staging it: `git archive
+   a689091dc5f0b4f4b1a4c4db4ee2fd20b02ac980 docs/sweeps/data/2026-11-10/157
+   docs/images/sweeps-2026-11-10 e2e/artifacts/sweep-157-ising-model | tar -x`.
+3. Show the restore is exact: `git diff a689091dc5f0b4f4b1a4c4db4ee2fd20b02ac980
+   -- <the five files>` is empty, and the restored JSON's sha256 equals
+   `git show a689091dc5f0b4f4b1a4c4db4ee2fd20b02ac980:docs/sweeps/data/2026-11-10/157/ising-model.json | shasum -a 256`.
+4. Run criteria 1, 2, 3 and 6 and record each exit code. Criterion 3 must now
+   exit 0. If any of them fails, stop and report partial with the output; do
+   not edit the gate, the oracle or any frozen file.
+5. Do not run the 157 sweep or the browser look again.
+
+Verifier for attempt 2: run criteria 1, 2, 3 and 6 yourself, confirm step 3's
+byte-identity yourself, and report criterion 7 as not applicable. Criteria 4 and
+5 stand from attempt 1's verdict
+(`state/uat/157-ising-coarse-domains-trial/attempt-1/verifier.json`) only if the
+five deliverables are byte-identical to the preserved commit; if anything
+differs, run 4 and 5 in full.
+
+### Recovery log
+
+| Attempt | Dispatched (base) | Seats | Outcome | Evidence | Diagnosis | Repair |
+|---|---|---|---|---|---|---|
+| 1 | 2026-11-10 21:35Z (`b79c8c0e8`) | Opus 5.5 high / Sol high | worker partial, verifier FAIL on 3 and 7; 8.8M tokens | `a689091dc` on `wip/157-...-attempt-1`; `state/uat/157-ising-coarse-domains-trial/attempt-1/` | harness: gate SIGPIPE false negative; card: operator criterion read as a verifier gate | `8f7f418b8` gate, `41b6a4bd4` card wording |
+| 2 | queued 2026-11-10 (dev tip at dispatch) | Sonnet 5.5 medium / Sol medium | pending | | | |
