@@ -163,4 +163,4 @@ differs, run 4 and 5 in full.
 | Attempt | Dispatched (base) | Seats | Outcome | Evidence | Diagnosis | Repair |
 |---|---|---|---|---|---|---|
 | 1 | 2026-11-10 21:35Z (`b79c8c0e8`) | Opus 5.5 high / Sol high | worker partial, verifier FAIL on 3 and 7; 8.8M tokens | `a689091dc` on `wip/157-...-attempt-1`; `state/uat/157-ising-coarse-domains-trial/attempt-1/` | harness: gate SIGPIPE false negative; card: operator criterion read as a verifier gate | `8f7f418b8` gate, `41b6a4bd4` card wording |
-| 2 | queued 2026-11-10 (dev tip at dispatch) | Sonnet 5.5 medium / Sol medium | pending | | | |
+| 2 | 2026-11-10 22:09Z (`f6419f64c`) | Sonnet 5.5 medium / Sol medium | worker pass (0.2M), verifier PASS on 1-6, 7 not applicable; landed `0994cba13` 22:20Z | `state/verifiers/157-ising-coarse-domains-trial.json` | restore byte-identical to `a689091dc` | none needed |
