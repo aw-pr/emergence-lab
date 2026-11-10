@@ -281,7 +281,7 @@ export function renderPresetLibrary(container: HTMLElement): { dispose(): void }
         const model = findEntry(entry.snapshot.slug)!;
         const modelName = model.variants?.find((v) => v.variant === entry.snapshot.variant)?.name ?? model.name;
         const meta = element("div", "preset-item__meta");
-        meta.append(element("span", "", modelName), element("span", `preset-item__badge preset-item__badge--${source}`, source === "trial" ? "Trial · stage 144" : "Personal"));
+        meta.append(element("span", "", modelName), element("span", `preset-item__badge preset-item__badge--${source}`, source === "trial" ? `Trial · stage ${(entry as TrialPreset).stage}` : "Personal"));
         info.append(meta, element("h3", "", entry.name));
         if (source === "trial") {
           const provenance = element("details", "preset-item__provenance");
@@ -319,7 +319,7 @@ export function renderPresetLibrary(container: HTMLElement): { dispose(): void }
       lists.append(section);
     };
     group("Your presets", "Personal configurations, ready for a fresh run.", personal, "personal");
-    group("From the research bench", "Nine read-only trials at shipped populations. Save a personal copy to make one your own. These are candidates, not promoted defaults; live trajectories vary with canvas size and time.", sources, "trial");
+    group("From the research bench", "Read-only trials from research stages. Save a personal copy to make one your own. These are candidates, not promoted defaults; live trajectories vary with canvas size and time.", sources, "trial");
   }
 
   search.addEventListener("input", renderLists);

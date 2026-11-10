@@ -1891,9 +1891,12 @@ const RD_PRIOR: Record<string, { source: string; description: string }[]> = {
   ],
 };
 
-async function rdRender(page: Page, config: SimSweepConfig, params: Params, steps: number, path: string) {
-  await page.setViewportSize({ width: 384, height: 384 });
-  const info = await page.evaluate(async ({ slug, params, steps, channel }) => {
+// "desktop-default" resolves to the slug's desktop quality-profile preset in the page.
+type RdView = { width: number; height: number; resolution: string };
+async function rdRender(page: Page, config: SimSweepConfig, params: Params, steps: number, path: string,
+  view: RdView = { width: 384, height: 384, resolution: "performance" }) {
+  await page.setViewportSize({ width: view.width, height: view.height });
+  const info = await page.evaluate(async ({ slug, params, steps, channel, view }) => {
     const load = (url: string) => import(/* @vite-ignore */ url);
     const [{ Renderer }, mod, { defaultColourOptionsFor }, { qualityProfileFor }, { getRenderMode }] = await Promise.all([
       load("/src/app/renderer.ts"), load(`/src/sims/${slug}/kernel.ts`), load("/src/app/colormap.ts"), load("/src/app/qualityProfiles.ts"), load("/src/app/renderModes.ts"),
@@ -1911,11 +1914,12 @@ async function rdRender(page: Page, config: SimSweepConfig, params: Params, step
     }
     document.body.innerHTML = "";
     const canvas = document.createElement("canvas"); canvas.id = "rd-evidence";
-    canvas.style.cssText = "position:fixed;left:0;top:0;width:384px;height:384px";
+    canvas.style.cssText = `position:fixed;left:0;top:0;width:${view.width}px;height:${view.height}px`;
     document.body.appendChild(canvas);
     const kernel = new SnapshotKernel(), mode = getRenderMode(slug);
     const profile = qualityProfileFor(slug, mode, "desktop");
     const colourOptions = { ...defaultColourOptionsFor(slug, kernel.channelCount), channel };
+    const resolution = view.resolution === "desktop-default" ? profile.defaultPreset : view.resolution;
     // The evidence reads the kernel's own field, so keep GPU-capable kernels on the CPU.
     // The backend reads the override only while it is being built.
     const pageUrl = location.href, cpuUrl = new URL(pageUrl);
@@ -1924,7 +1928,7 @@ async function rdRender(page: Page, config: SimSweepConfig, params: Params, step
     let renderer: InstanceType<typeof Renderer>;
     try {
       renderer = new Renderer({ canvas, kernel, params, stepsPerFrame: 1, colourOptions,
-        displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution: "performance", qualityProfile: profile });
+        displayOptions: { dotSize: 1, trailFade: 0, bloom: 0 }, renderMode: mode, resolution, qualityProfile: profile });
     } finally {
       history.replaceState(history.state, "", pageUrl);
     }
@@ -1932,8 +1936,8 @@ async function rdRender(page: Page, config: SimSweepConfig, params: Params, step
     const state = kernel.readState(), cc = kernel.channelCount;
     const field = Array.from({ length: grid[0] * grid[1] }, (_, i) => Number(state[i * cc + channel]));
     (window as any).__rdRenderer = renderer;
-    return { grid, field, receivedParams, canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer, running: renderer.isRunning(), colourOptions };
-  }, { slug: config.slug, params, steps, channel: config.primaryChannel });
+    return { grid, field, receivedParams, canvas: [canvas.width, canvas.height], renderer: canvas.dataset.renderer, running: renderer.isRunning(), colourOptions, resolution };
+  }, { slug: config.slug, params, steps, channel: config.primaryChannel, view });
   expect(info.running).toBe(false);
   expect(info.renderer).toBe("webgl2");
   await page.locator("#rd-evidence").screenshot({ path });
@@ -3787,4 +3791,160 @@ test("phase 145 circular persistence respects wrap and occupancy", () => {
   expect(masked.circularPersistence).toBe(1);
   expect(masked.jointOccupancy).toBe(.5);
   expect(phase145Diagnostics([0], [0], [0], [0]).jointOccupancy).toBe(0);
+});
+
+// ---------------------------------------------------------------------------
+// Stage 157: card 146's Ising candidate c04, shipped as the "Coarse domains"
+// trial, re-measured under the 146 method beside the four shipped references,
+// with app-renderer frames at the desktop default grid against Critical domains.
+// ---------------------------------------------------------------------------
+const S157_ROOT = "docs/sweeps/data/2026-11-10/157";
+const S157_DATA = `${S157_ROOT}/ising-model.json`;
+const S157_IMAGES = "docs/images/sweeps-2026-11-10";
+const S157_ARTIFACT = "sweep-157-ising-model";
+const S157_CONFIG = "sweep-146-ising-model";
+const S157_CANDIDATE = { id: "146-ising-c04", label: "Coarse domains", trialId: "trial-157-ising-model-temperature2.38_coupling1.4" };
+const S157_PARAMS = { externalField: 0, sweepsPerStep: 0.5, seed: 7, temperature: 2.38, coupling: 1.4, initialState: "random" };
+const S157_APP_REFERENCE = "146-current-critical";
+const S157_APP_STEPS = [300, 1500, 3000];
+// The app canvas at a 1440x900 desktop viewport; Ising's desktop preset (ultra) caps the grid above this size.
+const S157_APP_VIEW: RdView = { width: 1440, height: 856, resolution: "desktop-default" };
+const S157_COMMAND = 'SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 157 " --workers=1';
+const S157_TOLERANCE = 1e-9;
+
+/** Domain size read straight off a two-state spin field: the share of unlike
+ * nearest-neighbour pairs, and its reciprocal, the mean run length between walls. */
+function s157DomainStats(field: number[], width: number, height: number) {
+  let unlike = 0, pairs = 0, up = 0;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const v = field[y * width + x];
+    up += v;
+    if (x + 1 < width) { pairs += 1; if (field[y * width + x + 1] !== v) unlike += 1; }
+    if (y + 1 < height) { pairs += 1; if (field[(y + 1) * width + x] !== v) unlike += 1; }
+  }
+  const wallDensity = unlike / pairs;
+  return { upFraction: up / field.length, wallDensity, meanRunLength: wallDensity > 0 ? 1 / wallDensity : null,
+    spatialAutocorrelation: spatialAutocorrelation(field, width, height) };
+}
+
+function s157MaxDelta(a: unknown, b: unknown, path = ""): { delta: number; path: string } {
+  if (typeof a === "number" && typeof b === "number") return { delta: a === b ? 0 : Math.abs(a - b), path };
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    let worst = { delta: 0, path };
+    for (const key of keys) {
+      if (!(key in (a as object)) || !(key in (b as object))) return { delta: Infinity, path: `${path}.${key}` };
+      const next = s157MaxDelta((a as any)[key], (b as any)[key], `${path}.${key}`);
+      if (next.delta > worst.delta || Number.isNaN(next.delta)) worst = next;
+    }
+    return worst;
+  }
+  return { delta: a === b ? 0 : Infinity, path };
+}
+
+sweepTest("sweep 157 ising-model coarse domains", async ({ page }) => {
+  test.setTimeout(3_600_000);
+  const config = SWEEP_CONFIGS[S157_CONFIG];
+  const gc = config.growthCriticality!;
+  const slug = config.slug;
+  const candidateParams = expandSweep(config)[Number(S157_CANDIDATE.id.slice(-2)) - 1];
+  expect(candidateParams, "146-ising-c04 is the trial's tuple").toEqual(S157_PARAMS);
+  const rows: ReferenceSet[] = [{ id: S157_CANDIDATE.id, label: S157_CANDIDATE.label, params: candidateParams }, ...config.references];
+  const manifest = {
+    stage: 157, slug, configuration: S157_CONFIG, methodVersion: gc.methodVersion, command: S157_COMMAND,
+    grid: { width: config.gridWidth, height: config.gridHeight }, fluxGap: config.fluxGap, dt: config.dt,
+    sampleSteps: gc.sampleSteps, longHorizon: gc.longHorizon, validationSizes: gc.validationSizes, seeds: gc.seeds,
+    candidate: { ...S157_CANDIDATE, params: candidateParams }, references: config.references,
+    appRender: { view: S157_APP_VIEW, steps: S157_APP_STEPS, rows: [S157_CANDIDATE.id, S157_APP_REFERENCE] },
+    method: "Card 146's growth-criticality-v1 method unchanged: mean of scoreFrames metrics over the declared captures via summarizeMetrics on a fresh seeded kernel per measurement; diagnostics never feed score. The candidate is ranked among itself and the four 146-current-* references only.",
+    sourceHashes: Object.fromEntries(["src/app/presets.ts", "src/app/trialPresets.ts", `src/sims/${slug}/kernel.ts`, "e2e/harness/metrics.ts", "e2e/harness/driver.ts"]
+      .map(p => [p, createHash("sha256").update(readFileSync(p)).digest("hex")])),
+  };
+  const started = Date.now();
+  const scale = (size: number) => Math.max(1, Math.round(384 / size));
+  const field = (id: string, kind: string, size: number, seed: unknown, steps: number, frame: ArrayLike<number>) => {
+    const path = `${S157_IMAGES}/157-${id}-field-${size}-seed${seed}-${kind}-t${steps}.png`;
+    writePng(path, frame, size, size, scale(size));
+    return path;
+  };
+  const scored: ScoredCandidate[] = [], readings: object[] = [], validation: any[] = [];
+  for (const row of rows) {
+    const samples = await gcCapture(page, config, row.params, config.gridWidth);
+    const result = gcScore(row.id, row.label, row.params, samples, gc.methodVersion);
+    scored.push(result);
+    readings.push(gcStrip(result, samples));
+    const seed = row.params.seed;
+    const entry: any = { id: row.id, label: row.label, strip: [], finiteSize: [], seeds: [] };
+    for (const s of samples) entry.strip.push({ steps: s.steps, image: field(row.id, "strip", config.gridWidth, seed, s.steps, s.frameA) });
+    for (const size of gc.validationSizes) {
+      const sized = await gcCapture(page, config, row.params, size);
+      entry.finiteSize.push({ size, steps: sized.map(s => s.steps), metrics: sized.map(s => s.metrics), diagnostics: sized.map(s => s.diagnostics),
+        meanScore: sized.reduce((sum, s) => sum + s.metrics.score, 0) / sized.length, image: field(row.id, "size", size, seed, sized[1].steps, sized[1].frameA) });
+    }
+    const long = await gcCapture(page, config, row.params, config.gridWidth, { sampleSteps: [gc.longHorizon] });
+    entry.longHorizon = { size: config.gridWidth, steps: long[0].steps, metrics: long[0].metrics, diagnostics: long[0].diagnostics,
+      image: field(row.id, "long", config.gridWidth, seed, long[0].steps, long[0].frameA) };
+    for (const s of gc.seeds!) {
+      const seeded = s === seed ? samples : await gcCapture(page, config, { ...row.params, seed: s }, config.gridWidth);
+      entry.seeds.push({ seed: s, metrics: seeded.map(x => x.metrics), meanScore: seeded.reduce((sum, x) => sum + x.metrics.score, 0) / seeded.length,
+        meanTemporalFlux: seeded.reduce((sum, x) => sum + x.metrics.temporalFlux, 0) / seeded.length,
+        image: field(row.id, "seed", config.gridWidth, s, seeded[1].steps, seeded[1].frameA) });
+    }
+    const scores = entry.seeds.map((s: any) => s.meanScore);
+    const mean = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+    entry.seedSpread = { seeds: gc.seeds, meanScore: mean, minScore: Math.min(...scores), maxScore: Math.max(...scores),
+      sdScore: Math.sqrt(scores.reduce((a: number, b: number) => a + (b - mean) ** 2, 0) / scores.length) };
+    validation.push(entry);
+    console.log(`157 ${row.id}: score ${result.metrics.score.toFixed(6)}, seeds ${scores.map((v: number) => v.toFixed(4)).join("/")}`);
+  }
+  const ranked = [...scored].sort((a, b) => b.metrics.score - a.metrics.score).map((row, i) => ({ rank: i + 1, ...row }));
+
+  const appRenders: any[] = [];
+  for (const id of [S157_CANDIDATE.id, S157_APP_REFERENCE]) {
+    const row = rows.find(r => r.id === id)!;
+    const frames: any[] = [];
+    let previous: number[] | undefined;
+    for (const steps of S157_APP_STEPS) {
+      const image = `${S157_IMAGES}/157-app-${id}-t${steps}.png`;
+      const rendered = await rdRender(page, config, row.params, steps, image, S157_APP_VIEW);
+      const [w, h] = rendered.grid;
+      const spins = rdDecode(rendered.field);
+      frames.push({ steps, image, grid: { width: w, height: h }, canvas: rendered.canvas, resolution: rendered.resolution, renderer: rendered.renderer,
+        fieldSha256: createHash("sha256").update(rendered.field).digest("hex"), ...s157DomainStats(spins, w, h),
+        changedFromPrevious: previous ? spins.filter((v, i) => v !== previous![i]).length / spins.length : null });
+      previous = spins;
+    }
+    appRenders.push({ id, label: row.label, params: row.params, frames });
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  const evidence = { ranked: ranked.map(({ id, rank, metrics }) => ({ id, rank, metrics })),
+    validation: validation.map(v => ({ ...v, strip: v.strip.map((s: any) => s.steps) })),
+    appRenders: appRenders.map(r => ({ id: r.id, frames: r.frames.map(({ image, ...rest }: any) => rest) })) };
+  const out = { manifest, ranked, candidate: ranked.find(r => r.id === S157_CANDIDATE.id), references: scored.slice(1), readings, validation, appRenders,
+    replayTolerance: S157_TOLERANCE, elapsedMs: Date.now() - started,
+    runtime: { browser: page.context().browser()?.version(), node: process.version, platform: process.platform } };
+  writeText(`${ARTIFACT_ROOT}/${S157_ARTIFACT}/report.md`, [
+    `# Sweep 157: ${S157_CANDIDATE.label} (${S157_CANDIDATE.id}) beside the shipped Ising references`, "",
+    metricsTable(ranked, config.axes.map(a => a.key).concat("externalField", "sweepsPerStep")), "",
+    "| id | seed scores (7/11/23) | 64² mean score | 256² mean score | t3000 score | t3000 flux |", "|---|---|---:|---:|---:|---:|",
+    ...validation.map(v => `| ${v.id} | ${v.seeds.map((s: any) => s.meanScore.toFixed(4)).join(" / ")} | ${v.finiteSize[0].meanScore.toFixed(4)} | ${v.finiteSize[1].meanScore.toFixed(4)} | ${v.longHorizon.metrics.score.toFixed(4)} | ${v.longHorizon.metrics.temporalFlux.toFixed(4)} |`), "",
+    "| app row | steps | grid | wall density | mean run length | changed since previous |", "|---|---:|---|---:|---:|---:|",
+    ...appRenders.flatMap(r => r.frames.map((f: any) => `| ${r.id} | ${f.steps} | ${f.grid.width}x${f.grid.height} | ${f.wallDensity.toFixed(4)} | ${f.meanRunLength?.toFixed(2) ?? "n/a"} | ${f.changedFromPrevious?.toFixed(4) ?? "n/a"} |`)),
+  ].join("\n") + "\n");
+
+  // A rerun beside a retained run is a replay: it lands next to the retained file and must match it.
+  if (existsSync(S157_DATA)) {
+    const retained = JSON.parse(readFileSync(S157_DATA, "utf8"));
+    const retainedEvidence = { ranked: retained.ranked.map(({ id, rank, metrics }: any) => ({ id, rank, metrics })),
+      validation: retained.validation.map((v: any) => ({ ...v, strip: v.strip.map((s: any) => s.steps) })),
+      appRenders: retained.appRenders.map((r: any) => ({ id: r.id, frames: r.frames.map(({ image, ...rest }: any) => rest) })) };
+    const worst = s157MaxDelta(JSON.parse(JSON.stringify(evidence)), retainedEvidence);
+    writeText(`${S157_ROOT}/ising-model.replay.json`, JSON.stringify({ ...out, replayOf: S157_DATA, maxAbsoluteDelta: worst.delta, worstPath: worst.path }, null, 2));
+    console.log(`157 replay against ${S157_DATA}: max delta ${worst.delta} at ${worst.path || "(none)"}`);
+    expect(worst.delta, worst.path).toBeLessThanOrEqual(S157_TOLERANCE);
+  } else {
+    writeText(S157_DATA, JSON.stringify(out, null, 2));
+  }
+  console.log(`157 complete in ${Date.now() - started} ms: ${ranked.map(r => `${r.rank}. ${r.id} ${r.metrics.score.toFixed(6)}`).join(", ")}`);
 });

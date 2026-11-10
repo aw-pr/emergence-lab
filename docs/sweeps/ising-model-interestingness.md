@@ -275,3 +275,7 @@ The full three-kernel command is `SWEEP=1 npx playwright test e2e/sweep.spec.ts 
 ### Repair note (2026-11-01)
 
 The retained data in this report was measured with `e2e/harness/driver.ts` at sha256 `6e8890ca5a2f7b4867145f7bffad2408d931000a` (recorded in the manifest `sourceHashes`). The later sandpile conservation repair changed only the `abelian-sandpile` branch of the diagnostic driver, so this kernel's search was deliberately not re-run and its manifest keeps the original driver hash. Regenerated evidence is limited to the sandpile files; everything for this kernel is retained unchanged.
+
+## Appendix: Coarse domains trial — 2026-11-10 (stage 157)
+
+Card 146's `146-ising-c04` (temperature 2.38, coupling 1.4, field 0, 0.5 updates per frame, random start) was re-measured under the card-146 method beside the four shipped references and rendered at the app's desktop grid against Critical domains. It is listed in the Presets library's research bench as the read-only trial "Coarse domains" (`trial-157-ising-model-temperature2.38_coupling1.4`); no shipped preset changed. Evidence, readings and the decision for the operator: [2026-11-10-ising-coarse-domains.md](2026-11-10-ising-coarse-domains.md).
