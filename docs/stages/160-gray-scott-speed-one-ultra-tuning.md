@@ -87,7 +87,7 @@ The verifier will check each of these. Failure of any one is a failure of the st
 5. Verifier browser: with cleared storage open `#/gray-scott` on a display or headless context at 60 Hz; `data-simulation-renderer` reads `gpu-ping-pong` and Grid quality reads ultra. For Waves and Mitosis, the Steps per frame control reads 1, and screenshots at 2 s, 10 s and 30 s after Reset read as the Visual goal target (forming, rings, full field). The report's iterations-to-developed figure for each preset reproduces within 20% in your run. A preset that finishes inside two seconds, or one unformed at 60 s, is a FAIL.
 6. Verifier: re-run the worker's measurement harness once; the ranked shortlist ordering of the top five is identical and every reference score matches within 1e-6 (GPU float stepping; the 2026-11-08 parity figures are 1.4e-6 after 200 passes, so this is the honest tolerance, not 1e-9). Any trial the worker added opens from its deep link at the stated F and k.
 7. Verifier scope: the diff touches only `src/app/presets.ts` (the six `stepsPerFrame` lines), the new or extended harness files under `e2e/`, `src/app/trialPresets.ts`, the report and `CLAUDE.md`. Any kernel, shader, GPU-path or quality-profile change is a FAIL regardless of other evidence.
-8. Operator: a look after landing; promotions from the shortlist and any per-preset speed other than 1 are separate decisions.
+8. Operator, not judged or recorded by either seat: a look after a PASS lands the stage on `dev` (the verifier reports it as not applicable, never as FAIL); promotions from the shortlist and any per-preset speed other than 1 are separate decisions.
 
 ## Contract test
 

@@ -68,7 +68,7 @@ The verifier will check each of these. Failure of any one is a failure of the st
 3. Worker and verifier: `scripts/check-contract-test-gate.sh --worktree` exits 0.
 4. Verifier browser: with cleared storage open `#/abelian-sandpile`; the controls read Classic critical's values (100000 / 4 / 1 / 50000). Set Grid quality to ultra, choose "Sandstorm": the four controls read 15650000, 12, 1000 and 2000000. Run to 300 and then 600 iterations, retaining a screenshot at each; the 600 frame reads as the Visual goal target and the pile's radius is larger at 600 than at 300. Record the frames per second shown at both points; the note's figures must be within a factor of two of yours. A pile that has stopped growing is a FAIL.
 5. Verifier scope: the diff touches only the three deliverable paths. Any other path, or a changed line in an incumbent preset, is a FAIL regardless of other evidence.
-6. Operator: look after landing; the values are the operator's own, so the look is confirmation and a chance to rename.
+6. Operator, not judged or recorded by either seat: a look after a PASS lands the stage on `dev` (the verifier reports it as not applicable, never as FAIL); the values are the operator's own, so the look is confirmation and a chance to rename.
 
 ## Contract test
 

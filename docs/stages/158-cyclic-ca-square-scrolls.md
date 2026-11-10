@@ -75,7 +75,7 @@ The verifier will check each of these. Failure of any one is a failure of the st
 4. Verifier browser: with cleared storage open `#/cyclic-ca`; the Kernel preset select shows Demons' values (States 14, Threshold 1, Moore). Choose "Square scrolls": the controls read 23, 1 and Moore. Run to 1000 iterations at the desktop default grid and retain a screenshot; it reads as the Visual goal target. Retain a frame at 1200; it differs from the 1000 frame across the field, not only at a few cells. Press Reset and run again: same regime. A frozen or single-spiral field is a FAIL.
 5. Verifier: run `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 158 " --workers=1` yourself; candidate ordering is identical to the worker's `docs/sweeps/data/2026-11-10/158/cyclic-ca.json` and every metric matches within absolute 1e-9; all three seeds are present for each state. Report a larger deviation as FAIL rather than widening the tolerance. View the five renderer screenshots and say in the verdict which states read as square scrolls and which do not; the report's plateau paragraph must agree with the images.
 6. Verifier scope: the diff touches only the five deliverable paths. Any other path, or a changed line in an incumbent preset, is a FAIL regardless of other evidence.
-7. Operator: look after landing; the preset is already shipped by this card on the operator's 2026-11-09 decision, so the look is confirmation and a chance to rename.
+7. Operator, not judged or recorded by either seat: a look after a PASS lands the stage on `dev` (the verifier reports it as not applicable, never as FAIL); the preset is already shipped by this card on the operator's 2026-11-09 decision, so the look is confirmation and a chance to rename.
 
 ## Contract test
 
