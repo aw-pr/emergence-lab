@@ -253,3 +253,7 @@ SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 abelian-sandpile" --
 ```
 
 The full three-kernel command is `SWEEP=1 npx playwright test e2e/sweep.spec.ts -g "sweep 146 " --workers=1` (about 7 minutes). Setting `SWEEP_146_RANKING_ONLY=1` stops after the ranking. Replay on the same browser and runtime reproduced every finalist and reference reading to a maximum absolute deviation of 0 (tolerance 1e-9).
+
+## Promotion: Sandstorm (2026-11-10)
+
+The operator's hand-tuned "Test1" pile shipped as the fourth preset, "Sandstorm" (15650000 / 12 / 1000 / 2000000). Provenance, measured cost and screenshots are in `docs/sweeps/2026-11-10-sandpile-sandstorm.md`.

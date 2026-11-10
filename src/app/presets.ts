@@ -78,6 +78,17 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         topplesPerStep: 120000,
       },
     },
+    // Tuned by hand by the operator on 2026-11-09 (saved as Test1); CPU-heavy at ultra.
+    {
+      id: "sandstorm",
+      label: "Sandstorm",
+      params: {
+        initialPile: 15650000,
+        toppleThreshold: 12,
+        grainsPerStep: 1000,
+        topplesPerStep: 2000000,
+      },
+    },
   ],
   "ising-model": [
     {
