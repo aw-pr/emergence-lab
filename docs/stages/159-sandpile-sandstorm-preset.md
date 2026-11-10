@@ -148,4 +148,4 @@ criterion 4 in full. Criterion 6 is not applicable.
 | Attempt | Dispatched (base) | Seats | Outcome | Evidence | Diagnosis | Repair |
 |---|---|---|---|---|---|---|
 | 1 | 2026-11-10 22:31Z (`17d6fce57`) | Sonnet 5.5 medium / Sol high | worker pass, verifier FAIL on criterion 4 sentence 1 only; 2.3M tokens | `7b7882064` on `wip/159-...-attempt-1`; `state/uat/159-sandpile-sandstorm-preset/attempt-1/` | card: expected fresh-load values were Classic critical's, not the kernel defaults the app and oracle use | this re-brief |
-| 2 | queued 2026-11-10 (dev tip at dispatch) | Sonnet 5.5 medium / Sol medium | pending | | | |
+| 2 | 2026-11-10 22:48Z (`e1a19a360`) | Sonnet 5.5 medium / Sol medium | worker pass, verifier PASS, 6 not applicable; landed `380121efd` 22:59Z | `state/verifiers/159-sandpile-sandstorm-preset.json` | restore identical to `7b7882064` | none needed |
