@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createHash } = require("node:crypto");
-const { readFileSync, existsSync } = require("node:fs");
+const { readFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 
 const ROOT = resolve(__dirname, "../..");
@@ -20,7 +20,7 @@ const INCUMBENTS = [
 const SQUARE_SCROLLS = { id: "square-scrolls", label: "Square scrolls", params: { states: 23, threshold: 1, neighbourhood: "moore" } };
 const DEFAULTS = { states: 14, threshold: 1, neighbourhood: "moore" };
 const THUMBNAIL = "46a715586dfe3bad1a635ae216ebdde1f1815afb10e160a731696877bd663415";
-const REPORT = "docs/sweeps/2026-11-10-cyclic-ca-square-scrolls.md";
+const INTERESTINGNESS = "docs/sweeps/cyclic-ca-interestingness.md";
 
 test("cyclic-ca ships four presets: the three incumbents unchanged, then Square scrolls", { skip }, () => {
   const cyclic = presetsModule().presetsFor("cyclic-ca");
@@ -47,11 +47,14 @@ test("the cyclic-ca thumbnail is byte-for-byte unchanged: the default preset did
   assert.equal(sha256("public/thumbnails/cyclic-ca.png"), THUMBNAIL);
 });
 
-test("the neighbour-check report exists and covers states 21 to 25 against the stored 147 finalist", { skip }, () => {
-  assert.ok(existsSync(join(ROOT, REPORT)), REPORT);
-  const report = readFileSync(join(ROOT, REPORT), "utf8");
-  for (const needle of ["147-cyclic-ca-c43", "Square scrolls", "states 21", "states 22", "states 23", "states 24", "states 25", "Demons"]) {
-    assert.ok(report.includes(needle), `report lacks "${needle}"`);
+test("the cyclic-ca interestingness write-up records the promotion against the card-147 finalist", { skip }, () => {
+  const doc = readFileSync(join(ROOT, INTERESTINGNESS), "utf8");
+  const start = doc.indexOf("## Promotion: Square scrolls");
+  assert.ok(start >= 0, `${INTERESTINGNESS} lacks a "## Promotion: Square scrolls" section`);
+  const next = doc.indexOf("\n## ", start + 1);
+  const section = doc.slice(start, next < 0 ? undefined : next);
+  for (const needle of ["147-cyclic-ca-c43", "0.887", "states 23", "Demons"]) {
+    assert.ok(section.includes(needle), `promotion section lacks "${needle}"`);
   }
 });
 // AUTOMETTA-CONTRACT-END
