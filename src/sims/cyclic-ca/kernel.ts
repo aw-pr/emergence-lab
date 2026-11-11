@@ -25,7 +25,7 @@ interface SimKernel {
   destroy(): void;
 }
 
-const DEFAULT_STATES = 14;
+const DEFAULT_STATES = 23;
 const DEFAULT_THRESHOLD = 1;
 const DEFAULT_NEIGHBOURHOOD = "moore";
 const DEFAULT_STEPS_PER_FRAME = 1;

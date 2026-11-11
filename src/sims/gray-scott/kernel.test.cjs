@@ -213,7 +213,7 @@ test("schema defaults use waves regime at gentler pace", () => {
   assert.equal(defaults.F, 0.018);
   assert.equal(defaults.k, 0.0487);
   assert.equal(defaults.dt, 1);
-  assert.equal(defaults.stepsPerFrame, 1);
+  assert.equal(defaults.stepsPerFrame, 3);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {

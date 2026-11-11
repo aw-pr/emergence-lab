@@ -19,7 +19,7 @@ export const GRAY_SCOTT_STENCILS = ["five-point", "nine-point"] as const;
 export type GrayScottStencil = (typeof GRAY_SCOTT_STENCILS)[number];
 export const GRAY_SCOTT_DEFAULT_STENCIL: GrayScottStencil = "nine-point";
 export const GRAY_SCOTT_DEFAULT_DT = 1;
-export const GRAY_SCOTT_DEFAULT_STEPS_PER_FRAME = 1;
+export const GRAY_SCOTT_DEFAULT_STEPS_PER_FRAME = 3;
 export const GRAY_SCOTT_MIN_DT = 0.125;
 
 const CHANNEL_COUNT = 2;
