@@ -89,6 +89,19 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
         topplesPerStep: 2000000,
       },
     },
+    // 2^18 grains dropped once and never fed, so it settles (about 47 s on
+    // the orchestrator's Mac) into the classic single-drop picture; 2^19 took
+    // 166 s, so bigger piles wait for GPU toppling.
+    {
+      id: "mandala",
+      label: "Mandala",
+      params: {
+        initialPile: 262144,
+        toppleThreshold: 4,
+        grainsPerStep: 0,
+        topplesPerStep: 500000,
+      },
+    },
   ],
   "ising-model": [
     {

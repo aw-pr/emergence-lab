@@ -1,5 +1,6 @@
 import {
   buildMapper,
+  channelMappingFor,
   isCyclic,
   type ColourMapOptions,
   type ColourPreset,
@@ -76,6 +77,8 @@ uniform float u_contrast;
 uniform bool u_paletteCycleReverse;
 uniform bool u_paletteCyclic;
 uniform int u_steps;
+uniform bool u_heightMapping;
+uniform bool u_avalancheGlow;
 uniform bool u_smoothSampling;
 uniform bool u_circularPhase;
 uniform float u_palettePhase;
@@ -198,6 +201,18 @@ vec3 rampColour(int preset, float t) {
     if (x <= 0.33) return mixRgb(vec3(226.0, 217.0, 226.0), vec3(65.0, 108.0, 172.0), x / 0.33) / 255.0;
     if (x <= 0.66) return mixRgb(vec3(65.0, 108.0, 172.0), vec3(176.0, 82.0, 112.0), (x - 0.33) / 0.33) / 255.0;
     return mixRgb(vec3(176.0, 82.0, 112.0), vec3(226.0, 217.0, 226.0), (x - 0.66) / 0.34) / 255.0;
+  }
+
+  if (preset == 19) {
+    if (x <= 1.0 / 3.0) return mixRgb(vec3(6.0, 64.0, 251.0), vec3(90.0, 180.0, 255.0), x * 3.0) / 255.0;
+    if (x <= 2.0 / 3.0) return mixRgb(vec3(90.0, 180.0, 255.0), vec3(252.0, 195.0, 1.0), (x - 1.0 / 3.0) * 3.0) / 255.0;
+    return mixRgb(vec3(252.0, 195.0, 1.0), vec3(124.0, 0.0, 0.0), (x - 2.0 / 3.0) * 3.0) / 255.0;
+  }
+
+  if (preset == 20) {
+    if (x <= 1.0 / 3.0) return mixRgb(vec3(255.0, 255.0, 255.0), vec3(140.0, 138.0, 46.0), x * 3.0) / 255.0;
+    if (x <= 2.0 / 3.0) return mixRgb(vec3(140.0, 138.0, 46.0), vec3(142.0, 79.0, 160.0), (x - 1.0 / 3.0) * 3.0) / 255.0;
+    return mixRgb(vec3(142.0, 79.0, 160.0), vec3(254.0, 213.0, 1.0), (x - 2.0 / 3.0) * 3.0) / 255.0;
   }
 
   if (preset == 15) {
@@ -353,6 +368,28 @@ vec3 twoChannelColour(float c0, float c1) {
   return mixRgb(cool, warm, energy);
 }
 
+// Height mapping, mirroring heightColour in colormap.ts (the authority): the
+// heat weight starts at activity 0, as the CPU's does.
+vec3 overlayAvalancheGlow(vec3 colour, float c1) {
+  vec3 heat = mixRgb(
+    vec3(255.0, 92.0, 12.0) / 255.0,
+    vec3(255.0, 246.0, 184.0) / 255.0,
+    c1
+  );
+  return mixRgb(colour, heat, smoothstep(0.0, 0.85, c1) * 0.55);
+}
+
+vec3 heightColour(float c0, float c1) {
+  vec3 stable;
+  if (u_preset == 13) {
+    vec3 base = rampColour(4, adjust(c0));
+    stable = mixRgb(vec3(8.0, 4.0, 2.0) / 255.0, base, smoothstep(0.0, 0.7, c0));
+  } else {
+    stable = singleChannelColour(u_paletteCycleReverse ? 1.0 - c0 : c0);
+  }
+  return u_avalancheGlow ? overlayAvalancheGlow(stable, c1) : stable;
+}
+
 vec3 threeChannelChemical(float a, float b, float c) {
   vec3 cool = rampColour(3, adjust(1.0 - a));
   vec3 warm = rampColour(4, adjust(a));
@@ -374,6 +411,7 @@ vec3 colourFromRaw(vec4 raw) {
   if (u_channelCount == 2) {
     float c0 = normalise(raw.r, u_ranges[0]);
     float c1 = normalise(raw.g, u_ranges[1]);
+    if (u_heightMapping) return heightColour(c0, c1);
     return twoChannelColour(c0, c1);
   }
 
@@ -858,6 +896,8 @@ interface UniformLocations {
   paletteCycleReverse: WebGLUniformLocation;
   paletteCyclic: WebGLUniformLocation;
   steps: WebGLUniformLocation;
+  heightMapping: WebGLUniformLocation;
+  avalancheGlow: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   circularPhase: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
@@ -2837,6 +2877,14 @@ export class WebGLRendererBackend implements RendererBackend {
         this.gl.getUniformLocation(this.program, "u_steps"),
         "u_steps uniform",
       ),
+      heightMapping: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_heightMapping"),
+        "u_heightMapping uniform",
+      ),
+      avalancheGlow: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_avalancheGlow"),
+        "u_avalancheGlow uniform",
+      ),
       smoothSampling: mustCreate(
         this.gl.getUniformLocation(this.program, "u_smoothSampling"),
         "u_smoothSampling uniform",
@@ -3040,6 +3088,11 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.paletteCyclic, isCyclic(colourOptions.preset) ? 1 : 0);
     gl.uniform1i(this.uniforms.steps, Math.max(0, Math.floor(colourOptions.steps || 0)));
+    gl.uniform1i(
+      this.uniforms.heightMapping,
+      channelMappingFor(kernel) === "height" ? 1 : 0,
+    );
+    gl.uniform1i(this.uniforms.avalancheGlow, colourOptions.avalancheGlow ? 1 : 0);
     gl.uniform1i(this.uniforms.smoothSampling, shouldSmoothSample(mode) ? 1 : 0);
     gl.uniform1i(this.uniforms.circularPhase, isCircularPhaseState(kernel) ? 1 : 0);
     gl.uniform1f(
@@ -3146,6 +3199,10 @@ function presetIndex(preset: ColourPreset): number {
       return 17;
     case "magma-cyclic":
       return 18;
+    case "sandpile-classic":
+      return 19;
+    case "sandpile-sunflower":
+      return 20;
   }
 }
 

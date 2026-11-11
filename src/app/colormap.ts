@@ -20,6 +20,8 @@ export type ColourPreset =
   | "twilight"
   | "phase"
   | "sand"
+  | "sandpile-classic"
+  | "sandpile-sunflower"
   | "ice"
   | "amber"
   | "rosewood"
@@ -49,6 +51,27 @@ export interface ColourMapOptions {
    * terraces instead of a smooth gradient.
    */
   steps: number;
+  /**
+   * Height-mapped sims only: overlay the activity channel as an orange-cream
+   * heat on whatever palette colours the height. Composite sims ignore it.
+   */
+  avalancheGlow: boolean;
+}
+
+/**
+ * How a two-channel kernel's channels reach the palette. "composite" blends
+ * both into one ramp coordinate; "height" colours channel 0 alone across the
+ * full ramp and leaves channel 1 to the optional avalanche glow.
+ */
+export type ChannelMapping = "composite" | "height";
+
+export function channelMappingFor(kernel: {
+  readonly name: string;
+  readonly channelCount: number;
+}): ChannelMapping {
+  return kernel.name === "Abelian Sandpile" && kernel.channelCount === 2
+    ? "height"
+    : "composite";
 }
 
 export interface ColourPresetOption {
@@ -65,7 +88,9 @@ export const COLOUR_PRESETS: readonly ColourPresetOption[] = [
   { value: "turbo", label: "Turbo" },
   { value: "twilight", label: "Twilight (cyclic)" },
   { value: "phase", label: "Phase silk (cyclic)" },
-  { value: "sand", label: "Avalanche glow" },
+  { value: "sandpile-classic", label: "Classic sandpile" },
+  { value: "sandpile-sunflower", label: "Sunflower sandpile" },
+  { value: "sand", label: "Amber sand" },
   { value: "ice", label: "Ice" },
   { value: "amber", label: "Amber" },
   { value: "rosewood", label: "Rosewood" },
@@ -105,6 +130,7 @@ export const DEFAULT_COLOUR_OPTIONS: ColourMapOptions = {
   contrast: 1,
   paletteCycleReverse: false,
   steps: 0,
+  avalancheGlow: false,
 };
 
 type ColourStop = readonly [number, Rgb];
@@ -178,6 +204,21 @@ const RAMPS: Record<
     [0.66, [176, 82, 112]],
     [1, [226, 217, 226]],
   ],
+  // Four grain counts, four colours: blue, light blue, yellow and maroon after
+  // Wes Pegden's sandpile images, and white, olive, purple and gold after the
+  // second reference.
+  "sandpile-classic": [
+    [0, [6, 64, 251]],
+    [1 / 3, [90, 180, 255]],
+    [2 / 3, [252, 195, 1]],
+    [1, [124, 0, 0]],
+  ],
+  "sandpile-sunflower": [
+    [0, [255, 255, 255]],
+    [1 / 3, [140, 138, 46]],
+    [2 / 3, [142, 79, 160]],
+    [1, [254, 213, 1]],
+  ],
   ice: [
     [0, [2, 6, 23]],
     [0.35, [20, 84, 150]],
@@ -241,7 +282,7 @@ export function defaultColourOptionsFor(
   // raw RGB just because it has three or more channels.
   switch (slug) {
     case "abelian-sandpile":
-      return { ...base, preset: "sand", gamma: 0.9, contrast: 1.1 };
+      return { ...base, preset: "sandpile-classic" };
     case "belousov-zhabotinsky":
       return { ...base, preset: "chemical", contrast: 1.2 };
     case "gray-scott":
@@ -381,11 +422,7 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
     return mix([0, 0, 0], hue, adjust(c0, options));
   }
   if (options.preset === "sand") {
-    const base = rampColour("amber", adjust(c0, options));
-    const density = smoothstep01(c0 / 0.7);
-    const stable = mix([8, 4, 2], base, density);
-    const heat = mix([255, 92, 12], [255, 246, 184], clamp01(c1));
-    return mix(stable, heat, smoothstep01(c1 / 0.85) * 0.55);
+    return overlayAvalancheGlow(amberSandColour(c0, options), c1);
   }
   if (options.preset === "lyapunov") {
     if (c0 > 0) return rampColour("amber", adjust(c0, options));
@@ -404,6 +441,29 @@ function twoChannelColour(c0: number, c1: number, options: ColourMapOptions): Rg
   const warm = rampColour("amber", adjust(c1, options));
   const energy = clamp01(c1 * 0.85 + (1 - c0) * 0.2);
   return mix(cool, warm, energy);
+}
+
+function amberSandColour(c0: number, options: ColourMapOptions): Rgb {
+  const base = rampColour("amber", adjust(c0, options));
+  const density = smoothstep01(c0 / 0.7);
+  return mix([8, 4, 2], base, density);
+}
+
+function overlayAvalancheGlow(colour: Rgb, activity: number): Rgb {
+  const heat = mix([255, 92, 12], [255, 246, 184], clamp01(activity));
+  return mix(colour, heat, smoothstep01(activity / 0.85) * 0.55);
+}
+
+/**
+ * Height mapping: channel 0 alone picks the colour, exactly as a one-channel
+ * sim would draw that value, so a settled pile spans the whole ramp.
+ */
+function heightColour(c0: number, c1: number, options: ColourMapOptions): Rgb {
+  const stable =
+    options.preset === "sand"
+      ? amberSandColour(c0, options)
+      : singleChannelColour(options.paletteCycleReverse ? clamp01(1 - c0) : c0, options);
+  return options.avalancheGlow ? overlayAvalancheGlow(stable, c1) : stable;
 }
 
 /**
@@ -464,6 +524,7 @@ export function buildMapper(
   channelCount: number,
   channelRanges: readonly (readonly [number, number])[],
   options: ColourMapOptions = DEFAULT_COLOUR_OPTIONS,
+  mapping: ChannelMapping = "composite",
 ): RgbMapper {
   if (channelCount <= 0) {
     return () => [0, 0, 0];
@@ -486,7 +547,9 @@ export function buildMapper(
     return (channels, offset) => {
       const c0 = normalise(channels[offset], min0, max0);
       const c1 = normalise(channels[offset + 1], min1, max1);
-      return twoChannelColour(c0, c1, options);
+      return mapping === "height"
+        ? heightColour(c0, c1, options)
+        : twoChannelColour(c0, c1, options);
     };
   }
 
@@ -515,10 +578,11 @@ export function sampleColour(
   channelIndex: number,
   channelCount: number,
   options: ColourMapOptions,
+  mapping: ChannelMapping = "composite",
 ): string {
   const values = new Float32Array(Math.max(1, channelCount));
   values[channelIndex] = 1;
-  const mapper = buildMapper(channelCount, [], options);
+  const mapper = buildMapper(channelCount, [], options, mapping);
   const [r, g, b] = mapper(values, 0);
   return `rgb(${r}, ${g}, ${b})`;
 }

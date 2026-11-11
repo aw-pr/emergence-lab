@@ -103,6 +103,7 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
+  channelMappingFor,
   defaultColourOptionsFor,
   sampleColour,
   type ColourMapOptions,
@@ -475,7 +476,11 @@ export async function renderSimView(
     slug,
     kernel.channelCount,
   );
-  let colourOptions: ColourMapOptions = snapshot ? { ...snapshot.colourOptions } : restoreRenderOptions(
+  // Presets saved before the avalanche glow existed carry no field for it.
+  let colourOptions: ColourMapOptions = snapshot ? {
+    ...snapshot.colourOptions,
+    avalancheGlow: snapshot.colourOptions.avalancheGlow ?? false,
+  } : restoreRenderOptions(
     slug,
     factoryColourOptions,
   );
@@ -642,6 +647,7 @@ export async function renderSimView(
     showExtremeResolution: slug === "logistic-mandelbrot" || resolution === "extreme",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
+    showAvalancheGlowControl: channelMappingFor(kernel) === "height",
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
@@ -2005,7 +2011,12 @@ function renderLegend(
 
     const dot = document.createElement("span");
     dot.className = "legend__dot";
-    dot.style.background = sampleColour(i, kernel.channelCount, colourOptions);
+    dot.style.background = sampleColour(
+      i,
+      kernel.channelCount,
+      colourOptions,
+      channelMappingFor(kernel),
+    );
     swatch.appendChild(dot);
 
     const label = document.createElement("span");
