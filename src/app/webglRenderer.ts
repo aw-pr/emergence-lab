@@ -20,6 +20,11 @@ import {
   type GrayScottDiagnosticCanvas,
 } from "./grayScottGpu.ts";
 import {
+  createGpuSandpile,
+  type GpuSandpileSimulation,
+  type SandpileDiagnosticCanvas,
+} from "./sandpileGpu.ts";
+import {
   createProgram,
   createQuadVao,
   mustCreate,
@@ -1347,6 +1352,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
   private readonly grayScott: GpuGrayScottSimulation | null;
+  private readonly sandpile: GpuSandpileSimulation | null;
   private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
@@ -1436,6 +1442,7 @@ export class WebGLRendererBackend implements RendererBackend {
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
     this.grayScott = floatTargets ? createGpuGrayScott(gl, this.quadBuffer) : null;
+    this.sandpile = floatTargets ? createGpuSandpile(gl, this.quadBuffer) : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
     this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
@@ -1510,6 +1517,7 @@ export class WebGLRendererBackend implements RendererBackend {
     if (this.supportsOrbit3d(mode, kernel)) return true;
     if (this.supportsGpuKuramoto(mode, kernel)) return true;
     if (this.supportsGpuGrayScott(mode, kernel)) return true;
+    if (this.supportsGpuSandpile(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
     // adjacent complex coordinates collapse together, so retain the CPU
@@ -1531,12 +1539,14 @@ export class WebGLRendererBackend implements RendererBackend {
     if (this.supportsOrbit3d(mode, kernel)) {
       this.kuramoto?.releaseState();
       this.releaseGrayScott();
+      this.releaseSandpile();
       this.updateOrbit3dParams(params);
       return;
     }
     this.orbit3d?.cancelBuild();
     if (this.supportsGpuKuramoto(mode, kernel)) {
       this.releaseGrayScott();
+      this.releaseSandpile();
       this.kuramoto?.initialise(this.gridWidth, this.gridHeight, params);
       return;
     }
@@ -1547,10 +1557,19 @@ export class WebGLRendererBackend implements RendererBackend {
       this.supportsGpuGrayScott(mode, kernel) &&
       this.grayScott?.initialise(this.gridWidth, this.gridHeight, params)
     ) {
+      this.releaseSandpile();
       this.attachGrayScottDiagnostics();
       return;
     }
     this.releaseGrayScott();
+    if (
+      this.supportsGpuSandpile(mode, kernel) &&
+      this.sandpile?.initialise(this.gridWidth, this.gridHeight, params)
+    ) {
+      this.attachSandpileDiagnostics();
+      return;
+    }
+    this.releaseSandpile();
     if (this.supportsDirectRendering(mode, kernel, params)) return;
     this.configureTexture(kernel.channelCount);
   }
@@ -1560,6 +1579,7 @@ export class WebGLRendererBackend implements RendererBackend {
     params: Record<string, number | boolean | string>,
   ): boolean {
     if (this.grayScott?.ready) return this.grayScott.advance(steps);
+    if (this.sandpile?.ready) return this.sandpile.advance(steps);
     return this.kuramoto?.advance(steps, params) ?? false;
   }
 
@@ -1571,6 +1591,9 @@ export class WebGLRendererBackend implements RendererBackend {
   ): boolean {
     if (this.grayScott?.ready) {
       return this.grayScott.applyImpulse(x, y, radius, strength);
+    }
+    if (this.sandpile?.ready) {
+      return this.sandpile.applyImpulse(x, y, radius, strength);
     }
     return this.kuramoto?.applyImpulse(x, y, radius, strength) ?? false;
   }
@@ -1685,6 +1708,10 @@ export class WebGLRendererBackend implements RendererBackend {
       if (this.grayScott) this.drawGpuField(this.grayScott, frame);
       return;
     }
+    if (this.supportsGpuSandpile(mode, kernel)) {
+      if (this.sandpile) this.drawGpuField(this.sandpile, frame);
+      return;
+    }
     if (this.supportsDirectRendering(mode, kernel, frame.params)) {
       this.drawGpuFractal(frame);
       return;
@@ -1754,7 +1781,7 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "boundaryDetail", 0) > 0
           ? "degraded"
           : "off";
-    } else if (isKuramotoState(kernel) || isGrayScottState(kernel)) {
+    } else if (isKuramotoState(kernel) || isGrayScottState(kernel) || isSandpileState(kernel)) {
       canvas.dataset.simulationRenderer = "cpu-kernel";
       delete canvas.dataset.orbit3dSampler;
     } else {
@@ -2362,6 +2389,34 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.grayScottPassCount;
   }
 
+  private supportsGpuSandpile(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.sandpile !== null &&
+      !this.sandpile.failed &&
+      !this.forceCpuSimulation &&
+      mode === "grid" &&
+      isSandpileState(kernel) &&
+      hasSandpileSteppingParams(kernel)
+    );
+  }
+
+  private attachSandpileDiagnostics(): void {
+    const sandpile = this.sandpile;
+    if (!sandpile) return;
+    const canvas = this.gl.canvas as SandpileDiagnosticCanvas;
+    canvas.sandpileReadGrains = () => sandpile.readGrains();
+    canvas.sandpileReadState = () => sandpile.readState();
+    canvas.sandpileRoundCount = () => sandpile.roundCount;
+  }
+
+  private releaseSandpile(): void {
+    this.sandpile?.releaseState();
+    const canvas = this.gl.canvas as SandpileDiagnosticCanvas;
+    delete canvas.sandpileReadGrains;
+    delete canvas.sandpileReadState;
+    delete canvas.sandpileRoundCount;
+  }
+
   private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
     return (
       this.orbit3d?.available === true &&
@@ -2812,6 +2867,8 @@ export class WebGLRendererBackend implements RendererBackend {
     this.kuramoto?.destroy();
     this.releaseGrayScott();
     this.grayScott?.destroy();
+    this.releaseSandpile();
+    this.sandpile?.destroy();
     this.orbit3d?.destroy();
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
@@ -3275,6 +3332,28 @@ function isGrayScottState(kernel: SimKernel): boolean {
     kernel.channelCount === 2 &&
     kernel.channelLabels[0] === "U" &&
     kernel.channelLabels[1] === "V"
+  );
+}
+
+function isSandpileState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Abelian Sandpile" &&
+    kernel.channelCount === 2 &&
+    kernel.channelLabels[0] === "Stable height" &&
+    kernel.channelLabels[1] === "Avalanche activity"
+  );
+}
+
+/**
+ * The GPU path re-implements the kernel's rule from these params, so it only
+ * stands in for a kernel that declares them; a bare sandpile-shaped state, such
+ * as a still drawn from supplied heights, keeps the upload path.
+ */
+const SANDPILE_STEPPING_PARAMS = ["initialPile", "toppleThreshold", "grainsPerStep", "topplesPerStep"];
+
+function hasSandpileSteppingParams(kernel: SimKernel): boolean {
+  return SANDPILE_STEPPING_PARAMS.every((key) =>
+    kernel.paramSchema.some((descriptor) => descriptor.key === key),
   );
 }
 
