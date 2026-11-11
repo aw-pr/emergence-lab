@@ -117,3 +117,14 @@ Both roles need a browser with WebGL2 float render targets: headless Chromium wi
 ## Readiness review
 
 Baselines ran on `b318892d6` on 2026-11-09: `npm run build:test` green, the frozen oracle 2 of 4 red for the stated reasons, 4 of 4 skipped without the flag; verify and the GPU spec figures carried from the 2026-11-08 runs on the same tree. The operator's decision is `docs/UAT/uat.md` notes 1 and 4, read as stated under Decided. Gated on card 157 because the trials reuse its stage-aware catalogue. No cross-family cold read before queueing; the next orchestration session may add one here. Serial dispatch: shares `src/app/presets.ts` with 158 and 159, `src/app/trialPresets.ts` with 157, and `e2e/` harness files with 157 and 158.
+
+## Retired
+
+- **Retired:** 2026-11-11 by the operator, in the orchestration chat.
+- **Reason:** the card misread the operator's request. "Set the sim speed to 1" meant the Simulation speed slider, which already opens at 1x for Gray-Scott (`speedProfileFor("gray-scott").initial` in `src/app/savedPresets.ts`) and which no preset changes. The card instead set every preset's Steps per frame from 20 to 1. The operator's words: "it wasnt he steps per frame that i wanted to 1 it was the sim speed i think i got confused." They judged Gray-Scott on `dev`, at Simulation speed 1x with Steps per frame 20, and found it fine, so no production change is wanted.
+- **Not a failure:** attempt 1 failed criterion 4 (a card error: the GPU spec needs `GS_GPU_PERF=1`) and criterion 5 (Mitosis takes about 84 s to start dividing at one step per frame). Both follow from the misread brief, not from the worker.
+- **Kept:** attempt 1 is on `wip/160-gray-scott-speed-one-ultra-tuning-attempt-1` (`7babaa258`), including `docs/sweeps/2026-11-10-gray-scott-ultra-tuning.md` and the trial shortlist ("Honeycomb holes" F 0.033 k 0.056, "Churning foam" F 0.02 k 0.0467). If the operator likes either trial after a look, it becomes a new preset card; nothing on that branch lands from this card.
+
+## Recovery log
+
+- **Attempt 1:** dispatched 2026-11-10T22:59:50Z on base `380121efd`. Worker partial (11.2M tokens), verifier FAIL on criteria 4 and 5 (4.1M). Preserved at `7babaa258` on `wip/160-gray-scott-speed-one-ultra-tuning-attempt-1`. Retired 2026-11-11 on the operator's decision above; no further attempts.
