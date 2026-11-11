@@ -105,6 +105,7 @@ import { presetsFor } from "./presets.ts";
 import {
   channelMappingFor,
   defaultColourOptionsFor,
+  legendChannelsFor,
   sampleColour,
   type ColourMapOptions,
 } from "./colormap.ts";
@@ -2005,7 +2006,11 @@ function renderLegend(
   colourOptions: ColourMapOptions,
 ): void {
   container.innerHTML = "";
-  for (let i = 0; i < kernel.channelCount; i += 1) {
+  for (const i of legendChannelsFor(
+    channelMappingFor(kernel),
+    kernel.channelCount,
+    colourOptions,
+  )) {
     const swatch = document.createElement("span");
     swatch.className = "legend__item";
 

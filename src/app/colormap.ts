@@ -74,6 +74,16 @@ export function channelMappingFor(kernel: {
     : "composite";
 }
 
+export function legendChannelsFor(
+  mapping: ChannelMapping,
+  channelCount: number,
+  options: Pick<ColourMapOptions, "avalancheGlow">,
+): number[] {
+  return mapping === "height" && !options.avalancheGlow
+    ? [0]
+    : Array.from({ length: channelCount }, (_, index) => index);
+}
+
 export interface ColourPresetOption {
   value: ColourPreset;
   label: string;

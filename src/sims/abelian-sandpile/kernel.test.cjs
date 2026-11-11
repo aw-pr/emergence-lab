@@ -52,12 +52,12 @@ test("metadata matches the renderer contract", () => {
   const grainsDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "grainsPerStep",
   );
-  assert.equal(grainsDescriptor?.default, 32);
+  assert.equal(grainsDescriptor?.default, 0);
 
   const initialPileDescriptor = kernel.paramSchema.find(
     (descriptor) => descriptor.key === "initialPile",
   );
-  assert.equal(initialPileDescriptor?.default, 450000);
+  assert.equal(initialPileDescriptor?.default, 262144);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {

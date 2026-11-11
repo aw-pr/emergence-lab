@@ -39,10 +39,10 @@ interface SimKernel {
 // abelian property guarantees reaches the same stable state as one-at-a-time
 // toppling. "Topples per step" therefore budgets cell relaxations per frame —
 // it bounds frame cost while each relaxation moves arbitrarily many grains.
-const DEFAULT_INITIAL_PILE = 450000;
+const DEFAULT_INITIAL_PILE = 262144;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
-const DEFAULT_GRAINS_PER_STEP = 32;
-const DEFAULT_TOPPLES_PER_STEP = 120000;
+const DEFAULT_GRAINS_PER_STEP = 0;
+const DEFAULT_TOPPLES_PER_STEP = 500000;
 const MAX_INITIAL_PILE = 16000000;
 const MAX_TOPPLES_PER_STEP = 2000000;
 const CHANNEL_COUNT = 2;
