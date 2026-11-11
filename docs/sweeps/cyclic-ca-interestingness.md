@@ -296,3 +296,18 @@ npm run verify
 For all three kernels, use `-g "sweep 147 "`. The full command reruns the entire declared grid, then the finalist/references, requiring identical ordering and metric deltas≤1e-9 against retained results (including spreads and every validation seed/time). Raw replay independently decodes retained floats and recomputes every reading/rank, and checks current-reference provenance. Images are regenerated. Pilot-only mode `SWEEP_147_PILOT=1` is admission evidence only and must never be counted as a completed grid.
 
 Worker check commands, exits and counts are recorded in checks; exact numeric replay summary is raw recomputation. Independent verifier replay and operator visual sign-off remain separate gates. Research acceptance does not change any production preset.
+
+## Promotion: Square scrolls
+
+**2026-11-11 (stage 158).** Ship `square-scrolls` ("Square scrolls") with
+states 23, threshold 1, Moore, after the three incumbent presets. In the
+"Missed regimes — 2026-10-30 (stage 147)" results above, `147-cyclic-ca-c43`
+scored 0.887 against Demons' 0.752. Demons remains the kernel default.
+
+The operator approved the preset after a live look on 2026-11-09
+([UAT note 3](../UAT/uat.md)): "Cyclic CAs, yes looks much bettere at 23 actually
+feels like it does something thats a good thread to investigate."
+
+The states 21 to 25 neighbour check was dropped with operator approval on
+2026-11-11 because the kernel caps states at 24. No neighbour sweep was run
+for this promotion.

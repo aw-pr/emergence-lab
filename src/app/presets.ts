@@ -832,6 +832,13 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       label: "Crystal lattice",
       params: { states: 12, threshold: 1, neighbourhood: "vonNeumann" },
     },
+    {
+      // Promoted from card 147's c43 (0.887 against Demons 0.752):
+      // the operator's 2026-11-09 look approved the nested square scrolls.
+      id: "square-scrolls",
+      label: "Square scrolls",
+      params: { states: 23, threshold: 1, neighbourhood: "moore" },
+    },
   ],
   // muDrift keeps the field reorganising; muDrift 0 is classic static-growth
   // Lenia, which condenses into stationary spots within ~20 s.
