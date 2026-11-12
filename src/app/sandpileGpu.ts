@@ -1,6 +1,7 @@
 import {
   readSandpileConfig,
   sandpileHeightLevels,
+  sandpileFitPile,
   sandpileImpulseCells,
   SANDPILE_ACTIVITY_DECAY,
   SANDPILE_ACTIVITY_EPSILON,
@@ -9,10 +10,9 @@ import {
 import { createProgram, createQuadVao, mustCreate } from "./webglHelpers.ts";
 
 /**
- * Most synchronous rounds one advance() may queue. Twice the heaviest kernel
- * step (500 rounds), so a capped frame still runs whole steps, while a run of
- * accumulated steps cannot queue seconds of GPU work and trip a driver reset
- * that would lose the GPU-only pile.
+ * Most synchronous rounds one advance() may queue. Small grids run whole
+ * steps; large grids can spread a step across frames to keep GPU work bounded
+ * without repeating feeding or activity decay.
  */
 export const SANDPILE_MAX_ROUNDS_PER_ADVANCE = 1000;
 
@@ -148,6 +148,42 @@ void main() {
 }
 `;
 
+// Reduce occupied cells (including activity) to an exact bounding rectangle.
+// Each output covers 8 x 8 input texels; later levels combine rectangles.
+const SANDPILE_BOUNDS_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+uniform sampler2D u_state;
+uniform ivec2 u_origin;
+uniform ivec2 u_extent;
+uniform bool u_first;
+layout(location = 0) out vec4 bounds;
+void main() {
+  bounds = vec4(1e9, 1e9, -1.0, -1.0);
+  ivec2 base = ivec2(gl_FragCoord.xy) * 8;
+  for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) {
+    ivec2 local = base + ivec2(x, y);
+    if (any(greaterThanEqual(local, u_extent))) continue;
+    ivec2 coord = local + u_origin;
+    vec4 value = texelFetch(u_state, coord, 0);
+    if (u_first) {
+      if (value.r == 0.0 && value.g == 0.0) continue;
+      value = vec4(vec2(coord), vec2(coord));
+    }
+    bounds.xy = min(bounds.xy, value.xy);
+    bounds.zw = max(bounds.zw, value.zw);
+  }
+}
+`;
+
+interface PileBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 interface RoundUniforms {
   size: WebGLUniformLocation;
   centre: WebGLUniformLocation;
@@ -181,6 +217,18 @@ export class GpuSandpileSimulation {
   private readonly impulseVao: WebGLVertexArrayObject;
   private readonly presentProgram: WebGLProgram;
   private readonly presentVao: WebGLVertexArrayObject;
+  private readonly boundsProgram: WebGLProgram;
+  private readonly boundsVao: WebGLVertexArrayObject;
+  private readonly boundsUniforms: {
+    origin: WebGLUniformLocation;
+    extent: WebGLUniformLocation;
+    first: WebGLUniformLocation;
+  };
+  private readonly boundsLevels: Array<{ texture: WebGLTexture; fbo: WebGLFramebuffer }> = [];
+  private bounds: PileBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  private pendingRounds = 0;
+  private roundMilliseconds = 0;
+  private readonly boundsReadback = new Float32Array(4);
   private readonly roundUniforms: RoundUniforms;
   private readonly impulseUniforms: ImpulseUniforms;
   private readonly presentUniforms: PresentUniforms;
@@ -206,6 +254,18 @@ export class GpuSandpileSimulation {
     this.impulseVao = createQuadVao(gl, this.impulseProgram, quadBuffer);
     this.presentProgram = createProgram(gl, PASS_VERTEX_SHADER, SANDPILE_PRESENT_SHADER);
     this.presentVao = createQuadVao(gl, this.presentProgram, quadBuffer);
+
+    this.boundsProgram = createProgram(gl, PASS_VERTEX_SHADER, SANDPILE_BOUNDS_SHADER);
+    this.boundsVao = createQuadVao(gl, this.boundsProgram, quadBuffer);
+    const bounds = (name: string): WebGLUniformLocation =>
+      mustCreate(gl.getUniformLocation(this.boundsProgram, name), `sandpile ${name} uniform`);
+    this.boundsUniforms = {
+      origin: bounds("u_origin"),
+      extent: bounds("u_extent"),
+      first: bounds("u_first"),
+    };
+    gl.useProgram(this.boundsProgram);
+    gl.uniform1i(bounds("u_state"), STATE_UNIT);
 
     const round = (name: string): WebGLUniformLocation =>
       mustCreate(gl.getUniformLocation(this.roundProgram, name), `sandpile ${name} uniform`);
@@ -278,7 +338,12 @@ export class GpuSandpileSimulation {
         this.height = nextHeight;
         this.allocateState();
       }
-      this.seed(config.initialPile);
+      this.seed(params.fitPile !== false ? sandpileFitPile(this.width, this.height) : config.initialPile);
+      const cx = Math.floor(this.width / 2);
+      const cy = Math.floor(this.height / 2);
+      this.bounds = { minX: cx, minY: cy, maxX: cx, maxY: cy };
+      this.pendingRounds = 0;
+      this.roundMilliseconds = 0;
       const error = gl.getError();
       if (error !== gl.NO_ERROR) {
         throw new Error(`WebGL error 0x${error.toString(16)} while seeding sandpile state.`);
@@ -299,14 +364,19 @@ export class GpuSandpileSimulation {
     }
   }
 
-  /** Run `steps` kernel steps (each roundsPerStep synchronous rounds), capped per call. */
+  /** Advance up to `steps` kernel steps, carrying over work when a frame is full. */
   advance(steps: number): boolean {
     const config = this.config;
     if (!this.ready || !config) return false;
     const requested = Math.max(0, Math.floor(steps));
     if (requested === 0) return true;
     const stepCap = Math.max(1, Math.floor(SANDPILE_MAX_ROUNDS_PER_ADVANCE / config.roundsPerStep));
-    this.runSteps(Math.min(requested, stepCap), config);
+    const stepsToRun = Math.min(requested, stepCap);
+    if (this.width * this.height <= 262144) {
+      this.runSteps(stepsToRun, config);
+    } else {
+      this.runBudgetedRounds(stepsToRun * config.roundsPerStep, config);
+    }
     return true;
   }
 
@@ -350,7 +420,12 @@ export class GpuSandpileSimulation {
     gl.useProgram(this.impulseProgram);
     gl.uniform2i(this.impulseUniforms.origin, minX, minY);
     gl.uniform2i(this.impulseUniforms.deltaSize, deltaWidth, deltaHeight);
+    this.bounds.minX = Math.min(this.bounds.minX, minX);
+    this.bounds.minY = Math.min(this.bounds.minY, minY);
+    this.bounds.maxX = Math.max(this.bounds.maxX, maxX);
+    this.bounds.maxY = Math.max(this.bounds.maxY, maxY);
     this.beginPasses(this.impulseProgram, this.impulseVao);
+    if (this.width * this.height > 262144) this.scissorBounds(0);
     this.runPass();
     this.endPasses();
     gl.activeTexture(gl.TEXTURE0 + DELTA_UNIT);
@@ -418,6 +493,12 @@ export class GpuSandpileSimulation {
       gl.deleteTexture(this.deltaTexture);
       this.deltaTexture = null;
     }
+    for (const level of this.boundsLevels) {
+      gl.deleteTexture(level.texture);
+      gl.deleteFramebuffer(level.fbo);
+    }
+    this.boundsLevels.length = 0;
+    this.pendingRounds = 0;
     this.width = 0;
     this.height = 0;
     this.rounds = 0;
@@ -426,6 +507,8 @@ export class GpuSandpileSimulation {
 
   destroy(): void {
     this.releaseState();
+    this.gl.deleteVertexArray(this.boundsVao);
+    this.gl.deleteProgram(this.boundsProgram);
     this.gl.deleteVertexArray(this.roundVao);
     this.gl.deleteVertexArray(this.impulseVao);
     this.gl.deleteVertexArray(this.presentVao);
@@ -477,10 +560,88 @@ export class GpuSandpileSimulation {
     this.presentStale = true;
   }
 
+  private scissorBounds(padding: number): PileBounds {
+    const region = {
+      minX: Math.max(0, this.bounds.minX - padding),
+      minY: Math.max(0, this.bounds.minY - padding),
+      maxX: Math.min(this.width - 1, this.bounds.maxX + padding),
+      maxY: Math.min(this.height - 1, this.bounds.maxY + padding),
+    };
+    const gl = this.gl;
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(region.minX, region.minY, region.maxX - region.minX + 1, region.maxY - region.minY + 1);
+    return region;
+  }
+
+  private runBudgetedRounds(requested: number, config: SandpileConfig): void {
+    // Readback below waits for this batch, so the estimate includes GPU time
+    // rather than just the time JavaScript takes to enqueue draws.
+    const roundLimit = Math.max(1, Math.min(requested,
+      this.roundMilliseconds > 0 ? Math.floor(12 / this.roundMilliseconds) : 128));
+    const start = performance.now();
+    const gl = this.gl;
+    const uniforms = this.roundUniforms;
+    this.beginPasses(this.roundProgram, this.roundVao);
+    // A synchronous round can move a grain only one cell. This halo is a
+    // strict bound, independent of the pile's shape, threshold or feeding.
+    const region = this.scissorBounds(roundLimit);
+    for (let round = 0; round < roundLimit; round += 1) {
+      const first = this.pendingRounds === 0;
+      if (first) this.pendingRounds = config.roundsPerStep;
+      gl.uniform1i(uniforms.feed, first ? config.grainsPerStep : 0);
+      gl.uniform1i(uniforms.decay, first ? 1 : 0);
+      this.runPass();
+      this.pendingRounds -= 1;
+    }
+    this.endPasses();
+    this.measureBounds(region);
+    const measured = (performance.now() - start) / roundLimit;
+    this.roundMilliseconds = Math.max(measured, this.roundMilliseconds * 0.8);
+    this.rounds += roundLimit;
+    this.presentStale = true;
+  }
+
+  private measureBounds(region: PileBounds): void {
+    const gl = this.gl;
+    this.beginPasses(this.boundsProgram, this.boundsVao);
+    let width = region.maxX - region.minX + 1;
+    let height = region.maxY - region.minY + 1;
+    let texture = this.textures![this.activeIndex];
+    let level = 0;
+    do {
+      const nextWidth = Math.ceil(width / 8);
+      const nextHeight = Math.ceil(height / 8);
+      const target = this.boundsLevels[level];
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.viewport(0, 0, nextWidth, nextHeight);
+      gl.uniform2i(this.boundsUniforms.origin, level === 0 ? region.minX : 0, level === 0 ? region.minY : 0);
+      gl.uniform2i(this.boundsUniforms.extent, width, height);
+      gl.uniform1i(this.boundsUniforms.first, level === 0 ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      texture = target.texture;
+      width = nextWidth;
+      height = nextHeight;
+      level += 1;
+    } while (width > 1 || height > 1);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, this.boundsReadback);
+    const [minX, minY, maxX, maxY] = this.boundsReadback;
+    // Keep bounds monotone: both ping-pong textures then remain zero outside
+    // the next batch's rectangle, including immediately after an impulse.
+    if (maxX >= 0) {
+      this.bounds.minX = Math.min(this.bounds.minX, minX);
+      this.bounds.minY = Math.min(this.bounds.minY, minY);
+      this.bounds.maxX = Math.max(this.bounds.maxX, maxX);
+      this.bounds.maxY = Math.max(this.bounds.maxY, maxY);
+    }
+    this.endPasses();
+  }
+
   private beginPasses(program: WebGLProgram, vao: WebGLVertexArrayObject): void {
     const gl = this.gl;
     // Blending into a 32F target is invalid without EXT_float_blend, and the
     // trail and orbit3d passes leave blend and depth toggled.
+    gl.disable(gl.SCISSOR_TEST);
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(program);
@@ -503,6 +664,7 @@ export class GpuSandpileSimulation {
 
   private endPasses(): void {
     const gl = this.gl;
+    gl.disable(gl.SCISSOR_TEST);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindVertexArray(null);
@@ -523,6 +685,7 @@ export class GpuSandpileSimulation {
 
   private seed(initialPile: number): void {
     const gl = this.gl;
+    gl.disable(gl.SCISSOR_TEST);
     const zero = new Float32Array([0, 0, 0, 0]);
     for (const fbo of this.fbos!) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
@@ -558,6 +721,7 @@ export class GpuSandpileSimulation {
   }
 
   private allocateState(): void {
+    const gl = this.gl;
     const textureA = this.createStateTexture();
     const textureB = this.createStateTexture();
     this.textures = [textureA, textureB];
@@ -571,9 +735,22 @@ export class GpuSandpileSimulation {
     this.presentTexture = this.createStateTexture();
     this.presentFbo = this.createFramebuffer(this.presentTexture);
     this.deltaTexture = this.createStateTexture(1, 1);
+    let width = this.width;
+    let height = this.height;
+    do {
+      width = Math.ceil(width / 8);
+      height = Math.ceil(height / 8);
+      const texture = this.createStateTexture(width, height, gl.RGBA32F, gl.RGBA);
+      this.boundsLevels.push({ texture, fbo: this.createFramebuffer(texture) });
+    } while (width > 1 || height > 1);
   }
 
-  private createStateTexture(width = this.width, height = this.height): WebGLTexture {
+  private createStateTexture(
+    width = this.width,
+    height = this.height,
+    internalFormat: number = this.gl.RG32F,
+    format: number = this.gl.RG,
+  ): WebGLTexture {
     const gl = this.gl;
     const texture = mustCreate(gl.createTexture(), "sandpile state texture");
     gl.activeTexture(gl.TEXTURE0 + STATE_UNIT);
@@ -582,7 +759,7 @@ export class GpuSandpileSimulation {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, width, height, 0, gl.RG, gl.FLOAT, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, gl.FLOAT, null);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
     return texture;

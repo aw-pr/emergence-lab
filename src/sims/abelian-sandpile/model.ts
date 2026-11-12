@@ -55,6 +55,10 @@ export function sandpileRoundsPerStep(topplesPerStep: number): number {
   return Math.max(1, Math.min(MAX_ROUNDS_PER_STEP, Math.ceil(topplesPerStep / TOPPLES_PER_ROUND)));
 }
 
+export function sandpileFitPile(width: number, height: number): number {
+  return Math.floor((0.85 * Math.min(width, height) / 0.73) ** 2);
+}
+
 export function readSandpileConfig(params: SandpileParams): SandpileConfig {
   const toppleThreshold = boundedInteger(
     numberParam(params, "toppleThreshold", SANDPILE_DEFAULT_TOPPLE_THRESHOLD),

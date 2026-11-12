@@ -645,7 +645,7 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
-    showExtremeResolution: slug === "logistic-mandelbrot" || resolution === "extreme",
+    showExtremeResolution: slug === "logistic-mandelbrot" || slug === "abelian-sandpile" || resolution === "extreme",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
     showAvalancheGlowControl: channelMappingFor(kernel) === "height",

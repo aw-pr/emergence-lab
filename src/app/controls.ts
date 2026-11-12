@@ -780,7 +780,9 @@ export class ControlsPanel {
     for (const option of options) {
       const optEl = document.createElement("option");
       optEl.value = option.value;
-      optEl.textContent = option.label;
+      optEl.textContent = option.value === "extreme" && this.slug === "abelian-sandpile"
+        ? "Extreme (one cell per screen pixel)"
+        : option.label;
       if (option.value === this.resolution) optEl.selected = true;
       select.appendChild(optEl);
     }
@@ -831,6 +833,12 @@ export class ControlsPanel {
           ? { params: this.defaultParams }
           : options.paramPresets.find((candidate) => candidate.id === select.value);
       if (!preset) return;
+      if (select.value === KERNEL_DEFAULT_PRESET && this.slug === "abelian-sandpile") {
+        this.resolution = this.defaultResolution;
+        if (this.resolutionSelect) this.resolutionSelect.value = this.defaultResolution;
+        if (!this.presetSession) saveResolution(this.slug, this.defaultResolution);
+        this.callbacks.onResolutionChange(this.defaultResolution);
+      }
       this.applyParams(preset.params, options.paramSchema);
     });
 

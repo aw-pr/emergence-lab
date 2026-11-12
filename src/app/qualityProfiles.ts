@@ -108,6 +108,10 @@ export function qualityProfileFor(
     defaultPreset = "ultra";
     cpuFallbackPreset = "high";
   }
+  if (slug === "abelian-sandpile") {
+    defaultPreset = "extreme";
+    cpuFallbackPreset = "balanced";
+  }
   if (slug === "lenia") defaultPreset = "performance";
 
   // Device tier adjusts the per-sim default above, never the other way

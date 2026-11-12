@@ -52,6 +52,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "classic-critical",
       label: "Classic critical",
       params: {
+        fitPile: false,
         initialPile: 100000,
         toppleThreshold: 4,
         grainsPerStep: 1,
@@ -62,6 +63,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "fast-avalanches",
       label: "Fast avalanches",
       params: {
+        fitPile: false,
         initialPile: 250000,
         toppleThreshold: 4,
         grainsPerStep: 16,
@@ -72,6 +74,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "high-threshold",
       label: "High threshold",
       params: {
+        fitPile: false,
         initialPile: 350000,
         toppleThreshold: 8,
         grainsPerStep: 8,
@@ -83,6 +86,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "sandstorm",
       label: "Sandstorm",
       params: {
+        fitPile: false,
         initialPile: 15650000,
         toppleThreshold: 12,
         grainsPerStep: 1000,
@@ -96,6 +100,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "mandala",
       label: "Mandala",
       params: {
+        fitPile: false,
         initialPile: 262144,
         toppleThreshold: 4,
         grainsPerStep: 0,

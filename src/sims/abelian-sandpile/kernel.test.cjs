@@ -36,10 +36,10 @@ test("metadata matches the renderer contract", () => {
 
   assert.deepEqual(
     kernel.paramSchema.map((descriptor) => descriptor.key),
-    ["initialPile", "toppleThreshold", "grainsPerStep", "topplesPerStep"],
+    ["initialPile", "toppleThreshold", "grainsPerStep", "topplesPerStep", "fitPile"],
   );
 
-  for (const descriptor of kernel.paramSchema) {
+  for (const descriptor of kernel.paramSchema.filter((p) => p.type === "number")) {
     assert.equal(descriptor.type, "number");
     assert.equal(typeof descriptor.default, "number");
     assert.equal(typeof descriptor.min, "number");
@@ -77,7 +77,7 @@ test("init creates the expected state shape and readState reference is stable", 
 
 test("init floors dimensions and resets state idempotently", () => {
   const kernel = new AbelianSandpileKernel();
-  kernel.init(10.9, 8.2, { initialPile: 65 });
+  kernel.init(10.9, 8.2, { fitPile: false, initialPile: 65 });
 
   const state = kernel.readState();
   assert.equal(state.length, 10 * 8 * kernel.channelCount);
@@ -85,7 +85,7 @@ test("init floors dimensions and resets state idempotently", () => {
   kernel.step(1);
   const afterStep = Array.from(state);
 
-  kernel.init(10.9, 8.2, { initialPile: 65 });
+  kernel.init(10.9, 8.2, { fitPile: false, initialPile: 65 });
   assert.notDeepEqual(Array.from(kernel.readState()), afterStep);
 
   const centreIndex = (Math.floor(8 / 2) * 10 + Math.floor(10 / 2)) * kernel.channelCount;
@@ -107,6 +107,7 @@ test("missing params use schema defaults", () => {
 
 test("repeated runs are deterministic for the same params and steps", () => {
   const params = {
+    fitPile: false,
     initialPile: 512,
     toppleThreshold: 4,
     grainsPerStep: 3,
@@ -123,6 +124,7 @@ test("selfTest passes", () => {
 test("toppling spreads grains beyond centre with open boundaries", () => {
   const kernel = new AbelianSandpileKernel();
   kernel.init(9, 9, {
+    fitPile: false,
     initialPile: 16,
     toppleThreshold: 4,
     grainsPerStep: 0,
@@ -161,6 +163,7 @@ test("toppling conserves total grain count at thresholds 4, 5, 6, 8 and 12", () 
     const grainsPerStep = 3;
     const kernel = new AbelianSandpileKernel();
     kernel.init(64, 64, {
+      fitPile: false,
       initialPile,
       toppleThreshold,
       grainsPerStep,
@@ -186,6 +189,7 @@ test("thresholds below 4 conserve grains and settle instead of livelocking", () 
   for (const toppleThreshold of [2, 3]) {
     const kernel = new AbelianSandpileKernel();
     kernel.init(64, 64, {
+      fitPile: false,
       initialPile: 500,
       toppleThreshold,
       grainsPerStep: 0,
@@ -210,6 +214,7 @@ test("thresholds below 4 conserve grains and settle instead of livelocking", () 
 test("toppling emits a visible avalanche activity channel", () => {
   const kernel = new AbelianSandpileKernel();
   kernel.init(21, 21, {
+    fitPile: false,
     initialPile: 4096,
     grainsPerStep: 0,
     topplesPerStep: 5000,
@@ -225,6 +230,7 @@ test("toppling emits a visible avalanche activity channel", () => {
 test("open boundaries allow grains to leave the grid", () => {
   const kernel = new AbelianSandpileKernel();
   kernel.init(1, 1, {
+    fitPile: false,
     initialPile: 4,
     toppleThreshold: 4,
     grainsPerStep: 0,
@@ -246,6 +252,7 @@ test("applyImpulse pours grains and relaxes through the topple queue", () => {
   const run = () => {
     const kernel = new AbelianSandpileKernel();
     kernel.init(width, height, {
+      fitPile: false,
       initialPile: 0,
       grainsPerStep: 0,
       topplesPerStep: 5000,
@@ -276,7 +283,7 @@ test("applyImpulse pours grains and relaxes through the topple queue", () => {
 
 test("applyImpulse is a safe no-op for zero strength and off-grid pokes", () => {
   const kernel = new AbelianSandpileKernel();
-  kernel.init(16, 16, { initialPile: 0, grainsPerStep: 0 });
+  kernel.init(16, 16, { fitPile: false, initialPile: 0, grainsPerStep: 0 });
   const ref = kernel.readState();
 
   kernel.applyImpulse(8, 8, 3, 0);
@@ -297,4 +304,15 @@ test("destroy releases state and leaves step/readState safe", () => {
     kernel.step(1);
   });
   assert.equal(kernel.readState().length, 0);
+});
+
+test("default fitting follows the grid and fixed mode honours Initial pile", () => {
+  const kernel = new AbelianSandpileKernel();
+  assert.equal(defaultsFromSchema(kernel).fitPile, true);
+  kernel.init(96, 80, {});
+  assert.equal(totalGrains(kernel), 8677);
+  kernel.init(96, 80, { initialPile: 2000, fitPile: true });
+  assert.equal(totalGrains(kernel), 8677);
+  kernel.init(96, 80, { initialPile: 2000, fitPile: false });
+  assert.equal(totalGrains(kernel), 2000);
 });
