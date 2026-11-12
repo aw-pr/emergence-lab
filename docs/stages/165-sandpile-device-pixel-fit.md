@@ -126,3 +126,26 @@ Both roles need a browser. Codex roles are sandboxed and this card declares Requ
 ## Readiness review
 
 Baselines on `3e157582e` on 2026-11-11: the frozen oracle 6 of 6 red for the stated reasons and 6 skipped without the flag; the contract gate exits 0 with both new oracles in the tree; `npm run verify` green at 512 tests, 429 pass, 83 skipped; criteria 4 to 8 cannot be baselined before card 164 lands and are recorded as such. Claims closure: `RESOLUTION_TARGETS.extreme` and the floor branch in `computeGridSize` are read only by the renderer and exist for the logistic map, so the sandpile needs its own no-floor path; `showExtremeResolution` is set in `simView.ts` for the logistic map or a saved Extreme choice; `ULTRA_DEFAULTS` and the Gray-Scott `cpuFallbackPreset` block in `qualityProfiles.ts` are the pattern for deliverable 6, and `qualityProfiles.test.cjs` pins profiles; presets are matched against params by the Kernel preset select, so a new param key must be handled there or "Kernel default" will not show after a reset (the smoke test "reset restores the kernel preset select: abelian-sandpile" covers it); `thumbnail.ts` passes schema defaults to `setGrid`, so the thumbnail fits its own 640 x 400 grid (216,926 grains, about 41,000 rounds, inside the 2,000 steps already set). On the CPU fallback the fitted pile at Balanced is about 347,000 grains and takes longer to settle than Mandala did (roughly 80 s); accepted, the fallback is rare. No cross-family cold read was run on cards 164 and 165: the operator asked for the run to start unattended, and the cross-family verifier reads each card cold.
+
+## Re-brief (2026-11-12, attempt 2)
+
+Attempt 1 (GPT-6.1 Sol) implemented deliverables 1 to 7 and part of 9, then stopped at a scope blocker: the required fifth param `fitPile` makes `src/app/paramGroups.test.cjs` fail against `docs/audits/2026-09-12-param-groups-before.json`, which lists the sandpile's four prior ungrouped controls and was outside the deliverables. The worker was right to stop. The operator authorised the snapshot update on 2026-11-12.
+
+Its work is preserved as `d09fba0847f49f3d56731c02dd9500d2d3fde723` on `wip/165-sandpile-device-pixel-fit-attempt-1` (11 files, the deliverable paths only; the commit subject says "verifier FAIL" but no verifier ran, it was a worker FAIL). Start by restoring those files into the run worktree (`git checkout d09fba0847f49f3d56731c02dd9500d2d3fde723 -- <the 11 paths>`), review them, and continue from there; do not rebuild from scratch.
+
+Changes to the card for this attempt:
+
+- **Deliverable 10 (new):** `docs/audits/2026-09-12-param-groups-before.json`: in the `abelian-sandpile` entry only, `ungrouped` gains `fitPile` in its rendered position (fifth, after `topplesPerStep`, unless `scripts/param-groups-snapshot.cjs` reports otherwise). No other sim's entry and no other key changes; confirm with `git diff` that the change is that one line.
+- **Criterion 9** now reads "deliverables 1 to 10".
+- Everything else on the card stands, including the frozen oracle and its digest.
+
+Still owed from attempt 1, none of it started or finished:
+
+- Criterion 1 (`npm run verify` exit 0) and criterion 2 (the 165 oracle, 6 of 6, never run).
+- Deliverable 8, the thumbnail. `node scripts/generate-thumbnails.mjs` deletes every file in `public/thumbnails/` before it writes, and attempt 1's run was interrupted after one file. Run it on its own, with no measurement or other browser work alongside, let it finish, then restore every thumbnail except `abelian-sandpile.png` from `HEAD` and confirm their bytes match. If it is interrupted again, restore all of them from `HEAD` and report it.
+- Deliverable 9's measurements: settle time and frame rate of the fitted pile at a device-pixel ratio of 2, and Sandstorm's frame rate at the Extreme grid, measured in isolation. Attempt 1's 72.4 frames a second over 21.83 s was taken while the thumbnail generator ran and the pile had not settled; do not carry it forward.
+- The large-grid limit and governor in `src/app/sandpileGpu.ts` were described as provisional. Settle them against the 150 s and 15 frames a second floors of criterion 6 and describe the final mechanism in the envelope.
+
+## Recovery log
+
+- **Attempt 1:** dispatched 2026-11-11T21:48:30Z on base `5fa81bc62`. Worker FAIL at a scope blocker (1.79M tokens), no verifier run. Preserved as `d09fba0847f49f3d56731c02dd9500d2d3fde723`; envelope and log archived under `state/uat/165-sandpile-device-pixel-fit/attempt-1/`. Diagnosis: card defect (the parameter-order audit snapshot was missing from the deliverables). Repair: snapshot added as deliverable 10, operator-approved 2026-11-12. Same pairing: the worker is already the mid tier. Next: attempt 2.
