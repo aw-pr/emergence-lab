@@ -13,7 +13,7 @@
 - **Requires GUI:** true
 - **Verifier panel:** false
 - **Recovery attempts:** 3
-- **Recovery attempt:** 1
+- **Recovery attempt:** 3
 - **Gate:** stage-completed: 164-sandpile-gpu-stepping
 - **Dispatch:** serial
 - **Pairing rationale:** the worker family alternates after card 164's Claude worker. The work is a default-grid change, one new kernel param with its control and presets, a pile-size rule, and performance work on the GPU pass card 164 built; the outcomes are pinned by a frozen contract with exact counts, so the Codex coding tier at high effort is the right worker, and it needs the browser for the thumbnail. The cross-family verifier is a Claude seat at high effort driving headless Chromium at a device-pixel ratio of 2, as for cards 158, 161 and 163; it reads the diff, runs the contract and measures the settle time. No frontier seat: the look is the operator's after landing.
@@ -149,6 +149,7 @@ Still owed from attempt 1, none of it started or finished:
 ## Recovery log
 
 - **Attempt 1:** dispatched 2026-11-11T21:48:30Z on base `5fa81bc62`. Worker FAIL at a scope blocker (1.79M tokens), no verifier run. Preserved as `d09fba0847f49f3d56731c02dd9500d2d3fde723`; envelope and log archived under `state/uat/165-sandpile-device-pixel-fit/attempt-1/`. Diagnosis: card defect (the parameter-order audit snapshot was missing from the deliverables). Repair: snapshot added as deliverable 10, operator-approved 2026-11-12. Same pairing: the worker is already the mid tier. Next: attempt 2.
+- **Attempt 2:** dispatched 2026-11-12T18:09:40Z on base `57e876756`. Worker FAIL after 31 minutes (6.58M tokens), no verifier run. Criteria 1 and 3 proven; criteria 2 and 4 to 8 unrun. Preserved as `aae4dc437adeabf4d111a6e84817253b697fc65c` on `wip/165-sandpile-device-pixel-fit-attempt-2`; envelope, log and the worker's evidence archived under `state/uat/165-sandpile-device-pixel-fit/attempt-2/`. Diagnosis: implementation-side procedure error (the worker edited `src/app/sandpileGpu.ts` while the thumbnail generator ran, Vite reloaded the page and the generator died); the card and oracle are sound. Repair: re-brief only, phases ordered and separated, no scope or criterion change (`2bfbd0677`). Same pairing. Requeued under the standing three-attempt policy with `--keep-budget`. Next: attempt 3, the last in the allowance.
 
 ## Re-brief (2026-11-12, attempt 3 of 3)
 
