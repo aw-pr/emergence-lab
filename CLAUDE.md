@@ -62,8 +62,17 @@ default grid; the per-sim fallback lives in `qualityProfileFor`'s
 advances from it and `publish` is the mirror boundary. A worktree branched from
 anywhere else inherits a history the rest of the fleet is not working against.
 
-As of 2026-08-23 there are no long-lived feature branches and no worktrees
-beyond the primary one. Every parallel line is closed:
+As of 2026-11-12 the only long-lived line besides `dev`, `main` and `publish`
+is `parked/logistic-mandelbrot-zoom`, checked out in `../emergence-lab-zoom-parked`
+and backed up to origin; it and its worktree stay until the operator says
+otherwise. Autometta cuts a transient `../emergence-lab-run-<stage>` worktree on
+`autometta/<stage>` for a stage in flight and leaves failed attempts on
+`wip/<stage>-attempt-N`; those go once the stage lands. `autometta/state` is the
+tick's snapshot ref, not a line of work. The branches and worktrees that had
+piled up were pruned on 2026-11-12: zoom-arc attempts the parked branch does not
+contain are kept as `archive/<branch name>` tags on origin.
+
+Every other parallel line is closed:
 
 - `feat/logistic-mandelbrot-hybrid-surface` — the parked surface experiment.
   Rejected on visual review 2026-07-20 (sawtooth silhouette, no sheet-to-cloud
