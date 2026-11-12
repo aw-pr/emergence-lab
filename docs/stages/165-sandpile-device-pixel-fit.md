@@ -149,3 +149,21 @@ Still owed from attempt 1, none of it started or finished:
 ## Recovery log
 
 - **Attempt 1:** dispatched 2026-11-11T21:48:30Z on base `5fa81bc62`. Worker FAIL at a scope blocker (1.79M tokens), no verifier run. Preserved as `d09fba0847f49f3d56731c02dd9500d2d3fde723`; envelope and log archived under `state/uat/165-sandpile-device-pixel-fit/attempt-1/`. Diagnosis: card defect (the parameter-order audit snapshot was missing from the deliverables). Repair: snapshot added as deliverable 10, operator-approved 2026-11-12. Same pairing: the worker is already the mid tier. Next: attempt 2.
+
+## Re-brief (2026-11-12, attempt 3 of 3)
+
+This is the last attempt in the stage's allowance. Attempt 2 (GPT-6.1 Sol) finished the implementation and proved criteria 1 and 3 (`npm run verify` exit 0 at 514 tests, 431 pass, 83 skipped; the contract gate exit 0; snapshot diff one line), then failed on procedure, not on code: it edited `src/app/sandpileGpu.ts` while `node scripts/generate-thumbnails.mjs` was running, Vite reloaded the page, the generator died after three files, and the worker stopped as the attempt 2 re-brief told it to. No browser evidence was collected.
+
+Its work is preserved as `aae4dc437adeabf4d111a6e84817253b697fc65c` on `wip/165-sandpile-device-pixel-fit-attempt-2` (12 files, deliverable paths only; the subject says "verifier FAIL" but no verifier ran). Start by restoring those files into the run worktree (`git checkout aae4dc437adeabf4d111a6e84817253b697fc65c -- <the 12 paths>`), confirm `git status` shows only those 12, and continue from there. Do not rebuild and do not redesign what already passes.
+
+The card, its criteria, the frozen oracle and its digest are unchanged. Nothing is added to scope.
+
+Work in this order, and keep the phases apart. The rule that attempt 2 broke: **while any browser run is in progress (generator, Playwright, a measurement), edit no file under `src/`, `public/` or `scripts/`, and start no second browser run.** Wait for the process to exit before the next step.
+
+1. **Browser validation first, source still open to change.** Run `SANDPILE_DEFINITION=165 npx playwright test -c e2e/sandpile-definition.config.ts` (criterion 2, 6 of 6) and the card 164 regression `SANDPILE_GPU=164 npx playwright test -c e2e/sandpile-gpu.config.ts -g "rounds per step|bit-identical|fed pile|impulse|switched off"`. The large-grid scissor, the 12 ms governor and the carried-over steps in `sandpileGpu.ts` have never run in a browser at a device-pixel grid: if either suite fails, fix the code between runs, not during one, and re-run `npm run verify` after the last source change.
+2. **Measurements, in isolation** (deliverable 9, criterion 6): settle time and frame rate of the fitted pile at a device-pixel ratio of 2, and Sandstorm's frame rate at the Extreme grid, against the 150 s and 15 frames a second floors. One measurement at a time, nothing else running. Carry no number forward from attempts 1 or 2.
+3. **Freeze the source.** After this point no file under `src/` changes. If a later step shows a code defect, go back to step 1 and repeat steps 1 to 3 in full.
+4. **Thumbnail last, on its own** (deliverable 8). Run `node scripts/generate-thumbnails.mjs` once with nothing else running and do nothing until it exits. It deletes all 26 files in `public/thumbnails/` before writing. When it exits 0, restore every file except `abelian-sandpile.png` from `HEAD` and confirm byte for byte; `git status` must then show `public/thumbnails/abelian-sandpile.png` as the only thumbnail change. Confirm the still is a settled pile (the generator's 2,000 steps are expected to be enough at 640 x 400; say how you checked). If it exits non-zero once, restore all 26 from `HEAD`, find the cause from its output, and run it once more; a second failure is a FAIL to report.
+5. **Envelope.** Everything the Return section asks for, with the final mechanism for the round limit and governor described as validated, not provisional.
+
+Stop rule as on the card: at wall-clock or an unresolved evidence failure, preserve and report; do not requeue.
