@@ -90,6 +90,9 @@ window.__boids168 = {
 
 async function open(page: Page, query: string) {
   await page.addInitScript(READINGS);
+  // A goto to the URL the page is already on, fragment included, is a
+  // same-document navigation in Chromium and keeps the running engine.
+  await page.goto("about:blank");
   await page.goto(`/${query}#/boids`);
   await expect(page.locator(".sim-view__canvas")).toBeVisible();
   await expect(page.locator(".sim-view")).not.toHaveClass(/sim-view--immersive/);
