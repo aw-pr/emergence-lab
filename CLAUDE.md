@@ -56,6 +56,12 @@ default grid; the per-sim fallback lives in `qualityProfileFor`'s
 `cpuFallbackPreset`. The same-day interestingness re-run is in
 `docs/sweeps/2026-11-08-operator-rerun.md`.
 
+The abelian sandpile moved to GPU-resident stepping on 2026-11-11 (card 164,
+`5fa81bc62`, `src/app/sandpileGpu.ts`). On 2026-11-12 it began opening at one
+cell per device pixel with the pile fitted to the screen (card 165,
+`88b86dd53`, new `fitPile` param, Extreme grid on desktop, Balanced on the
+tablet tier).
+
 ## Worktrees and branches
 
 **Take new worktrees from `dev`.** `dev` is the live branch in practice; `main`
