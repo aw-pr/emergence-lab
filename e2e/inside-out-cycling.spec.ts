@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Logistic-Mandelbrot Inside-out spread colouring: integration evidence for
  * stage 100 criteria 2-7 (docs/stages/100-logistic-mandelbrot-inside-out-spread-colouring.md),
@@ -695,7 +696,7 @@ test.describe("controls and cache", () => {
       if (message.type() === "error") errors.push(message.text());
     });
     const canvas = await openSim(page, frozenParams({ colourMode: "cycle", cycleSpeed: 0 }));
-    await page.locator(".sim-view__drawer-handle").click();
+    await openControls(page);
     const initial = await canvasDataset(canvas);
     const points = initial.orbit3dPoints;
     expect(Number(points)).toBeGreaterThan(0);
@@ -818,7 +819,7 @@ function directionEvidenceTests(VIEWS: readonly DirectionView[], SEQUENCE_DIR: s
         }, { timeout: 20_000, intervals: [500] }).toBe(true);
       };
       if (view.preset) {
-        await handle.click();
+        await openControls(page);
         const presets = page.getByRole("combobox", { name: "Kernel preset", exact: true });
         await presets.selectOption(view.preset);
         await expect(presets).toHaveValue(view.preset);

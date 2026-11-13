@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { driveKernel } from "./harness/driver.ts";
 import { coverage } from "./harness/metrics.ts";
@@ -106,6 +107,7 @@ test("Kuramoto local and global coupling stay GPU-resident", async ({ page }) =>
   await expect(canvas).toHaveAttribute("data-renderer", /webgl2|canvas2d/);
   if ((await canvas.getAttribute("data-renderer")) !== "webgl2") return;
 
+  await openControls(page);
   const couplingMode = page.locator('[data-param-key="couplingMode"]');
   await expect(canvas).toHaveAttribute("data-simulation-renderer", "gpu-ping-pong");
   await couplingMode.selectOption("global");
@@ -130,10 +132,7 @@ test("logistic-Mandelbrot reports and completes the GPU cloud path", async ({ pa
 test("controls info popup opens, closes, and is absent without an info descriptor", async ({ page }) => {
   await page.goto("/#/logistic-mandelbrot");
 
-  // logistic-mandelbrot loads straight into immersive mode, which parks the
-  // settings drawer off-screen behind a handle (see .sim-view__drawer-handle
-  // in simView.ts) until it is opened by hover or this click.
-  await page.locator(".sim-view__drawer-handle").click();
+  await openControls(page);
 
   const infoButtons = page.locator(".control__info-button");
   await expect(infoButtons.first()).toBeVisible();
@@ -313,7 +312,7 @@ test("cyclic Magma joins seamlessly and agrees across CPU and GPU mappings", asy
 
 test("Logistic Mandelbrot loads and resets to cyclic Magma", async ({ page }) => {
   await page.goto("/#/logistic-mandelbrot");
-  await page.getByRole("button", { name: "Show settings", exact: true }).click();
+  await openControls(page);
   const palette = page.getByRole("combobox", { name: "Palette", exact: true });
   await expect(palette).toHaveValue("magma-cyclic");
   await palette.selectOption("magma");
@@ -641,7 +640,7 @@ for (const slug of ["mandelbrot", "boids", "abelian-sandpile"]) {
 
     // Headless Chromium reports viewport == screen, so every route loads
     // immersive with the settings drawer parked off-screen behind its handle.
-    await page.locator(".sim-view__drawer-handle").click();
+    await openControls(page);
 
     const select = page.getByLabel("Kernel preset");
     const reset = page.getByRole("button", { name: "Reset to defaults" });

@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -71,6 +72,7 @@ test("gray-scott steps GPU-resident on webgl2", async ({ page }) => {
   const canvas = page.locator(".sim-view__canvas");
   await expectGpuResident(page);
 
+  await openControls(page);
   await page.getByLabel("Kernel preset").selectOption("waves");
   await expectGpuResident(page);
 
@@ -361,6 +363,7 @@ async function measureAppFrames(page: Page, url: string, frames: number): Promis
   await page.goto(url);
   const canvas = page.locator(".sim-view__canvas");
   await expect(canvas).toHaveAttribute("data-renderer", "webgl2");
+  await openControls(page);
   await page.getByLabel("Grid quality").selectOption("ultra");
   await page.getByLabel("Kernel preset").selectOption("waves");
   const intervals: number[] = await page.evaluate(

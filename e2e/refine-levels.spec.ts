@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Logistic-Mandelbrot second refinement level: integration evidence for
  * stage 105 criteria 2-8
@@ -595,7 +596,7 @@ test.describe("evidence", () => {
     // The slider is a live control: raising it from the drawer rebuilds with level 2.
     const { canvas } = await openPacked(page, { params: cloudParams(), preset: "balanced", timeoutMs: 600_000 });
     const handle = page.locator(".sim-view__drawer-handle");
-    await handle.click();
+    await openControls(page);
     await setParam(page, "tailRefinement", 0.6);
     await expect(page.locator('[data-param-key="tailRefinement"]')).toHaveValue("0.6");
     await handle.click();

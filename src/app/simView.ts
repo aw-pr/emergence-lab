@@ -36,6 +36,7 @@ import {
 
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
 const LIVE_MODEL_SOURCE = "live";
+const CONTROLS_DISCOVERED_KEY = "el:controls-discovered:v1";
 const dismissedCustomObstacleHints = new Set<string>();
 
 interface BoidsObstacleEditor {
@@ -1435,6 +1436,15 @@ function buildLayout(
   page.className = "sim-view";
 
   const siteChrome = siteOwnsChrome();
+  let controlsDiscovered = false;
+  try {
+    controlsDiscovered = localStorage.getItem(CONTROLS_DISCOVERED_KEY) === "1";
+  } catch { /* Storage may be blocked by the host browser. */ }
+  const controlsHint = controlsDiscovered ? undefined : document.createElement("span");
+  if (controlsHint) {
+    controlsHint.className = "sim-view__controls-hint";
+    controlsHint.textContent = "Adjust parameters: arrow tab on the left";
+  }
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
@@ -1471,6 +1481,7 @@ function buildLayout(
     title.className = "sim-view__title";
     title.textContent = header.name;
     bar.append(back, title);
+    if (controlsHint) bar.appendChild(controlsHint);
 
     if (header.family) {
       const tag = document.createElement("span");
@@ -1567,7 +1578,7 @@ function buildLayout(
   body.appendChild(sidebar);
 
   // Normal layout only (hidden in immersive and on phones, which have their
-  // own reveals). Every view opens with the controls shown.
+  // own reveals). Every view opens with the controls minimised.
   const sidebarTab = document.createElement("button");
   sidebarTab.type = "button";
   sidebarTab.className = "sim-view__sidebar-tab";
@@ -1576,10 +1587,16 @@ function buildLayout(
     sidebarTab.setAttribute("aria-expanded", String(shown));
     sidebarTab.setAttribute("aria-label", shown ? "Hide controls" : "Show controls");
   };
-  showControls(true);
+  showControls(false);
   sidebarTab.addEventListener("click", () => {
     const show = page.classList.contains("sim-view--controls-hidden");
     showControls(show);
+    if (show) {
+      controlsHint?.remove();
+      try {
+        localStorage.setItem(CONTROLS_DISCOVERED_KEY, "1");
+      } catch { /* Removing the hint still lasts for this view. */ }
+    }
     // Focus left on a control inside the panel would hold the hidden panel
     // open through its :focus-within reveal.
     const root = body.getRootNode() as Document | ShadowRoot;
@@ -1587,6 +1604,10 @@ function buildLayout(
     if (!show && focused instanceof HTMLElement && sidebar.contains(focused)) focused.blur();
   });
   body.appendChild(sidebarTab);
+  if (siteChrome && controlsHint) {
+    controlsHint.classList.add("sim-view__controls-hint--pill");
+    body.appendChild(controlsHint);
+  }
 
   // With the controls hidden, resting a fine pointer on the stage's left edge
   // slides them back in over the stage until it leaves (styles.css); the tab

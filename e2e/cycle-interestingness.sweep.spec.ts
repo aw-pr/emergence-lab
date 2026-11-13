@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Logistic-Mandelbrot cycle-interestingness parameter sweep (stage 102).
  *
@@ -226,7 +227,7 @@ async function parkDrawer(page: Page): Promise<void> {
 async function applyPose(page: Page, canvas: Locator, candidate: Candidate, pose: PoseId): Promise<void> {
   if (pose === "bifurcation-curtain") {
     const handle = page.locator(".sim-view__drawer-handle");
-    await handle.click();
+    await openControls(page);
     const presets = page.getByRole("combobox", { name: "Kernel preset", exact: true });
     await presets.selectOption("bifurcation-curtain");
     await expect(presets).toHaveValue("bifurcation-curtain");
