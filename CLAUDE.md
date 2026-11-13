@@ -62,7 +62,7 @@ cell per device pixel with the pile fitted to the screen (card 165,
 `88b86dd53`, new `fitPile` param, Extreme grid on desktop, Balanced on the
 tablet tier).
 
-On 2026-11-13 Boids opened with five flocks close in and aimed slightly off the centre (`946357cbc`); a flow sweep and two flocking prototypes found no rule that keeps many headings alive for minutes without losing the look the operator prefers, so the original rule stays. Card 167 made every sim open with the parameters panel minimised and a discreet hint until the tab is first clicked, reversing the 2026-11-08 default. Card 168, an opt-in GPU Boids flock behind `?simulationRenderer=gpu`, was in flight; making GPU the default waits on the operator's side-by-side look.
+On 2026-11-13 Boids opened with five flocks close in and aimed slightly off the centre (`946357cbc`); a flow sweep and two flocking prototypes found no rule that keeps many headings alive for minutes without losing the look the operator prefers, so the original rule stays. Card 167 made every sim open with the parameters panel minimised and a discreet hint until the tab is first clicked, reversing the 2026-11-08 default. Card 168 (`b7cc927fd`) added a GPU-resident Boids flock (`src/app/boidsGpu.ts`) and, after the operator's side-by-side look ("GPU is better"), card 169 (`0762daf8b`) made it the desktop default; the CPU kernel remains the fallback, the path for tablets, phones, obstacles and large visual radii, and is forced by `?simulationRenderer=cpu`.
 
 ## Worktrees and branches
 
