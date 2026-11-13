@@ -125,7 +125,7 @@ import {
   shouldUseSmoothCanvasPresentation,
 } from "./renderModes.ts";
 import { isFractalViewSlug, zoomAroundPoint } from "./fractalView.ts";
-import { qualityProfileFor } from "./qualityProfiles.ts";
+import { qualityProfileFor, tierParamOverridesFor } from "./qualityProfiles.ts";
 
 const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
   "gray-scott": [
@@ -444,6 +444,7 @@ export async function renderSimView(
   const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
+    ...tierParamOverridesFor(slug),
     ...(variantDef?.params ?? {}),
   };
   const restored: SimParams = snapshot ? { ...snapshot.params } : restorePersistedParams(

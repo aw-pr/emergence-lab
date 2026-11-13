@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   classifyDeviceTier,
   qualityProfileFor,
+  tierParamOverridesFor,
 } = require("../../.test-build/app/qualityProfiles.js");
 
 test("classifyDeviceTier: fine pointer is always desktop", () => {
@@ -87,5 +88,17 @@ test("qualityProfileFor: sandpile uses device pixels on desktop and Balanced els
     const profile = qualityProfileFor("abelian-sandpile", "grid", tier);
     assert.equal(profile.defaultPreset, "balanced");
     assert.equal(profile.cpuFallbackPreset, undefined);
+  }
+});
+
+test("tierParamOverridesFor: Boids keeps the desktop density on the smaller tablet and phone grids", () => {
+  assert.deepEqual(tierParamOverridesFor("boids", "desktop"), {});
+  assert.deepEqual(tierParamOverridesFor("boids", "tablet"), { boidCount: 7000 });
+  assert.deepEqual(tierParamOverridesFor("boids", "phone"), { boidCount: 5000 });
+});
+
+test("tierParamOverridesFor: other sims take no tier override", () => {
+  for (const tier of ["desktop", "tablet", "phone"]) {
+    assert.deepEqual(tierParamOverridesFor("particle-life", tier), {});
   }
 });

@@ -86,6 +86,22 @@ const ULTRA_DEFAULTS = new Set([
   "kuramoto-oscillators",
 ]);
 
+/**
+ * Opening param values that depend on the device tier. Boids' neighbour radii
+ * are absolute grid cells, so its count is really a density: the desktop
+ * default over the ultra grid is about 0.017 boids a cell, and the same count
+ * in a tablet or phone grid packs so tightly that no flock forms.
+ */
+export function tierParamOverridesFor(
+  slug: string,
+  tier: DeviceTier = detectDeviceTier(),
+): Record<string, number> {
+  if (slug !== "boids") return {};
+  if (tier === "tablet") return { boidCount: 7000 };
+  if (tier === "phone") return { boidCount: 5000 };
+  return {};
+}
+
 export function qualityProfileFor(
   slug: string,
   mode: RenderMode,
