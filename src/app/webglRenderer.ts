@@ -25,6 +25,14 @@ import {
   type SandpileDiagnosticCanvas,
 } from "./sandpileGpu.ts";
 import {
+  boidsGpuEligible,
+  createGpuBoids,
+  hasBoidsKernelAccess,
+  type BoidsGpuDiagnosticCanvas,
+  type GpuBoidsSimulation,
+} from "./boidsGpu.ts";
+import { detectDeviceTier } from "./qualityProfiles.ts";
+import {
   createProgram,
   createQuadVao,
   mustCreate,
@@ -1354,6 +1362,10 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly grayScott: GpuGrayScottSimulation | null;
   private readonly sandpile: GpuSandpileSimulation | null;
   private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
+  /** Boids steps on the GPU only on request, on the desktop tier, with float render targets. */
+  private readonly boids: GpuBoidsSimulation | null;
+  private boidsKernel: SimKernel | null = null;
+  private boidsHeld = false;
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
   private orbit3dGroundTexture: WebGLTexture | null = null;
@@ -1443,6 +1455,12 @@ export class WebGLRendererBackend implements RendererBackend {
       : null;
     this.grayScott = floatTargets ? createGpuGrayScott(gl, this.quadBuffer) : null;
     this.sandpile = floatTargets ? createGpuSandpile(gl, this.quadBuffer) : null;
+    this.boids =
+      floatTargets &&
+      simulationRendererOverrideFromUrl() === "gpu" &&
+      detectDeviceTier() === "desktop"
+        ? createGpuBoids(gl, this.quadBuffer)
+        : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
     this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
@@ -1518,6 +1536,7 @@ export class WebGLRendererBackend implements RendererBackend {
     if (this.supportsGpuKuramoto(mode, kernel)) return true;
     if (this.supportsGpuGrayScott(mode, kernel)) return true;
     if (this.supportsGpuSandpile(mode, kernel)) return true;
+    if (this.boidsStepping(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
     // adjacent complex coordinates collapse together, so retain the CPU
@@ -1536,6 +1555,9 @@ export class WebGLRendererBackend implements RendererBackend {
   ): void {
     this.gridWidth = Math.max(1, Math.floor(gridWidth));
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    // The kernel is re-initialised next; the flock is taken over again from
+    // its fresh seed when it is first drawn.
+    this.releaseBoids();
     if (this.supportsOrbit3d(mode, kernel)) {
       this.kuramoto?.releaseState();
       this.releaseGrayScott();
@@ -1577,7 +1599,14 @@ export class WebGLRendererBackend implements RendererBackend {
   advanceDirect(
     steps: number,
     params: Record<string, number | boolean | string>,
+    dt?: number,
   ): boolean {
+    if (this.boids?.ready && this.boidsKernel) {
+      this.syncBoids(this.boidsKernel, "particle", params);
+      if (!this.boids.ready) return false;
+      if (this.boidsHeld) return true;
+      return this.boids.step(dt ?? 0);
+    }
     if (this.grayScott?.ready) return this.grayScott.advance(steps);
     if (this.sandpile?.ready) return this.sandpile.advance(steps);
     return this.kuramoto?.advance(steps, params) ?? false;
@@ -1710,6 +1739,11 @@ export class WebGLRendererBackend implements RendererBackend {
     }
     if (this.supportsGpuSandpile(mode, kernel)) {
       if (this.sandpile) this.drawGpuField(this.sandpile, frame);
+      return;
+    }
+    if (this.boids) this.syncBoids(kernel, mode, frame.params);
+    if (this.boidsStepping(mode, kernel)) {
+      this.drawGpuBoids(frame);
       return;
     }
     if (this.supportsDirectRendering(mode, kernel, frame.params)) {
@@ -2417,6 +2451,121 @@ export class WebGLRendererBackend implements RendererBackend {
     delete canvas.sandpileRoundCount;
   }
 
+  private boidsStepping(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.boids !== null &&
+      this.boids.ready &&
+      mode === "particle" &&
+      kernel === this.boidsKernel
+    );
+  }
+
+  /**
+   * Keep the flock on the engine that may step it: take it over from the CPU
+   * kernel while the field is clear, and hand it back in place (positions and
+   * velocities) once a layout or a dropped boulder needs obstacle steering.
+   */
+  private syncBoids(
+    kernel: SimKernel,
+    mode: RenderMode,
+    params: Record<string, number | boolean | string>,
+  ): void {
+    const boids = this.boids;
+    if (!boids) return;
+    if (!isBoidsState(kernel) || !hasBoidsKernelAccess(kernel) || mode !== "particle") {
+      if (boids.ready) this.releaseBoids();
+      return;
+    }
+    const steering = kernel.steeringConfig();
+    const eligible = boidsGpuEligible({
+      requested: true,
+      desktop: true,
+      floatTargets: true,
+      obstacleLayout: params.obstacleLayout,
+      hasObstacles: kernel.hasObstacles(),
+      visualRadius: steering.visualRadius,
+      boidCount: steering.boidCount,
+      binningMinBoids: steering.binningMinBoids,
+    });
+    if (boids.ready) {
+      if (kernel !== this.boidsKernel) {
+        this.releaseBoids();
+      } else if (!eligible) {
+        const flock = boids.read();
+        if (flock) kernel.importBoids(flock);
+        this.releaseBoids();
+        return;
+      } else {
+        return;
+      }
+    }
+    if (
+      eligible &&
+      !boids.failed &&
+      steering.width === this.gridWidth &&
+      steering.height === this.gridHeight &&
+      boids.seed(steering, kernel.exportBoids())
+    ) {
+      this.boidsKernel = kernel;
+      this.attachBoidsDiagnostics();
+    }
+  }
+
+  private attachBoidsDiagnostics(): void {
+    const boids = this.boids;
+    if (!boids) return;
+    const canvas = this.gl.canvas as BoidsGpuDiagnosticCanvas;
+    const held = (on: boolean): void => {
+      this.boidsHeld = on;
+    };
+    canvas.boidsGpu = {
+      get count() {
+        return boids.count;
+      },
+      get steps() {
+        return boids.steps;
+      },
+      read: () => boids.read() ?? new Float32Array(0),
+      advance: (steps: number, dt: number) => {
+        for (let step = 0; step < Math.floor(steps); step += 1) {
+          if (!boids.step(dt)) return;
+        }
+      },
+      hold: held,
+    };
+  }
+
+  private releaseBoids(): void {
+    if (!this.boids) return;
+    this.boids.releaseState();
+    this.boidsKernel = null;
+    this.boidsHeld = false;
+    delete (this.gl.canvas as BoidsGpuDiagnosticCanvas).boidsGpu;
+  }
+
+  private drawGpuBoids(frame: RendererBackendFrame): void {
+    const boids = this.boids;
+    if (!boids || !boids.bindForPresentation()) return;
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    delete canvas.dataset.fractalRenderer;
+    delete canvas.dataset.fractalSupersample;
+    delete canvas.dataset.orbit3dSampler;
+    delete canvas.dataset.orbit3dBoundaryDetail;
+    canvas.dataset.simulationRenderer = "gpu-boids";
+    this.setUniforms(
+      frame.kernel,
+      frame.colourOptions,
+      frame.displayOptions,
+      frame.mode,
+      frame.params,
+      frame.elapsedTime,
+      frame.speedScale,
+      frame.state,
+      boids.meanDirection,
+    );
+    this.drawMappedState(frame.kernel, frame.mode, frame.displayOptions);
+  }
+
   private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
     return (
       this.orbit3d?.available === true &&
@@ -2869,6 +3018,8 @@ export class WebGLRendererBackend implements RendererBackend {
     this.grayScott?.destroy();
     this.releaseSandpile();
     this.sandpile?.destroy();
+    this.releaseBoids();
+    this.boids?.destroy();
     this.orbit3d?.destroy();
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
@@ -3122,6 +3273,7 @@ export class WebGLRendererBackend implements RendererBackend {
     elapsedTime: number,
     speedScale: number,
     state: Float32Array,
+    boidsMeanDir?: readonly [number, number],
   ): void {
     const gl = this.gl;
     const ranges = new Float32Array(8);
@@ -3168,9 +3320,10 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
     gl.uniform1i(this.uniforms.streamerMode, isAttractorState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.streamerWidth, numericParam(params, "ribbonWidth", 2.1));
-    const meanDir = isBoidsState(kernel)
-      ? boidsMeanDirection(state, kernel.channelCount, this.gridWidth * this.gridHeight)
-      : [0, 0];
+    const meanDir = !isBoidsState(kernel)
+      ? [0, 0]
+      : boidsMeanDir ??
+        boidsMeanDirection(state, kernel.channelCount, this.gridWidth * this.gridHeight);
     gl.uniform2f(this.uniforms.boidsMeanDir, meanDir[0], meanDir[1]);
   }
 }
@@ -3445,14 +3598,15 @@ function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
 /**
  * `?simulationRenderer=cpu` keeps GPU-capable field simulations on their CPU
  * kernel (reported as `data-simulation-renderer="cpu-kernel"`), for A/B timing
- * and for evidence runs that read the kernel's own state. Read once when the
- * backend is built; inert when absent, and any other value is ignored.
+ * and for evidence runs that read the kernel's own state.
+ * `?simulationRenderer=gpu` opts Boids into GPU stepping on the desktop tier
+ * and changes nothing else. Read once when the backend is built; inert when
+ * absent, and any other value is ignored.
  */
-function simulationRendererOverrideFromUrl(): "cpu" | null {
+function simulationRendererOverrideFromUrl(): "cpu" | "gpu" | null {
   if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get("simulationRenderer") === "cpu"
-    ? "cpu"
-    : null;
+  const value = new URLSearchParams(window.location.search).get("simulationRenderer");
+  return value === "cpu" || value === "gpu" ? value : null;
 }
 
 function boundedInteger(

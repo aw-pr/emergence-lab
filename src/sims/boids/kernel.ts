@@ -94,6 +94,24 @@ export type CapsuleObstacle = {
 
 export type Obstacle = CircleObstacle | CapsuleObstacle;
 
+export type BoidsSteeringConfig = {
+  width: number;
+  height: number;
+  boidCount: number;
+  visualRadius: number;
+  separationRadius: number;
+  maxSpeed: number;
+  alignment: number;
+  cohesion: number;
+  separation: number;
+  wanderStrength: number;
+  minSpeedFraction: number;
+  neighbourCandidates: number;
+  binningMinBoids: number;
+  seed: number;
+  step: number;
+};
+
 export const OBSTACLE_LAYOUT_FORMAT_VERSION = 1;
 
 export type ObstacleLayoutDecodeResult =
@@ -888,6 +906,67 @@ export class BoidsKernel implements SimKernel {
 
   readState(): Float32Array {
     return this.state;
+  }
+
+  /** The latched steering values and constants, for an engine that steps this flock elsewhere. */
+  steeringConfig(): BoidsSteeringConfig {
+    return {
+      width: this.width,
+      height: this.height,
+      boidCount: this.boidCount,
+      visualRadius: this.visualRadius,
+      separationRadius: this.separationRadius,
+      maxSpeed: this.maxSpeed,
+      alignment: this.alignment,
+      cohesion: this.cohesion,
+      separation: this.separation,
+      wanderStrength: WANDER_STRENGTH,
+      minSpeedFraction: MIN_SPEED_FRACTION,
+      neighbourCandidates: NEIGHBOUR_CANDIDATES,
+      binningMinBoids: BINNING_MIN_BOIDS,
+      seed: this.seed,
+      step: this.stepCounter,
+    };
+  }
+
+  hasObstacles(): boolean {
+    return this.obstacles.length > 0;
+  }
+
+  /** Positions and velocities interleaved as x, y, vx, vy per boid. */
+  exportBoids(): Float32Array {
+    const out = new Float32Array(this.boidCount * 4);
+    for (let i = 0; i < this.boidCount; i += 1) {
+      out[i * 4] = this.x[i];
+      out[i * 4 + 1] = this.y[i];
+      out[i * 4 + 2] = this.vx[i];
+      out[i * 4 + 3] = this.vy[i];
+    }
+    return out;
+  }
+
+  /**
+   * Replace the flock with one stepped elsewhere, in the exportBoids() layout.
+   * Boids caught inside an obstacle are pushed out as a freshly placed one
+   * would push them. Returns false, changing nothing, on a count mismatch.
+   */
+  importBoids(boids: Float32Array): boolean {
+    if (boids.length !== this.boidCount * 4) {
+      return false;
+    }
+    for (let i = 0; i < this.boidCount; i += 1) {
+      this.x[i] = wrap(boids[i * 4], this.width);
+      this.y[i] = wrap(boids[i * 4 + 1], this.height);
+      this.vx[i] = boids[i * 4 + 2];
+      this.vy[i] = boids[i * 4 + 3];
+    }
+    if (this.obstacles.length > 0) {
+      for (let i = 0; i < this.boidCount; i += 1) {
+        this.resolveObstaclePenetration(i);
+      }
+    }
+    this.rasterise();
+    return true;
   }
 
   getObstacleEditBounds(): readonly [number, number] {

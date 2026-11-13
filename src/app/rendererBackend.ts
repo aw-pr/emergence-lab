@@ -51,8 +51,11 @@ export interface RendererBackend {
     kernel: SimKernel,
     params: SimParams,
   ): boolean;
-  /** Advance a GPU-resident simulation without stepping or reading back its CPU kernel. */
-  advanceDirect?(steps: number, params: SimParams): boolean;
+  /**
+   * Advance a GPU-resident simulation without stepping or reading back its CPU
+   * kernel. A continuous-time simulation steps once at dt seconds instead.
+   */
+  advanceDirect?(steps: number, params: SimParams, dt?: number): boolean;
   /** Apply a grid-space brush directly to GPU-resident simulation state. */
   applyDirectImpulse?(
     x: number,

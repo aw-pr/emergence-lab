@@ -510,10 +510,15 @@ export class Renderer {
     const stepCount = Math.floor(this.stepAccumulator);
     this.stepAccumulator -= stepCount;
 
+    const particleDt = dt * this.stepsPerFrame;
     const directStepHandled =
-      stepCount > 0 &&
-      this.usesDirectRendering() &&
-      (this.backend.advanceDirect?.(stepCount, this.params) ?? false);
+      this.renderMode === "particle"
+        ? particleDt > 0 &&
+          this.usesDirectRendering() &&
+          (this.backend.advanceDirect?.(1, this.params, particleDt) ?? false)
+        : stepCount > 0 &&
+          this.usesDirectRendering() &&
+          (this.backend.advanceDirect?.(stepCount, this.params) ?? false);
 
     if (directStepHandled) {
       // State remains GPU-resident; draw() presents the backend's active texture.
