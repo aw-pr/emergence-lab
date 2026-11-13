@@ -41,9 +41,9 @@ const DEFAULT_SEPARATION = 0.22;
 const DEFAULT_POINT_SIZE = 4;
 /** Ring-arranged flocks at load, so the first frames read as flocking rather
  * than a uniform speckle. */
-const DEFAULT_INITIAL_FLOCKS = 8;
+const DEFAULT_INITIAL_FLOCKS = 5;
 /** Radians each ring flock aims off the centre, all to the same side. */
-const FLOCK_AIM_SKEW = 0;
+const FLOCK_AIM_SKEW = 0.3;
 const MAX_BOID_COUNT = 40000;
 /** Per-step random heading nudge as a fraction of max speed; a little keeps flocks
  * from freezing into rigid crystalline order, but too much washes the flocking
@@ -1688,8 +1688,8 @@ export class BoidsKernel implements SimKernel {
     const count = this.initialFlocks;
     const centreX = this.width * 0.5;
     const centreY = this.height * 0.5;
-    const ringX = this.width * 0.31;
-    const ringY = this.height * 0.29;
+    const ringX = this.width * 0.17;
+    const ringY = this.height * 0.16;
     const spread = Math.min(this.width, this.height) * 0.085;
     const centresX = new Float64Array(count);
     const centresY = new Float64Array(count);
