@@ -73,7 +73,7 @@ export interface BoidsGpuDiagnosticCanvas extends HTMLCanvasElement {
 }
 
 export interface BoidsGpuConditions {
-  /** `?simulationRenderer=gpu` is present. */
+  /** `?simulationRenderer=cpu` is absent. */
   requested: boolean;
   desktop: boolean;
   floatTargets: boolean;

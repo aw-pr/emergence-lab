@@ -1362,7 +1362,11 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly grayScott: GpuGrayScottSimulation | null;
   private readonly sandpile: GpuSandpileSimulation | null;
   private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
-  /** Boids steps on the GPU only on request, on the desktop tier, with float render targets. */
+  /**
+   * Boids steps on the GPU on the desktop tier with float render targets,
+   * unless `?simulationRenderer=cpu` is present or the backend was built with
+   * `boidsOnCpu`.
+   */
   private readonly boids: GpuBoidsSimulation | null;
   private boidsKernel: SimKernel | null = null;
   private boidsHeld = false;
@@ -1420,7 +1424,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private bloomWidth = 0;
   private bloomHeight = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options: WebGLRendererOptions = {}) {
     const gl = canvas.getContext("webgl2", {
       alpha: false,
       antialias: false,
@@ -1457,7 +1461,8 @@ export class WebGLRendererBackend implements RendererBackend {
     this.sandpile = floatTargets ? createGpuSandpile(gl, this.quadBuffer) : null;
     this.boids =
       floatTargets &&
-      simulationRendererOverrideFromUrl() === "gpu" &&
+      !this.forceCpuSimulation &&
+      !options.boidsOnCpu &&
       detectDeviceTier() === "desktop"
         ? createGpuBoids(gl, this.quadBuffer)
         : null;
@@ -3328,15 +3333,21 @@ export class WebGLRendererBackend implements RendererBackend {
   }
 }
 
+export interface WebGLRendererOptions {
+  /** Keep Boids on its CPU kernel, for one-shot stills drawn from the kernel's own state. */
+  boidsOnCpu?: boolean;
+}
+
 export function createWebGLRendererBackend(
   canvas: HTMLCanvasElement,
+  options: WebGLRendererOptions = {},
 ): WebGLRendererBackend | null {
   const probe = document.createElement("canvas");
   if (!probe.getContext("webgl2")) {
     console.warn("WebGL2 renderer unavailable; falling back to Canvas 2D.");
     return null;
   }
-  return new WebGLRendererBackend(canvas);
+  return new WebGLRendererBackend(canvas, options);
 }
 
 function textureFormatFor(
@@ -3596,12 +3607,12 @@ function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
 }
 
 /**
- * `?simulationRenderer=cpu` keeps GPU-capable field simulations on their CPU
- * kernel (reported as `data-simulation-renderer="cpu-kernel"`), for A/B timing
- * and for evidence runs that read the kernel's own state.
- * `?simulationRenderer=gpu` opts Boids into GPU stepping on the desktop tier
- * and changes nothing else. Read once when the backend is built; inert when
- * absent, and any other value is ignored.
+ * `?simulationRenderer=cpu` keeps GPU-capable simulations, Boids included, on
+ * their CPU kernel (field simulations report
+ * `data-simulation-renderer="cpu-kernel"`), for A/B timing and for evidence
+ * runs that read the kernel's own state. Boids steps on the GPU by default on
+ * the desktop tier, so `?simulationRenderer=gpu` is the same as no parameter.
+ * Read once when the backend is built; any other value is ignored.
  */
 function simulationRendererOverrideFromUrl(): "cpu" | "gpu" | null {
   if (typeof window === "undefined") return null;

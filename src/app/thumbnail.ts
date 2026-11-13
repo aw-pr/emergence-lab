@@ -63,8 +63,10 @@ function acquireBackend(width: number, height: number): RendererBackend {
     sharedCanvas.width = width;
     sharedCanvas.height = height;
     sharedBackend?.destroy();
+    // The still is stepped on the CPU kernel and drawn from it; Boids' GPU
+    // engine would otherwise take the flock over at the draw.
     sharedBackend =
-      createWebGLRendererBackend(sharedCanvas) ??
+      createWebGLRendererBackend(sharedCanvas, { boidsOnCpu: true }) ??
       new CanvasRendererBackend(sharedCanvas);
     sharedWidth = width;
     sharedHeight = height;
