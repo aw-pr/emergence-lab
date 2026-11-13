@@ -408,3 +408,271 @@ The base kernel, served from commit `b133231e843cb65938a4e40f48e79229642d8fc7` i
 Exact scripts, commands/exits, raw readings, all six timing runs, rejected-variant readings, source hashes, browser setup observations and frames are retained under `e2e/artifacts/153-boids-unbiased-neighbours/` (untracked). Entry points are `commands.json`, `measure.cjs`, `browser-check.cjs`, `readings-v1.json`, `benchmarks.json`, `alternatives.json`, `new-browser.json`, `base-browser.json`, `verify.log` and `oracle.log`. Node was v26.5.0. Two preliminary UI captures failed because of the button's accessible name, and one observer capture missed Vite's cache-busting query; the harnesses were corrected and those failures are recorded in `commands.json`. None was a kernel or WebGL2 failure. The isolated worker server has been stopped.
 
 Worker criteria 1–4 are satisfied; the worker's supplementary evidence supports 5–6. Independent verifier reruns and the verifier's scope/visual judgement remain due. The operator's criterion-8 look on dev remains due. No work was committed, merged, published or promoted; main, labs and the public mirror are untouched.
+
+
+## 2026-11-13 - flow sweep (heading variety that lasts, per device tier)
+
+The operator, 2026-11-13: "I think maybe the large visual and spatial radius destroys the effect a little on smaller screens and can be a bit clunky with that many boids. Run a tuning sweep on it ... some presets for each candidate in the browser I can quickly judge. I like the colourful flowing patterns that keep chaotic as long as possible; by colourful I really mean flocking direction indication. Play around with what I had set before the bigger boids - big boids do look great on a big screen but they feel a bit low res."
+
+Colour in Boids is heading. The WebGL glyph shader (`boidPaletteColour` in `src/app/webglRenderer.ts`) maps each boid's heading onto the cyclic twilight palette and dims boids that oppose the global mean heading. "Colourful" therefore means many headings on screen at once, in coherent flowing patches, kept for minutes: not one shared heading (monochrome), not per-boid random headings (speckle), not tight balls on an empty screen. This sweep searched for that per device tier, on each tier's real compute grid, and hands over a shortlist as an importable presets file. No default, preset, kernel or test was changed.
+
+### Method and instrument
+
+The instrument, its formulas, calibration and limits are in [`data/2026-11-13/boids-flow/INSTRUMENT.md`](data/2026-11-13/boids-flow/INSTRUMENT.md) (method `boids-flow-v1`, script `scripts/sweep-boids-flow.mjs`). In short:
+
+- The real kernel (`.test-build`, compiled from `src/sims/boids/kernel.ts`) runs offline on the tier's measured grid at the app's per-frame step, dt = 1/60: 60 steps per app-second, so 3 app-minutes is 10800 steps. The 144, 152 and 153 harnesses stepped dt = 1, which is why the pre-11-05 defaults read "aligned by step 300" there; at the app's dt the same row reads global order 0.47-0.52 at 20 s.
+- Per sample it reads global order G (1 = one heading), local order L (coherent patches against speckle), heading entropy E, heading domains, coverage, the densest-5% share (tight balls), and median nearest-neighbour spacing in CSS px (fineness). `flowScore = L x E x (1 - G) x coverageTerm x patchTerm`.
+- **Chaos lifetime** (per seed) is the last sample from 5 s on with every `flowScore >= 0.5`; reported in app-seconds at 60 steps a second. `rowScore` is the minimum `flowScore` from 10 s on. Long results rank by worst-seed lifetime, then median.
+- Stages: a desktop pilot (14 rows, 2 seeds, 40 s; long pilot 5 rows, 3 min) to calibrate; a screen per tier (96 Latin-hypercube candidates plus references, seed 0, 40 s); a long stage per tier (top screen rows plus references, seeds 0-2, 3 min); supplementary long rounds that filled two gaps in the long selection; uncontended step timing; then real-renderer captures of the candidates.
+- Captures (`scripts/capture-boids-flow.mjs`, record `captures.json`): each row opened as a preset in headless Chromium under its tier's emulation, with trails 0.93, bloom 0.3 and twilight as shipped, kernel seed and dt pinned by an init script, frames held at 5, 20, 60 and 150 s. At the first target the live kernel matched a fresh kernel stepped the same way bit for bit (`seedCheck` identical) on every row, so the frames are the offline seed runs.
+- Judging: one judge per tier and one skeptic across tiers read the contact sheets, individual frames and the data.
+
+### Measured tier grids
+
+Read from the running app by `node scripts/sweep-boids-flow.mjs probe` (`tiers.json`). The grid is about one cell per CSS px until the preset's cell budget caps it.
+
+| Context | Viewport (CSS) | DPR | Pointer | Tier | Preset | Grid | CSS px per cell | Opening boids | Headless steps/s |
+|---|---|---|---|---|---|---|---|---|---|
+| desktop window | 1280x720 | 2 | fine | desktop | ultra | 1280x720 | 1.00 | 28000 | 31 |
+| MacBook Pro 16 default | 1728x1117 | 2 | fine | desktop | ultra | 1592x1029 (cap) | 1.09 | 28000 | 34 |
+| big screen (the sweep's desktop tier) | 2560x1440 | 1 | fine | desktop | ultra | 1707x960 (cap) | 1.50 | 28000 | 27 |
+| iPad landscape | 1180x820 | 2 | coarse | tablet | balanced | 768x534 | 1.54 | 7000 | 86 |
+| phone portrait | 390x844 | 3 | coarse | phone | balanced | 390x844 | 1.00 | 5000 | 120 |
+
+Today's visual radius of 14 cells is 1.5% of the short side on the desktop grid, 2.6% on the tablet and 3.6% on the phone. A 1280x720 window is 1.78 times denser than the desktop tier at the same count. Desktop is CPU-bound today at 27-34 steps a second; headless tablet and phone rates say nothing about a real device's refresh.
+
+### Searched and not searched
+
+| Axis | desktop (1707x960) | tablet (768x534) | phone (390x844) |
+|---|---|---|---|
+| boidCount (step 250) | 12000-28000 | 4000-12000 | 3000-8000 |
+| visualRadius | 8-32 | 4-20 | 3-16 |
+| separationRadius | visualRadius x 0.25-2.0, clamped 1-32 | same | same |
+| separation | 0.1-0.6 | same | same |
+| alignment | 0.01-0.12 | same | same |
+| cohesion | 0-0.02 | same | same |
+| maxSpeed | 24-40 | same | same |
+| initialFlocks | 0, 6-12 | same | same |
+
+Runs: screens of 101, 103 and 103 rows (9.5, 3.0 and 1.7 minutes on 10 workers); long stages of 13, 15 and 15 rows (11.8, 3.1 and 2.3 minutes); six supplementary long rounds of 2-6 rows, 717 s in all (`rows/<tier>-long-extra*.json`), which covered screen finalists the long selection dropped through its contended-cost filter or its fineness cut-off, each tier's best recipe on the other grids, and alignment 0.015 variants. Every Fine schools row comes from these rounds. 37 capture rows (desktop 10, desktop720 8, tablet 9, phone 10).
+
+Not searched: point size below 4 (the schema minimum; the glyph is 6 CSS px on the desktop and tablet grids whatever the params) and finer resolution presets; the palette and the 35% dimming of opposed boids; kernel constants (72 neighbour candidates, minimum speed 0.7 x `maxSpeed`, wander 0.05); obstacles; 120 Hz stepping; the 1280x720 desktop grid offline (captured only); more than 3 seeds; anything past 3 minutes.
+
+### Pilot (desktop, seeds 0 / 1)
+
+Subset of the pilot in INSTRUMENT.md (`pilot-desktop.json`, `pilot-long-desktop.json`). Lifetimes are app-seconds.
+
+| Row | What | G at 20 s | G at 40 s | rowScore median | Lifetime, 40 s screen, median (min) | Lifetime, 3 min long pilot | NN CSS px |
+|---|---|---|---|---|---|---|---|
+| `a-current` | current defaults 28000 / 8 flocks / radii 14 and 27 | 0.15 / 0.60 | 0.56 / 0.59 | 0.17 | 15 (10) | 20 / 10 | 7.37 |
+| `c-scatter` | shipped preset Scatter | 0.11 / 0.02 | 0.07 / 0.09 | 0.80 | 40 (40) | 60 / 150 | 9.38 |
+| `j-current-12k` | current radii at 12000 boids | 0.31 / 0.43 | 0.22 / 0.89 | 0.32 | 25 (10) | 40 / 10 | 9.55 |
+| `b-pre1105` | pre-2026-11-05 defaults 17777 / 6 / 25 and 8 | 0.47 / 0.52 | 0.67 / 0.71 | 0.01 | 0 (0) | - | 2.79 |
+| `b-pre1105-dt1` | the same stepped at dt 1, as 144/152 did | 0.99 / 0.99 | 0.99 / 0.99 | 0.00 | 0 (0) | - | 7.07 |
+| `g-pre1105-align03` | pre-11-05 with alignment 0.03 | 0.13 / 0.21 | 0.09 / 0.27 | 0.08 | 0 (0) | 0 / 0 | 2.72 |
+| `h-small-radius` | 28000, visual 8, separation 4 | 0.10 / 0.38 | 0.17 / 0.37 | 0.10 | 0 (0) | - | 3.02 |
+| `d-rejected152` | 152 finalist the operator rejected | 0.62 / 0.90 | 0.62 / 0.91 | 0.00 | 0 (0) | - | 0.63 |
+| `e-speckle` | alignment 0, cohesion 0 | 0.01 / 0.01 | 0.00 / 0.01 | 0.00 | 5 (5) | - | 6.84 |
+
+Every pilot row collapsed to one heading inside 3 minutes. Today's defaults hold the liked look for 10-20 s and are monochrome (G 0.99) from 90 s. The rejected looks (tight balls, speckle, dt-1 monochrome) all score 0, which is the calibration check.
+
+### Top long-stage rows per tier (3 seeds, 3 app-minutes)
+
+Lifetime is the instrument's chaos lifetime in app-seconds at 60 steps a second. "ms/step, contended" is the median kernel step on 10 worker threads, from the row's own result file, and only ranks rows within a file; "uncontended" is one process, full step including the raster pass, at steps 300-600 (opening) and 1800-2400 (30-40 s), and is the cost to quote. Bold rows are on the shortlist; `ref-current` is today's opening.
+
+**Desktop** (1707x960; default uncontended 21.0 / 19.2 ms)
+
+| Row (file) | Boids | Flocks | Visual / sep radius | Speed | Align | Cohesion | Sep | rowScore | Lifetime worst / median (per seed) | NN CSS px | ms/step contended | Uncontended opening / steady |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `x-loose-20k-sr12` (long-extra), Loose drift | 20000 | 11 | 10 / 12 | 32 | 0.015 | 0.0139 | 0.207 | 0.049 | 75 / 90 (75, 105, 90) | 9.07 | 8.65 | 11.0 / 13.0 |
+| `ref-scatter` (long), Scatter | 17777 | 8 | 24 / 10 | 26 | 0.03 | 0.004 | 0.5 | 0.208 | 60 / 135 (60, 150, 135) | 11.69 | 22.92 | 20.2 / 20.1 |
+| **`d-vr5-sr8-a015-28k` (long-extra3), Fine schools** | 28000 | 9 | 5 / 8 | 24 | 0.015 | 0.0179 | 0.191 | 0.346 | 60 / 75 (60, 75, 135) | 6.85 | 8.8 | 12.8 / 12.2 |
+| `n12500_f11_vr10_sr16_...` (long) | 12500 | 11 | 10 / 16 | 32 | 0.015 | 0.0139 | 0.207 | 0.003 | 60 / 75 (75, 90, 60) | 13.42 | 3.92 | - |
+| `x-fine-vr9-sr8-a04` (long-extra), Twelve clumps | 22500 | 12 | 9 / 8 | 27 | 0.04 | 0.0012 | 0.123 | 0.048 | 60 / 60 (60, 60, 75) | 7.52 | 13.34 | 17.5 / 15.9 |
+| **`n27500_f6_vr15_sr17_...` (long), Current radius, weak alignment** | 27500 | 6 | 15 / 17 | 27 | 0.022 | 0.0089 | 0.197 | 0.004 | 45 / 105 (45, 105, 135) | 9.70 | 23.06 | 25.1 / 21.2 |
+| `d-loose-28k-sr12` (long-extra3) | 28000 | 11 | 10 / 12 | 32 | 0.015 | 0.0139 | 0.207 | 0.228 | 45 / 90 (90, 165, 45) | 7.88 | 13.43 | - |
+| `n18500_f10_vr9_sr11_...` (long) | 18500 | 10 | 9 / 11 | 25 | 0.099 | 0.0036 | 0.239 | 0.001 | 45 / 60 (45, 60, 60) | 11.94 | 6.65 | - |
+| **`n12500_f11_vr10_sr11_...` (long), Fast, eleven flocks** | 12500 | 11 | 10 / 11 | 40 | 0.061 | 0.0091 | 0.339 | 0.043 | 30 / 30 (60, 30, 30) | 12.60 | 4.13 | 6.8 / 7.0 |
+| **`ref-current` (long), today** | 28000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | 0.000 | 10 / 30 (30, 10, 30) | 7.59 | 20.42 | 21.0 / 19.2 |
+
+**Tablet** (768x534; default uncontended 5.0 / 4.8 ms)
+
+| Row (file) | Boids | Flocks | Visual / sep radius | Speed | Align | Cohesion | Sep | rowScore | Lifetime worst / median (per seed) | NN CSS px | ms/step contended | Uncontended opening / steady |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **`r-vr5-sr8-a015` (long-extra2), Fine schools** | 9750 | 9 | 5 / 8 | 24 | 0.015 | 0.0179 | 0.191 | 0.004 | 60 / 60 (90, 60, 60) | 6.46 | 3.05 | 4.8 / 4.3 |
+| `n9750_f9_vr5_sr8_..._a0.031` (long) | 9750 | 9 | 5 / 8 | 24 | 0.031 | 0.0179 | 0.191 | 0.003 | 45 / 60 (45, 60, 60) | 6.91 | 3.11 | - |
+| `n6000_f6_vr7_sr8_...` (long), Six flocks lean | 6000 | 6 | 7 / 8 | 30 | 0.044 | 0.0066 | 0.344 | 0.001 | 30 / 30 (30, 30, 45) | 9.45 | 1.84 | 2.9 / 2.6 |
+| `r-rel1pc-9750` (long-extra2), Loose drift scaled | 9750 | 11 | 6 / 7 | 32 | 0.015 | 0.0139 | 0.207 | 0.002 | 20 / 30 (20, 30, 45) | 5.89 | 3.44 | 6.8 / 4.6 |
+| `x-vr8-sr9` (long-extra) | 9500 | 8 | 8 / 9 | 24 | 0.065 | 0.014 | 0.12 | 0.001 | 20 / 30 (60, 30, 20) | 7.30 | 4.71 | - |
+| `ref-scatter` (long), Scatter at desktop density | 4450 | 8 | 24 / 10 | 26 | 0.03 | 0.004 | 0.5 | 0.000 | 20 / 30 (30, 20, 30) | 13.42 | 4.09 | 4.9 / 5.1 |
+| **`ref-current` (long), today** | 7000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | 0.000 | 10 / 10 (20, 10, 10) | 7.83 | 4.08 | 5.0 / 4.8 |
+| `n9000_f10_vr4_sr5_...` (long), Tiny radius | 9000 | 10 | 4 / 5 | 29 | 0.11 | 0.0021 | 0.247 | 0.005 | 0 / 0 (opens clumpy) | 5.47 | 2.81 | 6.7 / 3.8 |
+
+**Phone** (390x844; default uncontended 3.3 / 3.2 ms)
+
+| Row (file) | Boids | Flocks | Visual / sep radius | Speed | Align | Cohesion | Sep | rowScore | Lifetime worst / median (per seed) | NN CSS px | ms/step contended | Uncontended opening / steady |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **`r-vr5-sr9-a015` (long-extra2), Fine schools** | 7750 | 9 | 5 / 9 | 26 | 0.015 | 0.0181 | 0.326 | 0.003 | 30 / 30 (45, 30, 30) | 4.93 | 1.88 | 3.0 / 2.7 |
+| `n5000_f9_vr9_sr12_...` (long), Lean drift | 5000 | 9 | 9 / 12 | 34 | 0.011 | 0.0152 | 0.435 | 0.001 | 20 / 30 (20, 45, 30) | 7.27 | 1.69 | 2.3 / 2.3 |
+| `n7750_f9_vr5_sr9_..._a0.035` (long) | 7750 | 9 | 5 / 9 | 26 | 0.035 | 0.0181 | 0.326 | 0.002 | 20 / 20 (30, 20, 20) | 4.97 | 1.95 | - |
+| `n6500_f7_vr7_sr7_...` (long) | 6500 | 7 | 7 / 7 | 32 | 0.016 | 0.0113 | 0.545 | 0.001 | 20 / 20 (20, 20, 30) | 5.78 | 2.12 | - |
+| `x-vr15-sr17` (long-extra), Current radius, weak alignment | 5500 | 6 | 15 / 17 | 27 | 0.022 | 0.0089 | 0.197 | 0.000 | 20 / 20 (20, 20, 30) | 6.92 | 3.61 | 4.2 / 4.2 |
+| `ref-scatter` (long), Scatter at desktop density | 3550 | 8 | 24 / 10 | 26 | 0.03 | 0.004 | 0.5 | 0.000 | 20 / 20 (20, 20, 20) | 8.95 | 3.25 | 4.0 / 4.0 |
+| `n8000_f6_vr3_sr5_...` (long), Tiny radius | 8000 | 6 | 3 / 5 | 31 | 0.013 | 0.0115 | 0.579 | 0.006 | 10 / 20 (20, 10, 20) | 3.15 | 1.75 | 2.8 / 2.4 |
+| **`n5000_f10_vr13_sr17_...` (long), Wide swirl** | 5000 | 10 | 13 / 17 | 26 | 0.075 | 0.0139 | 0.319 | 0.248 | 10 / 10 (10, 10, 10) | 6.25 | 2.50 | 3.1 / 3.0 |
+| **`ref-current` (long), today** | 5000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | 0.000 | 10 / 10 (10, 10, 10) | 5.26 | 2.60 | 3.3 / 3.2 |
+
+The pre-11-05 references come from the screen stage only (one seed, 40 s): lifetime 0 on every tier because they open as clumps; global order at 40 s 0.67 (desktop), 0.96 (tablet), 0.97 (phone); uncontended 20.8 / 21.2, 5.5 / 5.2 and 4.3 / 4.1 ms.
+
+Wide swirl's 10 s lifetime is the patch term at work: it keeps global order at or under 0.32 for the full 3 minutes on all three seeds, but in 5-9 broad regions, under the 10 the term asks for.
+
+### What the data says matters
+
+1. **Alignment, on every tier.** Rows still multi-heading at 40 s had median alignment 0.045-0.062; collapsed rows 0.067-0.074. Cutting alignment on the same row moved the worst seed from 30 to 60 s on desktop (0.076 to 0.04), 45 to 60 s on tablet (0.031 to 0.015) and 20 to 30 s on phone (0.035 to 0.015).
+2. **A separation radius above the visual radius speeds the collapse.** On desktop the median ratio was 0.87 in rows that held and 1.19 in rows that collapsed. The kernel applies separation only to neighbours inside the visual radius and sums the push, so today's 27 against 14 pushes every visible neighbour hard. That gives the even, coarse 7.6 CSS px lattice that alignment then sweeps into one heading.
+3. **Smaller radii on smaller grids.** On tablet and phone, rows that held had visual radius 8-10 against 10-13 for rows that collapsed, and 3.6-4.7 boids within a visual radius against 5-8. More flocks (9-10 against 8) and slightly more cohesion (0.011-0.016 against 0.009-0.010) helped there. Speed hardly mattered.
+4. **Keep radii in absolute cells; do not scale them to the screen.** Desktop Loose drift scaled to about 1% of the short side lasts 20 s on tablet and clumps from the start on phone; today's 14 / 27 scaled to the short side lasts 10 s; Scatter's radius 24 lasts 60 s on desktop but 20 s on tablet and phone. Visual radius 5 (0.5%, 0.9% and 1.3% of the short side) holds on all three grids.
+5. **Fineness and persistence need not trade off.** Small radii with light alignment are both finer and longer-lived than today. The pre-11-05 family is finer still inside its clumps but clumpy and collapsing on every grid.
+
+The fineness floor is the grid, not the params: point size 4 is a 2-cell glyph radius, 6 CSS px on the desktop cap grid, whatever the spacing.
+
+### Real-renderer captures
+
+Rows are capture rows (label and params on the left), columns are 5, 20, 60 and 150 s of app time (steps 300, 1200, 3600 and 9000), seed 0 unless the id ends `-seedN`. Under each frame: G, heading entropy H and the offline domain count. Candidate frames are kept beside the sheets in `docs/images/sweeps-2026-11-13/` (`boids-flow-<tier>-<candidate>-t<seconds>s`).
+
+Desktop, 2560x1440 at DPR 1, grid 1707x960 (includes Fine schools seeds 1 and 2):
+
+![Boids flow contact sheet, desktop](../images/sweeps-2026-11-13/boids-flow-sheet-desktop.jpg)
+
+Desktop window, 1280x720 at DPR 2, grid 1280x720 (1.78x denser at the same count; seed 0 only):
+
+![Boids flow contact sheet, 1280x720 desktop window](../images/sweeps-2026-11-13/boids-flow-sheet-desktop720.jpg)
+
+Tablet, 1180x820 touch at DPR 2, grid 768x534 (includes Fine schools seeds 1 and 2):
+
+![Boids flow contact sheet, tablet](../images/sweeps-2026-11-13/boids-flow-sheet-tablet.jpg)
+
+Phone, 390x844 touch at DPR 3, grid 390x844 (includes Fine schools seeds 1 and 2):
+
+![Boids flow contact sheet, phone](../images/sweeps-2026-11-13/boids-flow-sheet-phone.jpg)
+
+### Judges and skeptic
+
+Scores are the judges' 0-10 marks for colour variety / flow / persistence / fineness. Quotes are verbatim, shortened.
+
+| Candidate | Tier judge | Judge, in short | Skeptic | Skeptic's objection, in short |
+|---|---|---|---|---|
+| desktop Fine schools | keep (5/5/6/6) | "the only desktop row still multi-coloured at 150 s on every seed shown"; "dense but tufty and jittery, like fur rather than smooth stream lines"; loses to the default at 20 s | maybe | "Better than today on every axis, but it delays the collapse rather than stopping it." Seed 0 passes G 0.5 at 120 s and reaches 0.85 by 180 s; seeds 1 and 2 drop to 5-10 effective domains after about 90 s. |
+| desktop Fast, eleven flocks | maybe (5/5/6/2) | "fits the 'faster, multiple clumps going different directions' verdict"; "the coarsest row ... works against the low-res complaint" | reject | Seed 2 "0.71 at 60 s and 0.94 by 105 s"; "Coarsest grain (NN 12.6 CSS px)"; on 1280x720 grey monochrome (0.97) at 150 s; "cost is its only merit". |
+| desktop Current radius, weak alignment | maybe (6/7/2/4) | "the best 60 s frame on the sheet"; at 150 s "the same end state as today's default"; "Worth showing only as the 'smallest change' option." | reject | "Costlier than today (21.2-25.1 against 19.2-21.0 ms uncontended)"; "The 60 s patchwork is the only good frame; it is gone by 2.5 min." |
+| desktop Loose drift | reject (4/5/2/4) | "by 150 s almost all maroon"; "coarser than the backed default" | reject | "Coarser than today (NN 9.1 against 7.6 CSS px)"; 2 of 3 seeds collapsing inside 3 min. |
+| desktop Twelve clumps | reject (4/3/3/5) | "too much empty screen and too dim" | reject | none of the seeds holds; blue monochrome on 1280x720. |
+| desktop Scatter | reject (4/5/1/3) | "At 150 s the whole screen is a dim, uniform navy/blue" | reject | "the large-radius regime the operator is complaining about". |
+| tablet Fine schools (3 seeds) | keep (6/6/5/7 seed 0; 5/6/2/7 seeds 1 and 2) | "the best 60 s frame on the tablet sheet"; "The honest claim is about 1-1.5 minutes, against under 1 minute today." | reject | "The multi-colour 60 s frames are mostly the opening ring not yet mixed"; "Every seed passes global order 0.5 at 90-120 s"; "A delay, not a fix." |
+| tablet Loose drift, Six flocks lean, Scatter, Tiny radius | reject | each reaches one heading by 150 s; Tiny radius has "a huge empty dark hole" | reject | agrees on all four. |
+| phone Fine schools (3 seeds) | keep (6/5/5/7 seed 0; 4/5/2-3/7 seeds 1 and 2) | "clearly beats today's default, but by about 150 s it still settles into one heading or bands on two of its three seeds"; "from about 20 s to 60 s roughly half the screen is a dark void" | reject | "Seeds 1 and 2 are already at global order 0.72 and 0.58 at 60 s"; its parameters differ from the shared rule; "On a 120 Hz phone the 30 s lifetime is about 15 s of wall time." |
+| phone Wide swirl | maybe (6/3/7/5) | "broad laminar stripes or a gradient, not chaotic ribbons"; "Stills cannot show whether the bands drift, so judge it live before deciding." | reject | "The only row anywhere whose data survives ... The frames do not survive"; separation radius 17 over visual 13 is "the exact regime behind the 'big coarse grains' complaint"; "worth one in-motion look". |
+| phone Lean drift, Current radius weak alignment, Tiny radius, Scatter | reject | collapse by 60-150 s or read as voids and long hairs | reject | agrees on all four. |
+| today's default (each tier) | reference | best 20 s frames on every sheet; monochrome lattice by 60 s | reference | "from 60 s on every tier it is a monochrome lattice, global order 0.92-0.99". |
+| pre-11-05 defaults (each tier) | reference | desktop: "exactly the 'clumps shrink into tight balls' failure the operator rejected"; tablet and phone: mostly empty screen, one heading | reference | not the look to go back to on these grids. |
+
+Two limits the skeptic raised that no parameter in this search can fix:
+
+- "The 'low res' complaint is mostly glyph size. pointSize is floored at 4 ... A real fix needs a grid or shader change." The best candidates tighten median spacing by 6-17% (phone 6%, desktop 10%, tablet 17%).
+- "The twilight palette's dark sector, plus 35% dimming of boids opposed to the mean heading, makes even diverse fields read as muted with large dark areas." Colour may need a palette or dimming change as well as parameters.
+
+The phone judge also saw a faint ghost of the spawn silhouette in the pre-11-05 phone frames that had not faded by 20 s, possibly trail residue that never reaches black. Not investigated here.
+
+### Shortlist and presets
+
+Presets file: [`data/2026-11-13/boids-flow/boids-flow.presets.json`](data/2026-11-13/boids-flow/boids-flow.presets.json), 12 presets, 11845 bytes. Per tier it holds every candidate a tier judge marked keep or maybe, best first, then today's opening and the pre-11-05 defaults at that tier's count. All share `obstacleLayout` none, `obstacleAmount` 0.5 (schema default, unused), `pointSize` 4, twilight at contrast 1.2, trails 0.93, bloom 0.3, speed 1x, auto-cycle off. Names sort in file order, which is also the Presets page order after import.
+
+| Preset name | Candidate id | Resolution | Boids | Flocks | Visual / sep radius | Speed | Align | Cohesion | Sep | Judge / skeptic |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Boids flow · desktop 1 · Fine schools | `desktop-fine-schools` | ultra | 28000 | 9 | 5 / 8 | 24 | 0.015 | 0.0179 | 0.191 | keep / maybe |
+| Boids flow · desktop 2 · Fast, eleven flocks | `desktop-fast-eleven` | ultra | 12500 | 11 | 10 / 11 | 40 | 0.061 | 0.0091 | 0.339 | maybe / reject |
+| Boids flow · desktop 3 · Current radius, weak alignment | `desktop-current-weak-align` | ultra | 27500 | 6 | 15 / 17 | 27 | 0.022 | 0.0089 | 0.197 | maybe / reject |
+| Boids flow · desktop ref · current default | `desktop-ref-current` | ultra | 28000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | reference |
+| Boids flow · desktop ref · pre-11-05 defaults | `desktop-ref-pre1105` | ultra | 17777 | 6 | 25 / 8 | 36 | 0.09 | 0.011 | 0.22 | reference |
+| Boids flow · phone 1 · Fine schools | `phone-fine-schools` | balanced | 7750 | 9 | 5 / 9 | 26 | 0.015 | 0.0181 | 0.326 | keep / reject |
+| Boids flow · phone 2 · Wide swirl | `phone-wide-swirl` | balanced | 5000 | 10 | 13 / 17 | 26 | 0.075 | 0.0139 | 0.319 | maybe / reject |
+| Boids flow · phone ref · current default | `phone-ref-current` | balanced | 5000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | reference |
+| Boids flow · phone ref · pre-11-05 defaults | `phone-ref-pre1105` | balanced | 3550 | 6 | 25 / 8 | 36 | 0.09 | 0.011 | 0.22 | reference |
+| Boids flow · tablet 1 · Fine schools | `tablet-fine-schools` | balanced | 9750 | 9 | 5 / 8 | 24 | 0.015 | 0.0179 | 0.191 | keep / reject |
+| Boids flow · tablet ref · current default | `tablet-ref-current` | balanced | 7000 | 8 | 14 / 27 | 36 | 0.09 | 0.011 | 0.22 | reference |
+| Boids flow · tablet ref · pre-11-05 defaults | `tablet-ref-pre1105` | balanced | 4450 | 6 | 25 / 8 | 36 | 0.09 | 0.011 | 0.22 | reference |
+
+The analyst's desktop fallback, Loose drift (best desktop worst seed, 75 s, but NN 9.1 CSS px), is not in the file: both its judge and the skeptic rejected it. The three Fine schools seeds per tier are one preset, because a Boids preset cannot carry a seed (below).
+
+**Recommended default per tier: Fine schools.**
+
+| Tier | Why | Main risk |
+|---|---|---|
+| desktop | Worst seed 60 s against 10 s, median 75 against 30; three or four heading colours still on screen at 150 s on all three seeds where today is one grey lattice by 60 s; spacing 6.85 against 7.59 CSS px; 1.6 times cheaper (12.8 / 12.2 against 21.0 / 19.2 ms uncontended; 13-16 against 24-34 ms in the page). | It delays the collapse rather than stopping it: seed 0 reaches G 0.85 by 180 s, and seeds 1 and 2 settle into 3-4 broad muted regions. The 60 s frames are half empty, the texture reads as fur, and it gives up today's 20 s ribbons. On a 1280x720 window only seed 0 was captured (G 0.72 at 150 s). |
+| tablet | Worst seed 60 s against 10 s; 3-4 headings in flowing patches at 60 s on all three seeds where today is monochrome; spacing 6.46 against 7.83 CSS px; 4-10% cheaper per step (4.8 / 4.3 against 5.0 / 4.8 ms) despite 9750 boids against 7000. | Every seed passes G 0.5 at 90-120 s and two of three are one heading at 150 s, so the honest claim is about 1-1.5 minutes against under 1 minute today. About 8% costlier in the first 5 s in the page (6.4 against 5.9 ms). At 120 Hz the wall-clock lifetime halves. |
+| phone | Worst seed 30 s against 10 s; more headings at 20 and 60 s; spacing 4.93 against 5.26 CSS px; 10-16% cheaper (3.0 / 2.7 against 3.3 / 3.2 ms) despite 7750 boids against 5000. | Seeds 1 and 2 are at G 0.72 and 0.58 by 60 s and one heading at 150 s; about half the screen is a dark void from 20 to 60 s; at 120 Hz the 30 s lifetime is about 15 s of wall time. |
+
+Wide swirl stays on the phone list only for an in-motion look: its numbers hold for 3 minutes, its stills read as static stripes.
+
+**The rule that links the tiers.** Fine schools is one recipe in absolute cells: visual radius 5, separation radius 8, alignment 0.015, cohesion about 0.018, speed 24, separation 0.191, 9 flocks, point size 4, with the boid count at about 0.024 boids a cell capped at the schema's 28000. That gives 28000 on desktop (the cap, 0.0171 a cell on 1707x960), 9750 on tablet (0.0238) and 7750 on phone (0.0235). Uncertainty: the phone row that was run uses separation radius 9, separation 0.326 and speed 26; the literal tablet set has not been run on the phone grid. A count that follows the tier, as `tierParamOverridesFor` does today, does not follow a desktop window's grid: 28000 boids on a 1280x720 window is 0.030 a cell, 1.78 times the tested density.
+
+**What opening a preset does on each tier** (read in `src/app/simView.ts`, `src/app/renderer.ts`, `src/app/qualityProfiles.ts`; proved below):
+
+- A loaded snapshot's params replace the factory params, so `tierParamOverridesFor` is not applied: the preset's `boidCount` is used as written on any device. The iPad opened the tablet preset at 9750, not the tablet opening's 7000.
+- The snapshot's resolution replaces the tier default, so the tablet and phone cap to balanced is not applied either. Opened on the iPad, the desktop preset ran at ultra on a 1180x820 grid with 28000 boids: 0.029 boids a cell, 1.7 times the desktop tier's density and 2.4 times the tablet grid's cells. Open each tier's own presets on that device.
+- The grid is the canvas's CSS size (one cell per CSS px for Boids), scaled down to the preset's cell budget, and is fixed at load: a plain resize keeps it. So a preset reproduces its tier's grid only on that tier's canvas size. Tablet presets give 768x534 in a 1180x820 window; in a 1280x720 window they give 853x480 (the same 410k cells, but 16:9 instead of 1.44:1). Phone presets give 390x844 only in a 390x844 viewport, which needs a device-emulation viewport (for example the browser's device toolbar at 390x844) on a desktop. Desktop presets give 1707x960 only on a canvas of at least 1.64M CSS px at 16:9; a 1280x720 window gives 1280x720 and a MacBook Pro 16 default window 1592x1029. Set the window first, then open the preset.
+- A Boids preset cannot carry a seed: `PresetValidator` accepts `seed` only for Physarum and Particle Life. Every open draws a fresh random seed, so the operator will see seeds other than the photographed seed 0, and seed variance is large (desktop Fine schools lasts 60, 75 and 135 s across three seeds).
+- Imported presets live in that browser's storage only. On the iPad the file has to reach the device (Files) and be imported on the Presets page of the same app build. Importing the file twice adds "(copy)" names.
+- Steering is applied once per rendered frame. Today's desktop runs at about 32 fps; a cheaper default will run faster, and a 120 Hz iPad or phone runs about twice as many steps a second as these 60 steps-a-second lifetimes assume.
+
+**Proof.** `PresetValidator.backup(raw, true)` from `.test-build` (the class the Presets page uses) accepted 12 of 12 entries, and `backup(raw, false)` accepted all 12 with no duplicate names or ids. In headless Chromium (`--use-angle=metal --enable-gpu`) against the dev server at `http://localhost:5174` (`data/2026-11-13/boids-flow/boids-flow.presets.proof.json`):
+
+- Presets page, Import presets with this file: "Imported 12 personal presets.", listed in file order (screenshot below). The app's own modules served by Vite (`registry`, `colormap`, `qualityProfiles`, `renderModes`, `savedPresets`, the `trialPresets` recipe) rebuilt all 12 snapshots identical to the file.
+- In a desktop (fine-pointer) browser, each of the 12 presets was opened from the Presets page with its tier's viewport set first. Each Boids view showed all ten row params exactly, the status "Personal preset: <name>", a WebGL2 canvas, and the tier's grid: 1707x960 for desktop presets at 2560x1440, 768x534 for tablet presets at 1180x820, and 390x844 for phone presets at 390x844. In a 1280x720 window the desktop pick gave 1280x720 and the tablet pick 853x480.
+- In iPad emulation (1180x820, DPR 2, touch) after its own import: tablet Fine schools 768x534 with 9750 boids, tablet reference 768x534 with 7000, desktop Fine schools 1180x820 with 28000. In phone emulation (390x844, DPR 3, touch): phone Fine schools and Wide swirl both 390x844, 7750 and 5000 boids. No page errors in any context.
+- Not proved: real Safari or WebKit. The installed WebKit build (revision 2272) does not match what Playwright 1.60 expects (2287), and it was not installed for this run.
+
+![Presets page after importing boids-flow.presets.json](../images/sweeps-2026-11-13/boids-flow-presets-imported.png)
+
+### Reproduction
+
+```sh
+npm run build:test   # the kernel build the sweep runs; the script refuses a stale one
+
+# grids per tier, pilots, row design: see INSTRUMENT.md "Commands"
+node scripts/sweep-boids-flow.mjs probe --base http://localhost:5174
+
+D=docs/sweeps/data/2026-11-13/boids-flow
+for t in desktop tablet phone; do
+  node scripts/sweep-boids-flow.mjs run --tier $t --stage screen --rows $D/rows/$t-screen.json --out $D/$t-screen.json --resume
+done
+for t in desktop tablet phone; do
+  node scripts/sweep-boids-flow.mjs run --tier $t --stage long --rows $D/rows/$t-long.json --out $D/$t-long.json --resume
+done
+# supplementary long rounds
+for f in desktop-long-extra desktop-long-extra3 tablet-long-extra tablet-long-extra2 phone-long-extra phone-long-extra2; do
+  node scripts/sweep-boids-flow.mjs run --tier ${f%%-*} --stage long --rows $D/rows/$f.json --out $D/$f.json --resume
+done
+# uncontended cost, opening and 30-40 s
+for t in desktop tablet phone; do
+  node scripts/sweep-boids-flow.mjs time --tier $t --rows $D/rows/$t-candidates.json --out $D/$t-time-candidates.json
+  node scripts/sweep-boids-flow.mjs time --tier $t --rows $D/rows/$t-candidates.json --warmup 1800 --measure 600 --out $D/$t-time-candidates-steady.json
+done
+
+# real-renderer captures and contact sheets (dev server for this checkout)
+node scripts/capture-boids-flow.mjs --tiers desktop,tablet,phone
+node scripts/capture-boids-flow.mjs --tiers desktop720
+node scripts/capture-boids-flow.mjs --tiers desktop,tablet,phone --rows desktop-fine-schools,tablet-fine-schools,phone-fine-schools --seeds 1,2
+node scripts/capture-boids-flow.mjs --sheets-only --tiers desktop,desktop720,tablet,phone
+
+# presets: build, validate with the real PresetValidator, prove the import end to end
+node $D/boids-flow.presets.mjs build
+node $D/boids-flow.presets.mjs validate
+node $D/boids-flow.presets.mjs prove --base http://localhost:5174
+```
+
+To judge in the browser: Presets, Import presets, choose `boids-flow.presets.json`, type a tier into Search presets, set the window or device emulation to that tier's size, then Open. Each open is a fresh seed.
+
+Evidence: `data/2026-11-13/boids-flow/` (`INSTRUMENT.md`, `tiers.json`, pilot, screen, long and supplementary results, timing files, `candidates.json`, `captures.json`, `boids-flow.presets.json`, `boids-flow.presets.proof.json`), images in `docs/images/sweeps-2026-11-13/`, throwaway frames in `e2e/artifacts/boids-flow/` (git-ignored).
+
+Nothing is promoted: no default, preset, kernel or test changed. The shortlist awaits the operator's look.
