@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Logistic-Mandelbrot cycle interestingness harness (stage 101): renders the
  * sim through the production WebGL path, captures a timed frame sequence at
@@ -160,7 +161,7 @@ async function applyPose(page: Page, canvas: Locator, candidate: Candidate): Pro
     // applying its own, so the parked camera, colour mode and cycle settings
     // are re-applied after it. Selecting it needs the drawer open.
     const handle = page.locator(".sim-view__drawer-handle");
-    await handle.click();
+    await openControls(page);
     const presets = page.getByRole("combobox", { name: "Kernel preset", exact: true });
     await presets.selectOption("bifurcation-curtain");
     await expect(presets).toHaveValue("bifurcation-curtain");

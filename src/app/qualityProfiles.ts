@@ -3,6 +3,11 @@ import type { ResolutionPreset } from "./resolutionPreset.ts";
 
 export interface QualityProfile {
   defaultPreset: ResolutionPreset;
+  /**
+   * Preset to use instead of defaultPreset when the backend steps this sim on
+   * the CPU. Present only when the default assumes GPU-resident stepping.
+   */
+  cpuFallbackPreset?: ResolutionPreset;
   /** Source cells per CSS pixel before the preset cell budget is applied. */
   computeScale: number;
   /** Device-pixel ratio ceiling for the standalone display backing store. */
@@ -79,10 +84,23 @@ const ULTRA_DEFAULTS = new Set([
   "brians-brain",
   "ising-model",
   "kuramoto-oscillators",
-  // The mandala's finest terraces are one cell wide, so a grid below the
-  // canvas resolution loses them to resampling before the eye ever sees them.
-  "abelian-sandpile",
 ]);
+
+/**
+ * Opening param values that depend on the device tier. Boids' neighbour radii
+ * are absolute grid cells, so its count is really a density: the desktop
+ * default over the ultra grid is about 0.017 boids a cell, and the same count
+ * in a tablet or phone grid packs so tightly that no flock forms.
+ */
+export function tierParamOverridesFor(
+  slug: string,
+  tier: DeviceTier = detectDeviceTier(),
+): Record<string, number> {
+  if (slug !== "boids") return {};
+  if (tier === "tablet") return { boidCount: 7000 };
+  if (tier === "phone") return { boidCount: 5000 };
+  return {};
+}
 
 export function qualityProfileFor(
   slug: string,
@@ -95,8 +113,20 @@ export function qualityProfileFor(
   // draw-side density slider keeps the frame cost adjustable without a
   // rebuild, so the densest tier is the right default here.
   if (slug === "logistic-mandelbrot") defaultPreset = "extreme";
-  if (slug === "gray-scott" || slug === "belousov-zhabotinsky" || slug === "physarum") {
+  if (slug === "belousov-zhabotinsky" || slug === "physarum") {
     defaultPreset = "high";
+  }
+  // Gray-Scott steps GPU-resident on WebGL2 with float render targets, where
+  // the ultra grid costs under a millisecond a frame. The CPU kernel needs
+  // about 400 ms a frame there, so it keeps the grid it had before.
+  let cpuFallbackPreset: ResolutionPreset | undefined;
+  if (slug === "gray-scott") {
+    defaultPreset = "ultra";
+    cpuFallbackPreset = "high";
+  }
+  if (slug === "abelian-sandpile") {
+    defaultPreset = "extreme";
+    cpuFallbackPreset = "balanced";
   }
   if (slug === "lenia") defaultPreset = "performance";
 
@@ -110,6 +140,12 @@ export function qualityProfileFor(
   } else if (tier === "phone") {
     defaultPreset = capPreset(defaultPreset, "balanced");
     if (PHONE_FORCED_PERFORMANCE.has(slug)) defaultPreset = "performance";
+  }
+  if (
+    cpuFallbackPreset !== undefined &&
+    PRESET_ORDER.indexOf(cpuFallbackPreset) >= PRESET_ORDER.indexOf(defaultPreset)
+  ) {
+    cpuFallbackPreset = undefined;
   }
 
   let computeScale = mode === "field" || mode === "smooth" ? 1.2 : 1;
@@ -126,6 +162,7 @@ export function qualityProfileFor(
     mode === "orbit3d";
   return {
     defaultPreset,
+    ...(cpuFallbackPreset === undefined ? {} : { cpuFallbackPreset }),
     computeScale,
     displayDprCap: expensiveDisplay ? 3 : 2.5,
     maxDisplayDimension: expensiveDisplay ? 6144 : 4096,

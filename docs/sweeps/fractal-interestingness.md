@@ -1,5 +1,7 @@
 # Shared fractal helper coverage — 2026-10-30
 
+> **Evidence files.** Sweep evidence (ranked JSON, manifests, screenshots) is not kept in the repository; the harness writes it to git-ignored folders. File names below are plain text so they can be matched against a local run.
+
 `src/sims/fractal/detail.ts` is shared implementation, not a simulation. It
 exports zoom/iteration caps, the adaptive iteration-limit calculation and the
 analytic main-cardioid/period-two-bulb interior shortcut. There is no independent
@@ -37,7 +39,7 @@ records both parameter objects and both actual effective limits. If a requested
 doubling is blocked, measure the attainable limit against a lower reference,
 mark the result cap-limited and retain uncertainty. Do not label it a doubling.
 
-The [Mandelbrot result JSON](data/2026-10-30/137/mandelbrot.json) includes seven
+The Mandelbrot result JSON includes seven
 256² comparisons with exact effective doubling and a separate cap probe:
 base 2048 at zoom 417.6 yields **2465**, compared against **1232** at base 815.
 The unattainable requested doubling would require effective 4930/base 4513.

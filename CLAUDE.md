@@ -49,7 +49,20 @@ which hands the operator a shortlist and changes no default. Stages 103
 gated on 103) were queued on 2026-10-06 and have since landed.
 Stages 105-107 (second refinement level, tail refinement default, wider extreme pool) landed and shipped 2026-10-08/09 with exposure 0.5 and edge glow 0.25 as the new defaults.
 
-Gray-Scott stays the priority kernel for future refinement.
+Gray-Scott stays the priority kernel for future refinement. On 2026-11-08 it
+moved to GPU-resident stepping in the WebGL2 backend (`src/app/grayScottGpu.ts`,
+Kuramoto pattern) with the CPU kernel as fallback, and ultra became its desktop
+default grid; the per-sim fallback lives in `qualityProfileFor`'s
+`cpuFallbackPreset`. The same-day interestingness re-run is in
+`docs/sweeps/2026-11-08-operator-rerun.md`.
+
+The abelian sandpile moved to GPU-resident stepping on 2026-11-11 (card 164,
+`5fa81bc62`, `src/app/sandpileGpu.ts`). On 2026-11-12 it began opening at one
+cell per device pixel with the pile fitted to the screen (card 165,
+`88b86dd53`, new `fitPile` param, Extreme grid on desktop, Balanced on the
+tablet tier).
+
+On 2026-11-13 Boids opened with five flocks close in and aimed slightly off the centre (`946357cbc`); a flow sweep and two flocking prototypes found no rule that keeps many headings alive for minutes without losing the look the operator prefers, so the original rule stays. Card 167 made every sim open with the parameters panel minimised and a discreet hint until the tab is first clicked, reversing the 2026-11-08 default. Card 168 (`b7cc927fd`) added a GPU-resident Boids flock (`src/app/boidsGpu.ts`) and, after the operator's side-by-side look ("GPU is better"), card 169 (`0762daf8b`) made it the desktop default; the CPU kernel remains the fallback, the path for tablets, phones, obstacles and large visual radii, and is forced by `?simulationRenderer=cpu`.
 
 ## Worktrees and branches
 
@@ -57,8 +70,17 @@ Gray-Scott stays the priority kernel for future refinement.
 advances from it and `publish` is the mirror boundary. A worktree branched from
 anywhere else inherits a history the rest of the fleet is not working against.
 
-As of 2026-08-23 there are no long-lived feature branches and no worktrees
-beyond the primary one. Every parallel line is closed:
+As of 2026-11-12 the only long-lived line besides `dev`, `main` and `publish`
+is `parked/logistic-mandelbrot-zoom`, checked out in `../emergence-lab-zoom-parked`
+and backed up to origin; it and its worktree stay until the operator says
+otherwise. Autometta cuts a transient `../emergence-lab-run-<stage>` worktree on
+`autometta/<stage>` for a stage in flight and leaves failed attempts on
+`wip/<stage>-attempt-N`; those go once the stage lands. `autometta/state` is the
+tick's snapshot ref, not a line of work. The branches and worktrees that had
+piled up were pruned on 2026-11-12: zoom-arc attempts the parked branch does not
+contain are kept as `archive/<branch name>` tags on origin.
+
+Every other parallel line is closed:
 
 - `feat/logistic-mandelbrot-hybrid-surface` — the parked surface experiment.
   Rejected on visual review 2026-07-20 (sawtooth silhouette, no sheet-to-cloud
@@ -93,8 +115,8 @@ code work begins.
 ## Commit discipline
 
 Atomic commits, one logical change each. Author identity tracks the model
-that wrote the change (`Claude Opus 4.7 <claude-opus-4-7@local>`,
-`Codex GPT-5 <codex-gpt-5@local>`, etc.); committer stays the human user.
+that wrote the change (for example `Claude Opus 5.5 <claude-opus-5-5@local>` or
+`GPT-6.1 Sol <gpt-6-1-sol@local>`); committer stays the human user.
 Verify gate `npm run verify` green before any commit lands on `main`. See
 `.cursor/rules/git-strategy.mdc`.
 
@@ -110,7 +132,8 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.0.1)
+- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.3.0)
 - `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
-- `state/handoffs/README.md` — structured handoff envelope
+- `state/handoffs/README.md` — structured handoff envelope (private working
+  tree only; `state/` is not published)
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks

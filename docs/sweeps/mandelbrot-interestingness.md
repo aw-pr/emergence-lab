@@ -1,5 +1,7 @@
 # Mandelbrot boundary interestingness sweep — 2026-10-30
 
+> **Evidence files.** Sweep evidence (ranked JSON, manifests, screenshots) is not kept in the repository; the harness writes it to git-ignored folders. File names below are plain text so they can be matched against a local run.
+
 **Research result: no promotion proposed.** The worker completed 48 coarse and
 24 refined views, all four current references, static calibration, exact numeric
 replay and three distinct-region evidence finalists. The strongest fine view
@@ -44,14 +46,14 @@ score zero and cannot be promoted. This run has no such output.
 
 ## Search coverage and pre-measurement declarations
 
-The [coarse manifest](data/2026-10-30/137/manifest-coarse.json) was written before
-coarse measurement. Its [48-view results](data/2026-10-30/137/coarse-results.json)
+The coarse manifest was written before
+coarse measurement. Its 48-view results
 were used to choose three refinement centres. The
-[refined manifest](data/2026-10-30/137/manifest-refined.json) was written before
+refined manifest was written before
 measuring the final declared list. Exact full parameters, deterministic settings,
 reference provenance, prior ranges, source hashes, iteration policy and final
 presentation settings are retained in the
-[complete ranked result JSON](data/2026-10-30/137/mandelbrot.json). These files are
+complete ranked result JSON. These files are
 portable evidence; scratch thumbnails and logs under `e2e/artifacts/` are not the
 only record.
 
@@ -104,7 +106,7 @@ Mandelbrot discovery. Their definitions are preserved in the frozen oracle.
 ## Ranked candidates (128²)
 
 Full descending rankings and parameters for every one of the 72 views are in
-the linked result JSON. The first 12 are below; C denotes an original coarse
+the result JSON. The first 12 are below; C denotes an original coarse
 view and R a refinement. All use the fixed geometry parameters above.
 
 | rank | phase | centerX | centerY | zoom | score | interior | edge | coarse edge | binary entropy |
@@ -169,7 +171,7 @@ rejected as automatic promotion proposals.
   roughly three quarters of the square field. It is a closer variant of the
   current Seahorse valley, not evidence of a new connectedness class.
 
-These are manual findings from the linked app captures and masks. No hull,
+These are manual findings from the app captures and masks. No hull,
 filament or connectivity classification was inferred from a new numerical
 label. No aesthetic superiority, distributional robustness or mathematical
 membership guarantee is claimed.
@@ -191,13 +193,13 @@ The comparison mask uses the doubled limit shown below.
 
 | evidence row | actual app 1200×900 | CPU escape 256² | CPU membership 256² | CPU comparison membership 256² |
 |---|---|---|---|---|
-| candidate: `centerX-0.765949_centerY-0.0891346_zoom417.6` | [app](../images/sweeps-2026-10-30/137-centerX-0.765949_centerY-0.0891346_zoom417.6-app.png) | [escape field](../images/sweeps-2026-10-30/137-centerX-0.765949_centerY-0.0891346_zoom417.6-field-256.png) | [mask](../images/sweeps-2026-10-30/137-centerX-0.765949_centerY-0.0891346_zoom417.6-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-centerX-0.765949_centerY-0.0891346_zoom417.6-comparison-membership-256.png) |
-| current reference: `137-current-spiral-hub` | [app](../images/sweeps-2026-10-30/137-137-current-spiral-hub-app.png) | [escape field](../images/sweeps-2026-10-30/137-137-current-spiral-hub-field-256.png) | [mask](../images/sweeps-2026-10-30/137-137-current-spiral-hub-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-137-current-spiral-hub-comparison-membership-256.png) |
-| candidate: `centerX-0.14_centerY-0.36_zoom2.2` | [app](../images/sweeps-2026-10-30/137-centerX-0.14_centerY-0.36_zoom2.2-app.png) | [escape field](../images/sweeps-2026-10-30/137-centerX-0.14_centerY-0.36_zoom2.2-field-256.png) | [mask](../images/sweeps-2026-10-30/137-centerX-0.14_centerY-0.36_zoom2.2-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-centerX-0.14_centerY-0.36_zoom2.2-comparison-membership-256.png) |
-| current reference: `137-current-whole-set` | [app](../images/sweeps-2026-10-30/137-137-current-whole-set-app.png) | [escape field](../images/sweeps-2026-10-30/137-137-current-whole-set-field-256.png) | [mask](../images/sweeps-2026-10-30/137-137-current-whole-set-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-137-current-whole-set-comparison-membership-256.png) |
-| candidate: `centerX-0.766666666667_centerY0.070333333333_zoom62.1` | [app](../images/sweeps-2026-10-30/137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-app.png) | [escape field](../images/sweeps-2026-10-30/137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-field-256.png) | [mask](../images/sweeps-2026-10-30/137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-comparison-membership-256.png) |
-| current reference: `137-current-seahorse-valley` | [app](../images/sweeps-2026-10-30/137-137-current-seahorse-valley-app.png) | [escape field](../images/sweeps-2026-10-30/137-137-current-seahorse-valley-field-256.png) | [mask](../images/sweeps-2026-10-30/137-137-current-seahorse-valley-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-137-current-seahorse-valley-comparison-membership-256.png) |
-| current kernel default | [app](../images/sweeps-2026-10-30/137-137-current-default-app.png) | [escape field](../images/sweeps-2026-10-30/137-137-current-default-field-256.png) | [mask](../images/sweeps-2026-10-30/137-137-current-default-membership-256.png) | [comparison mask](../images/sweeps-2026-10-30/137-137-current-default-comparison-membership-256.png) |
+| candidate: `centerX-0.765949_centerY-0.0891346_zoom417.6` | `137-centerX-0.765949_centerY-0.0891346_zoom417.6-app.png` | `137-centerX-0.765949_centerY-0.0891346_zoom417.6-field-256.png` | `137-centerX-0.765949_centerY-0.0891346_zoom417.6-membership-256.png` | `137-centerX-0.765949_centerY-0.0891346_zoom417.6-comparison-membership-256.png` |
+| current reference: `137-current-spiral-hub` | `137-137-current-spiral-hub-app.png` | `137-137-current-spiral-hub-field-256.png` | `137-137-current-spiral-hub-membership-256.png` | `137-137-current-spiral-hub-comparison-membership-256.png` |
+| candidate: `centerX-0.14_centerY-0.36_zoom2.2` | `137-centerX-0.14_centerY-0.36_zoom2.2-app.png` | `137-centerX-0.14_centerY-0.36_zoom2.2-field-256.png` | `137-centerX-0.14_centerY-0.36_zoom2.2-membership-256.png` | `137-centerX-0.14_centerY-0.36_zoom2.2-comparison-membership-256.png` |
+| current reference: `137-current-whole-set` | `137-137-current-whole-set-app.png` | `137-137-current-whole-set-field-256.png` | `137-137-current-whole-set-membership-256.png` | `137-137-current-whole-set-comparison-membership-256.png` |
+| candidate: `centerX-0.766666666667_centerY0.070333333333_zoom62.1` | `137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-app.png` | `137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-field-256.png` | `137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-membership-256.png` | `137-centerX-0.766666666667_centerY0.070333333333_zoom62.1-comparison-membership-256.png` |
+| current reference: `137-current-seahorse-valley` | `137-137-current-seahorse-valley-app.png` | `137-137-current-seahorse-valley-field-256.png` | `137-137-current-seahorse-valley-membership-256.png` | `137-137-current-seahorse-valley-comparison-membership-256.png` |
+| current kernel default | `137-137-current-default-app.png` | `137-137-current-default-field-256.png` | `137-137-current-default-membership-256.png` | `137-137-current-default-comparison-membership-256.png` |
 
 ## Iteration and resolution validation
 
@@ -274,7 +276,7 @@ and exported metrics directly into Chromium. It replays **all 72 candidates and
 four references**, obtaining identical candidate ordering and maximum static
 metric deviation **0**. It also independently checks all current preset params.
 Raw 128² Float32-equivalent fields and their hashes are retained for the seven
-shortlist/reference rows (linked below). Validation resolution is a different
+shortlist/reference rows (listed below). Validation resolution is a different
 experiment, not an exact replay.
 
 Runtime: Chromium 148.0.7778.96, Node v26.5.0, macOS. The Vite server was started
@@ -296,7 +298,7 @@ green. Skips are not passes. New sweep: exit 0,**one executed test**,72/72
 candidates and 4/4 current references, no skipped sweep. Exact replay: exit 0,
 one executed test,76/76 fields. Supplemental diagnostic test: exit 0.
 Full frozen oracle and worktree gate results are recorded in the linked
-[verification record](data/2026-10-30/137/verification.json).
+verification record.
 
 The selected historical browser baseline retains the card's known Gray-Scott
 exact-literal failure before 143: expected score 0.7102674508287455, actual
@@ -329,26 +331,26 @@ operator decision. No default/preset or release change is part of this stage.
 The following exact 128² fields correspond to the replay hashes in the result
 JSON. They are kernel data, not renderer screenshots.
 
-- [`centerX-0.765949_centerY-0.0891346_zoom417.6` raw field](data/2026-10-30/137/centerX-0.765949_centerY-0.0891346_zoom417.6.field-128.json)
-- [`centerX-0.14_centerY-0.36_zoom2.2` raw field](data/2026-10-30/137/centerX-0.14_centerY-0.36_zoom2.2.field-128.json)
-- [`centerX-0.766666666667_centerY0.070333333333_zoom62.1` raw field](data/2026-10-30/137/centerX-0.766666666667_centerY0.070333333333_zoom62.1.field-128.json)
-- [`137-current-default` raw field](data/2026-10-30/137/137-current-default.field-128.json)
-- [`137-current-whole-set` raw field](data/2026-10-30/137/137-current-whole-set.field-128.json)
-- [`137-current-seahorse-valley` raw field](data/2026-10-30/137/137-current-seahorse-valley.field-128.json)
-- [`137-current-spiral-hub` raw field](data/2026-10-30/137/137-current-spiral-hub.field-128.json)
+- `centerX-0.765949_centerY-0.0891346_zoom417.6` raw field
+- `centerX-0.14_centerY-0.36_zoom2.2` raw field
+- `centerX-0.766666666667_centerY0.070333333333_zoom62.1` raw field
+- `137-current-default` raw field
+- `137-current-whole-set` raw field
+- `137-current-seahorse-valley` raw field
+- `137-current-spiral-hub` raw field
 
 These intermediate coarse-stage captures are preserved as exploration only.
 They precede explicitly pinned final presentation settings and are excluded
 from the equal-presentation final comparison above.
 
-- [Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-app](../images/sweeps-2026-10-30/137-centerX-0.14_centerY0.36_zoom2.2-app.png)
-- [Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-field-256](../images/sweeps-2026-10-30/137-centerX-0.14_centerY0.36_zoom2.2-field-256.png)
-- [Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-membership-256](../images/sweeps-2026-10-30/137-centerX-0.14_centerY0.36_zoom2.2-membership-256.png)
-- [Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-app](../images/sweeps-2026-10-30/137-centerX-0.765324_centerY-0.0885096_zoom288-app.png)
-- [Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-field-256](../images/sweeps-2026-10-30/137-centerX-0.765324_centerY-0.0885096_zoom288-field-256.png)
-- [Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-membership-256](../images/sweeps-2026-10-30/137-centerX-0.765324_centerY-0.0885096_zoom288-membership-256.png)
+- Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-app
+- Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-field-256
+- Exploratory 137-centerX-0.14_centerY0.36_zoom2.2-membership-256
+- Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-app
+- Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-field-256
+- Exploratory 137-centerX-0.765324_centerY-0.0885096_zoom288-membership-256
 
 Exploratory coarse raw fields (not additional final shortlist entries):
 
-- [centerX-0.14_centerY0.36_zoom2.2.field-128.json](data/2026-10-30/137/centerX-0.14_centerY0.36_zoom2.2.field-128.json)
-- [centerX-0.765324_centerY-0.0885096_zoom288.field-128.json](data/2026-10-30/137/centerX-0.765324_centerY-0.0885096_zoom288.field-128.json)
+- `centerX-0.14_centerY0.36_zoom2.2.field-128.json`
+- `centerX-0.765324_centerY-0.0885096_zoom288.field-128.json`

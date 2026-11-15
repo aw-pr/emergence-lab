@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const test = require("node:test");
 
 const {
@@ -212,7 +213,7 @@ test("schema defaults use waves regime at gentler pace", () => {
   assert.equal(defaults.F, 0.018);
   assert.equal(defaults.k, 0.0487);
   assert.equal(defaults.dt, 1);
-  assert.equal(defaults.stepsPerFrame, 1);
+  assert.equal(defaults.stepsPerFrame, 3);
 });
 
 test("init creates the expected state shape and readState reference is stable", () => {
@@ -290,6 +291,30 @@ test("init seeds compact V blobs into an otherwise undepleted U field", () => {
     const down = readCell(state, width, centreX, centreY + offset);
     assert.equal(up.u, down.u);
     assert.equal(up.v, down.v);
+  }
+});
+
+// Byte-level pin of the seed so the layout survives being moved, and so a GPU
+// path that uploads the same field can be checked against it.
+test("seed layout is pinned", () => {
+  const expected = [
+    [1, 1, "bfa5538a8f3284f327823c89a6d203566809b93710aad4316466893e4d39b942"],
+    [7, 5, "ee1a99e3b91d2648bdc56c8a9bd531edc67cfcb4e2f1c0534c3c5d0bdf730a27"],
+    [200, 136, "bbf1be43f4df6b4ae53a34a59ce35026ff6c49abdb75f67a2b6c2c1e4d304949"],
+    [384, 384, "94b2ed3ff4e27bc31bbfa18bc3f6cb5c9b3d4018563291c8363ce62d96e65df5"],
+    [1280, 785, "55a00cc98f27204342945f250b4cc342e52a924938a583ceb48b7505dd80e2fe"],
+    [1280, 1280, "84d8551cc054a4d67bc789193eedb7c6c312b4a6cdbe1c11cc2e7e1a99b22f32"],
+  ];
+  for (const [width, height, digest] of expected) {
+    const kernel = new GrayScottKernel();
+    kernel.init(width, height, {});
+    const state = kernel.readState();
+    const bytes = Buffer.from(state.buffer, state.byteOffset, state.byteLength);
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      digest,
+      `${width}x${height}`,
+    );
   }
 });
 

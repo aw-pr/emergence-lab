@@ -1,5 +1,7 @@
 # Markus–Lyapunov interestingness sweep — 2026-10-30
 
+> **Evidence files.** Sweep evidence (ranked JSON, manifests, screenshots) is not kept in the repository; the harness writes it to git-ignored folders. File names below are plain text so they can be matched against a local run.
+
 **Research outcome: no promotion proposed.** Completed 48 coarse and 24 refined views (all six schema sequences), plus both shipped views as current references. The sign-mix score ranks balanced, moderately bounded stable/chaotic splits, but the leaders read dimmer and flatter in the app palette than the shipped Woven boundary and Zircon Zity references. Three evidence finalists are retained, including the rejected score leader. Independent cross-family verification and operator visual review remain separate.
 
 ## Method
@@ -13,7 +15,7 @@ New opt-in method `lyapunov-sign-v1` (`lyapunovSignMetrics` in `e2e/harness/metr
 
 Historical `scoreFrames` outputs and every old config are untouched; the frozen contract's hash check covers the old configs. Each row starts a fresh deterministic kernel: no RNG or seed, no `step` calls, `rotationSpeed` pinned to 0 (rotation is presentation, not new dynamics), 128×128 grid, warmup 300 and sample 700 iterations for every candidate. Raw-channel diagnostics (non-finite, at-ceiling, both-sign, off-plane fractions) are reported on every row and never scored.
 
-Full evidence: [ranked results, manifest, replay, convergence and screenshot settings](data/2026-10-30/140/markus-lyapunov.json), [coarse pre-measurement declaration](data/2026-10-30/140/manifest-coarse.json), [refined pre-measurement declaration](data/2026-10-30/140/manifest-refined.json), [preserved coarse results](data/2026-10-30/140/coarse-results.json), [direct-import replay](data/2026-10-30/140/direct-replay.json). Raw 128² sign maps for each finalist and reference: [c06](data/2026-10-30/140/140-c06.sign-128.json), [c62](data/2026-10-30/140/140-c62.sign-128.json), [c69](data/2026-10-30/140/140-c69.sign-128.json), [Zircon Zity](data/2026-10-30/140/140-current-zircon-zity.sign-128.json), [Woven boundary](data/2026-10-30/140/140-current-woven-boundary.sign-128.json). They store `S`/`C`/`0` per cell, which is lossless for every sign metric.
+Full evidence: ranked results, manifest, replay, convergence and screenshot settings, coarse pre-measurement declaration, refined pre-measurement declaration, preserved coarse results, direct-import replay. Raw 128² sign maps for each finalist and reference: c06, c62, c69, Zircon Zity, Woven boundary. They store `S`/`C`/`0` per cell, which is lossless for every sign metric.
 
 ## Searched and not searched
 
@@ -64,7 +66,7 @@ Both shipped views at their shipped iteration settings, rotation disabled. The k
 
 ## Manual visual interpretation and proposed promotions
 
-**No promotion.** The metric shortlists balanced sign geometry; it does not decide which view looks better. The observations below are manual findings from the linked images, not new numerical classes.
+**No promotion.** The metric shortlists balanced sign geometry; it does not decide which view looks better. The observations below are manual findings from the images, not new numerical classes.
 
 - **140-c06** (AB, 3.48/3.64, zoom 2.8; score leader): in the app palette two broad dark-brown stable bands with thin bright superstable lines cross a blue-black chaotic field. It has the most balanced split, but the stable regions are large and flat, so the picture is coarser and dimmer than either reference. Reject as a preset proposal; the rank reflects sign balance, not richness.
 - **140-c62** (ABB, 3.2933/3.5867, zoom 9): a large smooth stable sweep fills the lower half and a band of fine filigree fills the upper half. Fine structure is present, but contrast is low and most of the frame is a flat dark field. Not proposed.
@@ -82,19 +84,19 @@ Grayscale sign PNGs are 256² CPU fields: white stable, black chaotic, mid grey 
 
 | Candidate app render | Current Zircon Zity (identical presentation) | Current Woven boundary (identical presentation) |
 |---|---|---|
-| ![140-c06 app](../images/sweeps-2026-10-30/140-140-c06-app.png) | ![Zircon Zity app](../images/sweeps-2026-10-30/140-140-current-zircon-zity-app.png) | ![Woven boundary app](../images/sweeps-2026-10-30/140-140-current-woven-boundary-app.png) |
-| ![140-c62 app](../images/sweeps-2026-10-30/140-140-c62-app.png) | ![Zircon Zity app](../images/sweeps-2026-10-30/140-140-current-zircon-zity-app.png) | ![Woven boundary app](../images/sweeps-2026-10-30/140-140-current-woven-boundary-app.png) |
-| ![140-c69 app](../images/sweeps-2026-10-30/140-140-c69-app.png) | ![Zircon Zity app](../images/sweeps-2026-10-30/140-140-current-zircon-zity-app.png) | ![Woven boundary app](../images/sweeps-2026-10-30/140-140-current-woven-boundary-app.png) |
+| `140-140-c06-app.png` | `140-140-current-zircon-zity-app.png` | `140-140-current-woven-boundary-app.png` |
+| `140-140-c62-app.png` | `140-140-current-zircon-zity-app.png` | `140-140-current-woven-boundary-app.png` |
+| `140-140-c69-app.png` | `140-140-current-zircon-zity-app.png` | `140-140-current-woven-boundary-app.png` |
 
 Every retained image:
 
 | ID / role | App render | Sign field 256 | Sign field 256, doubled iterations | Stability magnitude 256 |
 |---|---|---|---|---|
-| 140-c06 (candidate) | [app](../images/sweeps-2026-10-30/140-140-c06-app.png) | [sign](../images/sweeps-2026-10-30/140-140-c06-sign-256.png) | [doubled](../images/sweeps-2026-10-30/140-140-c06-sign-256-doubled.png) | [field](../images/sweeps-2026-10-30/140-140-c06-stability-field-256.png) |
-| 140-c62 (candidate) | [app](../images/sweeps-2026-10-30/140-140-c62-app.png) | [sign](../images/sweeps-2026-10-30/140-140-c62-sign-256.png) | [doubled](../images/sweeps-2026-10-30/140-140-c62-sign-256-doubled.png) | [field](../images/sweeps-2026-10-30/140-140-c62-stability-field-256.png) |
-| 140-c69 (candidate) | [app](../images/sweeps-2026-10-30/140-140-c69-app.png) | [sign](../images/sweeps-2026-10-30/140-140-c69-sign-256.png) | [doubled](../images/sweeps-2026-10-30/140-140-c69-sign-256-doubled.png) | [field](../images/sweeps-2026-10-30/140-140-c69-stability-field-256.png) |
-| 140-current-zircon-zity (current reference) | [app](../images/sweeps-2026-10-30/140-140-current-zircon-zity-app.png) | [sign](../images/sweeps-2026-10-30/140-140-current-zircon-zity-sign-256.png) | [doubled](../images/sweeps-2026-10-30/140-140-current-zircon-zity-sign-256-doubled.png) | [field](../images/sweeps-2026-10-30/140-140-current-zircon-zity-stability-field-256.png) |
-| 140-current-woven-boundary (current reference) | [app](../images/sweeps-2026-10-30/140-140-current-woven-boundary-app.png) | [sign](../images/sweeps-2026-10-30/140-140-current-woven-boundary-sign-256.png) | [doubled](../images/sweeps-2026-10-30/140-140-current-woven-boundary-sign-256-doubled.png) | [field](../images/sweeps-2026-10-30/140-140-current-woven-boundary-stability-field-256.png) |
+| 140-c06 (candidate) | `140-140-c06-app.png` | `140-140-c06-sign-256.png` | `140-140-c06-sign-256-doubled.png` | `140-140-c06-stability-field-256.png` |
+| 140-c62 (candidate) | `140-140-c62-app.png` | `140-140-c62-sign-256.png` | `140-140-c62-sign-256-doubled.png` | `140-140-c62-stability-field-256.png` |
+| 140-c69 (candidate) | `140-140-c69-app.png` | `140-140-c69-sign-256.png` | `140-140-c69-sign-256-doubled.png` | `140-140-c69-stability-field-256.png` |
+| 140-current-zircon-zity (current reference) | `140-140-current-zircon-zity-app.png` | `140-140-current-zircon-zity-sign-256.png` | `140-140-current-zircon-zity-sign-256-doubled.png` | `140-140-current-zircon-zity-stability-field-256.png` |
+| 140-current-woven-boundary (current reference) | `140-140-current-woven-boundary-app.png` | `140-140-current-woven-boundary-sign-256.png` | `140-140-current-woven-boundary-sign-256-doubled.png` | `140-140-current-woven-boundary-stability-field-256.png` |
 
 ## Resolution, iteration and pathology checks
 

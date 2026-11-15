@@ -26,8 +26,10 @@ const HEIGHT = 400;
 // Slow-developing sims need more than the default 48 steps to reach a
 // representative still. Offline generation makes this free.
 const STEPS_BY_SLUG = {
+  "abelian-sandpile": 2000,
   "particle-life": 600,
   "gray-scott": 1100,
+  "cyclic-ca": 1000,
   "diffusion-limited-aggregation": 220,
   // Clustered flocks need time to leave their seeding ring and form streams.
   boids: 300,

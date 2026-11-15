@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Logistic-Mandelbrot packed orbit cloud: integration evidence for stage 103
  * criteria 2-9 (docs/stages/103-logistic-mandelbrot-packed-cells.md).
@@ -647,7 +648,7 @@ test.describe("evidence", () => {
       }
       const { canvas } = await openPacked(page, { origin, params: cloudParams(), preset: "extreme", timeoutMs: 600_000 });
       const handle = page.locator(".sim-view__drawer-handle");
-      await handle.click();
+      await openControls(page);
       const presets = page.getByRole("combobox", { name: "Kernel preset", exact: true });
       await presets.selectOption("bifurcation-curtain");
       await expect(presets).toHaveValue("bifurcation-curtain");

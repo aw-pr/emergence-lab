@@ -26,8 +26,8 @@ without tying it to a particular model.
 ## Commit attribution
 
 The committer is always the human user; the commit *author* identifies the
-model that wrote the change (e.g. `Claude Opus 4.8 <claude-opus-4-8@local>`,
-`Codex GPT-5.3 <codex-gpt-5-3@local>`). This attribution convention is
+model that wrote the change (e.g. `Claude Opus 5.5 <claude-opus-5-5@local>`,
+`GPT-6.1 Sol <gpt-6-1-sol@local>`). This attribution convention is
 unchanged. See the global dev rules and `.cursor/rules/git-strategy.mdc`.
 
 ## History (context only)

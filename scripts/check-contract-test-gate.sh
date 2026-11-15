@@ -50,9 +50,9 @@ extract_block() {
 # Card path declared on the BEGIN marker line (card=<path>), read from stdin.
 card_path_from_marker() {
   awk -v b="$MARKER_BEGIN" '
-    index($0, b) {
+    !done && index($0, b) {
       for (i = 1; i <= NF; i++)
-        if ($i ~ /^card=/) { sub(/^card=/, "", $i); print $i; exit }
+        if ($i ~ /^card=/) { sub(/^card=/, "", $i); print $i; done = 1; break }
     }'
 }
 
@@ -76,6 +76,15 @@ staged_content() {
 
 working_content() {
   cat -- "$1"
+}
+
+# True when the file matches the grep arguments. grep -q would stop at the
+# first match, and under pipefail the reader's SIGPIPE on a file larger than
+# the pipe buffer would then read as no match; grep -c drains the input.
+file_matches() {
+  local reader="$1" path="$2"
+  shift 2
+  "$reader" "$path" | grep -c "$@" >/dev/null
 }
 
 # Every path declared as a "Test file:" line in any stage card on disk,
@@ -179,13 +188,13 @@ EOF
       *) [ -n "$naming_card" ] || continue ;;
     esac
 
-    if "$content" "$f" | grep -q "$MARKER_NONE"; then
-      if "$content" "$f" | grep -q "$MARKER_BEGIN"; then
+    if file_matches "$content" "$f" -- "$MARKER_NONE"; then
+      if file_matches "$content" "$f" -- "$MARKER_BEGIN"; then
         warn "$f: cannot carry both $MARKER_NONE and $MARKER_BEGIN markers"
         violations=$((violations + 1)); continue
       fi
 
-      if ! "$content" "$f" | grep -Eq "^[[:space:]]*#[[:space:]]*$MARKER_NONE[[:space:]]+reason=[^[:space:]]"; then
+      if ! file_matches "$content" "$f" -E -- "^[[:space:]]*#[[:space:]]*$MARKER_NONE[[:space:]]+reason=[^[:space:]]"; then
         warn "$f: $MARKER_NONE marker needs a reason=<text>"
         violations=$((violations + 1)); continue
       fi
@@ -203,7 +212,7 @@ EOF
       continue
     fi
 
-    if "$content" "$f" | grep -q "$MARKER_BEGIN"; then
+    if file_matches "$content" "$f" -- "$MARKER_BEGIN"; then
       card="$("$content" "$f" | card_path_from_marker)"
       if [ -z "$card" ]; then
         warn "$f: $MARKER_BEGIN marker has no card=<path>"

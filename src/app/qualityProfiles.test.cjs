@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   classifyDeviceTier,
   qualityProfileFor,
+  tierParamOverridesFor,
 } = require("../../.test-build/app/qualityProfiles.js");
 
 test("classifyDeviceTier: fine pointer is always desktop", () => {
@@ -50,11 +51,54 @@ test("qualityProfileFor: lenia's performance default is untouched by the tablet 
 test("qualityProfileFor: heavy sims force down to performance on phone even from high", () => {
   const profile = qualityProfileFor("gray-scott", "grid", "phone");
   assert.equal(profile.defaultPreset, "performance");
+  assert.equal(profile.cpuFallbackPreset, undefined);
+});
+
+test("qualityProfileFor: gray-scott defaults to ultra on desktop with a high CPU fallback", () => {
+  const profile = qualityProfileFor("gray-scott", "field", "desktop");
+  assert.equal(profile.defaultPreset, "ultra");
+  assert.equal(profile.cpuFallbackPreset, "high");
+});
+
+test("qualityProfileFor: gray-scott's tablet cap also withdraws the CPU fallback", () => {
+  const profile = qualityProfileFor("gray-scott", "field", "tablet");
+  assert.equal(profile.defaultPreset, "balanced");
+  assert.equal(profile.cpuFallbackPreset, undefined);
+});
+
+test("qualityProfileFor: other sims do not carry a CPU fallback preset", () => {
+  for (const slug of ["boids", "belousov-zhabotinsky", "kuramoto-oscillators", "logistic-mandelbrot"]) {
+    const profile = qualityProfileFor(slug, "field", "desktop");
+    assert.equal(profile.cpuFallbackPreset, undefined, slug);
+  }
 });
 
 test("qualityProfileFor: a balanced-default sim is unaffected by any tier", () => {
   for (const tier of ["desktop", "tablet", "phone"]) {
     const profile = qualityProfileFor("julia-set", "grid", tier);
     assert.equal(profile.defaultPreset, "balanced");
+  }
+});
+
+test("qualityProfileFor: sandpile uses device pixels on desktop and Balanced elsewhere", () => {
+  const desktop = qualityProfileFor("abelian-sandpile", "grid", "desktop");
+  assert.equal(desktop.defaultPreset, "extreme");
+  assert.equal(desktop.cpuFallbackPreset, "balanced");
+  for (const tier of ["tablet", "phone"]) {
+    const profile = qualityProfileFor("abelian-sandpile", "grid", tier);
+    assert.equal(profile.defaultPreset, "balanced");
+    assert.equal(profile.cpuFallbackPreset, undefined);
+  }
+});
+
+test("tierParamOverridesFor: Boids keeps the desktop density on the smaller tablet and phone grids", () => {
+  assert.deepEqual(tierParamOverridesFor("boids", "desktop"), {});
+  assert.deepEqual(tierParamOverridesFor("boids", "tablet"), { boidCount: 7000 });
+  assert.deepEqual(tierParamOverridesFor("boids", "phone"), { boidCount: 5000 });
+});
+
+test("tierParamOverridesFor: other sims take no tier override", () => {
+  for (const tier of ["desktop", "tablet", "phone"]) {
+    assert.deepEqual(tierParamOverridesFor("particle-life", tier), {});
   }
 });

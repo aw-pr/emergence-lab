@@ -1,6 +1,6 @@
 # Emergence lab
 
-![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange) ![Phase: Hone](https://img.shields.io/badge/phase-hone-blue) ![Stack: TypeScript + Vite](https://img.shields.io/badge/stack-TypeScript%20%2B%20Vite-3178c6) ![Renderer: WebGL2](https://img.shields.io/badge/renderer-WebGL2-990000) ![Agents: Claude + Codex](https://img.shields.io/badge/agents-Claude%20%2B%20Codex-7c3aed) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)
+![Node: 22.18+](https://img.shields.io/badge/node-22.18%2B-blue) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green) ![Tests: 442 passing](https://img.shields.io/badge/tests-442%20passing-brightgreen) ![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
 > Many agents following simple local rules exhibit *emergent
 > behaviour*, seen in everything from ecosystems to economies. 
@@ -38,9 +38,38 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Logistic Mandelbrot.** The bifurcation cascade hung off the Mandelbrot set as a curtain.
 - **Clifford-DeJong.** Clifford, De Jong, and Svensson point-map attractors, with live coefficient drift.
 
-Gray-Scott is the priority kernel. The others are calibrated and held.
+Gray-Scott is the priority kernel. Recent tuning has gone into the sandpile
+and Boids as well.
+
+## Defaults and presets
+
+- **Opening view.** Every simulation opens with the parameters panel
+  minimised and the hint "Adjust parameters: arrow tab on the left" until the
+  tab is first clicked.
+- **Grid quality.** Performance, Balanced, High, Ultra and Extreme (Extreme
+  only where a sim opts in). Each sim has its own default: Ultra for most,
+  including Gray-Scott and Boids; Extreme for the sandpile and the
+  logistic-Mandelbrot point cloud; High for Belousov-Zhabotinsky and Physarum;
+  Performance for Lenia. Tablets and phones are capped at Balanced.
+- **Opening configurations.** Gray-Scott opens at three steps per frame,
+  Cyclic CA on Square scrolls, the sandpile on Mandala with the pile fitted to
+  the screen at one cell per device pixel, and Boids with five flocks close in,
+  aimed just off the centre.
+- **Built-in presets.** View > Kernel preset lists 91 named parameter sets
+  across the sims (Gray-Scott's Mitosis, Coral and Worms, the sandpile's
+  Sandstorm and Mandala, Rule 30 and Rule 110 for the elementary automata, and
+  so on).
+- **Your presets.** The Presets section in the sidebar saves the current
+  configuration (parameters, palette, display options, grid quality, speed) in
+  the browser's local storage, up to 200. The gallery's Presets page opens,
+  deletes, exports and imports them as a JSON file. It also lists ten
+  read-only trial presets from the research sweeps under "From the research
+  bench"; save a personal copy to change one.
 
 ## Run it
+
+Needs Node 22.18 or later: the unit tests import TypeScript sources directly
+and rely on Node's built-in type stripping.
 
 ```bash
 npm install
@@ -52,10 +81,19 @@ Open the URL Vite prints, normally `http://localhost:5173/`.
 Checks:
 
 ```bash
-npm run verify   # types, kernel tests, production build
-npm test
+npm run verify   # types, unit tests, production build
+npm test         # unit tests only: 525, of which 83 are opt-in contract tests skipped by default
 npm run build
 ```
+
+The browser suites under `e2e/` run with Playwright (`npx playwright test`,
+which starts its own Vite server on port 5173). Many of them are long sweeps
+or GPU timing checks that expect a desktop browser with nothing else running.
+
+Two URL parameters are useful when comparing paths:
+`?simulationRenderer=cpu` keeps every GPU-capable simulation on its CPU
+kernel, and `?orbit3dSampler=cpu` forces the logistic-Mandelbrot point cloud
+onto its CPU sampler.
 
 ## Publish into the site
 
@@ -114,8 +152,9 @@ For a 3D cloud, `data-orbit3d-build="complete"` and a positive
 `data-orbit3d-points` confirm that the selected path produced a whole cloud.
 The 2D fallback intentionally has neither attribute.
 Boundary detail is an opt-in GPU-only live-build control: at maximum it raises
-the point budget from the unchanged 9.6M extreme ceiling to 16M and spends the
-additional capacity on a 5x5 boundary sub-grid warmed for 20,000 iterations.
+the point budget from the unchanged 9.6M extreme ceiling to 20M (16M from the
+lower grid tiers) and spends the additional capacity on a 5x5 boundary
+sub-grid warmed for 20,000 iterations.
 That depth is deliberate: stage 35 measured boundary-band period mismatch
 falling from 1.71% at 1,500 warmup iterations to 0.25% at 20,000.
 Tail refinement defaults to its maximum, 0.6, on both paths. On the GPU path
@@ -168,6 +207,11 @@ Vite and TypeScript throughout. Kernels are pure deterministic numerics
 with no runtime dependencies. The renderer uses a quality-first WebGL2/GPU
 path, including direct fragment-shader fractals, with Canvas 2D kept as a
 fallback and debug surface.
+Gray-Scott, Kuramoto and the sandpile step GPU-resident in WebGL2 wherever
+float render targets are available, and Boids does the same on desktop. The
+CPU kernels stay as the fallback and the reference: they run Boids on tablets
+and phones, with obstacles or with large visual radii, and they take over if a
+GPU engine fails. There is no WebGPU path.
 Legacy browsers are not a target.
 
 ## Adding a simulation
@@ -190,12 +234,14 @@ emergence-lab/
     sims/<name>/kernel.ts # deterministic kernel
     app/                  # renderer, gallery, controls, presets
   essays/                 # one .md per sim
-  scripts/                # publish, deploy, thumbnail and point-cloud baking
+  scripts/                # publish, deploy, thumbnail, sweep and point-cloud baking
+  e2e/                    # Playwright browser suites and sweep harness
   public/baked/           # machine-local .elpc bakes + index.json (git-ignored)
   docs/
     INTERFACE.md          # the SimKernel contract
     PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
-  state/handoffs/         # autometta worker completion envelopes
+    stages/               # autometta stage cards, one per piece of work
+    sweeps/               # interestingness sweep reports
 ```
 
 ## Version history

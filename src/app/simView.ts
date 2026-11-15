@@ -36,6 +36,7 @@ import {
 
 /** The "build it in the browser" option of the logistic-Mandelbrot `modelSource`. */
 const LIVE_MODEL_SOURCE = "live";
+const CONTROLS_DISCOVERED_KEY = "el:controls-discovered:v1";
 const dismissedCustomObstacleHints = new Set<string>();
 
 interface BoidsObstacleEditor {
@@ -103,7 +104,9 @@ const VIEW_PARAM_KEYS: Readonly<Record<string, readonly string[]>> = {
 import type { ParamDescriptor, SimKernel, SimParams } from "./types.ts";
 import { presetsFor } from "./presets.ts";
 import {
+  channelMappingFor,
   defaultColourOptionsFor,
+  legendChannelsFor,
   sampleColour,
   type ColourMapOptions,
 } from "./colormap.ts";
@@ -123,7 +126,7 @@ import {
   shouldUseSmoothCanvasPresentation,
 } from "./renderModes.ts";
 import { isFractalViewSlug, zoomAroundPoint } from "./fractalView.ts";
-import { qualityProfileFor } from "./qualityProfiles.ts";
+import { qualityProfileFor, tierParamOverridesFor } from "./qualityProfiles.ts";
 
 const FORMULAS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
   "gray-scott": [
@@ -442,6 +445,7 @@ export async function renderSimView(
   const factoryParams: SimParams = {
     ...defaultParamsFromSchema(kernel.paramSchema),
     ...defaultParamOverridesFor(slug),
+    ...tierParamOverridesFor(slug),
     ...(variantDef?.params ?? {}),
   };
   const restored: SimParams = snapshot ? { ...snapshot.params } : restorePersistedParams(
@@ -475,7 +479,11 @@ export async function renderSimView(
     slug,
     kernel.channelCount,
   );
-  let colourOptions: ColourMapOptions = snapshot ? { ...snapshot.colourOptions } : restoreRenderOptions(
+  // Presets saved before the avalanche glow existed carry no field for it.
+  let colourOptions: ColourMapOptions = snapshot ? {
+    ...snapshot.colourOptions,
+    avalancheGlow: snapshot.colourOptions.avalancheGlow ?? false,
+  } : restoreRenderOptions(
     slug,
     factoryColourOptions,
   );
@@ -488,8 +496,9 @@ export async function renderSimView(
   let stepsPerFrame = snapshot?.stepsPerFrame ?? speedProfile.initial;
   const fractal = isFractalSlug(slug);
   const qualityProfile = qualityProfileFor(slug, renderMode);
-  const defaultResolution = qualityProfile.defaultPreset;
-  const resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
+  let defaultResolution = qualityProfile.defaultPreset;
+  const chosenResolution = snapshot?.resolution ?? loadResolution(slug);
+  let resolution = snapshot?.resolution ?? resolveResolution(slug, defaultResolution);
 
   // Sims whose kernel reports run completion (currently DLA) can auto-cycle
   // into a fresh randomised run when they finish. On by default when supported.
@@ -521,6 +530,17 @@ export async function renderSimView(
     autoCycle: initialAutoCycle,
     qualityProfile,
   });
+
+  // A default that assumes GPU-resident stepping is withdrawn once the backend
+  // turns out to step this sim on the CPU; a saved choice is kept as made.
+  const cpuFallbackPreset = qualityProfile.cpuFallbackPreset;
+  if (cpuFallbackPreset !== undefined && !renderer.usesDirectRendering()) {
+    defaultResolution = cpuFallbackPreset;
+    if (chosenResolution == null) {
+      resolution = cpuFallbackPreset;
+      renderer.setResolution(resolution);
+    }
+  }
 
   const obstacleEditor = slug === "boids"
     ? kernel as SimKernel & BoidsObstacleEditor
@@ -627,9 +647,10 @@ export async function renderSimView(
     initialResolution: resolution,
     defaultResolution,
     showResolutionControl: !fractal,
-    showExtremeResolution: slug === "logistic-mandelbrot" || resolution === "extreme",
+    showExtremeResolution: slug === "logistic-mandelbrot" || slug === "abelian-sandpile" || resolution === "extreme",
     showTrailControl: renderMode === "particle",
     showDotSizeControl: !kernel.paramSchema.some((p) => p.key === "pointSize"),
+    showAvalancheGlowControl: channelMappingFor(kernel) === "height",
     showAutoCycleControl: autoCycleSupported,
     initialAutoCycle,
     defaultAutoCycle,
@@ -1415,6 +1436,15 @@ function buildLayout(
   page.className = "sim-view";
 
   const siteChrome = siteOwnsChrome();
+  let controlsDiscovered = false;
+  try {
+    controlsDiscovered = localStorage.getItem(CONTROLS_DISCOVERED_KEY) === "1";
+  } catch { /* Storage may be blocked by the host browser. */ }
+  const controlsHint = controlsDiscovered ? undefined : document.createElement("span");
+  if (controlsHint) {
+    controlsHint.className = "sim-view__controls-hint";
+    controlsHint.textContent = "Adjust parameters: arrow tab on the left";
+  }
 
   const back = document.createElement("a");
   back.className = "sim-view__back";
@@ -1451,6 +1481,7 @@ function buildLayout(
     title.className = "sim-view__title";
     title.textContent = header.name;
     bar.append(back, title);
+    if (controlsHint) bar.appendChild(controlsHint);
 
     if (header.family) {
       const tag = document.createElement("span");
@@ -1547,7 +1578,7 @@ function buildLayout(
   body.appendChild(sidebar);
 
   // Normal layout only (hidden in immersive and on phones, which have their
-  // own reveals). Every view opens with the controls shown.
+  // own reveals). Every view opens with the controls minimised.
   const sidebarTab = document.createElement("button");
   sidebarTab.type = "button";
   sidebarTab.className = "sim-view__sidebar-tab";
@@ -1556,10 +1587,16 @@ function buildLayout(
     sidebarTab.setAttribute("aria-expanded", String(shown));
     sidebarTab.setAttribute("aria-label", shown ? "Hide controls" : "Show controls");
   };
-  showControls(true);
+  showControls(false);
   sidebarTab.addEventListener("click", () => {
     const show = page.classList.contains("sim-view--controls-hidden");
     showControls(show);
+    if (show) {
+      controlsHint?.remove();
+      try {
+        localStorage.setItem(CONTROLS_DISCOVERED_KEY, "1");
+      } catch { /* Removing the hint still lasts for this view. */ }
+    }
     // Focus left on a control inside the panel would hold the hidden panel
     // open through its :focus-within reveal.
     const root = body.getRootNode() as Document | ShadowRoot;
@@ -1567,6 +1604,10 @@ function buildLayout(
     if (!show && focused instanceof HTMLElement && sidebar.contains(focused)) focused.blur();
   });
   body.appendChild(sidebarTab);
+  if (siteChrome && controlsHint) {
+    controlsHint.classList.add("sim-view__controls-hint--pill");
+    body.appendChild(controlsHint);
+  }
 
   // With the controls hidden, resting a fine pointer on the stage's left edge
   // slides them back in over the stage until it leaves (styles.css); the tab
@@ -1987,13 +2028,22 @@ function renderLegend(
   colourOptions: ColourMapOptions,
 ): void {
   container.innerHTML = "";
-  for (let i = 0; i < kernel.channelCount; i += 1) {
+  for (const i of legendChannelsFor(
+    channelMappingFor(kernel),
+    kernel.channelCount,
+    colourOptions,
+  )) {
     const swatch = document.createElement("span");
     swatch.className = "legend__item";
 
     const dot = document.createElement("span");
     dot.className = "legend__dot";
-    dot.style.background = sampleColour(i, kernel.channelCount, colourOptions);
+    dot.style.background = sampleColour(
+      i,
+      kernel.channelCount,
+      colourOptions,
+      channelMappingFor(kernel),
+    );
     swatch.appendChild(dot);
 
     const label = document.createElement("span");

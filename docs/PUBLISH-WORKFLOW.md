@@ -31,9 +31,9 @@ mode. There are three long-lived branches with different audiences:
 The site flow is `feat/* → dev → main`. The public flow is
 `publish → release/* → publish → public`, cherry-picking the publish-safe
 commits from the private line when necessary. Advancing `main` (via
-`git ff-dev-main`) updates the site. Running `git publish` pushes an already
-curated `publish` head. You choose when to do each. Both aliases require a
-local `dev` branch to exist.
+`git ff-dev-main`) updates the site. Pushing an already curated `publish`
+head to the public remote as a PR source opens the public release for review.
+You choose when to do each.
 
 ## The one hard invariant
 
@@ -74,39 +74,38 @@ git switch -c release/<slug> publish
 git cherry-pick <publish-safe-commit>...
 git switch publish
 git merge --ff-only release/<slug>
-git publish                   # push origin publish, then public publish:main
+git push origin publish       # back up the curated head
+git push public publish       # PR source on the public remote (private-file-scanned)
+gh pr create -R aw-pr/emergence-lab --base main --head publish
 git branch -d release/<slug>
 ```
 
-The `git ff-dev-main` alias (advance the site):
+The `git ff-dev-main` alias (advance the site) is set locally per checkout:
 
-1. Refuses if the working tree is dirty.
-2. Fetches `origin` and resolves the default branch (`main`).
-3. Requires a local `dev` branch to exist.
-4. Switches to `main`, `pull --ff-only origin main`, then
-   `merge --ff-only dev` (fails if `dev` is not a descendant of `main`).
-5. Pushes `origin main` — **this is what triggers the Netlify deploy.**
-6. Returns to the branch you started on.
+1. Switches to `main` and runs `merge --ff-only dev` (fails if `dev` is not a
+   descendant of `main`).
+2. Pushes `origin main` — **this is what triggers the Netlify deploy.**
+3. Returns to the branch you started on.
 
-The `git publish` alias (push the curated public mirror):
+It does not fetch or check for a dirty tree first, so pull `main` and commit
+or stash before running it.
 
-1. Refuses if the working tree is dirty.
-2. Requires a local `dev` branch to exist (aborts otherwise).
-3. Switches to `publish`.
-4. Refuses if a configured private-tier file exists at the `publish` head.
-5. Pushes `publish` to the private remote (`origin`, for backup).
-6. Pushes `publish:main` to the public remote (`public`), with the
-   `PUBLISH_GUARD_OK=1` sentinel the pre-push hook requires.
-7. Returns to `dev` on exit.
+The `git publish` alias, set by `scripts/install-guards.sh`, pushes `publish`
+to the private remote (`origin`, for backup) and then pushes `publish:main` to
+the public remote with the `PUBLISH_GUARD_OK=1` sentinel. Under the default PR
+boundary that second push is refused by the pre-push hook, which prints the PR
+recipe above instead; the alias only completes in a repo that has opted into
+`publishguard.boundary direct`.
 
 Do **not** hand-type `git push public main` to publish — it is refused, and
 the forge refuses it too.
 
 The publish boundary is PR-by-default. `public/main` advances only by a
-merge performed on GitHub, where the diff is visible first. `git publish`
-does three things and then stops: back up `publish` to `origin`, push
+merge performed on GitHub, where the diff is visible first. The publish
+flow does three things and then stops: back up `publish` to `origin`, push
 `publish` to the public remote as a PR source (private-file-scanned), and
-open the `publish → main` PR. **Reviewing and merging that PR is yours.**
+open the `publish → main` PR (or let the push update one that is already
+open). **Reviewing and merging that PR is yours.**
 No agent completes it, and there is no environment variable that lets one.
 
 Two gates hold this, deliberately duplicated: the pre-push hook refuses the
@@ -125,8 +124,8 @@ Repo-level opt-out: `git config publishguard.boundary direct`.
   the curated `publish` history.
 - Topic branches (`wip/*`, `tuning-and-visual-fixes`, etc.) — these are
   for `origin` only. The pre-push hook on `public` rejects anything other
-  than the `main` ref.
-- Agent runtime state branches (`phat-controller/state`) — local only.
+  than the `main` ref and the `publish` PR source.
+- Agent runtime state branches (`autometta/state`) — local only.
 - `.publish-guard.local`, `.env*`, the autometta `state/` directory, and
   anything matching the personal patterns. The pre-commit hook enforces
   this at staging time.
@@ -183,8 +182,8 @@ GUARD_PUBLIC_BRANCH='main'
 ```
 
 Set the five `publishguard.*` config keys above. Add the public remote
-and create the local `dev` and `publish` branches (both aliases require
-`dev` to exist):
+and create the local `dev` and `publish` branches (`git ff-dev-main`
+merges from `dev`):
 
 ```sh
 git remote add public git@github.com:PUB_MATCH.git
@@ -207,8 +206,8 @@ in your git config (they're set locally per-checkout in this repo).
 5. Bundle backup taken:
    `git bundle create ~/emergence-lab-history-$(date +%Y%m%d-%H%M%S).bundle --all`.
 
-Then fast-forward the audited release branch onto `publish` and run
-`git publish`.
+Then fast-forward the audited release branch onto `publish` and push it as
+the PR source (see Day-to-day).
 
 ## Site deploy and publish are independent
 
@@ -219,4 +218,5 @@ Then fast-forward the audited release branch onto `publish` and run
   the public mirror should only contain work already deployed from private
   `main`, so it lags or reflects the deployed site and never leads it.
 - **Both**: ordinary case. Push to `main` (site updates), then
-  curate `publish` and run `git publish` when ready (public mirror catches up).
+  curate `publish` and open the publish PR when ready (public mirror catches
+  up once the PR is merged).

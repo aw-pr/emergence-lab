@@ -1,0 +1,3069 @@
+{
+ "base": "92060d523",
+ "defaults": {
+  "abelian-sandpile": {
+   "initialPile": 450000,
+   "toppleThreshold": 4,
+   "grainsPerStep": 32,
+   "topplesPerStep": 120000
+  },
+  "belousov-zhabotinsky": {
+   "diffusionA": 0.18,
+   "diffusionB": 0.08,
+   "diffusionC": 0.035,
+   "feed": 0.02,
+   "kill": 0.02,
+   "stepsPerFrame": 1
+  },
+  "boids": {
+   "obstacleLayout": "none",
+   "obstacleAmount": 0.5,
+   "boidCount": 28000,
+   "initialFlocks": 8,
+   "visualRadius": 14,
+   "separationRadius": 27,
+   "maxSpeed": 36,
+   "alignment": 0.09,
+   "cohesion": 0.011,
+   "separation": 0.22,
+   "pointSize": 4
+  },
+  "brians-brain": {
+   "birthCount": 2,
+   "seedDensity": 0.22,
+   "dyingValue": 0.5
+  },
+  "burning-ship": {
+   "centerX": -1.755,
+   "centerY": -0.03,
+   "zoom": 14,
+   "maxIterations": 260,
+   "autoIterations": true,
+   "palettePhase": 0.1,
+   "cycleSpeed": 0.35
+  },
+  "clifford-dejong": {
+   "map": "clifford",
+   "a": -1.4,
+   "b": 1.6,
+   "c": 1,
+   "d": 0.7,
+   "driftAmount": 0.5,
+   "driftSpeed": 0.5,
+   "pointsPerFrame": 14000,
+   "exposure": 0.035,
+   "fade": 0.995,
+   "colourMode": "speed",
+   "cycleSpeed": 0.02
+  },
+  "cyclic-ca": {
+   "states": 23,
+   "threshold": 1,
+   "neighbourhood": "moore",
+   "stepsPerFrame": 1
+  },
+  "diffusion-limited-aggregation": {
+   "walkersPerStep": 64,
+   "maxWalkSteps": 400,
+   "spawnRadius": 0.05,
+   "stickiness": 0.45,
+   "seedCount": 4,
+   "colourByAge": true
+  },
+  "elementary-cellular-automata": {
+   "rule": 30,
+   "seedMode": 0,
+   "stepsPerFrame": 1
+  },
+  "game-of-life": {
+   "birthMin": 3,
+   "birthMax": 3,
+   "surviveMin": 2,
+   "surviveMax": 3,
+   "seedDensity": 0.28,
+   "sparkRate": 0.1,
+   "ageShading": true
+  },
+  "gray-scott": {
+   "Du": 0.2097,
+   "Dv": 0.105,
+   "F": 0.018,
+   "k": 0.0487,
+   "stencil": "nine-point",
+   "dt": 1,
+   "stepsPerFrame": 3
+  },
+  "ising-model": {
+   "temperature": 2.269,
+   "coupling": 1,
+   "externalField": 0,
+   "sweepsPerStep": 0.35,
+   "initialState": "random"
+  },
+  "julia-set": {
+   "cRe": -0.4,
+   "cIm": 0.6,
+   "centerX": 0,
+   "centerY": 0,
+   "zoom": 1.45,
+   "maxIterations": 180,
+   "autoIterations": true,
+   "palettePhase": 0.38,
+   "cycleSpeed": 0.1
+  },
+  "kuramoto-oscillators": {
+   "coupling": 1.8,
+   "frequencySpread": 0.45,
+   "noise": 0.015,
+   "timestep": 0.045,
+   "couplingMode": "local",
+   "initialPattern": "vortices"
+  },
+  "lenia": {
+   "mu": 0.15,
+   "sigma": 0.017,
+   "muDrift": 0.015,
+   "dt": 0.1,
+   "radius": 8,
+   "stepsPerFrame": 1
+  },
+  "logistic-mandelbrot": {
+   "geometryMode": "cloud",
+   "surfaceOpacity": 0.4,
+   "colourMode": "inside-out",
+   "exposure": 1.3,
+   "edgeGlow": 0,
+   "tailRefinement": 0.6,
+   "boundaryDetail": 1,
+   "pointDensity": 1,
+   "zoomGrowth": 0,
+   "autoRotate": true,
+   "continuousSpin": true,
+   "realAxisSweep": false,
+   "sweepSpeed": 0.1,
+   "cycleSpeed": 0.1,
+   "cycleBands": 4,
+   "cascadeReveal": true,
+   "cascadeDuration": 16.5,
+   "warmupIterations": 1500,
+   "sampleCount": 8,
+   "plottedIterations": 96,
+   "realSliceOnly": false,
+   "modelSource": "live"
+  },
+  "lorenz-attractor": {
+   "attractor": "lorenz",
+   "sigma": 14,
+   "rho": 41.6,
+   "beta": 2.6666667,
+   "stepsPerFrame": 6,
+   "fade": 0.997,
+   "ribbonWidth": 2.1,
+   "colourByHeight": true,
+   "cycleSpeed": 0.05
+  },
+  "mandelbrot": {
+   "centerX": -0.5,
+   "centerY": 0,
+   "zoom": 1,
+   "maxIterations": 128,
+   "autoIterations": true,
+   "palettePhase": 0,
+   "cycleSpeed": 0.1
+  },
+  "markus-lyapunov": {
+   "centerX": 3,
+   "centerY": 3,
+   "zoom": 1,
+   "warmupIterations": 200,
+   "sampleIterations": 500,
+   "sequence": "AB",
+   "rotationSpeed": 6
+  },
+  "particle-life": {
+   "particleCount": 6000,
+   "species": 8,
+   "rmax": 24,
+   "rmin": 12,
+   "forceScale": 140,
+   "friction": 0.97,
+   "matrixBias": 0.35,
+   "pointSize": 3
+  },
+  "physarum": {
+   "agentCount": 100000,
+   "sensorAngle": 22.5,
+   "sensorDistance": 9,
+   "turnSpeed": 22.5,
+   "moveSpeed": 1,
+   "depositAmount": 0.22,
+   "evaporation": 0.9,
+   "stepsPerFrame": 1
+  },
+  "swarmalators": {
+   "particleCount": 384,
+   "A": 1,
+   "B": 18,
+   "J": 1,
+   "K": -0.75,
+   "frequencySpread": 0,
+   "noise": 0,
+   "timestep": 0.05,
+   "seed": 1,
+   "trailPersistence": 0.85,
+   "cameraDrift": 0.5
+  }
+ },
+ "quality": {
+  "abelian-sandpile": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "belousov-zhabotinsky": {
+   "desktop/grid": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "high",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "high",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "boids": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "brians-brain": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "burning-ship": {
+   "desktop/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "clifford-dejong": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "cyclic-ca": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "diffusion-limited-aggregation": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "elementary-cellular-automata": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "game-of-life": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "gray-scott": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "cpuFallbackPreset": "high",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1.25,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "ising-model": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "julia-set": {
+   "desktop/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "kuramoto-oscillators": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "lenia": {
+   "desktop/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "logistic-mandelbrot": {
+   "desktop/grid": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "extreme",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1.5,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "lorenz-attractor": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "mandelbrot": {
+   "desktop/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "markus-lyapunov": {
+   "desktop/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "particle-life": {
+   "desktop/grid": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "ultra",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "ultra",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "physarum": {
+   "desktop/grid": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "high",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "performance",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  },
+  "swarmalators": {
+   "desktop/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "desktop/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "desktop/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "tablet/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "tablet/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/grid": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/field": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/smooth": {
+    "defaultPreset": "balanced",
+    "computeScale": 1.2,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/fractal": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   },
+   "phone/particle": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 2.5,
+    "maxDisplayDimension": 4096,
+    "maxDisplayPixels": 8388608
+   },
+   "phone/orbit3d": {
+    "defaultPreset": "balanced",
+    "computeScale": 1,
+    "displayDprCap": 3,
+    "maxDisplayDimension": 6144,
+    "maxDisplayPixels": 12582912
+   }
+  }
+ },
+ "thumbnails": {
+  "abelian-sandpile.png": "175ad61ea8f6fd35eca15e1e595e9a3a996cc5e803f570589ae012e33a5fd0a0",
+  "belousov-zhabotinsky.png": "72ee5160cf55e88d3ac647f53a629cd236603182961be8c1e7cff473aee55bb8",
+  "boids.png": "f905c00274111e290d64ea63b589d438eab295dcbd32fbe1ead222ee5bc23f96",
+  "brians-brain.png": "731806f656c8cfd0055ebec6ceb441519dc36b5d8f91454674b30ffbe480b296",
+  "burning-ship.png": "1afd0d07be39fa05e82ac84e9d0a4c0c86b3494c7b4faab08f243c0c1faf016a",
+  "clifford-dejong__clifford.png": "b72c402c4f7a68707239f9016c3214786302860b209f79e00f4e7cb29fd67a7b",
+  "clifford-dejong__dejong.png": "587f87fa36410bb5855a4e08675c24b9ac314155239c76f001aab27111a580a0",
+  "clifford-dejong__svensson.png": "727193e8c3d2fe699c0783c0ac0b892948459609e357904915c4163073f5503a",
+  "cyclic-ca.png": "08ccbdc5e06279b48f8ecc7e5f6423cbf9242590f80bc517c74da07661893ae8",
+  "diffusion-limited-aggregation.png": "b122c5b04522035ef23e613341a6a85580f123347626c19f114e35510a430e92",
+  "elementary-cellular-automata.png": "55c3f34686b810cbd626b7bdf7be61f3ef10d22b64f18ace5dfce0e7e272e79d",
+  "game-of-life.png": "e56b26ab33989c321ed7ab590d74d17c92ce77de53e48547c7fe99fcf7425d89",
+  "gray-scott.png": "91f6312243d8f637dac3383cb17e6d18c157e9ad8e4886cb94fff0c6649938f6",
+  "ising-model.png": "66ea592b8a17ff35b7b660bedf4f1649ee5a6bcb8bf31929df08bbae2b0e6d5e",
+  "julia-set.png": "2e58e28bb16301c1c939070c42fd1af491bc76de67d79e317f678070e08bff35",
+  "kuramoto-oscillators.png": "339b13ee7b93d3b1d72926f2a7402a1fb2bd8fa00b76b1be4e0afa21cc1a9c2a",
+  "lenia.png": "ba16d3d7c35401b1e9c2caf3c255ec5584baeef5d4b83adb3b7f9f44daaf179b",
+  "logistic-mandelbrot.png": "4c636ef95c6d7e9129e34c0d6c3f76500f3ef8159e7de5ad5b19dbca67af73ef",
+  "lorenz-attractor__aizawa.png": "d949ac5b29c79b42d6e7b6b12e201a31f2a7de1e24204834a896a04022d248e0",
+  "lorenz-attractor__halvorsen.png": "e17a06c1ebda38a1242f19ff736f7b89eccf08dd1670162c15488dae677c2e85",
+  "lorenz-attractor__lorenz.png": "b54cbc1211462d89754c0c288331b0e48e36cc8d60d6154d7b91ba9156fde3e3",
+  "lorenz-attractor__rossler.png": "a569c25df744b822e118e1801ba10e034d734fad8a48379efc48e3d4eee87f21",
+  "lorenz-attractor__thomas.png": "218bf5ef1b20ec2b484bbd6c3d288fbc7c4adc2ee45e09a8ad0a2011d6ccfad2",
+  "mandelbrot.png": "d10d21d9bd4420bb3ee96aa1b2fbdd9e9b13a7c5b8e33ed8673c88f997f23d1a",
+  "particle-life.png": "a91382f4b72ea49e974617ff12a43f8a4e195215ffee33614a181acfd4b3a8a8",
+  "physarum.png": "9098919cc04310ac7472d67850fba4b4802e7dc5f065878fc0050b84aa68bc57"
+ }
+}

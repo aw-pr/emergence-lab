@@ -305,6 +305,27 @@ code {
   white-space: nowrap;
 }
 
+.sim-view__controls-hint {
+  flex: none;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.sim-view__controls-hint--pill {
+  position: absolute;
+  top: 50%;
+  left: 26px;
+  z-index: 3;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-line-faint);
+  border-radius: var(--radius);
+  background: rgba(4, 9, 17, 0.76);
+  backdrop-filter: blur(10px);
+  transform: translateY(-50%);
+}
+
 .sim-view__about-button {
   display: inline-flex;
   flex: none;
@@ -1053,6 +1074,7 @@ textarea.boids-obstacle-layouts__input {
  * and the stage takes the whole viewport; the sidebar becomes the drawer. */
 .sim-view--immersive .sim-view__bar,
 .sim-view--immersive .sim-view__pills,
+.sim-view--immersive .sim-view__controls-hint,
 .sim-view--immersive .sim-view__sidebar-tab {
   display: none;
 }
@@ -1587,7 +1609,8 @@ details.controls__colour:not([open]) summary {
   .sim-view__bar .sim-view__about-button {
     margin-left: auto;
   }
-  .sim-view__sidebar-tab {
+  .sim-view__sidebar-tab,
+  .sim-view__controls-hint {
     display: none;
   }
 

@@ -1,5 +1,7 @@
 import {
   buildMapper,
+  channelMappingFor,
+  type ChannelMapping,
   type ColourMapOptions,
   type RgbMapper,
 } from "./colormap.ts";
@@ -23,6 +25,7 @@ export class CanvasRendererBackend implements RendererBackend {
   private channelCount = 0;
   private channelRanges: readonly (readonly [number, number])[] = [];
   private colourOptions: ColourMapOptions | null = null;
+  private mapping: ChannelMapping = "composite";
   private gridWidth = 1;
   private gridHeight = 1;
   private displayWidth = 1;
@@ -203,10 +206,12 @@ export class CanvasRendererBackend implements RendererBackend {
     kernel: SimKernel,
     colourOptions: ColourMapOptions | null,
   ): void {
+    const mapping = channelMappingFor(kernel);
     if (
       this.channelCount === kernel.channelCount &&
       this.channelRanges === kernel.channelRanges &&
-      this.colourOptions === colourOptions
+      this.colourOptions === colourOptions &&
+      this.mapping === mapping
     ) {
       return;
     }
@@ -214,10 +219,12 @@ export class CanvasRendererBackend implements RendererBackend {
     this.channelCount = kernel.channelCount;
     this.channelRanges = kernel.channelRanges;
     this.colourOptions = colourOptions;
+    this.mapping = mapping;
     this.mapper = buildMapper(
       kernel.channelCount,
       kernel.channelRanges,
       colourOptions ?? undefined,
+      mapping,
     );
   }
 

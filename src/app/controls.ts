@@ -124,6 +124,8 @@ export interface ControlsOptions {
    * of which does anything.
    */
   showDotSizeControl?: boolean;
+  /** Show the "Avalanche glow" switch (height-mapped sims only). */
+  showAvalancheGlowControl?: boolean;
   /** Show the "Auto-cycle runs" toggle (sims whose kernel reports isComplete()). */
   showAutoCycleControl?: boolean;
   /** Initial auto-cycle state (persisted or per-sim default). */
@@ -167,6 +169,7 @@ export class ControlsPanel {
   private readonly showExtremeResolution: boolean;
   private readonly showTrailControl: boolean;
   private readonly showDotSizeControl: boolean;
+  private readonly showAvalancheGlowControl: boolean;
   private readonly showAutoCycleControl: boolean;
   private readonly defaultAutoCycle: boolean;
   private autoCycle: boolean;
@@ -201,6 +204,7 @@ export class ControlsPanel {
   private colourPresetSelect?: HTMLSelectElement;
   private cycleDirectionSelect?: HTMLSelectElement;
   private invertInput?: HTMLInputElement;
+  private avalancheGlowInput?: HTMLInputElement;
   private readonly colourRangeControls = new Map<
     string,
     {
@@ -230,6 +234,7 @@ export class ControlsPanel {
     this.showExtremeResolution = options.showExtremeResolution ?? false;
     this.showTrailControl = options.showTrailControl ?? false;
     this.showDotSizeControl = options.showDotSizeControl ?? true;
+    this.showAvalancheGlowControl = options.showAvalancheGlowControl ?? false;
     this.showAutoCycleControl = options.showAutoCycleControl ?? false;
     this.defaultAutoCycle = options.defaultAutoCycle ?? false;
     this.autoCycle = options.initialAutoCycle ?? this.defaultAutoCycle;
@@ -775,7 +780,9 @@ export class ControlsPanel {
     for (const option of options) {
       const optEl = document.createElement("option");
       optEl.value = option.value;
-      optEl.textContent = option.label;
+      optEl.textContent = option.value === "extreme" && this.slug === "abelian-sandpile"
+        ? "Extreme (one cell per screen pixel)"
+        : option.label;
       if (option.value === this.resolution) optEl.selected = true;
       select.appendChild(optEl);
     }
@@ -826,6 +833,12 @@ export class ControlsPanel {
           ? { params: this.defaultParams }
           : options.paramPresets.find((candidate) => candidate.id === select.value);
       if (!preset) return;
+      if (select.value === KERNEL_DEFAULT_PRESET && this.slug === "abelian-sandpile") {
+        this.resolution = this.defaultResolution;
+        if (this.resolutionSelect) this.resolutionSelect.value = this.defaultResolution;
+        if (!this.presetSession) saveResolution(this.slug, this.defaultResolution);
+        this.callbacks.onResolutionChange(this.defaultResolution);
+      }
       this.applyParams(preset.params, options.paramSchema);
     });
 
@@ -879,6 +892,17 @@ export class ControlsPanel {
         this.setColourOptions({ ...this.colourOptions, invert });
       }),
     );
+    if (this.showAvalancheGlowControl) {
+      section.appendChild(
+        this.buildColourBooleanControl(
+          "Avalanche glow",
+          this.colourOptions.avalancheGlow,
+          (avalancheGlow) => {
+            this.setColourOptions({ ...this.colourOptions, avalancheGlow });
+          },
+        ),
+      );
+    }
     if (this.showDotSizeControl) {
       section.appendChild(
         this.buildColourRangeControl(
@@ -1062,6 +1086,8 @@ export class ControlsPanel {
     });
     if (labelText === "Invert colours") {
       this.invertInput = input;
+    } else if (labelText === "Avalanche glow") {
+      this.avalancheGlowInput = input;
     }
 
     return wrap;
@@ -1205,6 +1231,9 @@ export class ControlsPanel {
     }
     if (this.invertInput) {
       this.invertInput.checked = this.colourOptions.invert;
+    }
+    if (this.avalancheGlowInput) {
+      this.avalancheGlowInput.checked = this.colourOptions.avalancheGlow;
     }
     this.syncColourRangeControl("Gamma", this.colourOptions.gamma);
     this.syncColourRangeControl("Contrast", this.colourOptions.contrast);

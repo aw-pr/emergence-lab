@@ -63,8 +63,10 @@ function acquireBackend(width: number, height: number): RendererBackend {
     sharedCanvas.width = width;
     sharedCanvas.height = height;
     sharedBackend?.destroy();
+    // The still is stepped on the CPU kernel and drawn from it; Boids' GPU
+    // engine would otherwise take the flock over at the draw.
     sharedBackend =
-      createWebGLRendererBackend(sharedCanvas) ??
+      createWebGLRendererBackend(sharedCanvas, { boidsOnCpu: true }) ??
       new CanvasRendererBackend(sharedCanvas);
     sharedWidth = width;
     sharedHeight = height;
@@ -117,9 +119,19 @@ async function renderThumbnail(
     }
     backend.setGrid(simWidth, simHeight, kernel, renderMode, params);
     kernel.init(simWidth, simHeight, params);
+    // A GPU-resident simulation draws its own state, not readState(), so the
+    // still must be evolved where it is drawn. advanceDirect(0) reports
+    // whether the backend holds that state.
+    const gpuResident =
+      (backend.supportsDirectRendering?.(renderMode, kernel, params) ?? false) &&
+      (backend.advanceDirect?.(0, params) ?? false);
 
     const dt = 1 / 30;
-    if (renderMode === "particle") {
+    if (gpuResident) {
+      for (let i = 0; i < steps; i += 1) {
+        backend.advanceDirect?.(1, params);
+      }
+    } else if (renderMode === "particle") {
       for (let i = 0; i < steps; i += 1) {
         kernel.step(dt);
       }

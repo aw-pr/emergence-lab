@@ -5,7 +5,8 @@
       "initialPile",
       "toppleThreshold",
       "grainsPerStep",
-      "topplesPerStep"
+      "topplesPerStep",
+      "fitPile"
     ],
     "view": []
   },

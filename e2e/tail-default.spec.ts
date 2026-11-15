@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 /**
  * Stage 106: Tail refinement default, persistence migration, CPU cap, cost,
  * and operator evidence against the unchanged tree on port 5174.
@@ -153,7 +154,7 @@ test("default: the maximum is shipped, Reset keeps it, and its build matches the
     });
     expect(descriptor?.default).toBe(0.6);
     expect(descriptor?.max).toBe(0.6);
-    await defaults.page.locator(".sim-view__drawer-handle").click();
+    await openControls(defaults.page);
     await defaults.page.getByRole("button", { name: "Reset to defaults", exact: true }).click();
     await expect(defaults.canvas).toHaveAttribute("data-orbit3d-build", "complete", { timeout: 600_000 });
     expect((await paramSnapshot(defaults.page)).tailRefinement).toBe("0.6");
@@ -241,7 +242,7 @@ test("legacy: returning visitors receive the moved default while explicit choice
     expect(stored).toEqual({ __format: 2, plottedIterations: 95 });
 
     const defaults = await kernelDefaults(oneChoice.page);
-    await oneChoice.page.locator(".sim-view__drawer-handle").click();
+    await openControls(oneChoice.page);
     await oneChoice.page.getByRole("button", { name: "Reset to defaults", exact: true }).click();
     const afterReset = await oneChoice.page.evaluate((slug) => ({
       stored: localStorage.getItem(`el:values:${slug}`),

@@ -1,3 +1,4 @@
+import { openControls } from "./harness/controls.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -11,10 +12,12 @@ mkdirSync(ARTIFACT_DIR, { recursive: true });
 const artifact = (name: string) => `${ARTIFACT_DIR}/${name}`;
 const personal = (page: Page, name: string) => page.locator('[data-preset-source="personal"]').filter({ has: page.getByText(name, { exact: true }) });
 async function library(page: Page) {
+  await openControls(page);
   await page.getByRole("link", { name: "Presets", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Presets", exact: true })).toBeVisible();
 }
 async function save(page: Page, name: string) {
+  await openControls(page);
   await page.getByRole("button", { name: "Save preset", exact: true }).click();
   await page.getByRole("textbox", { name: "Preset name", exact: true }).fill(name);
   await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
@@ -85,6 +88,7 @@ test("150 supplemental: real trial kernel inputs, defaults and lifecycle", async
     const row = TRIALS[slug][0];
     const item = page.locator(`[data-preset-source="trial"][data-preset-slug="${slug}"]`).first();
     await item.getByRole("button", { name: "Open", exact: true }).click();
+    await openControls(page);
     await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
     const actual = await runtime(page);
     for (const [key, value] of Object.entries(row.params)) expect(actual.init.params[key], `${slug}.${key}`).toEqual(value);
@@ -106,6 +110,7 @@ test("150 supplemental: real trial kernel inputs, defaults and lifecycle", async
     expect(await page.evaluate(() => (window as any).presetEvidence.previous.running)).toBe(false);
     expect((await runtime(page)).destroyed).toBe(retained.length * 2 - 1);
     await page.goBack();
+    await openControls(page);
     await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page.getByRole("heading", { name: "Presets", exact: true })).toBeVisible();
@@ -120,9 +125,8 @@ test("150 supplemental: real trial kernel inputs, defaults and lifecycle", async
 test("150 supplemental: full visual configuration, custom Boids field and session isolation", async ({ page }) => {
   await page.goto("/#/presets"); await instrument(page);
   await page.evaluate(() => { location.hash = "#/boids"; });
+  await openControls(page);
   await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
-  const drawer = page.getByRole("button", { name: "Show settings", exact: true });
-  if (await drawer.isVisible()) await drawer.click();
   await setParam(page, "boidCount", 1000);
   await setParam(page, "obstacleLayout", "custom");
   await setRange(page, "Gamma", 1.35);
@@ -142,6 +146,7 @@ test("150 supplemental: full visual configuration, custom Boids field and sessio
   const ordinary = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /^el:(values|render|resolution|custom-obstacles):/.test(key))));
   await library(page);
   await personal(page, "Custom field").getByRole("button", { name: "Open", exact: true }).click();
+  await openControls(page);
   await expect(page.getByRole("button", { name: "Update preset", exact: true })).toBeVisible();
   const actual = await runtime(page);
   for (const key of ["params", "colourOptions", "displayOptions", "resolution", "stepsPerFrame", "autoCycle"]) expect((actual as any)[key], key).toEqual(saved.snapshot[key]);
@@ -151,12 +156,12 @@ test("150 supplemental: full visual configuration, custom Boids field and sessio
   await control(page, "Grid quality").locator("select").selectOption("high");
   await canvas.click({ position: { x: 590, y: 210 } });
   expect(await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /^el:(values|render|resolution|custom-obstacles):/.test(key))))).toEqual(ordinary);
-  const reopenedDrawer = page.getByRole("button", { name: "Show settings", exact: true });
-  if (await reopenedDrawer.isVisible()) await reopenedDrawer.click();
+  await openControls(page);
   await page.getByRole("button", { name: "Reset to defaults", exact: true }).click();
   expect(await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /^el:(values|render|resolution|custom-obstacles):/.test(key))))).toEqual(ordinary);
   await library(page);
   await personal(page, "Custom field").getByRole("button", { name: "Open", exact: true }).click();
+  await openControls(page);
   await expect(page.getByRole("button", { name: "Update preset", exact: true })).toBeVisible();
   expect((await runtime(page)).params).toEqual(saved.snapshot.params);
   writeFileSync(artifact("runtime-custom-field.json"), JSON.stringify({ saved: saved.snapshot, restored: actual }, null, 2));
@@ -170,6 +175,7 @@ test("150 supplemental: concurrent deletion, stale IDs and nonnumeric variant se
   const route = page.url();
   await expect(page.locator('[data-param-key="map"]')).toHaveValue("dejong");
   await expect(page.locator('[data-param-key="colourMode"]')).toHaveValue("angle");
+  await openControls(page);
   const other = await context.newPage(); await other.goto("/#/presets");
   await personal(other, "Variant").getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Update preset", exact: true }).click();
@@ -207,6 +213,7 @@ test("150 supplemental: malformed storage recovery, atomic validation and limits
 
 test("150 supplemental: keyboard dialogs and mobile states", async ({ page }) => {
   await page.goto("/#/game-of-life");
+  await openControls(page);
   const saveButton = page.getByRole("button", { name: "Save preset", exact: true });
   await saveButton.click();
   const name = page.getByRole("textbox", { name: "Preset name", exact: true });
@@ -260,6 +267,7 @@ test("150 supplemental: embedded host chrome, fixed route and hash lifecycle", a
   });
   await expect(page.getByRole("heading", { name: "Presets", exact: true })).toBeVisible();
   await page.locator('[data-preset-source="trial"][data-preset-slug="boids"]').first().getByRole("button", { name: "Open", exact: true }).click();
+  await openControls(page);
   await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Host site" })).toBeVisible();
   await expect(page.getByRole("link", { name: "← Gallery" })).toHaveAttribute("href", "/host-gallery");
@@ -306,9 +314,8 @@ test("150 supplemental: all available models and variants validate without quant
 test("150 supplemental: out-of-range save refusal leaves the live configuration running", async ({ page }) => {
   await page.goto("/#/presets"); await instrument(page);
   await page.evaluate(() => { location.hash = "#/game-of-life"; });
+  await openControls(page);
   await expect(page.getByRole("button", { name: "Save preset", exact: true })).toBeVisible();
-  const drawer = page.getByRole("button", { name: "Show settings", exact: true });
-  if (await drawer.isVisible()) await drawer.click();
   const row = page.locator('[data-param-key="birthMin"]').locator('..');
   await row.getByRole("button", { name: /^Adjust/ }).click();
   await row.locator('.control__tune-field').filter({ has: page.getByText("Max", { exact: true }) }).locator('input').fill('20');

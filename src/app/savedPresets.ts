@@ -140,10 +140,11 @@ export class PresetValidator {
       if (!Number.isInteger(params.seed)) throw new Error("Seed must be an integer.");
     }
     const colour = record(s.colourOptions, "Colour options");
-    exactKeys(colour, ["preset", "invert", "gamma", "contrast", "steps", "paletteCycleReverse"], "colour option");
+    exactKeys(colour, ["preset", "invert", "gamma", "contrast", "steps", "paletteCycleReverse", "avalancheGlow"], "colour option");
     if (!COLOUR_PRESETS.some((option) => option.value === colour.preset)) throw new Error("Unknown colour palette.");
     boolean(colour.invert, "Invert colours");
     boolean(colour.paletteCycleReverse, "Cycle direction");
+    if (colour.avalancheGlow !== undefined) boolean(colour.avalancheGlow, "Avalanche glow");
     number(colour.gamma, 0.2, 2.5, "Gamma");
     number(colour.contrast, 0.4, 2.4, "Contrast");
     number(colour.steps, 0, 64, "Palette steps");

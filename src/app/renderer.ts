@@ -510,10 +510,15 @@ export class Renderer {
     const stepCount = Math.floor(this.stepAccumulator);
     this.stepAccumulator -= stepCount;
 
+    const particleDt = dt * this.stepsPerFrame;
     const directStepHandled =
-      stepCount > 0 &&
-      this.usesDirectRendering() &&
-      (this.backend.advanceDirect?.(stepCount, this.params) ?? false);
+      this.renderMode === "particle"
+        ? particleDt > 0 &&
+          this.usesDirectRendering() &&
+          (this.backend.advanceDirect?.(1, this.params, particleDt) ?? false)
+        : stepCount > 0 &&
+          this.usesDirectRendering() &&
+          (this.backend.advanceDirect?.(stepCount, this.params) ?? false);
 
     if (directStepHandled) {
       // State remains GPU-resident; draw() presents the backend's active texture.
@@ -841,6 +846,19 @@ export class Renderer {
       };
     }
 
+    if (this.kernel.name === "Abelian Sandpile" && this.resolution === "extreme") {
+      const { width, height } = this.computeDisplaySize();
+      const scale = Math.min(
+        1,
+        Math.sqrt(RESOLUTION_TARGETS.extreme / (width * height)),
+        this.gridMaxDim() / Math.max(width, height),
+      );
+      return {
+        width: Math.max(1, Math.floor(width * scale)),
+        height: Math.max(1, Math.floor(height * scale)),
+      };
+    }
+
     // The preset is a COST CEILING, not a fixed size. The grid fits the current
     // window (~1 cell per CSS px → crisp) but never exceeds the preset's cell
     // budget, so a big window caps out (bounded blur + bounded step cost) while
@@ -860,7 +878,7 @@ export class Renderer {
     if (overCap < 1) {
       w *= overCap;
       h *= overCap;
-    } else if (this.resolution === "extreme" && overCap > 1) {
+    } else if (this.kernel.name === "Logistic Mandelbrot" && this.resolution === "extreme" && overCap > 1) {
       // Extreme is a floor as well as a ceiling: its whole point is a maximal
       // candidate pool for the point-cloud builder, so a small window must not
       // quietly shrink it back to the ultra tier.
@@ -920,7 +938,8 @@ export class Renderer {
     return 786_432;
   }
 
-  private usesDirectRendering(): boolean {
+  /** True while the backend steps this simulation itself, with no CPU kernel step. */
+  usesDirectRendering(): boolean {
     return (
       this.backend.supportsDirectRendering?.(
         this.renderMode,

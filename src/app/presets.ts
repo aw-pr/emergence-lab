@@ -52,6 +52,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "classic-critical",
       label: "Classic critical",
       params: {
+        fitPile: false,
         initialPile: 100000,
         toppleThreshold: 4,
         grainsPerStep: 1,
@@ -62,6 +63,7 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "fast-avalanches",
       label: "Fast avalanches",
       params: {
+        fitPile: false,
         initialPile: 250000,
         toppleThreshold: 4,
         grainsPerStep: 16,
@@ -72,10 +74,37 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "high-threshold",
       label: "High threshold",
       params: {
+        fitPile: false,
         initialPile: 350000,
         toppleThreshold: 8,
         grainsPerStep: 8,
         topplesPerStep: 120000,
+      },
+    },
+    // Tuned by hand by the operator on 2026-11-09 (saved as Test1); CPU-heavy at ultra.
+    {
+      id: "sandstorm",
+      label: "Sandstorm",
+      params: {
+        fitPile: false,
+        initialPile: 15650000,
+        toppleThreshold: 12,
+        grainsPerStep: 1000,
+        topplesPerStep: 2000000,
+      },
+    },
+    // 2^18 grains dropped once and never fed, so it settles (about 47 s on
+    // the orchestrator's Mac) into the classic single-drop picture; 2^19 took
+    // 166 s, so bigger piles wait for GPU toppling.
+    {
+      id: "mandala",
+      label: "Mandala",
+      params: {
+        fitPile: false,
+        initialPile: 262144,
+        toppleThreshold: 4,
+        grainsPerStep: 0,
+        topplesPerStep: 500000,
       },
     },
   ],
@@ -820,6 +849,13 @@ const PRESETS: Record<string, readonly ParamPreset[]> = {
       id: "crystal-lattice",
       label: "Crystal lattice",
       params: { states: 12, threshold: 1, neighbourhood: "vonNeumann" },
+    },
+    {
+      // Promoted from card 147's c43 (0.887 against Demons 0.752):
+      // the operator's 2026-11-09 look approved the nested square scrolls.
+      id: "square-scrolls",
+      label: "Square scrolls",
+      params: { states: 23, threshold: 1, neighbourhood: "moore" },
     },
   ],
   // muDrift keeps the field reorganising; muDrift 0 is classic static-growth

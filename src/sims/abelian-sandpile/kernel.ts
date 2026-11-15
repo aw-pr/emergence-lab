@@ -26,23 +26,10 @@ interface SimKernel {
   applyImpulse?(x: number, y: number, radius: number, strength: number): void;
 }
 
-// Pile size trades final size against whether the viewer ever sees the thing
-// settle. Radius grows ~sqrt(grains) but the topples needed to relax grow far
-// faster, and topples/second is CPU-bound, so raising "topples per step" buys
-// nothing: it only trades frame rate for topples per frame. 3,000,000 grains
-// wanted a radius of ~674 cells (wider than the grid, so it clipped) and was
-// still a formless speckle after a minute of watching, because the terraces
-// only resolve once the bulk has relaxed. This settles in well under a minute
-// at a radius that fits the frame, which is what makes the terraces visible.
-// Relaxation is bulk-toppling:
-// each queue visit topples a cell floor(z/threshold) times at once, which the
-// abelian property guarantees reaches the same stable state as one-at-a-time
-// toppling. "Topples per step" therefore budgets cell relaxations per frame —
-// it bounds frame cost while each relaxation moves arbitrarily many grains.
-const DEFAULT_INITIAL_PILE = 450000;
+const DEFAULT_INITIAL_PILE = 262144;
 const DEFAULT_TOPPLE_THRESHOLD = 4;
-const DEFAULT_GRAINS_PER_STEP = 32;
-const DEFAULT_TOPPLES_PER_STEP = 120000;
+const DEFAULT_GRAINS_PER_STEP = 0;
+const DEFAULT_TOPPLES_PER_STEP = 500000;
 const MAX_INITIAL_PILE = 16000000;
 const MAX_TOPPLES_PER_STEP = 2000000;
 const CHANNEL_COUNT = 2;
@@ -110,7 +97,14 @@ export class AbelianSandpileKernel implements SimKernel {
       min: 1,
       max: MAX_TOPPLES_PER_STEP,
       step: 1000,
-      info: "Caps how many cell relaxations run per frame. Too low and a large pile visibly lags behind its avalanches; raising it does not speed up settling once the queue is already draining each frame.",
+      info: "Caps cell relaxations per step on the CPU; on the GPU it sets the rounds per step. Larger grids may run fewer rounds per frame to keep controls responsive.",
+    },
+    {
+      key: "fitPile",
+      label: "Fit pile to screen",
+      type: "boolean",
+      default: true,
+      info: "Sizes the opening pile to about 85 per cent of the view. Initial pile applies when this is off.",
     },
   ] as const satisfies readonly ParamDescriptor[];
 
@@ -181,11 +175,13 @@ export class AbelianSandpileKernel implements SimKernel {
     const centreX = Math.floor(this.width / 2);
     const centreY = Math.floor(this.height / 2);
     const centreIndex = centreY * this.width + centreX;
-    this.grains[centreIndex] = boundedInteger(
-      numberParam(params, "initialPile", DEFAULT_INITIAL_PILE),
-      0,
-      MAX_INITIAL_PILE,
-    );
+    this.grains[centreIndex] = params.fitPile !== false
+      ? Math.floor((0.85 * Math.min(this.width, this.height) / 0.73) ** 2)
+      : boundedInteger(
+        numberParam(params, "initialPile", DEFAULT_INITIAL_PILE),
+        0,
+        MAX_INITIAL_PILE,
+      );
     this.enqueueIfUnstable(centreIndex);
     this.writeState();
   }

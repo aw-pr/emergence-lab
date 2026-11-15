@@ -1,5 +1,6 @@
 import {
   buildMapper,
+  channelMappingFor,
   isCyclic,
   type ColourMapOptions,
   type ColourPreset,
@@ -13,6 +14,29 @@ import {
   type Orbit3DMarkerSnapshot,
 } from "./rendererBackend.ts";
 import type { SimKernel } from "./types.ts";
+import {
+  createGpuGrayScott,
+  type GpuGrayScottSimulation,
+  type GrayScottDiagnosticCanvas,
+} from "./grayScottGpu.ts";
+import {
+  createGpuSandpile,
+  type GpuSandpileSimulation,
+  type SandpileDiagnosticCanvas,
+} from "./sandpileGpu.ts";
+import {
+  boidsGpuEligible,
+  createGpuBoids,
+  hasBoidsKernelAccess,
+  type BoidsGpuDiagnosticCanvas,
+  type GpuBoidsSimulation,
+} from "./boidsGpu.ts";
+import { detectDeviceTier } from "./qualityProfiles.ts";
+import {
+  createProgram,
+  createQuadVao,
+  mustCreate,
+} from "./webglHelpers.ts";
 import {
   GROUND_DOMAIN,
   ORBIT_SURFACE_CLOUD_BAND_CELLS,
@@ -66,6 +90,8 @@ uniform float u_contrast;
 uniform bool u_paletteCycleReverse;
 uniform bool u_paletteCyclic;
 uniform int u_steps;
+uniform bool u_heightMapping;
+uniform bool u_avalancheGlow;
 uniform bool u_smoothSampling;
 uniform bool u_circularPhase;
 uniform float u_palettePhase;
@@ -188,6 +214,18 @@ vec3 rampColour(int preset, float t) {
     if (x <= 0.33) return mixRgb(vec3(226.0, 217.0, 226.0), vec3(65.0, 108.0, 172.0), x / 0.33) / 255.0;
     if (x <= 0.66) return mixRgb(vec3(65.0, 108.0, 172.0), vec3(176.0, 82.0, 112.0), (x - 0.33) / 0.33) / 255.0;
     return mixRgb(vec3(176.0, 82.0, 112.0), vec3(226.0, 217.0, 226.0), (x - 0.66) / 0.34) / 255.0;
+  }
+
+  if (preset == 19) {
+    if (x <= 1.0 / 3.0) return mixRgb(vec3(6.0, 64.0, 251.0), vec3(90.0, 180.0, 255.0), x * 3.0) / 255.0;
+    if (x <= 2.0 / 3.0) return mixRgb(vec3(90.0, 180.0, 255.0), vec3(252.0, 195.0, 1.0), (x - 1.0 / 3.0) * 3.0) / 255.0;
+    return mixRgb(vec3(252.0, 195.0, 1.0), vec3(124.0, 0.0, 0.0), (x - 2.0 / 3.0) * 3.0) / 255.0;
+  }
+
+  if (preset == 20) {
+    if (x <= 1.0 / 3.0) return mixRgb(vec3(255.0, 255.0, 255.0), vec3(140.0, 138.0, 46.0), x * 3.0) / 255.0;
+    if (x <= 2.0 / 3.0) return mixRgb(vec3(140.0, 138.0, 46.0), vec3(142.0, 79.0, 160.0), (x - 1.0 / 3.0) * 3.0) / 255.0;
+    return mixRgb(vec3(142.0, 79.0, 160.0), vec3(254.0, 213.0, 1.0), (x - 2.0 / 3.0) * 3.0) / 255.0;
   }
 
   if (preset == 15) {
@@ -343,6 +381,28 @@ vec3 twoChannelColour(float c0, float c1) {
   return mixRgb(cool, warm, energy);
 }
 
+// Height mapping, mirroring heightColour in colormap.ts (the authority): the
+// heat weight starts at activity 0, as the CPU's does.
+vec3 overlayAvalancheGlow(vec3 colour, float c1) {
+  vec3 heat = mixRgb(
+    vec3(255.0, 92.0, 12.0) / 255.0,
+    vec3(255.0, 246.0, 184.0) / 255.0,
+    c1
+  );
+  return mixRgb(colour, heat, smoothstep(0.0, 0.85, c1) * 0.55);
+}
+
+vec3 heightColour(float c0, float c1) {
+  vec3 stable;
+  if (u_preset == 13) {
+    vec3 base = rampColour(4, adjust(c0));
+    stable = mixRgb(vec3(8.0, 4.0, 2.0) / 255.0, base, smoothstep(0.0, 0.7, c0));
+  } else {
+    stable = singleChannelColour(u_paletteCycleReverse ? 1.0 - c0 : c0);
+  }
+  return u_avalancheGlow ? overlayAvalancheGlow(stable, c1) : stable;
+}
+
 vec3 threeChannelChemical(float a, float b, float c) {
   vec3 cool = rampColour(3, adjust(1.0 - a));
   vec3 warm = rampColour(4, adjust(a));
@@ -364,6 +424,7 @@ vec3 colourFromRaw(vec4 raw) {
   if (u_channelCount == 2) {
     float c0 = normalise(raw.r, u_ranges[0]);
     float c1 = normalise(raw.g, u_ranges[1]);
+    if (u_heightMapping) return heightColour(c0, c1);
     return twoChannelColour(c0, c1);
   }
 
@@ -848,6 +909,8 @@ interface UniformLocations {
   paletteCycleReverse: WebGLUniformLocation;
   paletteCyclic: WebGLUniformLocation;
   steps: WebGLUniformLocation;
+  heightMapping: WebGLUniformLocation;
+  avalancheGlow: WebGLUniformLocation;
   smoothSampling: WebGLUniformLocation;
   circularPhase: WebGLUniformLocation;
   palettePhase: WebGLUniformLocation;
@@ -1296,6 +1359,17 @@ export class WebGLRendererBackend implements RendererBackend {
   private readonly program: WebGLProgram;
   private readonly fractalProgram: WebGLProgram;
   private readonly kuramoto: GpuKuramotoSimulation | null;
+  private readonly grayScott: GpuGrayScottSimulation | null;
+  private readonly sandpile: GpuSandpileSimulation | null;
+  private readonly forceCpuSimulation = simulationRendererOverrideFromUrl() === "cpu";
+  /**
+   * Boids steps on the GPU on the desktop tier with float render targets,
+   * unless `?simulationRenderer=cpu` is present or the backend was built with
+   * `boidsOnCpu`.
+   */
+  private readonly boids: GpuBoidsSimulation | null;
+  private boidsKernel: SimKernel | null = null;
+  private boidsHeld = false;
   private readonly orbit3d: Orbit3DPointCloud | null;
   private orbit3dBuildKey = "";
   private orbit3dGroundTexture: WebGLTexture | null = null;
@@ -1350,7 +1424,7 @@ export class WebGLRendererBackend implements RendererBackend {
   private bloomWidth = 0;
   private bloomHeight = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options: WebGLRendererOptions = {}) {
     const gl = canvas.getContext("webgl2", {
       alpha: false,
       antialias: false,
@@ -1383,6 +1457,15 @@ export class WebGLRendererBackend implements RendererBackend {
     this.kuramoto = floatTargets
       ? new GpuKuramotoSimulation(gl, this.quadBuffer)
       : null;
+    this.grayScott = floatTargets ? createGpuGrayScott(gl, this.quadBuffer) : null;
+    this.sandpile = floatTargets ? createGpuSandpile(gl, this.quadBuffer) : null;
+    this.boids =
+      floatTargets &&
+      !this.forceCpuSimulation &&
+      !options.boidsOnCpu &&
+      detectDeviceTier() === "desktop"
+        ? createGpuBoids(gl, this.quadBuffer)
+        : null;
     this.orbit3d = floatTargets ? createOrbit3DPointCloud(gl) : null;
     this.orbit3d?.setForceCpuSampling(orbit3dSamplerOverrideFromUrl() === "cpu");
     this.extractProgram = createProgram(gl, VERTEX_SHADER, BLOOM_EXTRACT_SHADER);
@@ -1456,6 +1539,9 @@ export class WebGLRendererBackend implements RendererBackend {
   ): boolean {
     if (this.supportsOrbit3d(mode, kernel)) return true;
     if (this.supportsGpuKuramoto(mode, kernel)) return true;
+    if (this.supportsGpuGrayScott(mode, kernel)) return true;
+    if (this.supportsGpuSandpile(mode, kernel)) return true;
+    if (this.boidsStepping(mode, kernel)) return true;
     if (mode !== "fractal" || fractalKind(kernel) < 0) return false;
     // WebGL2 highp fragment arithmetic is normally 32-bit. Beyond this point
     // adjacent complex coordinates collapse together, so retain the CPU
@@ -1474,17 +1560,43 @@ export class WebGLRendererBackend implements RendererBackend {
   ): void {
     this.gridWidth = Math.max(1, Math.floor(gridWidth));
     this.gridHeight = Math.max(1, Math.floor(gridHeight));
+    // The kernel is re-initialised next; the flock is taken over again from
+    // its fresh seed when it is first drawn.
+    this.releaseBoids();
     if (this.supportsOrbit3d(mode, kernel)) {
       this.kuramoto?.releaseState();
+      this.releaseGrayScott();
+      this.releaseSandpile();
       this.updateOrbit3dParams(params);
       return;
     }
     this.orbit3d?.cancelBuild();
     if (this.supportsGpuKuramoto(mode, kernel)) {
+      this.releaseGrayScott();
+      this.releaseSandpile();
       this.kuramoto?.initialise(this.gridWidth, this.gridHeight, params);
       return;
     }
     this.kuramoto?.releaseState();
+    // A failed initialise marks the simulation failed, so the gate below and
+    // the renderer's next supportsDirectRendering() both fall back to the CPU.
+    if (
+      this.supportsGpuGrayScott(mode, kernel) &&
+      this.grayScott?.initialise(this.gridWidth, this.gridHeight, params)
+    ) {
+      this.releaseSandpile();
+      this.attachGrayScottDiagnostics();
+      return;
+    }
+    this.releaseGrayScott();
+    if (
+      this.supportsGpuSandpile(mode, kernel) &&
+      this.sandpile?.initialise(this.gridWidth, this.gridHeight, params)
+    ) {
+      this.attachSandpileDiagnostics();
+      return;
+    }
+    this.releaseSandpile();
     if (this.supportsDirectRendering(mode, kernel, params)) return;
     this.configureTexture(kernel.channelCount);
   }
@@ -1492,7 +1604,16 @@ export class WebGLRendererBackend implements RendererBackend {
   advanceDirect(
     steps: number,
     params: Record<string, number | boolean | string>,
+    dt?: number,
   ): boolean {
+    if (this.boids?.ready && this.boidsKernel) {
+      this.syncBoids(this.boidsKernel, "particle", params);
+      if (!this.boids.ready) return false;
+      if (this.boidsHeld) return true;
+      return this.boids.step(dt ?? 0);
+    }
+    if (this.grayScott?.ready) return this.grayScott.advance(steps);
+    if (this.sandpile?.ready) return this.sandpile.advance(steps);
     return this.kuramoto?.advance(steps, params) ?? false;
   }
 
@@ -1502,6 +1623,12 @@ export class WebGLRendererBackend implements RendererBackend {
     radius: number,
     strength: number,
   ): boolean {
+    if (this.grayScott?.ready) {
+      return this.grayScott.applyImpulse(x, y, radius, strength);
+    }
+    if (this.sandpile?.ready) {
+      return this.sandpile.applyImpulse(x, y, radius, strength);
+    }
     return this.kuramoto?.applyImpulse(x, y, radius, strength) ?? false;
   }
 
@@ -1608,7 +1735,20 @@ export class WebGLRendererBackend implements RendererBackend {
       return;
     }
     if (this.supportsGpuKuramoto(mode, kernel)) {
-      this.drawGpuKuramoto(frame);
+      if (this.kuramoto) this.drawGpuField(this.kuramoto, frame);
+      return;
+    }
+    if (this.supportsGpuGrayScott(mode, kernel)) {
+      if (this.grayScott) this.drawGpuField(this.grayScott, frame);
+      return;
+    }
+    if (this.supportsGpuSandpile(mode, kernel)) {
+      if (this.sandpile) this.drawGpuField(this.sandpile, frame);
+      return;
+    }
+    if (this.boids) this.syncBoids(kernel, mode, frame.params);
+    if (this.boidsStepping(mode, kernel)) {
+      this.drawGpuBoids(frame);
       return;
     }
     if (this.supportsDirectRendering(mode, kernel, frame.params)) {
@@ -1680,7 +1820,7 @@ export class WebGLRendererBackend implements RendererBackend {
         numericParam(frame.params, "boundaryDetail", 0) > 0
           ? "degraded"
           : "off";
-    } else if (isKuramotoState(kernel)) {
+    } else if (isKuramotoState(kernel) || isGrayScottState(kernel) || isSandpileState(kernel)) {
       canvas.dataset.simulationRenderer = "cpu-kernel";
       delete canvas.dataset.orbit3dSampler;
     } else {
@@ -2186,8 +2326,11 @@ export class WebGLRendererBackend implements RendererBackend {
     this.orbit3dInteriorDistanceTexture = texture;
   }
 
-  private drawGpuKuramoto(frame: RendererBackendFrame): void {
-    if (!this.kuramoto?.bindForPresentation()) return;
+  private drawGpuField(
+    simulation: { bindForPresentation(): boolean },
+    frame: RendererBackendFrame,
+  ): void {
+    if (!simulation.bindForPresentation()) return;
     const canvas = this.gl.canvas as HTMLCanvasElement;
     delete canvas.dataset.fractalRenderer;
     delete canvas.dataset.fractalSupersample;
@@ -2253,9 +2396,179 @@ export class WebGLRendererBackend implements RendererBackend {
   ): boolean {
     return (
       this.kuramoto !== null &&
+      !this.forceCpuSimulation &&
       mode === "field" &&
       isKuramotoState(kernel)
     );
+  }
+
+  private supportsGpuGrayScott(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.grayScott !== null &&
+      !this.grayScott.failed &&
+      !this.forceCpuSimulation &&
+      mode === "field" &&
+      isGrayScottState(kernel)
+    );
+  }
+
+  private attachGrayScottDiagnostics(): void {
+    const grayScott = this.grayScott;
+    if (!grayScott) return;
+    const canvas = this.gl.canvas as GrayScottDiagnosticCanvas;
+    canvas.grayScottReadState = (x, y, width, height) =>
+      grayScott.readState(x, y, width, height);
+    canvas.grayScottPassCount = () => grayScott.passCount;
+  }
+
+  private releaseGrayScott(): void {
+    this.grayScott?.releaseState();
+    const canvas = this.gl.canvas as GrayScottDiagnosticCanvas;
+    delete canvas.grayScottReadState;
+    delete canvas.grayScottPassCount;
+  }
+
+  private supportsGpuSandpile(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.sandpile !== null &&
+      !this.sandpile.failed &&
+      !this.forceCpuSimulation &&
+      mode === "grid" &&
+      isSandpileState(kernel) &&
+      hasSandpileSteppingParams(kernel)
+    );
+  }
+
+  private attachSandpileDiagnostics(): void {
+    const sandpile = this.sandpile;
+    if (!sandpile) return;
+    const canvas = this.gl.canvas as SandpileDiagnosticCanvas;
+    canvas.sandpileReadGrains = () => sandpile.readGrains();
+    canvas.sandpileReadState = () => sandpile.readState();
+    canvas.sandpileRoundCount = () => sandpile.roundCount;
+  }
+
+  private releaseSandpile(): void {
+    this.sandpile?.releaseState();
+    const canvas = this.gl.canvas as SandpileDiagnosticCanvas;
+    delete canvas.sandpileReadGrains;
+    delete canvas.sandpileReadState;
+    delete canvas.sandpileRoundCount;
+  }
+
+  private boidsStepping(mode: RenderMode, kernel: SimKernel): boolean {
+    return (
+      this.boids !== null &&
+      this.boids.ready &&
+      mode === "particle" &&
+      kernel === this.boidsKernel
+    );
+  }
+
+  /**
+   * Keep the flock on the engine that may step it: take it over from the CPU
+   * kernel while the field is clear, and hand it back in place (positions and
+   * velocities) once a layout or a dropped boulder needs obstacle steering.
+   */
+  private syncBoids(
+    kernel: SimKernel,
+    mode: RenderMode,
+    params: Record<string, number | boolean | string>,
+  ): void {
+    const boids = this.boids;
+    if (!boids) return;
+    if (!isBoidsState(kernel) || !hasBoidsKernelAccess(kernel) || mode !== "particle") {
+      if (boids.ready) this.releaseBoids();
+      return;
+    }
+    const steering = kernel.steeringConfig();
+    const eligible = boidsGpuEligible({
+      requested: true,
+      desktop: true,
+      floatTargets: true,
+      obstacleLayout: params.obstacleLayout,
+      hasObstacles: kernel.hasObstacles(),
+      visualRadius: steering.visualRadius,
+      boidCount: steering.boidCount,
+      binningMinBoids: steering.binningMinBoids,
+    });
+    if (boids.ready) {
+      if (kernel !== this.boidsKernel) {
+        this.releaseBoids();
+      } else if (!eligible) {
+        const flock = boids.read();
+        if (flock) kernel.importBoids(flock);
+        this.releaseBoids();
+        return;
+      } else {
+        return;
+      }
+    }
+    if (
+      eligible &&
+      !boids.failed &&
+      steering.width === this.gridWidth &&
+      steering.height === this.gridHeight &&
+      boids.seed(steering, kernel.exportBoids())
+    ) {
+      this.boidsKernel = kernel;
+      this.attachBoidsDiagnostics();
+    }
+  }
+
+  private attachBoidsDiagnostics(): void {
+    const boids = this.boids;
+    if (!boids) return;
+    const canvas = this.gl.canvas as BoidsGpuDiagnosticCanvas;
+    const held = (on: boolean): void => {
+      this.boidsHeld = on;
+    };
+    canvas.boidsGpu = {
+      get count() {
+        return boids.count;
+      },
+      get steps() {
+        return boids.steps;
+      },
+      read: () => boids.read() ?? new Float32Array(0),
+      advance: (steps: number, dt: number) => {
+        for (let step = 0; step < Math.floor(steps); step += 1) {
+          if (!boids.step(dt)) return;
+        }
+      },
+      hold: held,
+    };
+  }
+
+  private releaseBoids(): void {
+    if (!this.boids) return;
+    this.boids.releaseState();
+    this.boidsKernel = null;
+    this.boidsHeld = false;
+    delete (this.gl.canvas as BoidsGpuDiagnosticCanvas).boidsGpu;
+  }
+
+  private drawGpuBoids(frame: RendererBackendFrame): void {
+    const boids = this.boids;
+    if (!boids || !boids.bindForPresentation()) return;
+    const canvas = this.gl.canvas as HTMLCanvasElement;
+    delete canvas.dataset.fractalRenderer;
+    delete canvas.dataset.fractalSupersample;
+    delete canvas.dataset.orbit3dSampler;
+    delete canvas.dataset.orbit3dBoundaryDetail;
+    canvas.dataset.simulationRenderer = "gpu-boids";
+    this.setUniforms(
+      frame.kernel,
+      frame.colourOptions,
+      frame.displayOptions,
+      frame.mode,
+      frame.params,
+      frame.elapsedTime,
+      frame.speedScale,
+      frame.state,
+      boids.meanDirection,
+    );
+    this.drawMappedState(frame.kernel, frame.mode, frame.displayOptions);
   }
 
   private supportsOrbit3d(mode: RenderMode, kernel: SimKernel): boolean {
@@ -2706,6 +3019,12 @@ export class WebGLRendererBackend implements RendererBackend {
     this.releaseSceneTarget();
     this.releaseBloomTargets();
     this.kuramoto?.destroy();
+    this.releaseGrayScott();
+    this.grayScott?.destroy();
+    this.releaseSandpile();
+    this.sandpile?.destroy();
+    this.releaseBoids();
+    this.boids?.destroy();
     this.orbit3d?.destroy();
     if (this.orbit3dGroundTexture) gl.deleteTexture(this.orbit3dGroundTexture);
     if (this.orbit3dInteriorDistanceTexture) gl.deleteTexture(this.orbit3dInteriorDistanceTexture);
@@ -2770,6 +3089,14 @@ export class WebGLRendererBackend implements RendererBackend {
       steps: mustCreate(
         this.gl.getUniformLocation(this.program, "u_steps"),
         "u_steps uniform",
+      ),
+      heightMapping: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_heightMapping"),
+        "u_heightMapping uniform",
+      ),
+      avalancheGlow: mustCreate(
+        this.gl.getUniformLocation(this.program, "u_avalancheGlow"),
+        "u_avalancheGlow uniform",
       ),
       smoothSampling: mustCreate(
         this.gl.getUniformLocation(this.program, "u_smoothSampling"),
@@ -2951,6 +3278,7 @@ export class WebGLRendererBackend implements RendererBackend {
     elapsedTime: number,
     speedScale: number,
     state: Float32Array,
+    boidsMeanDir?: readonly [number, number],
   ): void {
     const gl = this.gl;
     const ranges = new Float32Array(8);
@@ -2974,6 +3302,11 @@ export class WebGLRendererBackend implements RendererBackend {
     );
     gl.uniform1i(this.uniforms.paletteCyclic, isCyclic(colourOptions.preset) ? 1 : 0);
     gl.uniform1i(this.uniforms.steps, Math.max(0, Math.floor(colourOptions.steps || 0)));
+    gl.uniform1i(
+      this.uniforms.heightMapping,
+      channelMappingFor(kernel) === "height" ? 1 : 0,
+    );
+    gl.uniform1i(this.uniforms.avalancheGlow, colourOptions.avalancheGlow ? 1 : 0);
     gl.uniform1i(this.uniforms.smoothSampling, shouldSmoothSample(mode) ? 1 : 0);
     gl.uniform1i(this.uniforms.circularPhase, isCircularPhaseState(kernel) ? 1 : 0);
     gl.uniform1f(
@@ -2992,24 +3325,29 @@ export class WebGLRendererBackend implements RendererBackend {
     gl.uniform1i(this.uniforms.trailMode, trailFadeFor(mode, displayOptions) > 0 ? 1 : 0);
     gl.uniform1i(this.uniforms.streamerMode, isAttractorState(kernel) ? 1 : 0);
     gl.uniform1f(this.uniforms.streamerWidth, numericParam(params, "ribbonWidth", 2.1));
-    const meanDir = boidsMeanDirection(
-      state,
-      kernel.channelCount,
-      this.gridWidth * this.gridHeight,
-    );
+    const meanDir = !isBoidsState(kernel)
+      ? [0, 0]
+      : boidsMeanDir ??
+        boidsMeanDirection(state, kernel.channelCount, this.gridWidth * this.gridHeight);
     gl.uniform2f(this.uniforms.boidsMeanDir, meanDir[0], meanDir[1]);
   }
 }
 
+export interface WebGLRendererOptions {
+  /** Keep Boids on its CPU kernel, for one-shot stills drawn from the kernel's own state. */
+  boidsOnCpu?: boolean;
+}
+
 export function createWebGLRendererBackend(
   canvas: HTMLCanvasElement,
+  options: WebGLRendererOptions = {},
 ): WebGLRendererBackend | null {
   const probe = document.createElement("canvas");
   if (!probe.getContext("webgl2")) {
     console.warn("WebGL2 renderer unavailable; falling back to Canvas 2D.");
     return null;
   }
-  return new WebGLRendererBackend(canvas);
+  return new WebGLRendererBackend(canvas, options);
 }
 
 function textureFormatFor(
@@ -3082,6 +3420,10 @@ function presetIndex(preset: ColourPreset): number {
       return 17;
     case "magma-cyclic":
       return 18;
+    case "sandpile-classic":
+      return 19;
+    case "sandpile-sunflower":
+      return 20;
   }
 }
 
@@ -3145,6 +3487,37 @@ function isKuramotoState(kernel: SimKernel): boolean {
     kernel.name === "Kuramoto Oscillators" &&
     kernel.channelCount === 1 &&
     kernel.channelLabels[0] === "Phase"
+  );
+}
+
+function isGrayScottState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Gray-Scott" &&
+    kernel.channelCount === 2 &&
+    kernel.channelLabels[0] === "U" &&
+    kernel.channelLabels[1] === "V"
+  );
+}
+
+function isSandpileState(kernel: SimKernel): boolean {
+  return (
+    kernel.name === "Abelian Sandpile" &&
+    kernel.channelCount === 2 &&
+    kernel.channelLabels[0] === "Stable height" &&
+    kernel.channelLabels[1] === "Avalanche activity"
+  );
+}
+
+/**
+ * The GPU path re-implements the kernel's rule from these params, so it only
+ * stands in for a kernel that declares them; a bare sandpile-shaped state, such
+ * as a still drawn from supplied heights, keeps the upload path.
+ */
+const SANDPILE_STEPPING_PARAMS = ["initialPile", "toppleThreshold", "grainsPerStep", "topplesPerStep"];
+
+function hasSandpileSteppingParams(kernel: SimKernel): boolean {
+  return SANDPILE_STEPPING_PARAMS.every((key) =>
+    kernel.paramSchema.some((descriptor) => descriptor.key === key),
   );
 }
 
@@ -3231,6 +3604,20 @@ function orbit3dSamplerOverrideFromUrl(): "cpu" | null {
   return new URLSearchParams(window.location.search).get("orbit3dSampler") === "cpu"
     ? "cpu"
     : null;
+}
+
+/**
+ * `?simulationRenderer=cpu` keeps GPU-capable simulations, Boids included, on
+ * their CPU kernel (field simulations report
+ * `data-simulation-renderer="cpu-kernel"`), for A/B timing and for evidence
+ * runs that read the kernel's own state. Boids steps on the GPU by default on
+ * the desktop tier, so `?simulationRenderer=gpu` is the same as no parameter.
+ * Read once when the backend is built; any other value is ignored.
+ */
+function simulationRendererOverrideFromUrl(): "cpu" | "gpu" | null {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("simulationRenderer");
+  return value === "cpu" || value === "gpu" ? value : null;
 }
 
 function boundedInteger(
@@ -3330,68 +3717,6 @@ export function palettePhase(
   return ((elapsedTime * speed * speedScale * direction) % 1 + 1) % 1;
 }
 
-function createProgram(
-  gl: WebGL2RenderingContext,
-  vertexSource: string,
-  fragmentSource: string,
-): WebGLProgram {
-  const vertex = createShader(gl, gl.VERTEX_SHADER, vertexSource);
-  const fragment = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-  const program = mustCreate(gl.createProgram(), "program");
-
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const message = gl.getProgramInfoLog(program) ?? "unknown link error";
-    gl.deleteProgram(program);
-    throw new Error(`WebGL2 renderer shader link failed: ${message}`);
-  }
-
-  return program;
-}
-
-function createQuadVao(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram,
-  quadBuffer: WebGLBuffer,
-): WebGLVertexArrayObject {
-  const positionLocation = gl.getAttribLocation(program, "a_position");
-  if (positionLocation < 0) {
-    throw new Error("WebGL2 renderer could not locate a_position attribute.");
-  }
-
-  const vao = mustCreate(gl.createVertexArray(), "vertex array");
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-  gl.enableVertexAttribArray(positionLocation);
-  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-  gl.bindVertexArray(null);
-  return vao;
-}
-
-function createShader(
-  gl: WebGL2RenderingContext,
-  type: number,
-  source: string,
-): WebGLShader {
-  const shader = mustCreate(gl.createShader(type), "shader");
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const message = gl.getShaderInfoLog(shader) ?? "unknown compile error";
-    gl.deleteShader(shader);
-    throw new Error(`WebGL2 renderer shader compile failed: ${message}`);
-  }
-
-  return shader;
-}
-
 function createOrbit3DPointCloud(
   gl: WebGL2RenderingContext,
 ): Orbit3DPointCloud | null {
@@ -3404,11 +3729,4 @@ function createOrbit3DPointCloud(
     );
     return null;
   }
-}
-
-function mustCreate<T>(value: T | null, label: string): T {
-  if (!value) {
-    throw new Error(`WebGL2 renderer could not create ${label}.`);
-  }
-  return value;
 }
