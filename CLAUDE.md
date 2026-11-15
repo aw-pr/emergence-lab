@@ -115,8 +115,8 @@ code work begins.
 ## Commit discipline
 
 Atomic commits, one logical change each. Author identity tracks the model
-that wrote the change (`Claude Opus 4.7 <claude-opus-4-7@local>`,
-`Codex GPT-5 <codex-gpt-5@local>`, etc.); committer stays the human user.
+that wrote the change (for example `Claude Opus 5.5 <claude-opus-5-5@local>` or
+`GPT-6.1 Sol <gpt-6-1-sol@local>`); committer stays the human user.
 Verify gate `npm run verify` green before any commit lands on `main`. See
 `.cursor/rules/git-strategy.mdc`.
 
