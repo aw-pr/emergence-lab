@@ -1,6 +1,6 @@
 # Emergence lab
 
-![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange) ![Phase: Hone](https://img.shields.io/badge/phase-hone-blue) ![Stack: TypeScript + Vite](https://img.shields.io/badge/stack-TypeScript%20%2B%20Vite-3178c6) ![Renderer: WebGL2](https://img.shields.io/badge/renderer-WebGL2-990000) ![Agents: Claude + Codex](https://img.shields.io/badge/agents-Claude%20%2B%20Codex-7c3aed) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)
+![Node: 22.18+](https://img.shields.io/badge/node-22.18%2B-blue) ![Licence: MIT](https://img.shields.io/badge/licence-MIT-green) ![Tests: 442 passing](https://img.shields.io/badge/tests-442%20passing-brightgreen) ![Status: Proof of Concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
 > Many agents following simple local rules exhibit *emergent
 > behaviour*, seen in everything from ecosystems to economies. 
@@ -42,6 +42,9 @@ Gray-Scott is the priority kernel. The others are calibrated and held.
 
 ## Run it
 
+Needs Node 22.18 or later: the unit tests import TypeScript sources directly
+and rely on Node's built-in type stripping.
+
 ```bash
 npm install
 npm run dev
@@ -52,10 +55,19 @@ Open the URL Vite prints, normally `http://localhost:5173/`.
 Checks:
 
 ```bash
-npm run verify   # types, kernel tests, production build
-npm test
+npm run verify   # types, unit tests, production build
+npm test         # unit tests only: 525, of which 83 are opt-in contract tests skipped by default
 npm run build
 ```
+
+The browser suites under `e2e/` run with Playwright (`npx playwright test`,
+which starts its own Vite server on port 5173). Many of them are long sweeps
+or GPU timing checks that expect a desktop browser with nothing else running.
+
+Two URL parameters are useful when comparing paths:
+`?simulationRenderer=cpu` keeps every GPU-capable simulation on its CPU
+kernel, and `?orbit3dSampler=cpu` forces the logistic-Mandelbrot point cloud
+onto its CPU sampler.
 
 ## Publish into the site
 
