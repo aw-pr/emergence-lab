@@ -152,8 +152,9 @@ For a 3D cloud, `data-orbit3d-build="complete"` and a positive
 `data-orbit3d-points` confirm that the selected path produced a whole cloud.
 The 2D fallback intentionally has neither attribute.
 Boundary detail is an opt-in GPU-only live-build control: at maximum it raises
-the point budget from the unchanged 9.6M extreme ceiling to 16M and spends the
-additional capacity on a 5x5 boundary sub-grid warmed for 20,000 iterations.
+the point budget from the unchanged 9.6M extreme ceiling to 20M (16M from the
+lower grid tiers) and spends the additional capacity on a 5x5 boundary
+sub-grid warmed for 20,000 iterations.
 That depth is deliberate: stage 35 measured boundary-band period mismatch
 falling from 1.71% at 1,500 warmup iterations to 0.25% at 20,000.
 Tail refinement defaults to its maximum, 0.6, on both paths. On the GPU path
