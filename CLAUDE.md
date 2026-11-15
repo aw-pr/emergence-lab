@@ -132,7 +132,8 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.0.1)
+- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.3.0)
 - `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
-- `state/handoffs/README.md` — structured handoff envelope
+- `state/handoffs/README.md` — structured handoff envelope (private working
+  tree only; `state/` is not published)
 - `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks
