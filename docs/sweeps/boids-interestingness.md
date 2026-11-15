@@ -418,7 +418,7 @@ Colour in Boids is heading. The WebGL glyph shader (`boidPaletteColour` in `src/
 
 ### Method and instrument
 
-The instrument, its formulas, calibration and limits are in [`data/2026-11-13/boids-flow/INSTRUMENT.md`](data/2026-11-13/boids-flow/INSTRUMENT.md) (method `boids-flow-v1`, script `scripts/sweep-boids-flow.mjs`). In short:
+The instrument, its formulas, calibration and limits are in `docs/sweeps/data/2026-11-13/boids-flow/INSTRUMENT.md` (method `boids-flow-v1`, script `scripts/sweep-boids-flow.mjs`). In short:
 
 - The real kernel (`.test-build`, compiled from `src/sims/boids/kernel.ts`) runs offline on the tier's measured grid at the app's per-frame step, dt = 1/60: 60 steps per app-second, so 3 app-minutes is 10800 steps. The 144, 152 and 153 harnesses stepped dt = 1, which is why the pre-11-05 defaults read "aligned by step 300" there; at the app's dt the same row reads global order 0.47-0.52 at 20 s.
 - Per sample it reads global order G (1 = one heading), local order L (coherent patches against speckle), heading entropy E, heading domains, coverage, the densest-5% share (tight balls), and median nearest-neighbour spacing in CSS px (fineness). `flowScore = L x E x (1 - G) x coverageTerm x patchTerm`.
@@ -542,19 +542,19 @@ Rows are capture rows (label and params on the left), columns are 5, 20, 60 and 
 
 Desktop, 2560x1440 at DPR 1, grid 1707x960 (includes Fine schools seeds 1 and 2):
 
-![Boids flow contact sheet, desktop](../images/sweeps-2026-11-13/boids-flow-sheet-desktop.jpg)
+Image: Boids flow contact sheet, desktop (`docs/images/sweeps-2026-11-13/boids-flow-sheet-desktop.jpg`, not in the repository).
 
 Desktop window, 1280x720 at DPR 2, grid 1280x720 (1.78x denser at the same count; seed 0 only):
 
-![Boids flow contact sheet, 1280x720 desktop window](../images/sweeps-2026-11-13/boids-flow-sheet-desktop720.jpg)
+Image: Boids flow contact sheet, 1280x720 desktop window (`docs/images/sweeps-2026-11-13/boids-flow-sheet-desktop720.jpg`, not in the repository).
 
 Tablet, 1180x820 touch at DPR 2, grid 768x534 (includes Fine schools seeds 1 and 2):
 
-![Boids flow contact sheet, tablet](../images/sweeps-2026-11-13/boids-flow-sheet-tablet.jpg)
+Image: Boids flow contact sheet, tablet (`docs/images/sweeps-2026-11-13/boids-flow-sheet-tablet.jpg`, not in the repository).
 
 Phone, 390x844 touch at DPR 3, grid 390x844 (includes Fine schools seeds 1 and 2):
 
-![Boids flow contact sheet, phone](../images/sweeps-2026-11-13/boids-flow-sheet-phone.jpg)
+Image: Boids flow contact sheet, phone (`docs/images/sweeps-2026-11-13/boids-flow-sheet-phone.jpg`, not in the repository).
 
 ### Judges and skeptic
 
@@ -585,7 +585,7 @@ The phone judge also saw a faint ghost of the spawn silhouette in the pre-11-05 
 
 ### Shortlist and presets
 
-Presets file: [`data/2026-11-13/boids-flow/boids-flow.presets.json`](data/2026-11-13/boids-flow/boids-flow.presets.json), 12 presets, 11845 bytes. Per tier it holds every candidate a tier judge marked keep or maybe, best first, then today's opening and the pre-11-05 defaults at that tier's count. All share `obstacleLayout` none, `obstacleAmount` 0.5 (schema default, unused), `pointSize` 4, twilight at contrast 1.2, trails 0.93, bloom 0.3, speed 1x, auto-cycle off. Names sort in file order, which is also the Presets page order after import.
+Presets file: `docs/sweeps/data/2026-11-13/boids-flow/boids-flow.presets.json`, 12 presets, 11845 bytes. Per tier it holds every candidate a tier judge marked keep or maybe, best first, then today's opening and the pre-11-05 defaults at that tier's count. All share `obstacleLayout` none, `obstacleAmount` 0.5 (schema default, unused), `pointSize` 4, twilight at contrast 1.2, trails 0.93, bloom 0.3, speed 1x, auto-cycle off. Names sort in file order, which is also the Presets page order after import.
 
 | Preset name | Candidate id | Resolution | Boids | Flocks | Visual / sep radius | Speed | Align | Cohesion | Sep | Judge / skeptic |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -632,7 +632,7 @@ Wide swirl stays on the phone list only for an in-motion look: its numbers hold 
 - In iPad emulation (1180x820, DPR 2, touch) after its own import: tablet Fine schools 768x534 with 9750 boids, tablet reference 768x534 with 7000, desktop Fine schools 1180x820 with 28000. In phone emulation (390x844, DPR 3, touch): phone Fine schools and Wide swirl both 390x844, 7750 and 5000 boids. No page errors in any context.
 - Not proved: real Safari or WebKit. The installed WebKit build (revision 2272) does not match what Playwright 1.60 expects (2287), and it was not installed for this run.
 
-![Presets page after importing boids-flow.presets.json](../images/sweeps-2026-11-13/boids-flow-presets-imported.png)
+Image: Presets page after importing boids-flow.presets.json (`docs/images/sweeps-2026-11-13/boids-flow-presets-imported.png`, not in the repository).
 
 ### Reproduction
 

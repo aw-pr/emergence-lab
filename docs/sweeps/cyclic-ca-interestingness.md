@@ -305,7 +305,7 @@ states 23, threshold 1, Moore, after the three incumbent presets. In the
 scored 0.887 against Demons' 0.752. Demons remains the kernel default.
 
 The operator approved the preset after a live look on 2026-11-09
-([UAT note 3](../UAT/uat.md)): "Cyclic CAs, yes looks much bettere at 23 actually
+(UAT note 3, in the operator's local `docs/UAT/uat.md`): "Cyclic CAs, yes looks much bettere at 23 actually
 feels like it does something thats a good thread to investigate."
 
 The states 21 to 25 neighbour check was dropped with operator approval on
