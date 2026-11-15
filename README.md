@@ -38,7 +38,33 @@ discipline's way of pointing at the same thing: local rules, global form.
 - **Logistic Mandelbrot.** The bifurcation cascade hung off the Mandelbrot set as a curtain.
 - **Clifford-DeJong.** Clifford, De Jong, and Svensson point-map attractors, with live coefficient drift.
 
-Gray-Scott is the priority kernel. The others are calibrated and held.
+Gray-Scott is the priority kernel. Recent tuning has gone into the sandpile
+and Boids as well.
+
+## Defaults and presets
+
+- **Opening view.** Every simulation opens with the parameters panel
+  minimised and the hint "Adjust parameters: arrow tab on the left" until the
+  tab is first clicked.
+- **Grid quality.** Performance, Balanced, High, Ultra and Extreme (Extreme
+  only where a sim opts in). Each sim has its own default: Ultra for most,
+  including Gray-Scott and Boids; Extreme for the sandpile and the
+  logistic-Mandelbrot point cloud; High for Belousov-Zhabotinsky and Physarum;
+  Performance for Lenia. Tablets and phones are capped at Balanced.
+- **Opening configurations.** Gray-Scott opens at three steps per frame,
+  Cyclic CA on Square scrolls, the sandpile on Mandala with the pile fitted to
+  the screen at one cell per device pixel, and Boids with five flocks close in,
+  aimed just off the centre.
+- **Built-in presets.** View > Kernel preset lists 91 named parameter sets
+  across the sims (Gray-Scott's Mitosis, Coral and Worms, the sandpile's
+  Sandstorm and Mandala, Rule 30 and Rule 110 for the elementary automata, and
+  so on).
+- **Your presets.** The Presets section in the sidebar saves the current
+  configuration (parameters, palette, display options, grid quality, speed) in
+  the browser's local storage, up to 200. The gallery's Presets page opens,
+  deletes, exports and imports them as a JSON file. It also lists ten
+  read-only trial presets from the research sweeps under "From the research
+  bench"; save a personal copy to change one.
 
 ## Run it
 
@@ -180,6 +206,11 @@ Vite and TypeScript throughout. Kernels are pure deterministic numerics
 with no runtime dependencies. The renderer uses a quality-first WebGL2/GPU
 path, including direct fragment-shader fractals, with Canvas 2D kept as a
 fallback and debug surface.
+Gray-Scott, Kuramoto and the sandpile step GPU-resident in WebGL2 wherever
+float render targets are available, and Boids does the same on desktop. The
+CPU kernels stay as the fallback and the reference: they run Boids on tablets
+and phones, with obstacles or with large visual radii, and they take over if a
+GPU engine fails. There is no WebGPU path.
 Legacy browsers are not a target.
 
 ## Adding a simulation
