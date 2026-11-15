@@ -39,8 +39,9 @@ preserve` — atomic commits remain atomic rather than being squashed).
    ```bash
    git ff-dev-main
    ```
-   Publishing the public mirror is a separate deliberate step (`git publish`).
-   See `docs/PUBLISH-WORKFLOW.md`.
+   Publishing the public mirror is a separate deliberate step: curate
+   `publish`, push it to the public remote as a PR source and open the
+   `publish → main` PR. See `docs/PUBLISH-WORKFLOW.md`.
 
 ## Commit messages
 
@@ -51,8 +52,8 @@ preserve` — atomic commits remain atomic rather than being squashed).
 ## Don't
 
 - Don't commit a failing or unverified state to `main`.
-- Don't push non-`main` branches to the public remote (the `pre-push` hook
-  blocks it; that block is intentional).
+- Don't push any branch other than `publish` (the PR source) to the public
+  remote (the `pre-push` hook blocks it; that block is intentional).
 - Don't push to a public remote from an agent session unless explicitly asked.
 
 See `docs/PUBLISH-WORKFLOW.md` for the publish side of this.
