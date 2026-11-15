@@ -234,12 +234,14 @@ emergence-lab/
     sims/<name>/kernel.ts # deterministic kernel
     app/                  # renderer, gallery, controls, presets
   essays/                 # one .md per sim
-  scripts/                # publish, deploy, thumbnail and point-cloud baking
+  scripts/                # publish, deploy, thumbnail, sweep and point-cloud baking
+  e2e/                    # Playwright browser suites and sweep harness
   public/baked/           # machine-local .elpc bakes + index.json (git-ignored)
   docs/
     INTERFACE.md          # the SimKernel contract
     PUBLISH-WORKFLOW.md   # publish-safety hooks and remotes
-  state/handoffs/         # autometta worker completion envelopes
+    stages/               # autometta stage cards, one per piece of work
+    sweeps/               # interestingness sweep reports
 ```
 
 ## Version history
