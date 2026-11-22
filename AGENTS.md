@@ -1,14 +1,14 @@
-# AGENTS.md — emergence-lab
+# AGENTS.md: emergence-lab
 
 ## Phase: hone
 
-emergence-lab is in the **hone phase** — refinement, parameter tuning,
+emergence-lab is in the **hone phase**: refinement, parameter tuning,
 performance, and UX polish on a working set of 20 simulations. See `MODELS.md`.
 
 ## Working model
 
 There is **no per-model ownership** of areas of this repo. Whichever agent
-picks up a task may edit any part of it — code (`src/**`), docs, architecture.
+picks up a task may edit any part of it: code (`src/**`), docs, architecture.
 Multi-agent work is run through **autometta** (stage cards under `docs/stages/`,
 see `docs/dispatch-contract.md`) when you want parallel workers and
 cross-checking; otherwise just do the work directly.
@@ -70,7 +70,7 @@ agent session unless explicitly asked.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.3.0)
-- `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
-- `HANDOFF.md` — current status and next-run brief
-- `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks
+- `docs/INTERFACE.md`: kernel contract (reviewed boundary, v1.3.0)
+- `MODELS.md`: model policy (no area ownership; autometta for multi-agent)
+- `HANDOFF.md`: current status and next-run brief
+- `docs/PUBLISH-WORKFLOW.md`: publish-safety workflow and guard hooks

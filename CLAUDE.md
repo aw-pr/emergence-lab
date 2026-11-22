@@ -1,12 +1,12 @@
-# CLAUDE.md — emergence-lab
+# CLAUDE.md: emergence-lab
 
 ## Phase: hone
 
-emergence-lab is in the **hone phase** — refinement, parameter tuning,
+emergence-lab is in the **hone phase**: refinement, parameter tuning,
 performance, and UX polish on a working set of 20 simulations. See `MODELS.md`.
 
 There is **no per-model ownership** of areas of this repo. Whichever agent is
-working a task may edit any part of it — code (`src/**`), docs, architecture.
+working a task may edit any part of it: code (`src/**`), docs, architecture.
 Multi-agent work runs through **autometta** when you want parallel workers and
 cross-checking (stage cards under `docs/stages/`, see
 `docs/dispatch-contract.md`); otherwise just do the work directly.
@@ -28,7 +28,7 @@ point-size cap (92) all passed and merged; stage 90 was superseded on card
 87's audit. Stage 93 moved parameter grouping into the kernel schema. Stage
 94, the CPU-fallback refinement default, landed at `e09473fb` after three
 attempts (10/10 criteria). Stage 95, which decided how a pure `src/app`
-module becomes testable, landed at `cdc1d2fe` — see `docs/INTERFACE.md` for
+module becomes testable, landed at `cdc1d2fe`; see `docs/INTERFACE.md` for
 the resulting convention (explicit `tsconfig.test.json` include list plus a
 preflight guard in `scripts/run-kernel-tests.cjs`); a future card adding a
 pure `src/app` module should consult it before improvising.
@@ -82,20 +82,20 @@ contain are kept as `archive/<branch name>` tags on origin.
 
 Every other parallel line is closed:
 
-- `feat/logistic-mandelbrot-hybrid-surface` — the parked surface experiment.
+- `feat/logistic-mandelbrot-hybrid-surface`: the parked surface experiment.
   Rejected on visual review 2026-07-20 (sawtooth silhouette, no sheet-to-cloud
   dissolve); stages 40-41 reopened it 2026-08-19 against those two defects and
   it stalled again. Superseded by the analytic edge-curve arc below, and retired
   2026-08-23 at operator decision. Its reusable parts already reached `dev`
-  independently — both stage cards, `docs/plans/2026-08-19-edge-analysis-findings.md`,
+  independently: both stage cards, `docs/plans/2026-08-19-edge-analysis-findings.md`,
   and `src/app/orbitSurface.ts` (ported at `94024ef`). The branch implementation
   is preserved at tag `archive/logistic-mandelbrot-hybrid-surface`; nothing else
   should be recovered from it without a fresh decision, since the approach was
   rejected twice.
-- `feat/logistic-mandelbrot-surface-v2` — the analytic edge-curve arc, stages
+- `feat/logistic-mandelbrot-surface-v2`: the analytic edge-curve arc, stages
   52-56 (`docs/plans/2026-08-22-analytic-edge-curves.md`). Merged to `dev`,
   deployed and mirrored 2026-08-23; branch and worktree deleted.
-- `feat/logistic-mandelbrot-gpu-sampler` — stages 34-36, WebGL2 fragment-shader
+- `feat/logistic-mandelbrot-gpu-sampler`: stages 34-36, WebGL2 fragment-shader
   orbit sampling. Merged to `dev` at `636315c` on 2026-08-16; branch and worktree
   `../emergence-lab-gpu` deleted. Background survives in
   `docs/plans/2026-08-15-logistic-mandelbrot-gpu-sampler-next-steps.md`.
@@ -132,8 +132,8 @@ hooks. See `docs/PUBLISH-WORKFLOW.md` before pushing anywhere.
 
 ## Related
 
-- `docs/INTERFACE.md` — kernel contract (reviewed boundary, v1.3.0)
-- `MODELS.md` — model policy (no area ownership; autometta for multi-agent)
-- `state/handoffs/README.md` — structured handoff envelope (private working
+- `docs/INTERFACE.md`: kernel contract (reviewed boundary, v1.3.0)
+- `MODELS.md`: model policy (no area ownership; autometta for multi-agent)
+- `state/handoffs/README.md`: structured handoff envelope (private working
   tree only; `state/` is not published)
-- `docs/PUBLISH-WORKFLOW.md` — publish-safety workflow and guard hooks
+- `docs/PUBLISH-WORKFLOW.md`: publish-safety workflow and guard hooks

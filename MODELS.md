@@ -1,9 +1,9 @@
-# MODELS.md — Model policy
+# MODELS.md: Model policy
 
 ## The rule
 
 **There is no per-model ownership of areas of this repo.** Whichever agent is
-working a task may edit any part of it — code, docs, architecture. Earlier
+working a task may edit any part of it: code, docs, architecture. Earlier
 phases split the trunk by model (Codex on `src/**`, Claude on docs); that split
 is retired.
 
@@ -32,9 +32,9 @@ unchanged. See the global dev rules and `.cursor/rules/git-strategy.mdc`.
 
 ## History (context only)
 
-- **Build phase**: three-model split — Codex kernels, Cursor renderer, Claude
+- **Build phase**: three-model split: Codex kernels, Cursor renderer, Claude
   docs. Useful while the kernel/renderer seam was being shaped.
-- **Consolidation phase**: dropped to two — Cursor full stack, Claude docs.
+- **Consolidation phase**: dropped to two: Cursor full stack, Claude docs.
 - **Hone phase (earlier)**: single-lead Codex over the code trunk, Claude over
   directives and essays.
 - **Now**: no area ownership. Any agent edits any part of the repo; autometta is

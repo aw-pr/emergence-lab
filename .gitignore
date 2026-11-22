@@ -31,8 +31,6 @@ state/**
 
 state/logs/
 
-# CodeGraph local index cache
-.codegraph/
 
 # Playwright
 test-results/

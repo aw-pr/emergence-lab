@@ -1,6 +1,6 @@
-# docs/INTERFACE.md — Kernel to Renderer Interface Contract
+# docs/INTERFACE.md: Kernel to Renderer Interface Contract
 
-**Status: reviewed contract — v1.3.0 (2026-08-15)**
+**Status: reviewed contract, v1.3.0 (2026-08-15)**
 
 This file defines the TypeScript interface that all simulation kernels must
 implement and that the renderer consumes. It is the only shared surface
@@ -46,16 +46,16 @@ export type SimParams = Record<string, number | boolean | string>;
  * The contract every simulation kernel must satisfy.
  *
  * Lifecycle:
- *   1. new KernelClass()          — construct; no side effects
- *   2. kernel.init(w, h, params)  — allocate buffers, set initial state
- *   3. kernel.step(dt)            — advance simulation by dt seconds
- *   4. kernel.readState()         — read current state for rendering
- *   5. kernel.destroy()           — release any resources
+ *   1. new KernelClass()          construct; no side effects
+ *   2. kernel.init(w, h, params)  allocate buffers, set initial state
+ *   3. kernel.step(dt)            advance simulation by dt seconds
+ *   4. kernel.readState()         read current state for rendering
+ *   5. kernel.destroy()           release any resources
  */
 export interface SimKernel {
   /**
    * Initialise or re-initialise the simulation.
-   * Must be idempotent — calling again resets to initial conditions.
+   * Must be idempotent: calling again resets to initial conditions.
    *
    * @param width   Grid columns. The renderer chooses this; it is the
    *                 simulation's compute resolution, NOT the canvas pixel width.
@@ -72,7 +72,7 @@ export interface SimKernel {
    * Workers, WASM and GPU compute are an internal kernel detail. A kernel that
    * computes asynchronously must double-buffer internally and have step()
    * advance to the latest available state without blocking the caller. step()
-   * never returns a promise. This keeps the render loop and the Codex/Cursor
+   * never returns a promise. This keeps the render loop and the kernel/renderer
    * boundary simple; the cost of async is borne inside the kernels that need
    * it, not imposed on every simple sim.
    *
@@ -170,7 +170,7 @@ export interface SimKernel {
    * brief hold, so a new randomised run begins. Kernels that omit it are
    * treated as never-complete and run indefinitely (the previous behaviour).
    *
-   * Must be a cheap, allocation-free read of existing state — the renderer may
+   * Must be a cheap, allocation-free read of existing state, so the renderer may
    * call it every frame. It reports the kernel's own notion of "done"; it does
    * not itself reset anything.
    */
@@ -191,7 +191,7 @@ export interface SimKernel {
    run indefinitely, exactly as before, and the auto-cycle control is only
    surfaced for sims that implement it. The method is a cheap, allocation-free
    read of existing state (same rule as `step()`/`readState()`); it only
-   *reports* completion and never mutates or resets anything — the reset is the
+   *reports* completion and never mutates or resets anything; the reset is the
    renderer's job. This is a purely additive surface change, so it bumps the
    minor version.
 
@@ -237,7 +237,7 @@ export interface SimKernel {
    the grid from a user-selectable quality preset and the viewport aspect, then
    upscales the kernel's state to fill the canvas (letterboxed). This keeps
    simulation cost constant across screen sizes and means a pure window/viewport
-   resize updates only the display — it does **not** re-init the kernel. Kernels
+   resize updates only the display: it does **not** re-init the kernel. Kernels
    are unaffected: they still receive `width`/`height` and allocate accordingly.
    This is a documentation clarification of existing semantics; the interface
    surface is unchanged.
@@ -277,14 +277,14 @@ export interface SimKernel {
 - Build the controls panel from `paramSchema` only; no per-sim branching.
 - Normalise with `channelRanges`; treat `readState()` as read-only.
 - Call `init()` before the first `step()`, and on a grid-size or param change.
-  A pure display/viewport resize must NOT call `init()` — it only rescales the
+  A pure display/viewport resize must NOT call `init()`; it only rescales the
   canvas; the grid and simulation state are preserved.
 - Call `destroy()` when swapping kernels or unmounting.
 - Do not import a kernel class from `src/sims/**`. Kernels load dynamically.
   A sim's pure, dependency-free modules (a `model.ts` with seeding and param
   parsing, a layout store) may be imported by `src/app`; that is how a backend
   runs a sim GPU-resident through the optional direct-rendering hooks in
-  `rendererBackend.ts` (Kuramoto, Gray-Scott).
+  `rendererBackend.ts` (Kuramoto, Gray-Scott, the sandpile and Boids).
 
 ## Testing a pure `src/app` module
 
@@ -314,8 +314,9 @@ Two constraints are worth knowing before you try to widen this:
   (`tsconfig.json`) uses `moduleResolution: "Bundler"` with
   `allowImportingTsExtensions`, so app modules import each other with explicit
   `.ts` specifiers; the test build uses `moduleResolution: "Node16"`, which
-  rejects those with TS5097. Twenty of the thirty-seven modules under `src/app`
-  cannot compile under the test config at all. Only modules whose relative
+  rejects those with TS5097. At the time of that audit, twenty of the
+  thirty-seven modules under `src/app` could not compile under the test config
+  at all. Only modules whose relative
   imports are type-only (or absent) are eligible. Measured and recorded in
   `docs/audits/2026-09-13-app-test-build-convention.md`.
 - `src/sims/**/kernel.ts` stays the first `include` entry. Kernel test coverage

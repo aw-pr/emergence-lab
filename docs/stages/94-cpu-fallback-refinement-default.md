@@ -3,8 +3,9 @@
 ## Metadata
 
 - **Authored:** 2026-09-12
-- **Re-briefed:** 2026-09-13 for attempt 2, widened per the Attempt history
-- **Attempt:** 2
+- **Re-briefed:** 2026-09-13 for attempt 2 (widened), again for attempt 3
+  (build config claimed)
+- **Attempt:** 3
 - **Orchestrator:** Claude Fable 5.1 <claude-fable-5-1@local>
 - **Worker:** GPT-6 Astra <gpt-6-astra@local>
 - **Verifier:** Claude Sonnet 5 <claude-sonnet-5@local>
@@ -48,6 +49,37 @@ field (`pointBudget`, `maxSurvivingCells`, `refineActive`, `baseSlotCap`,
 `refineFraction`. A second plan call at the fallback point, before any
 array is allocated, is therefore sufficient and safe: everything the CPU
 path allocates comes after `:1702` and reads the re-destructured values.
+
+**Attempt 2 (2026-09-13, GPT-6 Astra) landed the whole card bar one line,
+and the verifier confirmed it.** Sonnet 5 passed criteria 2, 4, 5, 6, 7, 8
+and 9 on independent inspection, including deriving all eight expected
+values from deliverable 4's rule before opening the test file and finding
+them correct. The re-plan sits where 2b asked: after the failed GPU attempt,
+before the first `Float32Array`, `let` for the nine CPU fields and `const`
+for the GPU ones.
+
+It failed on criteria 1 and 3 for a reason that is this card's fault, not
+the worker's: `tsconfig.test.json`'s `include` is
+`["src/sims/**/kernel.ts", "src/app/qualityProfiles.ts"]`, so
+`npm run build:test` never emits `.test-build/app/orbitRefinement.js` and
+the new test cannot require it. 366 of 367 tests pass; the one failure is
+that missing module. Astra correctly refused to edit a build config the card
+had not claimed — stage 88 attempt 1 failed for making exactly that kind of
+unclaimed edit. Deliverable 7 below now claims it.
+
+**Start from the preserved work, do not redo it.** Attempt 2 is committed at
+`4ba9466a` on `wip/94-cpu-fallback-refinement-default-attempt-1`, carrying
+all six deliverables. Restore it into your run worktree first:
+
+```sh
+git cherry-pick --no-commit 4ba9466a   # or: git checkout 4ba9466a -- <paths>
+```
+
+Then make the deliverable 7 change, re-run the gate, and commit the whole
+thing as one stage commit. If you find a genuine defect in the restored
+work, fix it and say so in the envelope; otherwise leave it alone. The
+expected diff for this attempt is one line of config plus whatever the
+verify run demands.
 
 ## Surfacing concern
 
@@ -150,6 +182,12 @@ Do not read anything else unless you need to; keep your context lean.
    way to see the rule in effect on a CPU machine.
 6. **`HANDOFF.md`**: the deferred line about the CPU-fallback default
    (around line 477) marked resolved by this card.
+7. **`tsconfig.test.json`**: add `"src/app/orbitRefinement.ts"` to the
+   `include` array so `npm run build:test` emits the module the test
+   requires. Add that one entry and nothing else — do not widen the pattern
+   to `src/app/**`, do not reorder or reformat the existing entries, and do
+   not touch `compilerOptions`. A broader glob would pull the whole renderer
+   into the test build and is a separate decision.
 
 ## Constraints
 
@@ -168,6 +206,9 @@ Do not read anything else unless you need to; keep your context lean.
   `src/sims/logistic-mandelbrot/model.ts`, or the frozen block in
   `src/sims/logistic-mandelbrot/gpu-parity.test.cjs`
   (`sha256:111b37b263b2afb8137c4628eae41ec55f035d2a2c8955f939ad82816d7be30e`).
+- `tsconfig.test.json` is claimed by this card for deliverable 7 only. No
+  other build or config file (`package.json`, `tsconfig.json`,
+  `vite.lib.config.ts`, `playwright.config.ts`) may be touched.
 - No new panel control, no new uniform, no shader change. If the rule
   cannot be expressed without one, stop and report; that is a different
   card.
@@ -181,7 +222,10 @@ Do not read anything else unless you need to; keep your context lean.
 The verifier will check each of these. Failure of any one is a failure of the
 stage.
 
-1. `npm run verify` green in the run worktree (after `npm ci`).
+1. `npm run verify` green in the run worktree (after `npm ci`), with
+   `orbitRefinement.test.cjs`'s eight cases actually executing — a run
+   reporting `fail 0` and a test total of at least 367. Attempt 2 died here;
+   a green typecheck with a failing test is not a pass.
 2. `scripts/check-contract-test-gate.sh --worktree` run and its exit code and
    message reported verbatim in the envelope, with one sentence saying which
    of its three outcomes it was and why that is correct for this card.
@@ -206,7 +250,10 @@ stage.
    traces `cpu-sampled` (sampler null at `:1615`) and
    `cpu-sampled-gpu-failed` (re-plan at the fallback) by reading the code,
    and states the resolved `refineFraction` and `refineActive` for each.
-9. The envelope carries the Astra scorecard block described under Dispatch
+9. `tsconfig.test.json`'s `include` gains exactly one entry,
+   `src/app/orbitRefinement.ts`, and the file is otherwise byte-identical.
+   The verifier diffs it.
+10. The envelope carries the Astra scorecard block described under Dispatch
    envelope.
 
 ## Contract test
@@ -280,7 +327,12 @@ if the tests pass.
 ## Family-specific notes
 
 Codex family: the run worktree has no `node_modules`; run `npm ci` first or
-`npm run verify` exits 127. Tests under `src/app` require the compiled
+`npm run verify` exits 127. Attempt 2 hit a variant worth knowing: the
+worktree's `node_modules` was a symlink into the main checkout, so `npm ci`
+exited 255 on `EPERM` unlinking `.package-lock.json`. Replacing only the
+worktree-local symlink with a real directory and re-running
+`npm ci --offline` cleared it. Do not delete the main checkout's
+`node_modules`. Tests under `src/app` require the compiled
 module from `.test-build/app/` after `npm run build:test`, following
 `src/app/qualityProfiles.test.cjs`. No network and no GUI are needed; do not
 attempt a browser.
