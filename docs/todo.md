@@ -1,7 +1,7 @@
 - [x] Set the default boids rersolution to ultra and see if we can reandomise the start criteria so we get different patterns and increase the number of boids to 10000
 - [x] can we try and increase the pixel desnsity in garry scott diffusion so we can fit more intricate patterns on the screen?
 
-## 2026-07-06 — release to dev, live deploy, and public mirror (Claude Opus 4.8)
+## 2026-07-06: release to dev, live deploy, and public mirror (Claude Opus 4.8)
 
 Shipped the completed `feat/visual-expansion` tuning work end to end.
 
@@ -18,14 +18,14 @@ Shipped the completed `feat/visual-expansion` tuning work end to end.
   `~/emergence-lab-history-20260706-115251.bundle`.
 - `npm run verify` green (201 kernel tests, typecheck, build) before merge
   and again on merged `dev`.
-- Deferred: thumbnails shipped as-is — the four tuned sims' default looks
+- Deferred: thumbnails shipped as-is: the four tuned sims' default looks
   changed but the user chose not to regenerate them this session; if their
   defaults move again, regenerate via `node scripts/generate-thumbnails.mjs`.
-- Left untouched: `docs/todo.md` line ~12 above still reads "all 12 essays"
-  — that's a historical changelog line from the 2026-07-04 entry (all 16
+- Left untouched: `docs/todo.md` line ~12 above still reads "all 12 essays".
+  That's a historical changelog line from the 2026-07-04 entry (all 16
   essays now exist); rewriting past log entries wasn't in scope.
 
-## 2026-07-04 — overnight build (Claude Sonnet 4.6)
+## 2026-07-04: overnight build (Claude Sonnet 4.6)
 
 - Gallery landing redesigned: responsive grid grouped by `family`, each card
   with a real still preview rendered from the sim's own kernel via the
@@ -41,7 +41,7 @@ Shipped the completed `feat/visual-expansion` tuning work end to end.
 - Queued (post-exam, optional): Fable-generated hero visuals to replace live
   thumbnails + an essay polish pass.
 
-## 2026-07-06 — visual expansion (multi-agent, Claude Fable 5 lead)
+## 2026-07-06: visual expansion (multi-agent, Claude Fable 5 lead)
 
 Branch `feat/visual-expansion` (35 commits off dev, verify green: 200 kernel
 tests, typecheck, build). Parallel Opus/Sonnet worktree agents, merged
@@ -52,7 +52,7 @@ sequentially with verify per merge.
   **particle-life** (seeded asymmetric matrix, 3-channel species RGB). Each
   with presets, kernel tests, essay stub.
 - Renderer/colour foundation: per-slug colormap defaults now win over the
-  ≥3-channel rgb fallback (fixes BZ rendering raw RGB — dead-code bug);
+  ≥3-channel rgb fallback (fixes BZ rendering raw RGB: dead-code bug);
   3-channel chemical blend for BZ; magma/turbo/twilight(cyclic) ramps in CPU
   + GLSL; seamless cyclic palette cycling; stepped quantisation (sandpile
   terraces = 5 bands); particle-mode trail persistence (boids default 0.93);
@@ -61,15 +61,15 @@ sequentially with verify per merge.
 - Kernel visual upgrades: DLA colour-by-accretion-age; game-of-life age
   shading + death-ghost trails; lorenz-attractor generalised to strange
   attractors (Rössler/Thomas/Aizawa/Halvorsen) with height-coloured trails.
-- **INTERFACE.md v1.1.0**: optional `applyImpulse(x, y, radius, strength)` —
+- **INTERFACE.md v1.1.0**: optional `applyImpulse(x, y, radius, strength)`:
   pointer drag perturbs gray-scott, BZ, game-of-life, sandpile, boids,
   physarum, lenia. Renderer owns px→cell mapping via shared containRect.
 - Known follow-ups: WebGL2 samples row 0 at bottom vs canvas2d top (latent
-  flip, compensated in pointerToCell — normalise someday); Gray-Scott GPU
+  flip, compensated in pointerToCell; normalise someday); Gray-Scott GPU
   compute path deliberately deferred (inverts the kernel-produces-floats
   seam; needs its own contract decision before code).
 
-## 2026-07-06 — visual expansion, follow-on tuning (Claude Opus 4.8)
+## 2026-07-06: visual expansion, follow-on tuning (Claude Opus 4.8)
 
 Five more commits on `feat/visual-expansion` (verify green: typecheck, 199
 kernel tests, build; gallery, variant routing, and stock thumbnails checked
@@ -77,11 +77,11 @@ live in-browser).
 
 - Strange attractors split into individual gallery cards via a registry
   `variant` concept, routed at `#/lorenz-attractor/<variant>`.
-- Physarum capped at **high** (960²), not ultra — the CPU 3×3 diffusion pass
+- Physarum capped at **high** (960²), not ultra: the CPU 3×3 diffusion pass
   makes ultra ~1 step/s and the trail never forms; agents scaled 32k → 100k.
 - Belousov-Zhabotinsky: high grid + slower default speed (1.5x → 1.0x).
 - Abelian sandpile: default pile 2M → 3M, per-frame topples 2M → 1M for
-  smoother growth. Still reads slightly pixelated/jerky at the higher pile —
+  smoother growth. Still reads slightly pixelated/jerky at the higher pile;
   left for Fable to tune further; bilinear display smoothing was offered but
   not applied.
 - Gallery: live per-card WebGL stills replaced by pre-rendered stock PNGs
